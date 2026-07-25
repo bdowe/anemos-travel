@@ -134,6 +134,12 @@ abstract class AppLocalizations {
   /// **'Trips and notes you already saved stay in the language they were written in.'**
   String get languageChangeNote;
 
+  /// Tooltip of the app-bar globe button that opens the language menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Change language'**
+  String get languageMenuTooltip;
+
   /// No description provided for @commonSave.
   ///
   /// In en, this message translates to:

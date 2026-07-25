@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/language_menu_button.dart';
 import '../widgets/sso_buttons.dart';
 import '../widgets/legal_links.dart';
 import '../utils/snack.dart';
@@ -178,6 +179,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
+        actions: const [LanguageMenuButton()],
       ),
       body: Center(
         child: SingleChildScrollView(

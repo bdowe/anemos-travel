@@ -18,6 +18,7 @@ import '../widgets/account_menu.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/continue_chats_section.dart';
 import '../widgets/gradient_app_bar.dart';
+import '../widgets/language_menu_button.dart';
 import '../widgets/live_trip_card.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
@@ -102,7 +103,7 @@ class HomeScreen extends ConsumerWidget {
             ),
           ],
         ),
-        actions: const [AccountMenu()],
+        actions: const [LanguageMenuButton(), AccountMenu()],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

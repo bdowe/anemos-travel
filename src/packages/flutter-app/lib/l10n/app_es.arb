@@ -6,6 +6,7 @@
   "languageEnglish": "English",
   "languageSpanish": "Español",
   "languageChangeNote": "Los viajes y las notas que ya guardaste se mantienen en el idioma en que se escribieron.",
+  "languageMenuTooltip": "Cambiar idioma",
   "commonSave": "Guardar",
   "commonCancel": "Cancelar",
   "commonDelete": "Eliminar",

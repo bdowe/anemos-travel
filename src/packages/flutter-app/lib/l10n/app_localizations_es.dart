@@ -28,6 +28,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'Los viajes y las notas que ya guardaste se mantienen en el idioma en que se escribieron.';
 
   @override
+  String get languageMenuTooltip => 'Cambiar idioma';
+
+  @override
   String get commonSave => 'Guardar';
 
   @override

@@ -6,6 +6,7 @@ import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/gradient_app_bar.dart';
+import '../widgets/language_menu_button.dart';
 import '../widgets/legal_links.dart';
 import '../widgets/page_container.dart';
 import 'auth_screen.dart';
@@ -73,6 +74,7 @@ class _LandingScreenState extends State<LandingScreen> {
           child: BrandLogo.mark(size: 30),
         ),
         actions: [
+          const LanguageMenuButton(),
           TextButton(
             onPressed: () => _openAuth(context, isLogin: true),
             style: TextButton.styleFrom(foregroundColor: Colors.white),
