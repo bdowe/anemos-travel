@@ -166,11 +166,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # QEMU runs the arm64 RUN steps (the api image's final alpine stage);
-      # the heavy build stages are pinned to $BUILDPLATFORM in their
-      # Dockerfiles and cross-compile natively.
-      - uses: docker/setup-qemu-action@v3
-
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
@@ -186,9 +181,9 @@ jobs:
         with:
           context: src/packages/api
           file: src/packages/api/Dockerfile
-          # arm64 covers the Raspberry Pi production host; amd64 keeps
-          # x86 servers and local docker-compose pulls working.
-          platforms: linux/amd64,linux/arm64
+          # Production is an amd64 VPS (Vultr); re-add linux/arm64 (plus the
+          # setup-qemu-action step) if an ARM host ever returns.
+          platforms: linux/amd64
           push: true
           tags: |
             ghcr.io/bdowe/goldentempo-api:latest
@@ -205,7 +200,7 @@ jobs:
         with:
           context: .
           file: dockerize/deployment/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ghcr.io/bdowe/goldentempo-gateway:latest
