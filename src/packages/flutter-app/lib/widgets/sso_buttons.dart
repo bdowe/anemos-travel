@@ -4,6 +4,7 @@ import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
 import 'apple_sign_in_button.dart';
 import 'google_sign_in_button.dart';
+import 'legal_links.dart';
 
 /// The SSO section of the auth screen: one "or" divider above whichever
 /// provider buttons the backend has configured (Google, then Apple). Renders
@@ -36,6 +37,10 @@ class SsoButtons extends ConsumerWidget {
         if (google) const GoogleSignInButton(),
         if (google && apple) const SizedBox(height: 12),
         if (apple) const AppleSignInButton(),
+        const SizedBox(height: 12),
+        // Informational — the provider's own click is the agreement. Email
+        // sign-up uses the blocking LegalConsentCheckbox instead.
+        const LegalAgreementText(),
       ],
     );
   }

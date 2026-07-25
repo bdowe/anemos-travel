@@ -25,32 +25,80 @@ Future<void> openLegalPage(String path) async {
 Future<void> openPrivacyPolicy() => openLegalPage('/privacy');
 Future<void> openTermsOfService() => openLegalPage('/terms');
 
+/// The "…Terms of Service and Privacy Policy." tail shared by the informational
+/// line and the consent checkbox: the two tappable links joined by the
+/// localized conjunction, followed by a period. The caller supplies the leading
+/// prefix span so it can read either "By signing up you agree to the …" or
+/// "I agree to the …".
+List<Widget> _legalLinkTail(BuildContext context, TextStyle? base) {
+  final l10n = context.l10n;
+  return [
+    _InlineLink(
+        label: l10n.legalTermsOfService, style: base, onTap: openTermsOfService),
+    Text(l10n.legalAgreementConjunction, style: base),
+    _InlineLink(
+        label: l10n.legalPrivacyPolicy, style: base, onTap: openPrivacyPolicy),
+    Text('.', style: base),
+  ];
+}
+
 /// "By signing up you agree to the Terms of Service and Privacy Policy" —
-/// small print with tappable links, shown under the sign-up form.
+/// informational small print with tappable links. Used under the SSO buttons,
+/// where the provider's own click is the agreement (email sign-up uses the
+/// blocking [LegalConsentCheckbox] instead).
 class LegalAgreementText extends StatelessWidget {
   const LegalAgreementText({super.key});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l10n = context.l10n;
     final base = theme.textTheme.bodySmall
         ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
     return Wrap(
       alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(l10n.legalAgreementPrefix, style: base),
-        _InlineLink(
-            label: l10n.legalTermsOfService,
-            style: base,
-            onTap: openTermsOfService),
-        Text(l10n.legalAgreementConjunction, style: base),
-        _InlineLink(
-            label: l10n.legalPrivacyPolicy,
-            style: base,
-            onTap: openPrivacyPolicy),
-        Text('.', style: base),
+        Text(context.l10n.legalAgreementPrefix, style: base),
+        ..._legalLinkTail(context, base),
+      ],
+    );
+  }
+}
+
+/// Blocking affirmative-consent checkbox for email sign-up: the create-account
+/// button stays disabled until this is ticked. The label ("I agree to the
+/// Terms of Service and Privacy Policy") carries the same tappable links.
+class LegalConsentCheckbox extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const LegalConsentCheckbox(
+      {super.key, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final base = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Checkbox(
+          value: value,
+          onChanged: (v) => onChanged(v ?? false),
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(context.l10n.legalConsentCheckboxPrefix, style: base),
+              ..._legalLinkTail(context, base),
+            ],
+          ),
+        ),
       ],
     );
   }

@@ -167,4 +167,40 @@ void main() {
     expect(service.registerCalls, isEmpty);
     expect(service.loginCalls, isEmpty);
   });
+
+  testWidgets('email sign-up is blocked until the consent box is ticked', (
+    tester,
+  ) async {
+    final service = _FakeAuthService();
+    await tester.pumpWidget(_wrap(service));
+    await tester.pump();
+
+    await tester.tap(find.text("Don't have an account? Sign up"));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(_fieldByLabel('Email'), 'brian@example.com');
+    await tester.enterText(_fieldByLabel('Password'), 'hunter2hunter2');
+    await tester.pump();
+
+    final createButton = find.ancestor(
+      of: find.text('Create account'),
+      matching: find.byType(FilledButton),
+    );
+
+    // Consent unticked: the button is disabled and the Enter-key path is
+    // guarded, so no registration can happen.
+    expect(tester.widget<FilledButton>(createButton).onPressed, isNull);
+    await tester.tap(createButton, warnIfMissed: false);
+    await tester.pump();
+    expect(service.registerCalls, isEmpty);
+
+    // Tick consent → the button enables and registration goes through.
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    expect(tester.widget<FilledButton>(createButton).onPressed, isNotNull);
+
+    await tester.tap(createButton);
+    await tester.pumpAndSettle();
+    expect(service.registerCalls, [('brian@example.com', 'hunter2hunter2')]);
+  });
 }

@@ -2117,6 +2117,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get legalAgreementPrefix => 'By signing up you agree to the ';
 
   @override
+  String get legalConsentCheckboxPrefix => 'I agree to the ';
+
+  @override
   String get legalTermsOfService => 'Terms of Service';
 
   @override
