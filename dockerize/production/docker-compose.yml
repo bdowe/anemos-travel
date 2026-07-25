@@ -15,15 +15,6 @@
 # POSTGRES_PASSWORD / IMAGE_TAG / TUNNEL_TOKEN below and the api's
 # env_file all come from one file.
 services:
-  chrome:
-    image: chromedp/headless-shell:latest
-    expose:
-      - "9222"
-    shm_size: '2gb'
-    restart: unless-stopped
-    networks:
-      - travel-planner-network
-
   postgres:
     image: postgres:16-alpine
     # No env_file here on purpose: postgres only needs its own three vars,
@@ -69,7 +60,6 @@ services:
       - .env
     environment:
       - GO_ENV=production
-      - CHROME_WS_URL=ws://chrome:9222/
       # Composed from the same POSTGRES_PASSWORD the postgres service boots
       # with, so credentials cannot drift between the two services.
       # sslmode=disable is acceptable here — and only here — because the
@@ -86,8 +76,6 @@ services:
       # the dumps are.
       - ./backups:/opt/goldentempo/backups:ro
     depends_on:
-      chrome:
-        condition: service_started
       postgres:
         condition: service_healthy
     healthcheck:

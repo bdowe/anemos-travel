@@ -1,12 +1,4 @@
 services:
-  chrome:
-    image: chromedp/headless-shell:latest
-    expose:
-      - "9222"
-    shm_size: '2gb'
-    networks:
-      - travel-planner-network
-
   postgres:
     image: postgres:16-alpine
     environment:
@@ -36,11 +28,8 @@ services:
         required: false
     environment:
       - GO_ENV=development
-      - CHROME_WS_URL=ws://chrome:9222/
       - DATABASE_URL=postgres://travel:travel@postgres:5432/travel_planner?sslmode=disable
     depends_on:
-      chrome:
-        condition: service_started
       postgres:
         condition: service_healthy
     healthcheck:
