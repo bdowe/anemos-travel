@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"net/mail"
 	"strings"
@@ -48,16 +49,31 @@ func generateSessionToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func issueSession(ctx context.Context, q *store.Queries, userID uuid.UUID) (store.Session, error) {
+// hashBearerToken returns the SHA-256 hex digest of a bearer token. Session
+// tokens are stored as this digest so a database read can't yield a usable
+// token; the raw token (held only by the client) is hashed the same way on
+// every lookup. Matches the Postgres `encode(sha256(id::bytea),'hex')` the
+// hashing migration applies to pre-existing rows, so old sessions keep working.
+func hashBearerToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+// issueSession mints a new session and returns the RAW token for the client.
+// The database stores only its hash — the raw is never persisted.
+func issueSession(ctx context.Context, q *store.Queries, userID uuid.UUID) (string, error) {
 	token, err := generateSessionToken()
 	if err != nil {
-		return store.Session{}, err
+		return "", err
 	}
-	return q.CreateSession(ctx, store.CreateSessionParams{
-		ID:        token,
+	if _, err := q.CreateSession(ctx, store.CreateSessionParams{
+		ID:        hashBearerToken(token),
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(sessionDuration),
-	})
+	}); err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
 func validateEmail(email string) bool {
