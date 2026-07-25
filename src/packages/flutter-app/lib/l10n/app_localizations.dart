@@ -3794,6 +3794,12 @@ abstract class AppLocalizations {
   /// **'By signing up you agree to the '**
   String get legalAgreementPrefix;
 
+  /// No description provided for @legalConsentCheckboxPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'I agree to the '**
+  String get legalConsentCheckboxPrefix;
+
   /// No description provided for @legalTermsOfService.
   ///
   /// In en, this message translates to:

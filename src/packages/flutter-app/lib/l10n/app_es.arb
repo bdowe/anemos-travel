@@ -616,6 +616,7 @@
   "sharedSaveSeparateCopy": "O guardar una copia aparte",
   "sharedKeepInTrips": "Guardar en mis viajes",
   "legalAgreementPrefix": "Al registrarte aceptas los ",
+  "legalConsentCheckboxPrefix": "Acepto los ",
   "legalTermsOfService": "Términos del servicio",
   "legalAgreementConjunction": " y la ",
   "legalPrivacyPolicy": "Política de privacidad",

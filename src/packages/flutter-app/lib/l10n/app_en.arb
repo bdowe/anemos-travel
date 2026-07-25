@@ -1416,6 +1416,7 @@
   "sharedSaveSeparateCopy": "Or save a separate copy",
   "sharedKeepInTrips": "Keep in my trips",
   "legalAgreementPrefix": "By signing up you agree to the ",
+  "legalConsentCheckboxPrefix": "I agree to the ",
   "legalTermsOfService": "Terms of Service",
   "legalAgreementConjunction": " and ",
   "legalPrivacyPolicy": "Privacy Policy",
