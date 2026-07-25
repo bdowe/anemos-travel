@@ -1,12 +1,33 @@
 # Production stack — goldentempotravel.com
 
-Runs the prebuilt GHCR images (multi-arch: amd64 + arm64) on a home
-**Raspberry Pi** reached exclusively through a **Cloudflare Tunnel**: the
-`cloudflared` service dials out to the Cloudflare edge, so the host
-publishes no ports, forwards nothing on the router, and never exposes its
-home IP. TLS terminates at the edge; nginx restores the real client IP
-from `CF-Connecting-IP` so the API's per-IP rate limiter sees end users,
-not the tunnel connector.
+Runs the prebuilt GHCR images (amd64) on a cloud VPS (**Vultr**,
+Ubuntu LTS — previously a home Raspberry Pi) reached exclusively through
+a **Cloudflare Tunnel**: the `cloudflared` service dials out to the
+Cloudflare edge, so the host publishes no ports and exposes nothing
+directly — even with a public IP, ingress stays tunnel-only. TLS
+terminates at the edge; nginx restores the real client IP from
+`CF-Connecting-IP` so the API's per-IP rate limiter sees end users, not
+the tunnel connector.
+
+## Host provisioning
+
+Any amd64 VM with **≥ 4 GB RAM** works (the `chrome` service alone asks
+for a 2 GB `shm_size`, plus postgres/api/nginx/cloudflared). From a fresh
+Ubuntu LTS image:
+
+1. Install Docker CE + the compose plugin, `rclone` (off-site backups),
+   and `jq`.
+2. Create a `deploy` user in the `docker` group; put the CI deploy
+   public key (pair of the `DEPLOY_SSH_KEY` secret) in its
+   `authorized_keys`.
+3. Recreate the layout below under `/opt/goldentempo/` (rsync this
+   directory; `mkdir backups`), fill `.env` from `.env.sample`.
+4. Firewall: `ufw allow from 172.28.0.0/16 to any port 22` (tunnel →
+   sshd for CI deploys), default-deny inbound otherwise. No inbound
+   80/443 ever; close public 22 once the tunnel SSH path is verified.
+5. Install the backup timer units from [`systemd/`](systemd/README.md).
+6. Regenerate the `DEPLOY_KNOWN_HOSTS` GitHub secret from the new host's
+   keys (one-liner in the deploy section below).
 
 ## Server layout
 
@@ -101,13 +122,13 @@ both images to GHCR (`:latest` and `:<sha>`) and the CI `deploy` job
 rsyncs this directory to `/opt/goldentempo/` and restarts the stack with
 `IMAGE_TAG=<sha>`. It also writes the live tag to
 `/opt/goldentempo/.image_tag` so manual restarts don't fall back to
-`:latest`. CI reaches the Pi through the tunnel's SSH hostname via
+`:latest`. CI reaches the host through the tunnel's SSH hostname via
 `cloudflared access ssh` + an Access service token. (Until the
 `DEPLOY_HOST` / `DEPLOY_SSH_KEY` / `DEPLOY_KNOWN_HOSTS` /
 `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` secrets exist, the
 deploy job self-skips with a notice. `DEPLOY_HOST` is the SSH hostname —
 `ssh.goldentempotravel.com` — and `DEPLOY_KNOWN_HOSTS` entries must use
-that same name: on the Pi,
+that same name: on the host,
 `for f in /etc/ssh/ssh_host_*_key.pub; do awk '{print "ssh.goldentempotravel.com", $1, $2}' "$f"; done`.)
 
 **Rollback** = re-deploy an older image: GitHub → Actions → CI →
