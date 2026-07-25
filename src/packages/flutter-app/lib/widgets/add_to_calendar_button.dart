@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../providers/trips_provider.dart';
 import '../utils/calendar_links.dart';
+import '../utils/errors.dart';
 import '../utils/share_link.dart';
 import '../utils/snack.dart';
 import '../utils/tracked_launch.dart';
@@ -84,7 +85,8 @@ class AddToCalendarButton extends ConsumerWidget {
       );
     } catch (e) {
       if (context.mounted) {
-        showSnack(context, context.l10n.calendarExportFailed('$e'));
+        showSnack(context,
+            context.l10n.calendarExportFailed(friendlyError(context.l10n, e)));
       }
     }
   }

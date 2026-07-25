@@ -2767,4 +2767,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calendarModeOther => 'Other';
+
+  @override
+  String get errorNetwork => 'Check your internet connection and try again.';
+
+  @override
+  String get errorTooManyRequests =>
+      'You\'re going a little too fast — wait a moment and try again.';
+
+  @override
+  String get errorSession => 'Your session has expired. Please sign in again.';
+
+  @override
+  String get errorServer =>
+      'Something went wrong on our end. Please try again in a moment.';
+
+  @override
+  String get errorGeneric => 'Something went wrong. Please try again.';
 }

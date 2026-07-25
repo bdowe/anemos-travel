@@ -6,6 +6,7 @@ import '../models/flight_search_request.dart';
 import '../providers/auth_provider.dart';
 import '../providers/flights_provider.dart';
 import '../providers/preferences_provider.dart';
+import '../utils/errors.dart';
 import '../widgets/airport_field.dart';
 import '../widgets/page_container.dart';
 import '../widgets/create_alert_sheet.dart';
@@ -595,7 +596,7 @@ class _Results extends StatelessWidget {
                   style: theme.textTheme.titleMedium),
               const SizedBox(height: 4),
               Text(
-                state.error!,
+                friendlyError(l10n, state.error),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),

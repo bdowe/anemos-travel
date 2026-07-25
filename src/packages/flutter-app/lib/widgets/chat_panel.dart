@@ -15,6 +15,7 @@ import '../services/dictation_controller.dart';
 import '../services/image_attachment_pipeline.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
+import '../utils/errors.dart';
 import '../utils/clipboard_images_stub.dart'
     if (dart.library.js_interop) '../utils/clipboard_images_web.dart';
 import '../utils/tracked_launch.dart';
@@ -1015,7 +1016,7 @@ class _ErrorBanner extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            error,
+            friendlyError(context.l10n, error),
             style: TextStyle(color: theme.colorScheme.onErrorContainer),
           ),
           if (canRetry)
