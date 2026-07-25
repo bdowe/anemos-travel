@@ -426,8 +426,66 @@ else
   skip "unsubscribe — SMOKE_SIGNING_SECRET unset (server dev secret is random/unknowable; real check is the inbox round-trip below)"
 fi
 
-# ===== 10. Teardown ===========================================================
-step "10. Teardown (delete throwaway account)"
+# ===== 10. Legal pages (launch-ready) ========================================
+step "10. Legal pages"
+for page in terms privacy; do
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time "$SMOKE_TIMEOUT" "$BASE_URL/$page" 2>/dev/null || echo 000)"
+  html="$(curl -sS --max-time "$SMOKE_TIMEOUT" "$BASE_URL/$page" 2>/dev/null || true)"
+  if [ "$code" != "200" ]; then
+    fail "GET /$page -> 200" "status=$code"
+  elif printf '%s' "$html" | grep -qiE 'draft-banner|noindex|TODO: set launch date'; then
+    fail "/$page is finalized (no draft-banner/noindex/TODO)" "an un-finalized marker is still present"
+  else
+    pass "GET /$page -> 200, finalized (no draft-banner/noindex/TODO)"
+  fi
+done
+
+# ===== 11. SEO plumbing + version marker =====================================
+step "11. SEO plumbing + version marker"
+for path in /robots.txt /sitemap.xml; do
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time "$SMOKE_TIMEOUT" "$BASE_URL$path" 2>/dev/null || echo 000)"
+  check "GET $path -> 200" "200" "$code"
+done
+ver="$(curl -sS --max-time "$SMOKE_TIMEOUT" "$BASE_URL/app/version.json" 2>/dev/null || true)"
+if printf '%s' "$ver" | jq -e '.release // .version // .build_number' >/dev/null 2>&1; then
+  pass "GET /app/version.json exposes a release/version marker"
+else
+  skip "/app/version.json — served by the deployed gateway (dev proxies the live Flutter dev server); verify on prod"
+fi
+
+# ===== 12. Edge security headers =============================================
+# Added to the deployment/production gateway (snippets/security-headers.conf).
+# The lean dev gateway doesn't carry them, so treat their absence as a SKIP and
+# hard-verify on prod — same posture as the bot-UA OG rewrite in step 5.
+step "12. Edge security headers"
+hdrs="$(curl -sS -I --max-time "$SMOKE_TIMEOUT" "$BASE_URL/app/" 2>/dev/null || true)"
+if printf '%s' "$hdrs" | grep -qi '^strict-transport-security:'; then
+  for h in Strict-Transport-Security X-Content-Type-Options X-Frame-Options Content-Security-Policy-Report-Only; do
+    if printf '%s' "$hdrs" | grep -qi "^$h:"; then
+      pass "/app/ sends $h"
+    else
+      fail "/app/ sends $h" "header missing"
+    fi
+  done
+else
+  skip "edge security headers — absent on this gateway (deployment/production only; verify on prod with curl -I)"
+fi
+
+# ===== 13. Localized share preview (es) ======================================
+step "13. Localized share preview (es)"
+if [ -n "$SHARE_TOKEN" ]; then
+  es_prev="$(curl -sS --max-time "$SMOKE_TIMEOUT" "$API/share-preview/$SHARE_TOKEN?lang=es" 2>/dev/null || true)"
+  if printf '%s' "$es_prev" | grep -qi '<html lang="es"' && printf '%s' "$es_prev" | grep -q 'og:'; then
+    pass "GET /share-preview/{token}?lang=es renders the Spanish OG page (html lang=es)"
+  else
+    fail "GET /share-preview/{token}?lang=es renders the Spanish OG page" 'no <html lang="es"> + og: meta'
+  fi
+else
+  skip "localized share preview — no share token from step 5"
+fi
+
+# ===== 14. Teardown ===========================================================
+step "14. Teardown (delete throwaway account)"
 req DELETE /auth/account "$(jq -n --arg p "$PASSWORD" '{password:$p}')" \
   "Authorization: Bearer $TOKEN"
 if [ "$LAST_STATUS" = "204" ]; then
@@ -456,7 +514,11 @@ ${C_BOLD}MANUAL CHECKS REMAINING (need real DNS/SMTP/crawler)${C_RESET}
     - SMTP deliverability + full inbox round-trips: signup verification email,
       password-reset email, and the List-Unsubscribe one-click (RFC 8058) link
       all arrive and work end to end.
-    - Legal pages: /privacy and /terms DRAFT banner removed and signed off.
+    - Legal review sign-off: step 10 auto-checks the draft-banner/noindex/TODO
+      are gone, but a human still owns the "the copy is correct" sign-off.
+    - Prod-only edge checks (skipped against the dev gateway): the security
+      headers (step 12) and /app/version.json (step 11) must be re-run against
+      the live https://goldentempotravel.com gateway with curl -I / curl.
 EOF
 
 [ "$FAILED" -eq 0 ]
