@@ -269,7 +269,7 @@ func sendReminderEmail(row store.ListTripsForReminderRow, kind string) {
 	// account synced (ListTripsForReminder carries it on the row).
 	subject, body := buildTripReminderEmail(localeOrDefault(row.Locale), kind, row.Title, dateString(row.StartDate), tripURL, unsub)
 	if err := emailService.SendMarketing(row.Email, subject, body, unsub); err != nil {
-		log.Printf("re-engagement: reminder email to %s failed: %v", row.Email, err)
+		log.Printf("re-engagement: reminder email to %s failed: %v", maskEmail(row.Email), err)
 	}
 }
 
@@ -282,6 +282,6 @@ func sendNudgeEmail(row store.ListUsersForWeeklyNudgeRow) {
 	}
 	subject, body := buildWeeklyNudgeEmail(localeOrDefault(row.Locale), name, appURL, unsub)
 	if err := emailService.SendMarketing(row.Email, subject, body, unsub); err != nil {
-		log.Printf("re-engagement: nudge email to %s failed: %v", row.Email, err)
+		log.Printf("re-engagement: nudge email to %s failed: %v", maskEmail(row.Email), err)
 	}
 }

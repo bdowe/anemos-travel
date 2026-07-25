@@ -482,14 +482,15 @@ func shouldWarnSigningSecrets(goEnv, exportSecret, unsubSecret string) bool {
 		strings.TrimSpace(unsubSecret) == ""
 }
 
-// warnIfSigningSecretsUnset emits a loud startup warning (never fatal — a soft
-// launch shouldn't die on this) when running in production without a stable
-// signing secret. Reads the raw envs directly, which is non-invasive: the token
-// files resolve their secret lazily via sync.Once, so this re-read does not force
-// or perturb their initialization.
+// warnIfSigningSecretsUnset logs at error level (never fatal — a soft launch
+// shouldn't die on this, but error level routes it to Sentry so a misconfigured
+// production deploy pages instead of scrolling past) when running in production
+// without a stable signing secret. Reads the raw envs directly, which is
+// non-invasive: the token files resolve their secret lazily via sync.Once, so
+// this re-read does not force or perturb their initialization.
 func warnIfSigningSecretsUnset() {
 	if shouldWarnSigningSecrets(os.Getenv("GO_ENV"), os.Getenv("EXPORT_SIGNING_SECRET"), os.Getenv("UNSUBSCRIBE_SIGNING_SECRET")) {
-		slog.Warn("signing secrets unset — outstanding unsubscribe/export links will break on restart; set EXPORT_SIGNING_SECRET (openssl rand -hex 32) in production")
+		slog.Error("signing secrets unset — outstanding unsubscribe/export links will break on restart; set EXPORT_SIGNING_SECRET (openssl rand -hex 32) in production")
 	}
 }
 

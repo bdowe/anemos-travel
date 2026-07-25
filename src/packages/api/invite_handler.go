@@ -146,7 +146,7 @@ func sendInviteEmail(owner store.User, to, token, tripTitle, locale string) {
 	link := publicAppURL("invite/", token)
 	body := tr(locale, "email.invite.body", ownerName, tripTitle, link)
 	if err := emailService.Send(to, tr(locale, "email.invite.subject", ownerName, tripTitle), body); err != nil {
-		log.Printf("invite email: send to %s failed: %v", to, err)
+		log.Printf("invite email: send to %s failed: %v", maskEmail(to), err)
 	}
 }
 
