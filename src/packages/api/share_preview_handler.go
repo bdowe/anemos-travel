@@ -27,7 +27,9 @@ var sharePreviewTmpl = template.Must(template.New("share-preview").Parse(`<!DOCT
   <meta property="og:description" content="{{.Description}}">
   <meta property="og:url" content="{{.URL}}">
   <meta property="og:image" content="{{.Image}}">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{{.Title}}">
   <meta name="twitter:description" content="{{.Description}}">
   <meta http-equiv="refresh" content="0;url={{.URL}}">
@@ -114,7 +116,7 @@ func sharePreviewHandler(w http.ResponseWriter, r *http.Request) {
 		Title:       truncatePreview(trip.Title, 70),
 		Description: truncatePreview(strings.Join(descParts, " · "), 200),
 		URL:         base + "/app/share/" + share.Token,
-		Image:       base + "/app/icons/Icon-512.png",
+		Image:       base + "/app/og-card.png",
 	}
 	if err := sharePreviewTmpl.Execute(w, data); err != nil {
 		// Headers already sent; nothing sensible left to do.
