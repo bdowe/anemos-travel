@@ -28,6 +28,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Trips and notes you already saved stay in the language they were written in.';
 
   @override
+  String get languageMenuTooltip => 'Change language';
+
+  @override
   String get commonSave => 'Save';
 
   @override

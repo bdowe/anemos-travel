@@ -327,12 +327,6 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
 class _LanguagePicker extends ConsumerWidget {
   const _LanguagePicker();
 
-  static String _nameFor(AppLocalizations l10n, String code) => switch (code) {
-        'en' => l10n.languageEnglish,
-        'es' => l10n.languageSpanish,
-        _ => code,
-      };
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
@@ -358,7 +352,7 @@ class _LanguagePicker extends ConsumerWidget {
               for (final locale in kSupportedLocales)
                 RadioListTile<String>(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(_nameFor(l10n, locale.languageCode)),
+                  title: Text(languageDisplayName(l10n, locale.languageCode)),
                   value: locale.languageCode,
                 ),
             ],

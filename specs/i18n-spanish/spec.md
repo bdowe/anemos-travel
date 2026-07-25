@@ -38,9 +38,15 @@ language is a translation job rather than an engineering project.
 - [ ] A language control in account settings offers *System default*, *English*
       and *Español*; choosing one switches the whole app immediately, without a
       restart, and survives closing and reopening the app.
+- [ ] A globe button in the app bar — on Home, the landing page and the
+      sign-in screen — opens a menu with the same three options, with the
+      current choice checked; selecting one behaves exactly like the settings
+      picker (immediate, persisted, synced to the account when signed in).
 - [ ] The explicit choice is remembered on the account: signing in on a second
       device (with no choice made there) adopts it.
-- [ ] Signed-out surfaces (landing, sign-in, sign-up) honor the device language.
+- [ ] Signed-out surfaces (landing, sign-in, sign-up) honor the device
+      language, and the app-bar globe menu lets a visitor choose explicitly
+      before signing in.
 - [ ] With the app in Spanish, the AI planner replies in Spanish and the
       itineraries, day summaries and titles it produces are in Spanish; dates,
       airport codes and other structured values remain in their canonical
@@ -101,7 +107,9 @@ language is a translation job rather than an engineering project.
 ## UI Behavior
 
 - **Screen / surface:** a *Language / Idioma* group in account settings,
-  alongside the existing email-preferences group.
+  alongside the existing email-preferences group; plus a globe icon button in
+  the Home, landing and sign-in app bars opening a popup menu with the same
+  options.
 - **Happy path:** the user opens account settings, picks *Español*, and the app
   redraws in Spanish immediately. The choice is stored on the device and, if
   signed in, on the account.

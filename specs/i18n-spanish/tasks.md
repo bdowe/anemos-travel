@@ -192,3 +192,13 @@ Also in PR 5:
 **Remaining follow-ups** (all recorded above, none blocking): `PackingItem`
 values, `weather_service.go`'s `summarizeWeather`, email dates staying ISO, and
 the lowercase budget/pace chip labels.
+
+## PR 8 — Visible language switcher
+
+- [x] Amend spec.md: app-bar globe menu on Home / landing / sign-in
+- [x] `l10n.dart`: shared `languageDisplayName`; retire `_LanguagePicker._nameFor`
+- [x] `widgets/language_menu_button.dart` — globe `PopupMenuButton`, checked on
+      the override, entries from `kLocaleSystem` + `kSupportedLocales`
+- [x] ARB: `languageMenuTooltip` (en + es); `flutter gen-l10n`, drift-free
+- [x] Mount in Home, landing and auth app bars (all widths — no rail gate)
+- [x] Tests: `language_menu_button_test.dart`; `flutter analyze` clean

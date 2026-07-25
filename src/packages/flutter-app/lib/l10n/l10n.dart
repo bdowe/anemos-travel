@@ -24,6 +24,16 @@ const List<Locale> kSupportedLocales = [
 bool isSupportedLanguage(String languageCode) =>
     kSupportedLocales.any((l) => l.languageCode == languageCode);
 
+/// The display name of a supported language, in its own language — shared by
+/// the account-settings picker and the app-bar language menu so they can
+/// never disagree.
+String languageDisplayName(AppLocalizations l10n, String code) =>
+    switch (code) {
+      'en' => l10n.languageEnglish,
+      'es' => l10n.languageSpanish,
+      _ => code,
+    };
+
 /// Shorthand for the generated lookups: `context.l10n.commonSave`.
 extension AppLocalizationsX on BuildContext {
   AppLocalizations get l10n => AppLocalizations.of(this);

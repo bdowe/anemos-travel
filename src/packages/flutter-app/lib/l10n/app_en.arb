@@ -24,6 +24,10 @@
   "@languageChangeNote": {
     "description": "Explains that switching language does not retranslate existing saved content."
   },
+  "languageMenuTooltip": "Change language",
+  "@languageMenuTooltip": {
+    "description": "Tooltip of the app-bar globe button that opens the language menu."
+  },
   "commonSave": "Save",
   "commonCancel": "Cancel",
   "commonDelete": "Delete",
