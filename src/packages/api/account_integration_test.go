@@ -65,7 +65,7 @@ func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 	resetDB(t)
 	user, tokenA := createTestUser(t, "me@example.com")
 	// A second device.
-	sessionB, err := issueSession(t.Context(), store.New(dbPool), user.ID)
+	tokenB, err := issueSession(t.Context(), store.New(dbPool), user.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 	if r := doJSON(t, "GET", "/api/v1/auth/me", tokenA, nil); r.Code != http.StatusUnauthorized {
 		t.Fatalf("old session A alive = %d", r.Code)
 	}
-	if r := doJSON(t, "GET", "/api/v1/auth/me", sessionB.ID, nil); r.Code != http.StatusUnauthorized {
+	if r := doJSON(t, "GET", "/api/v1/auth/me", tokenB, nil); r.Code != http.StatusUnauthorized {
 		t.Fatalf("old session B alive = %d", r.Code)
 	}
 	if r := doJSON(t, "GET", "/api/v1/auth/me", fresh, nil); r.Code != http.StatusOK {
@@ -109,7 +109,7 @@ func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 func TestLogoutAllDevices(t *testing.T) {
 	resetDB(t)
 	user, token := createTestUser(t, "me@example.com")
-	other, err := issueSession(t.Context(), store.New(dbPool), user.ID)
+	otherToken, err := issueSession(t.Context(), store.New(dbPool), user.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestLogoutAllDevices(t *testing.T) {
 	if rec := doJSON(t, "POST", "/api/v1/auth/logout-all", token, nil); rec.Code != http.StatusNoContent {
 		t.Fatalf("logout-all = %d", rec.Code)
 	}
-	if r := doJSON(t, "GET", "/api/v1/auth/me", other.ID, nil); r.Code != http.StatusUnauthorized {
+	if r := doJSON(t, "GET", "/api/v1/auth/me", otherToken, nil); r.Code != http.StatusUnauthorized {
 		t.Fatalf("other device still signed in = %d", r.Code)
 	}
 }

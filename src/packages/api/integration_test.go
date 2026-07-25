@@ -152,11 +152,11 @@ func createTestUser(t *testing.T, email string) (store.User, string) {
 	if err != nil {
 		t.Fatalf("createTestUser(%s): %v", email, err)
 	}
-	s, err := issueSession(ctx, q, u.ID)
+	token, err := issueSession(ctx, q, u.ID)
 	if err != nil {
 		t.Fatalf("issueSession(%s): %v", email, err)
 	}
-	return u, s.ID
+	return u, token
 }
 
 func makeAdmin(t *testing.T, id uuid.UUID) {

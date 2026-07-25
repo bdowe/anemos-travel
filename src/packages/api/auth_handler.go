@@ -121,7 +121,7 @@ func userIDFromRequest(r *http.Request) (uuid.UUID, bool, error) {
 	if token == "" {
 		return uuid.UUID{}, false, nil
 	}
-	row, err := store.New(dbPool).GetSessionWithUser(r.Context(), token)
+	row, err := store.New(dbPool).GetSessionWithUser(r.Context(), hashBearerToken(token))
 	if err != nil {
 		if dbErrorStatus(err) == http.StatusServiceUnavailable {
 			ctxLog(r.Context()).Error("auth: session lookup failed (db)", "error", err)
@@ -154,7 +154,7 @@ func authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		q := store.New(dbPool)
-		row, err := q.GetSessionWithUser(r.Context(), token)
+		row, err := q.GetSessionWithUser(r.Context(), hashBearerToken(token))
 		if err != nil {
 			// A DB-connection failure (Postgres restarting, pool closed, conn
 			// refused) must NOT masquerade as an invalid session — that logs
@@ -278,7 +278,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	// Count the successful creation toward this IP's daily ceiling.
 	registrationCounter.incr(ip, time.Now())
 
-	session, err := issueSession(r.Context(), q, user.ID)
+	token, err := issueSession(r.Context(), q, user.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not start session")
 		return
@@ -287,7 +287,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	// or fails on email delivery or analytics.
 	safeGo("sendVerificationEmail", func() { sendVerificationEmailIn(user, signupLocale) })
 	safeGo("recordEvent", func() { recordEvent(user.ID, "user_registered", nil, nil) })
-	writeJSON(w, http.StatusCreated, AuthResponse{User: toUserResponse(user), Token: session.ID})
+	writeJSON(w, http.StatusCreated, AuthResponse{User: toUserResponse(user), Token: token})
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -337,17 +337,17 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	// Successful auth clears the failure streak.
 	loginLockouts.reset(req.Email)
 
-	session, err := issueSession(r.Context(), q, user.ID)
+	token, err := issueSession(r.Context(), q, user.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not start session")
 		return
 	}
-	writeJSON(w, http.StatusOK, AuthResponse{User: toUserResponse(user), Token: session.ID})
+	writeJSON(w, http.StatusOK, AuthResponse{User: toUserResponse(user), Token: token})
 }
 
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	if token := bearerToken(r); token != "" && dbPool != nil {
-		_ = store.New(dbPool).DeleteSession(r.Context(), token)
+		_ = store.New(dbPool).DeleteSession(r.Context(), hashBearerToken(token))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
