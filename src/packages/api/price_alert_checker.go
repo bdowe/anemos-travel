@@ -461,7 +461,7 @@ func buildAlertEmail(locale string, a store.PriceAlert, lowest FlightOffer, matc
 func sendAlertEmail(locale, to string, a store.PriceAlert, lowest FlightOffer, matched pgtype.Date) {
 	subject, body := buildAlertEmail(locale, a, lowest, matched)
 	if err := emailService.Send(to, subject, body); err != nil {
-		log.Printf("price alerts: email to %s failed: %v", to, err)
+		log.Printf("price alerts: email to %s failed: %v", maskEmail(to), err)
 	}
 }
 

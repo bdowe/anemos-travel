@@ -80,7 +80,15 @@ func listUnsubscribeHeaders(unsubscribeURL string) []string {
 // user-facing error.
 func (s *EmailService) SendWithHeaders(to, subject, body string, extraHeaders []string) error {
 	if !s.Configured() {
-		log.Printf("email (not sent, SMTP unconfigured) to=%s subject=%q headers=%v body=%q", to, subject, extraHeaders, body)
+		// The full body carries verify/reset tokens and one-click unsubscribe
+		// links — invaluable for grabbing a token in local dev, but a secret
+		// leak if SMTP is ever unset in production. Log it only outside
+		// production; production gets a masked, body-free line.
+		if os.Getenv("GO_ENV") == "production" {
+			log.Printf("email (not sent, SMTP unconfigured) to=%s subject=%q", maskEmail(to), subject)
+		} else {
+			log.Printf("email (not sent, SMTP unconfigured) to=%s subject=%q headers=%v body=%q", to, subject, extraHeaders, body)
+		}
 		return nil
 	}
 	msg := buildEmailMessage(s.From, to, subject, body, extraHeaders)
@@ -107,4 +115,21 @@ func buildEmailMessage(from, to, subject, body string, extraHeaders []string) st
 	lines = append(lines, extraHeaders...)
 	lines = append(lines, "", body)
 	return strings.Join(lines, "\r\n")
+}
+
+// maskEmail reduces an address to a low-PII form for logs: it keeps the first
+// (and, when the local part is long enough, last) character of the local part
+// and the full domain, so a line stays useful for delivery debugging without
+// recording who the recipient is — e.g. "brian@gmail.com" -> "b***n@gmail.com".
+// A value without a usable local part is dropped entirely.
+func maskEmail(email string) string {
+	at := strings.LastIndexByte(email, '@')
+	if at <= 0 || at == len(email)-1 {
+		return "[redacted-email]"
+	}
+	local, domain := email[:at], email[at+1:]
+	if len(local) <= 2 {
+		return local[:1] + "***@" + domain
+	}
+	return local[:1] + "***" + local[len(local)-1:] + "@" + domain
 }

@@ -107,7 +107,7 @@ func sendVerificationEmailIn(user store.User, locale string) {
 	// throttled resend doesn't invalidate a still-valid prior token. Keyed by
 	// purpose so verify and reset don't block each other. Anti email-bombing.
 	if !emailSendThrottle.allow("verify:"+strings.ToLower(user.Email), time.Now(), emailMinInterval()) {
-		log.Printf("verification email: throttled for %s (min interval not elapsed)", user.Email)
+		log.Printf("verification email: throttled for %s (min interval not elapsed)", maskEmail(user.Email))
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -115,13 +115,13 @@ func sendVerificationEmailIn(user store.User, locale string) {
 	q := store.New(dbPool)
 	token, err := issueEmailToken(ctx, q, user, "verify", verifyTokenTTL)
 	if err != nil {
-		log.Printf("verification email: could not issue token for %s: %v", user.Email, err)
+		log.Printf("verification email: could not issue token for %s: %v", maskEmail(user.Email), err)
 		return
 	}
 	link := publicAppURL("verify/", token)
 	body := tr(locale, "email.verify.body", link)
 	if err := emailSend(user.Email, tr(locale, "email.verify.subject"), body); err != nil {
-		log.Printf("verification email: send to %s failed: %v", user.Email, err)
+		log.Printf("verification email: send to %s failed: %v", maskEmail(user.Email), err)
 	}
 }
 
@@ -233,23 +233,23 @@ func requestPasswordResetHandler(w http.ResponseWriter, r *http.Request) {
 			// still always answers 202, so the throttle is invisible to callers
 			// and can't be used to enumerate accounts. Anti email-bombing.
 			if !emailSendThrottle.allow("reset:"+u.Email, time.Now(), emailMinInterval()) {
-				log.Printf("password reset: throttled for %s (min interval not elapsed)", u.Email)
+				log.Printf("password reset: throttled for %s (min interval not elapsed)", maskEmail(u.Email))
 				return
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			token, err := issueEmailToken(ctx, store.New(dbPool), u, "reset", resetTokenTTL)
 			if err != nil {
-				log.Printf("password reset: could not issue token for %s: %v", u.Email, err)
+				log.Printf("password reset: could not issue token for %s: %v", maskEmail(u.Email), err)
 				return
 			}
 			body := tr(locale, "email.reset.body", publicAppURL("reset/", token), token)
 			if err := emailSend(u.Email, tr(locale, "email.reset.subject"), body); err != nil {
-				log.Printf("password reset: send to %s failed: %v", u.Email, err)
+				log.Printf("password reset: send to %s failed: %v", maskEmail(u.Email), err)
 			}
 		})
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("password reset: lookup failed for %s: %v", email, err)
+		log.Printf("password reset: lookup failed for %s: %v", maskEmail(email), err)
 	}
 	w.WriteHeader(http.StatusAccepted)
 }
