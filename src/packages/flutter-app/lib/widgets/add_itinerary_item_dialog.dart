@@ -7,6 +7,7 @@ import '../models/itinerary_item.dart';
 import '../models/place_search_result.dart';
 import '../providers/places_api_provider.dart';
 import '../providers/trips_provider.dart';
+import '../utils/errors.dart';
 import '../utils/trip_days.dart';
 
 /// Category chips send canonical API values ('attraction', 'restaurant'), which
@@ -130,7 +131,7 @@ class _AddItineraryItemDialogState
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = l10n.itemDialogErrorAddFailed('$e');
+          _error = l10n.itemDialogErrorAddFailed(friendlyError(l10n, e));
         });
       }
     }

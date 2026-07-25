@@ -11,6 +11,7 @@ import '../providers/shared_trip_provider.dart';
 import '../providers/shared_with_me_provider.dart';
 import '../providers/trips_provider.dart';
 import '../theme/spacing.dart';
+import '../utils/errors.dart';
 import '../utils/trip_days.dart';
 import '../utils/trip_format.dart';
 import '../widgets/empty_state.dart';
@@ -128,7 +129,7 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
       Navigator.of(context)
           .pushNamedAndRemoveUntil('/', (route) => false);
     } catch (e) {
-      if (mounted) showSnack(context, l10n.sharedSaveCopyError('$e'));
+      if (mounted) showSnack(context, l10n.sharedSaveCopyError(friendlyError(l10n, e)));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -170,7 +171,7 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
 
       WidgetsBinding.instance.addPostFrameCallback((_) => openOnTripsTab());
     } catch (e) {
-      if (mounted) showSnack(context, l10n.sharedJoinError('$e'));
+      if (mounted) showSnack(context, l10n.sharedJoinError(friendlyError(l10n, e)));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

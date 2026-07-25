@@ -22,6 +22,7 @@ import '../providers/transport_provider.dart';
 import '../providers/trips_provider.dart';
 import '../providers/recent_trip_provider.dart';
 import '../providers/booking_drafts_provider.dart';
+import '../utils/errors.dart';
 import '../providers/booking_todos_provider.dart';
 import '../providers/preferences_provider.dart';
 import '../providers/api_client_provider.dart';
@@ -1072,7 +1073,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .setBooked(widget.tripId, todo.id, booked);
     } catch (e) {
       if (mounted) setState(() => _bookingTodos = prev);
-      _showSnack(l10n.tripUpdateFailed('$e'));
+      _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1103,7 +1104,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .reorderTodos(widget.tripId, [for (final t in newOrder) t.id]);
     } catch (e) {
       if (mounted) setState(() => _bookingTodos = prev);
-      _showSnack(l10n.tripReorderFailed('$e'));
+      _showSnack(l10n.tripReorderFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1178,7 +1179,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           stayIds: [for (final a in newOrder) a.id]);
     } catch (e) {
       if (mounted) setState(() => _stays = prev);
-      _showSnack(l10n.tripReorderFailed('$e'));
+      _showSnack(l10n.tripReorderFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1200,7 +1201,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           segmentIds: [for (final s in newOrder) s.id]);
     } catch (e) {
       if (mounted) setState(() => _segments = prev);
-      _showSnack(l10n.tripReorderFailed('$e'));
+      _showSnack(l10n.tripReorderFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1232,7 +1233,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             .add(widget.tripId, body);
         await _load();
       } catch (e) {
-        _showSnack(l10n.tripAddStayFailed('$e'));
+        _showSnack(l10n.tripAddStayFailed(friendlyError(l10n, e)));
       }
       return;
     }
@@ -1262,7 +1263,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .addSegment(widget.tripId, body);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripAddTransportFailed('$e'));
+      _showSnack(l10n.tripAddTransportFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1278,7 +1279,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             _bookingTodos.where((t) => t.id != todo.id).toList());
       }
     } catch (e) {
-      _showSnack(l10n.tripDeleteFailed('$e'));
+      _showSnack(l10n.tripDeleteFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1343,7 +1344,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         await _syncBookingDrafts(updated);
       }
     } catch (e) {
-      _showSnack(l10n.tripUpdateFailed('$e'));
+      _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1543,7 +1544,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             .clearIfMatches(widget.tripId);
         if (mounted) Navigator.of(context).pop();
       } catch (e) {
-        _showSnack(l10n.tripDeleteFailed('$e'));
+        _showSnack(l10n.tripDeleteFailed(friendlyError(l10n, e)));
       }
     }
   }
@@ -1578,7 +1579,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       ref.invalidate(sharedWithMeProvider);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      _showSnack(l10n.tripLeaveFailed('$e'));
+      _showSnack(l10n.tripLeaveFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1597,7 +1598,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .add(widget.tripId, body);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripAddStayFailed('$e'));
+      _showSnack(l10n.tripAddStayFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1610,7 +1611,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .delete(widget.tripId, a.id);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripRemoveStayFailed('$e'));
+      _showSnack(l10n.tripRemoveStayFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1631,7 +1632,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .update(widget.tripId, a.id, body);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripUpdateStayFailed('$e'));
+      _showSnack(l10n.tripUpdateStayFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1653,7 +1654,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .update(widget.tripId, a.id, {'booked': booked});
     } catch (e) {
       if (mounted) setState(() => _stays = prev);
-      _showSnack(l10n.tripUpdateFailed('$e'));
+      _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1674,7 +1675,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .addSegment(widget.tripId, body);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripAddTransportFailed('$e'));
+      _showSnack(l10n.tripAddTransportFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1687,7 +1688,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .deleteSegment(widget.tripId, s.id);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripRemoveTransportFailed('$e'));
+      _showSnack(l10n.tripRemoveTransportFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1708,7 +1709,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .updateSegment(widget.tripId, s.id, body);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripUpdateTransportFailed('$e'));
+      _showSnack(l10n.tripUpdateTransportFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1729,7 +1730,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .updateSegment(widget.tripId, seg.id, {'booked': booked});
     } catch (e) {
       if (mounted) setState(() => _segments = prev);
-      _showSnack(l10n.tripUpdateFailed('$e'));
+      _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1772,7 +1773,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         sharePositionOrigin: _shareAnchorRect(),
       );
     } catch (e) {
-      _showSnack(l10n.tripShareLinkFailed('$e'));
+      _showSnack(l10n.tripShareLinkFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1804,8 +1805,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       );
     } catch (e) {
       _showSnack(print
-          ? l10n.tripPrintExportFailed('$e')
-          : l10n.tripCalendarExportFailed('$e'));
+          ? l10n.tripPrintExportFailed(friendlyError(l10n, e))
+          : l10n.tripCalendarExportFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1853,7 +1854,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         kind: 'item',
       );
     } catch (e) {
-      _showSnack(l10n.tripEventExportFailed('$e'));
+      _showSnack(l10n.tripEventExportFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1863,7 +1864,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       await ref.read(tripsApiServiceProvider).revokeShareLink(widget.tripId);
       _showSnack(l10n.tripSharingTurnedOff);
     } catch (e) {
-      _showSnack(l10n.tripSharingOffFailed('$e'));
+      _showSnack(l10n.tripSharingOffFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1886,7 +1887,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         sharePositionOrigin: _shareAnchorRect(),
       );
     } catch (e) {
-      _showSnack(l10n.tripInviteFailed('$e'));
+      _showSnack(l10n.tripInviteFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -2645,7 +2646,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .reorderItineraryItems(trip.id, [for (final it in newItems) it.id]);
       await _load(silent: true);
     } catch (e) {
-      _showSnack(l10n.tripReorderFailed('$e'));
+      _showSnack(l10n.tripReorderFailed(friendlyError(l10n, e)));
       await _load(silent: true);
     }
   }
@@ -3254,7 +3255,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .reorderItineraryItems(trip.id, ids);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripReorderFailed('$e'));
+      _showSnack(l10n.tripReorderFailed(friendlyError(l10n, e)));
       await _load();
     }
   }
@@ -3278,7 +3279,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .reorderItineraryItems(trip.id, ids);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripReorderFailed('$e'));
+      _showSnack(l10n.tripReorderFailed(friendlyError(l10n, e)));
       await _load();
     }
   }
@@ -3293,7 +3294,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .read(tripsApiServiceProvider)
           .deleteItineraryItem(trip.id, item.id);
     } catch (e) {
-      _showSnack(l10n.tripRemoveItemFailed(item.name, '$e'));
+      _showSnack(l10n.tripRemoveItemFailed(item.name, friendlyError(l10n, e)));
       return;
     }
     await _load();
@@ -3331,7 +3332,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       await ref.read(tripsApiServiceProvider).addItineraryItem(tripId, body);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripRestoreItemFailed(item.name, '$e'));
+      _showSnack(l10n.tripRestoreItemFailed(item.name, friendlyError(l10n, e)));
     }
   }
 
@@ -3352,7 +3353,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .updateItineraryItem(trip.id, item.id, changes);
       await _load();
     } catch (e) {
-      _showSnack(l10n.tripUpdateItemFailed(item.name, '$e'));
+      _showSnack(l10n.tripUpdateItemFailed(item.name, friendlyError(l10n, e)));
     }
   }
 
@@ -3387,7 +3388,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               .add(tripId, body);
           await _afterFix();
         } catch (e) {
-          _showSnack(l10n.tripAddStayFailed('$e'));
+          _showSnack(l10n.tripAddStayFailed(friendlyError(l10n, e)));
         }
         break;
       case 'add_transport':
@@ -3408,7 +3409,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               .addSegment(tripId, body);
           await _afterFix();
         } catch (e) {
-          _showSnack(l10n.tripAddTransportFailed('$e'));
+          _showSnack(l10n.tripAddTransportFailed(friendlyError(l10n, e)));
         }
         break;
       case 'move_item':
@@ -3432,7 +3433,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   ),
           ));
         } catch (e) {
-          _showSnack(l10n.tripMoveItemFailed('$e'));
+          _showSnack(l10n.tripMoveItemFailed(friendlyError(l10n, e)));
         }
         break;
       case 'mark_booked':
@@ -3454,7 +3455,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             ),
           ));
         } catch (e) {
-          _showSnack(l10n.tripUpdateBookingFailed('$e'));
+          _showSnack(l10n.tripUpdateBookingFailed(friendlyError(l10n, e)));
         }
         break;
       case 'add_packing':
@@ -3480,13 +3481,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   ref.invalidate(checklistProvider(tripId));
                   _invalidateReview();
                 } catch (e) {
-                  _showSnack(l10n.tripUndoFailed('$e'));
+                  _showSnack(l10n.tripUndoFailed(friendlyError(l10n, e)));
                 }
               },
             ),
           ));
         } catch (e) {
-          _showSnack(l10n.tripAddPackingFailed('$e'));
+          _showSnack(l10n.tripAddPackingFailed(friendlyError(l10n, e)));
         }
         break;
       case 'set_dates':
@@ -3530,7 +3531,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .updateItineraryItem(widget.tripId, itemId, {'day': day});
       await _afterFix();
     } catch (e) {
-      _showSnack(l10n.tripMoveItemFailed('$e'));
+      _showSnack(l10n.tripMoveItemFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -3556,7 +3557,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     try {
       budget = await ref.read(budgetProvider(widget.tripId).future);
     } catch (e) {
-      _showSnack(l10n.tripLoadBudgetFailed('$e'));
+      _showSnack(l10n.tripLoadBudgetFailed(friendlyError(l10n, e)));
       return;
     }
     if (!mounted) return;
@@ -3605,7 +3606,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       ref.invalidate(budgetProvider(widget.tripId));
       await _afterFix();
     } catch (e) {
-      _showSnack(l10n.tripUpdateBudgetFailed('$e'));
+      _showSnack(l10n.tripUpdateBudgetFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -5171,7 +5172,7 @@ class _AddBookingTodoDialogState extends ConsumerState<_AddBookingTodoDialog> {
     } catch (e) {
       setState(() {
         _saving = false;
-        _error = l10n.tripSaveFailed('$e');
+        _error = l10n.tripSaveFailed(friendlyError(l10n, e));
       });
     }
   }

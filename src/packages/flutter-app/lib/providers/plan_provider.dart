@@ -46,7 +46,10 @@ class PlanState {
   final String? eventLinksCity;
   final List<LocalRecommendation>? localRecs;
   final String? localRecsCity;
-  final String? error;
+  // Either a friendly String the /plan SSE stream sent, or a raw caught error
+  // (ApiException) from a failed connect. friendlyError() renders both: it
+  // passes a String through unchanged and classifies an ApiException.
+  final Object? error;
 
   /// Messages the user sent while a turn was streaming, waiting FIFO to be
   /// sent. Always replaced whole, never mutated in place.
@@ -162,7 +165,7 @@ class PlanState {
       eventLinksCity: eventLinksCity == _sentinel ? this.eventLinksCity : eventLinksCity as String?,
       localRecs: localRecs == _sentinel ? this.localRecs : localRecs as List<LocalRecommendation>?,
       localRecsCity: localRecsCity == _sentinel ? this.localRecsCity : localRecsCity as String?,
-      error: error == _sentinel ? this.error : error as String?,
+      error: error == _sentinel ? this.error : error,
       queuedMessages: queuedMessages ?? this.queuedMessages,
       suggestedReplies: suggestedReplies ?? this.suggestedReplies,
       profileUpdateNote:
@@ -572,7 +575,7 @@ class PlanNotifier extends StateNotifier<PlanState> {
         activeTools: [],
         isCompacting: false,
         suggestedReplies: [],
-        error: e.toString(),
+        error: e,
       );
     }
   }
