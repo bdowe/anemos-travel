@@ -3794,6 +3794,12 @@ abstract class AppLocalizations {
   /// **'By signing up you agree to the '**
   String get legalAgreementPrefix;
 
+  /// No description provided for @legalConsentCheckboxPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'I agree to the '**
+  String get legalConsentCheckboxPrefix;
+
   /// No description provided for @legalTermsOfService.
   ///
   /// In en, this message translates to:
@@ -4783,6 +4789,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Other'**
   String get calendarModeOther;
+
+  /// No description provided for @errorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your internet connection and try again.'**
+  String get errorNetwork;
+
+  /// No description provided for @errorTooManyRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re going a little too fast — wait a moment and try again.'**
+  String get errorTooManyRequests;
+
+  /// No description provided for @errorSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Your session has expired. Please sign in again.'**
+  String get errorSession;
+
+  /// No description provided for @errorServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong on our end. Please try again in a moment.'**
+  String get errorServer;
+
+  /// No description provided for @errorGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get errorGeneric;
 }
 
 class _AppLocalizationsDelegate

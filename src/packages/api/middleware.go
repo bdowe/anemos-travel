@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -49,6 +51,77 @@ func (s *statusRecorder) Flush() {
 	}
 }
 
+// tokenPathPrefixes are URL path prefixes whose NEXT segment is a secret — a
+// signed export token, a share/invite/unsubscribe token, or a share-preview
+// token. redactPath scrubs that segment so capability tokens never reach the
+// request log (from where they could be replayed).
+var tokenPathPrefixes = []string{
+	"/api/v1/export/",
+	"/api/v1/shared/",
+	"/api/v1/invites/",
+	"/api/v1/unsubscribe/",
+	"/api/v1/share-preview/",
+}
+
+// redactPath replaces the secret segment following a known token-bearing
+// prefix with "[redacted]", keeping the rest of the path for debugging
+// (e.g. /api/v1/export/[redacted]/print.html). Paths without such a prefix
+// pass through unchanged.
+func redactPath(p string) string {
+	for _, prefix := range tokenPathPrefixes {
+		if !strings.HasPrefix(p, prefix) {
+			continue
+		}
+		rest := p[len(prefix):]
+		if rest == "" {
+			return p
+		}
+		if i := strings.IndexByte(rest, '/'); i >= 0 {
+			return prefix + "[redacted]" + rest[i:]
+		}
+		return prefix + "[redacted]"
+	}
+	return p
+}
+
+// sensitiveQueryKeys are query parameters whose values are secrets or
+// single-use capability codes (email-verify token, OAuth code/state, and the
+// OAuth token echoes some providers append).
+var sensitiveQueryKeys = map[string]bool{
+	"token":        true,
+	"code":         true,
+	"state":        true,
+	"access_token": true,
+	"id_token":     true,
+}
+
+// redactQuery replaces the values of sensitive query keys with "[redacted]",
+// leaving every other parameter — and the original order — intact. Splitting on
+// the raw "&" is safe because a literal "&" inside a value is always
+// percent-encoded. A query with no sensitive keys is returned verbatim.
+func redactQuery(raw string) string {
+	parts := strings.Split(raw, "&")
+	changed := false
+	for i, p := range parts {
+		key := p
+		if eq := strings.IndexByte(p, '='); eq >= 0 {
+			key = p[:eq]
+		}
+		decoded := key
+		if u, err := url.QueryUnescape(key); err == nil {
+			decoded = u
+		}
+		if sensitiveQueryKeys[strings.ToLower(decoded)] {
+			parts[i] = key + "=[redacted]"
+			changed = true
+		}
+	}
+	if !changed {
+		return raw
+	}
+	return strings.Join(parts, "&")
+}
+
 // requestIDMiddleware assigns each request an ID (honoring an inbound
 // X-Request-ID from the gateway), echoes it on the response, and emits the
 // structured request log line.
@@ -67,13 +140,13 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 		attrs := []any{
 			"request_id", id,
 			"method", r.Method,
-			"path", r.URL.Path,
+			"path", redactPath(r.URL.Path),
 			"status", rec.status,
 			"duration_ms", time.Since(start).Milliseconds(),
 			"remote", clientIP(r),
 		}
 		if q := r.URL.RawQuery; q != "" {
-			attrs = append(attrs, "query", q)
+			attrs = append(attrs, "query", redactQuery(q))
 		}
 		slog.Info("request", attrs...)
 	})

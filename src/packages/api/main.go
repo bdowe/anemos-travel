@@ -428,98 +428,6 @@ func flightsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func airbnbParseHandler(w http.ResponseWriter, r *http.Request) {
-	var req AirbnbParseRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		ctxLog(r.Context()).Error("invalid JSON request body", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(Response{Message: "Invalid JSON in request body", Status: "error"})
-		return
-	}
-	if req.URL == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(Response{Message: "url is required", Status: "error"})
-		return
-	}
-
-	svc := NewAirbnbService()
-	listing, err := svc.ParseListing(req.URL)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		json.NewEncoder(w).Encode(Response{Message: err.Error(), Status: "error"})
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(listing)
-}
-
-// airbnbDebugHandler returns a summarized key-tree of window.__NEXT_DATA__ so
-// we can identify the correct field paths without parsing megabytes of JSON.
-func airbnbDebugHandler(w http.ResponseWriter, r *http.Request) {
-	var req AirbnbParseRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		ctxLog(r.Context()).Error("invalid JSON request body", "error", err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(Response{Message: "Invalid JSON in request body", Status: "error"})
-		return
-	}
-	if req.URL == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(Response{Message: "url is required", Status: "error"})
-		return
-	}
-
-	svc := NewAirbnbService()
-	result, err := svc.FetchDebugInfo(req.URL)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		json.NewEncoder(w).Encode(Response{Message: err.Error(), Status: "error"})
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-// summarizeStructure recursively builds a key-tree of the data to the given
-// depth. Objects become their key maps, arrays show count + first element,
-// strings are truncated to 120 chars, primitives are shown as-is.
-func summarizeStructure(node interface{}, depth int) interface{} {
-	if depth == 0 {
-		return "…"
-	}
-	switch v := node.(type) {
-	case map[string]interface{}:
-		out := make(map[string]interface{}, len(v))
-		for k, val := range v {
-			out[k] = summarizeStructure(val, depth-1)
-		}
-		return out
-	case []interface{}:
-		if len(v) == 0 {
-			return []interface{}{}
-		}
-		return map[string]interface{}{
-			"_count": len(v),
-			"_first": summarizeStructure(v[0], depth-1),
-		}
-	case string:
-		if len(v) > 120 {
-			return v[:120] + "…"
-		}
-		return v
-	default:
-		return v
-	}
-}
-
 // sentryEnabled records whether sentry.Init succeeded. Every Sentry call site
 // outside sentry_slog.go is guarded on it, so with SENTRY_DSN unset the
 // binary takes the exact same code paths as before Sentry existed. (sentry-go
@@ -574,14 +482,15 @@ func shouldWarnSigningSecrets(goEnv, exportSecret, unsubSecret string) bool {
 		strings.TrimSpace(unsubSecret) == ""
 }
 
-// warnIfSigningSecretsUnset emits a loud startup warning (never fatal — a soft
-// launch shouldn't die on this) when running in production without a stable
-// signing secret. Reads the raw envs directly, which is non-invasive: the token
-// files resolve their secret lazily via sync.Once, so this re-read does not force
-// or perturb their initialization.
+// warnIfSigningSecretsUnset logs at error level (never fatal — a soft launch
+// shouldn't die on this, but error level routes it to Sentry so a misconfigured
+// production deploy pages instead of scrolling past) when running in production
+// without a stable signing secret. Reads the raw envs directly, which is
+// non-invasive: the token files resolve their secret lazily via sync.Once, so
+// this re-read does not force or perturb their initialization.
 func warnIfSigningSecretsUnset() {
 	if shouldWarnSigningSecrets(os.Getenv("GO_ENV"), os.Getenv("EXPORT_SIGNING_SECRET"), os.Getenv("UNSUBSCRIBE_SIGNING_SECRET")) {
-		slog.Warn("signing secrets unset — outstanding unsubscribe/export links will break on restart; set EXPORT_SIGNING_SECRET (openssl rand -hex 32) in production")
+		slog.Error("signing secrets unset — outstanding unsubscribe/export links will break on restart; set EXPORT_SIGNING_SECRET (openssl rand -hex 32) in production")
 	}
 }
 
@@ -767,8 +676,6 @@ func buildRouter() *mux.Router {
 	transcribe := rateLimitMiddleware(transcribeLimiter)
 	api.Handle("/transcribe", transcribe(http.HandlerFunc(transcribeHandler))).Methods("POST")
 	api.HandleFunc("/transcribe/availability", transcribeAvailabilityHandler).Methods("GET")
-	api.HandleFunc("/airbnb/parse", airbnbParseHandler).Methods("POST")
-	api.HandleFunc("/airbnb/debug", airbnbDebugHandler).Methods("POST")
 	api.Handle("/auth/register", strict(http.HandlerFunc(registerHandler))).Methods("POST")
 	api.Handle("/auth/login", strict(http.HandlerFunc(loginHandler))).Methods("POST")
 	// Reset/verify are unauthenticated and trigger email sends — strict tier.

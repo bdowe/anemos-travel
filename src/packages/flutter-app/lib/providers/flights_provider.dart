@@ -22,7 +22,9 @@ class FlightsState {
   final String? bestOfferId;
   final String optimizeFor;
   final bool loading;
-  final String? error;
+  // Holds the raw caught error (an ApiException, usually) so the UI can render
+  // it via friendlyError(l10n, ...); providers have no BuildContext/l10n.
+  final Object? error;
   final bool hasSearched;
 
   const FlightsState({
@@ -48,7 +50,7 @@ class FlightsState {
           bestOfferId == _sentinel ? this.bestOfferId : bestOfferId as String?,
       optimizeFor: optimizeFor ?? this.optimizeFor,
       loading: loading ?? this.loading,
-      error: error == _sentinel ? this.error : error as String?,
+      error: error == _sentinel ? this.error : error,
       hasSearched: hasSearched ?? this.hasSearched,
     );
   }
@@ -77,7 +79,7 @@ class FlightsNotifier extends StateNotifier<FlightsState> {
         loading: false,
       );
     } catch (e) {
-      state = state.copyWith(loading: false, error: e.toString());
+      state = state.copyWith(loading: false, error: e);
     }
   }
 

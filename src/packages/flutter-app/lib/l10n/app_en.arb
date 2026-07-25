@@ -1416,6 +1416,7 @@
   "sharedSaveSeparateCopy": "Or save a separate copy",
   "sharedKeepInTrips": "Keep in my trips",
   "legalAgreementPrefix": "By signing up you agree to the ",
+  "legalConsentCheckboxPrefix": "I agree to the ",
   "legalTermsOfService": "Terms of Service",
   "legalAgreementConjunction": " and ",
   "legalPrivacyPolicy": "Privacy Policy",
@@ -1846,5 +1847,10 @@
   "calendarModeBus": "Bus",
   "calendarModeCar": "Car",
   "calendarModeFerry": "Ferry",
-  "calendarModeOther": "Other"
+  "calendarModeOther": "Other",
+  "errorNetwork": "Check your internet connection and try again.",
+  "errorTooManyRequests": "You're going a little too fast — wait a moment and try again.",
+  "errorSession": "Your session has expired. Please sign in again.",
+  "errorServer": "Something went wrong on our end. Please try again in a moment.",
+  "errorGeneric": "Something went wrong. Please try again."
 }

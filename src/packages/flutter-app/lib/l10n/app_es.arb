@@ -616,6 +616,7 @@
   "sharedSaveSeparateCopy": "O guardar una copia aparte",
   "sharedKeepInTrips": "Guardar en mis viajes",
   "legalAgreementPrefix": "Al registrarte aceptas los ",
+  "legalConsentCheckboxPrefix": "Acepto los ",
   "legalTermsOfService": "Términos del servicio",
   "legalAgreementConjunction": " y la ",
   "legalPrivacyPolicy": "Política de privacidad",
@@ -780,5 +781,10 @@
   "calendarModeBus": "Autobús",
   "calendarModeCar": "Coche",
   "calendarModeFerry": "Ferri",
-  "calendarModeOther": "Otro"
+  "calendarModeOther": "Otro",
+  "errorNetwork": "Comprueba tu conexión a internet e inténtalo de nuevo.",
+  "errorTooManyRequests": "Vas un poco demasiado rápido: espera un momento e inténtalo de nuevo.",
+  "errorSession": "Tu sesión ha caducado. Vuelve a iniciar sesión.",
+  "errorServer": "Algo salió mal de nuestro lado. Inténtalo de nuevo en un momento.",
+  "errorGeneric": "Algo salió mal. Inténtalo de nuevo."
 }

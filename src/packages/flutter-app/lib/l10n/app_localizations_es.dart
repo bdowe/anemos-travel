@@ -2128,6 +2128,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get legalAgreementPrefix => 'Al registrarte aceptas los ';
 
   @override
+  String get legalConsentCheckboxPrefix => 'Acepto los ';
+
+  @override
   String get legalTermsOfService => 'Términos del servicio';
 
   @override
@@ -2785,4 +2788,22 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get calendarModeOther => 'Otro';
+
+  @override
+  String get errorNetwork =>
+      'Comprueba tu conexión a internet e inténtalo de nuevo.';
+
+  @override
+  String get errorTooManyRequests =>
+      'Vas un poco demasiado rápido: espera un momento e inténtalo de nuevo.';
+
+  @override
+  String get errorSession => 'Tu sesión ha caducado. Vuelve a iniciar sesión.';
+
+  @override
+  String get errorServer =>
+      'Algo salió mal de nuestro lado. Inténtalo de nuevo en un momento.';
+
+  @override
+  String get errorGeneric => 'Algo salió mal. Inténtalo de nuevo.';
 }

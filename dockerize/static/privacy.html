@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
   <title>Privacy Policy — Golden Tempo Travel</title>
   <style>
     * { box-sizing: border-box; }
@@ -14,15 +13,6 @@
       color: #263238;
       background: #fafafa;
       line-height: 1.6;
-    }
-    .draft-banner {
-      background: #fff3cd;
-      color: #664d03;
-      border-bottom: 1px solid #ffe69c;
-      text-align: center;
-      padding: 10px 16px;
-      font-weight: 600;
-      font-size: 0.95rem;
     }
     header {
       background: linear-gradient(to bottom right, #00897B, #004D40);
@@ -57,15 +47,20 @@
       border-radius: 0 8px 8px 0;
       margin: 20px 0;
     }
-    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-    th, td {
-      text-align: left;
-      padding: 8px 10px;
-      border-bottom: 1px solid #CFD8DC;
-      vertical-align: top;
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 16px 0;
       font-size: 0.95rem;
     }
-    th { color: #00695C; }
+    th, td {
+      border: 1px solid #CFD8DC;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #E0F2F1; color: #00695C; }
+    .table-scroll { overflow-x: auto; }
     footer {
       border-top: 1px solid #CFD8DC;
       margin-top: 48px;
@@ -77,142 +72,314 @@
   </style>
 </head>
 <body>
-  <div class="draft-banner">DRAFT — pending legal review. This document is not yet final.</div>
   <header>
     <div class="wrap">
       <p class="brand">Golden Tempo Travel</p>
       <h1>Privacy Policy</h1>
-      <p class="meta">Draft of July 6, 2026 · Golden Tempo LLC</p>
+      <p class="meta">Effective July 24, 2026 · Golden Tempo LLC</p>
     </div>
   </header>
   <main>
     <p>
       Golden Tempo Travel is operated by <strong>Golden Tempo LLC</strong>, a
-      New Jersey limited liability company ("we", "us"). This policy explains
-      what information the service collects, how it is used, and the choices
-      you have. Questions or requests:
+      New Jersey limited liability company ("we," "us"). This policy explains
+      what we collect, how we use it, who we share it with, and the choices you
+      have. It is written to match what the product actually does. Questions or
+      requests:
       <a href="mailto:goldentempollc@gmail.com">goldentempollc@gmail.com</a>.
     </p>
-
     <div class="callout">
       <strong>The short version:</strong> we store your account email, your
-      trips and travel preferences, and first-party usage events. We do not
-      sell personal data, we do not use third-party analytics or advertising
-      trackers, and you can delete your account (and the data that goes with
-      it) yourself, in the app, at any time.
+      trips, and your conversations with the AI planning assistant. Your
+      planning messages are sent to Anthropic (the AI provider) to generate
+      responses. We keep a first-party log of product events with no third-party
+      analytics or ad trackers, we do not sell personal data, and you can delete
+      your account — and everything in it — yourself, in the app, at any time.
     </div>
 
     <h2>1. Information we collect</h2>
+    <p>
+      <strong>Account information.</strong> Your email address, an optional
+      display name, your language preference, and — if you sign up with a
+      password — the password stored only as a bcrypt hash (we cannot see your
+      actual password). If you sign in with Google or Apple, we store your email
+      and the provider's account identifier so we can recognize you next time;
+      SSO-only accounts have no password at all.
+    </p>
+    <p>
+      <strong>Trips and planning content.</strong> Trips, itineraries, saved
+      places, accommodations and transport segments, booking checklists, packing
+      lists, budgets and expenses, price alerts (route, dates, and baggage
+      preference), and trip share/invite records.
+    </p>
+    <p>
+      <strong>AI conversations.</strong> When you are signed in, your
+      conversations with the planning assistant are saved so you can pick up
+      where you left off. <strong>Images you attach are not stored</strong> —
+      they are sent to the AI provider to generate a response, and only an
+      "image attached" marker is kept in the saved conversation. Conversations
+      you have while signed out are not saved at all.
+    </p>
+    <p>
+      <strong>Traveler preferences and profile notes.</strong> Preferences you
+      set (budget, pace, interests, home airport) and a short, AI-maintained set
+      of profile notes about how you like to travel (for example "travels with
+      two kids," "vegetarian"), built from your planning conversations so future
+      trips are personalized. The AI is instructed <strong>not</strong> to
+      record sensitive information (such as health, religion, or politics) unless
+      you explicitly ask it to remember something. You can view and edit these
+      preferences in the app, and they are deleted with your account.
+    </p>
+    <p>
+      <strong>Usage events.</strong> A first-party log of product events
+      (account created, trip saved, booking link clicked, AI session token
+      counts, and similar). Each event carries your internal account ID, an
+      event type, an optional trip ID, and limited technical metadata — by
+      design it contains <strong>no email address, no IP address, no browser
+      user-agent, and no free text</strong>. It lives in our own database; we
+      use no third-party analytics services. A small set of events (such as
+      landing-page clicks) can be recorded without any account attached.
+    </p>
+    <p>
+      <strong>Server logs and security data.</strong> Like nearly every web
+      service, our servers keep standard request logs — timestamp, request path,
+      response status, and <strong>your IP address</strong> — used for security,
+      debugging, and abuse prevention, and routinely rotated. We also keep
+      short-lived, in-memory counters keyed by IP address to rate-limit abuse
+      (login lockouts, daily AI-usage caps, sign-up caps); these are never
+      written to the database and disappear on restart. Our edge network
+      provider (Cloudflare) also processes your IP address and requests to route
+      traffic and block attacks.
+    </p>
+    <p>
+      <strong>Email delivery records.</strong> When we send you email
+      (verification, password reset, price alerts, trip reminders, co-planning
+      invites), your email address is processed by our transactional email
+      provider for delivery. Links in verification and reset emails use
+      single-use, expiring tokens that we store only as cryptographic hashes.
+    </p>
+
+    <h2>2. How we use information</h2>
     <ul>
-      <li><strong>Account information.</strong> Your email address, an optional
-        display name, and your password — stored only as a cryptographic hash;
-        we cannot see your actual password.</li>
-      <li><strong>Trip and planning data.</strong> Trips, itineraries, saved
-        places, booking checklists, price alerts, and the traveler preferences
-        you set (for example travel style or pace) — including messages you
-        send to the AI planning assistant.</li>
-      <li><strong>Usage events.</strong> A first-party log of product events
-        (for example: account created, trip saved, booking link clicked, AI
-        planning session token counts). These events are tied to your account
-        ID only — by design they contain <strong>no email address, no IP
-        address, no browser user-agent, and no free text</strong>. They live in
-        our own database; we use no third-party analytics services.</li>
-      <li><strong>Email delivery records.</strong> When we send you a
-        verification email, a password-reset code, or a price-alert
-        notification, your email address is processed by our transactional
-        email provider for delivery.</li>
+      <li>To provide the Service: store your trips, generate itineraries, run
+        searches, send the emails you request or subscribe to.</li>
+      <li>To personalize: apply your saved preferences and profile notes to
+        future planning conversations.</li>
+      <li>To keep the Service safe and affordable: rate limiting, abuse
+        prevention, debugging, and cost monitoring.</li>
+      <li>To understand product usage in aggregate, using our own pseudonymous
+        event log.</li>
+      <li>We do <strong>not</strong> use your data for third-party advertising,
+        and we do not sell it.</li>
     </ul>
 
-    <h2>2. Third-party services we use to answer your requests</h2>
+    <h2>3. AI processing (please read this one)</h2>
     <p>
-      When you plan a trip, parts of your request are sent to third-party
-      providers <em>transiently</em> — to look up an answer, not to build a
-      profile of you:
+      The planning assistant is powered by <strong>Anthropic's Claude
+      models</strong>, called from our servers. When you use it, we send
+      Anthropic: your conversation messages, any images you attach, your current
+      trip context, your saved traveler preferences and profile notes, and the
+      results of searches the assistant runs on your behalf. Long conversations
+      are also summarized by an AI model so they can continue past length
+      limits, and after planning sessions an AI model may distill durable travel
+      preferences from the conversation into your profile notes.
     </p>
-    <table>
-      <tr><th>Provider</th><th>What is sent</th><th>Why</th></tr>
-      <tr><td>Google Places</td><td>Place and destination search terms</td><td>Finding and verifying places</td></tr>
-      <tr><td>Duffel</td><td>Airports, dates, passenger counts</td><td>Flight search</td></tr>
-      <tr><td>Ticketmaster</td><td>City and date window</td><td>Local events lookup</td></tr>
-      <tr><td>Open-Meteo</td><td>Destination coordinates and dates</td><td>Weather forecasts</td></tr>
-      <tr><td>Anthropic</td><td>Your planning conversation and trip context</td><td>Generating AI itineraries</td></tr>
-      <tr><td>Speech services</td><td>Voice-dictation audio (only while you use the mic)</td><td>Turning your speech into text</td></tr>
-    </table>
     <p>
-      These lookups are made server-side through our API; the providers do not
-      receive your email address or account identity from us. Results you
-      choose to keep (for example a place added to an itinerary) are stored as
-      part of your trip data.
+      We use Anthropic's commercial API. Under Anthropic's commercial terms, API
+      inputs and outputs are not used to train Anthropic's models by default.
+      Anthropic's own usage policies apply to this processing: see
+      <a href="https://www.anthropic.com/legal" rel="noopener"
+        target="_blank">anthropic.com/legal</a>.
+    </p>
+    <div class="callout">
+      Practical advice: the assistant needs to know about your trip, not about
+      you. Don't paste passport numbers, payment details, or other sensitive
+      personal information into the chat.
+    </div>
+
+    <h2>4. Service providers we share data with, and why</h2>
+    <p>
+      We share data only as needed to answer your requests or run the Service —
+      never for the providers' own marketing:
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Provider</th><th>What they receive</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Anthropic</td><td>Planning conversations, attached images, trip context, preferences (see Section 3)</td><td>AI itinerary generation</td></tr>
+          <tr><td>Google Places</td><td>Place and destination search text</td><td>Finding and verifying places</td></tr>
+          <tr><td>Duffel</td><td>Airports, dates, passenger counts</td><td>Flight search</td></tr>
+          <tr><td>Ticketmaster</td><td>City and date window</td><td>Local events lookup</td></tr>
+          <tr><td>Open-Meteo</td><td>Destination name/coordinates and dates</td><td>Weather forecasts</td></tr>
+          <tr><td>Groq (or your browser's built-in speech service)</td><td>Voice-dictation audio, only while you use the microphone</td><td>Speech-to-text</td></tr>
+          <tr><td>Google / Apple</td><td>Standard sign-in flow data, if you choose SSO</td><td>Account sign-in</td></tr>
+          <tr><td>Resend</td><td>Your email address and message content</td><td>Delivering the emails described above</td></tr>
+          <tr><td>Cloudflare</td><td>IP address and request traffic</td><td>Edge network, TLS, and attack protection</td></tr>
+          <tr><td>Sentry</td><td>Technical error reports (error message and request metadata such as a request ID — not your account profile)</td><td>Error monitoring</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      These lookups are made server-side; search providers do not receive your
+      email address or account identity from us. Results you choose to keep
+      become part of your trip data.
     </p>
     <p>
       <strong>Voice dictation is optional.</strong> If you tap the microphone,
-      audio is transcribed either by your browser's built-in speech service
-      (for example Google in Chrome or Apple in Safari) or by our configured
-      transcription provider, then discarded — we never store your audio, and
-      nothing is sent unless you choose to send the resulting text.
+      audio is transcribed either by your browser's built-in speech service or
+      by our transcription provider, then discarded — we never store your audio.
+    </p>
+    <p>
+      Beyond these providers, we do not share personal data with third parties
+      except: with your direction (share links, invites, booking handoffs), to
+      comply with law or valid legal process, to protect the Service and its
+      users from fraud or abuse, or as part of a business transfer (in which case
+      this policy would continue to apply to your data until changed with
+      notice).
     </p>
 
-    <h2>3. Affiliate and outbound links</h2>
+    <h2>5. Affiliate and outbound links</h2>
     <p>
-      Booking handoff links (for example to Booking.com) open the provider's
-      own site and may include an affiliate identifier so the provider can
-      credit us if you book. Once you leave Golden Tempo Travel, the
+      Booking handoff links (for example Booking.com or Ferryhopper) open the
+      provider's own site and may include an affiliate identifier so the
+      provider can credit us if you book. Once you leave Golden Tempo Travel, the
       provider's own privacy policy applies. We record that a booking link was
-      clicked (see usage events above); we do not receive your payment or
-      booking details.
+      clicked (see usage events); we never receive your payment or booking
+      details.
     </p>
 
-    <h2>4. Cookies and local storage</h2>
-    <p>
-      We use browser local storage to keep your session token so you stay
-      signed in. We do not use advertising cookies, cross-site trackers, or
-      third-party analytics scripts.
-    </p>
-
-    <h2>5. We do not sell personal data</h2>
-    <p>
-      We do not sell, rent, or trade your personal data, and we do not share
-      it with third parties for their own marketing.
-    </p>
-
-    <h2>6. Data retention and deletion</h2>
+    <h2>6. Sharing, invites, and export links</h2>
     <ul>
-      <li>Account, trip, and preference data is kept for as long as your
-        account exists.</li>
-      <li>You can <strong>delete your account in the app</strong> (Account
-        settings → Delete account). Deletion permanently removes your account,
-        trips, itineraries, preferences, alerts, and sessions.</li>
-      <li>Usage events are pseudonymous by design (account ID only, no email,
-        IP, or user-agent) and are retained after account deletion as part of
-        aggregate product statistics; after deletion they no longer link to
-        any identifiable account record.</li>
-      <li>You can also request deletion or a copy of your data by emailing
-        <a href="mailto:goldentempollc@gmail.com">goldentempollc@gmail.com</a>.</li>
+      <li><strong>Share links:</strong> anyone with a share link can view the
+        latest version of that trip until you revoke the link (you can revoke it
+        in the app).</li>
+      <li><strong>Co-planner invites:</strong> sent by email with a single-use,
+        expiring invite token (stored hashed on our side). Co-planners can view
+        and edit the trip; your display name is visible to them.</li>
+      <li><strong>Export and calendar links:</strong> signed links that expire
+        after one hour; anyone with the link can access the export while it is
+        valid.</li>
     </ul>
 
-    <h2>7. Security</h2>
+    <h2>7. Cookies and local storage</h2>
     <p>
-      Passwords are stored only as salted hashes, sessions use expiring
-      tokens, and access to production data is limited. No online service can
-      promise perfect security, but we design for storing as little personal
-      data as possible in the first place.
+      We use your browser's storage for: your session token (so you stay signed
+      in), a local cache of your trips (so they stay viewable offline), and small
+      preferences like language and last-viewed trip. We set <strong>no
+      advertising cookies, no cross-site trackers, and no third-party analytics
+      scripts</strong>. Cloudflare may set strictly-necessary technical cookies
+      for security. You can clear all locally stored data by signing out and
+      clearing your browser's site data.
     </p>
 
-    <h2>8. Children</h2>
+    <h2>8. Data retention</h2>
+    <ul>
+      <li>Account, trip, preference, and conversation data: kept while your
+        account exists.</li>
+      <li>Unfinished planning conversations: automatically deleted after about
+        60 days of inactivity.</li>
+      <li>Email verification/reset/invite tokens: single-use and short-lived;
+        stored only as hashes.</li>
+      <li>Server request logs: kept short-term for security and operations, then
+        rotated.</li>
+      <li>Database backups: we keep a rolling window of recent daily backups
+        (roughly the last ten days). Deleted data leaves the backup rotation as
+        those backups age out.</li>
+      <li>Usage events: pseudonymous by design (internal account ID only). After
+        you delete your account they are retained as aggregate product
+        statistics, but no longer link to any identifiable account record — the
+        account they pointed at no longer exists.</li>
+    </ul>
+
+    <h2>9. Deleting your account</h2>
     <p>
-      The service is not directed to children under 13, and we do not
-      knowingly collect personal information from them. If you believe a child
-      has created an account, contact us and we will delete it.
+      You can delete your account yourself in the app (Account settings → Delete
+      account; password confirmation required unless you signed up via SSO).
+      Deletion immediately and permanently removes your account, trips,
+      itineraries, conversations, preferences and profile notes, alerts,
+      notifications, share links, and sessions from our live database. Copies in
+      rotating backups age out as described above. You can also email us to
+      request deletion.
     </p>
 
-    <h2>9. Changes to this policy</h2>
+    <h2>10. Security</h2>
     <p>
-      We may update this policy as the product evolves. Material changes will
-      be reflected on this page with an updated date. Continued use of the
-      service after a change means you accept the updated policy.
+      Honestly stated: passwords are stored as bcrypt hashes; email-borne tokens
+      (verification, reset, invites) are stored only as SHA-256 hashes; sessions
+      use random, expiring tokens; export links are signed and expire after an
+      hour; all traffic is encrypted in transit (TLS); production access is
+      limited to the operator. We deliberately collect little (no payment data,
+      no precise location tracking, no ad IDs) because the best protection for
+      data is not holding it. No online service can promise perfect security — if
+      we learn of a breach affecting your data, we will notify you as required by
+      law.
     </p>
 
-    <h2>10. Contact</h2>
+    <h2>11. Your rights and controls</h2>
+    <p>Built into the app, today:</p>
+    <ul>
+      <li><strong>Delete your account</strong> (and all your data) — Account
+        settings.</li>
+      <li><strong>Sign out of your other devices</strong> — Account
+        settings.</li>
+      <li><strong>Edit or delete</strong> any trip, conversation, or preference,
+        including the AI-maintained profile notes.</li>
+      <li><strong>Email controls:</strong> verification and reset emails are
+        transactional; price alerts stop when you delete the alert; trip
+        reminders and weekly digest emails have opt-outs in Account settings
+        <strong>and</strong> a one-click unsubscribe link in every such
+        email.</li>
+      <li><strong>Revoke share links</strong> and remove co-planners.</li>
+    </ul>
+    <p>
+      By email
+      (<a href="mailto:goldentempollc@gmail.com">goldentempollc@gmail.com</a>):
+      you can request a copy of your data, correction, or deletion, and we will
+      act on it within 30 days.
+    </p>
+    <p>
+      <strong>If you are in the EEA, UK, or a jurisdiction with similar
+      laws:</strong> we process your data to perform our contract with you
+      (providing the Service), for our legitimate interests (security, abuse
+      prevention, product improvement using pseudonymous events), and with your
+      consent where required (non-essential emails). You have rights of access,
+      rectification, erasure, portability, restriction, and objection, and the
+      right to complain to your local supervisory authority. We are a small US
+      company and have not appointed an EU/UK representative.
+    </p>
+    <p>
+      <strong>California residents:</strong> we do not sell or "share" personal
+      information as defined by the CCPA/CPRA, and we honor access and deletion
+      requests from anyone, regardless of where you live.
+    </p>
+
+    <h2>12. International transfers</h2>
+    <p>
+      We are US-based, and your data is processed and stored in the United States
+      (our own database servers, plus the US-based providers listed above). If
+      you use the Service from outside the US, you understand your data is
+      transferred to and processed in the US, where privacy laws may differ from
+      those in your country.
+    </p>
+
+    <h2>13. Children</h2>
+    <p>
+      The Service is not directed to children under 13, and we do not knowingly
+      collect personal information from them. If you believe a child under 13 has
+      created an account, contact us and we will delete it.
+    </p>
+
+    <h2>14. Changes to this policy</h2>
+    <p>
+      We may update this policy as the product evolves. Material changes will be
+      posted here with a new effective date, and we will make reasonable efforts
+      to notify you in the app or by email. Continued use after a change means
+      you accept the updated policy.
+    </p>
+
+    <h2>15. Contact</h2>
     <p>
       Golden Tempo LLC (New Jersey, USA)<br>
       <a href="mailto:goldentempollc@gmail.com">goldentempollc@gmail.com</a>

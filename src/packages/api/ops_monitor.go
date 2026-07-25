@@ -157,7 +157,7 @@ func (m *healthMonitor) alertTransition(ctx context.Context, state healthState) 
 	subject, body := buildOpsAlertEmail(state.degraded, state.reasons, publicAppURL())
 	for _, a := range admins {
 		if err := m.sendEmail(a.Email, subject, body); err != nil {
-			log.Printf("ops health: alert email to %s failed: %v", a.Email, err)
+			log.Printf("ops health: alert email to %s failed: %v", maskEmail(a.Email), err)
 		}
 	}
 }

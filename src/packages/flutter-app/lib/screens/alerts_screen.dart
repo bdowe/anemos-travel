@@ -6,6 +6,7 @@ import '../providers/alerts_provider.dart';
 import '../providers/notifications_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/spacing.dart';
+import '../utils/errors.dart';
 import '../utils/money_format.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/offline_banner.dart' show relativeTime;
@@ -267,7 +268,7 @@ class _AlertCard extends ConsumerWidget {
         await notifier.updateTarget(alert.id, result.target!);
       }
     } catch (e) {
-      if (context.mounted) showSnack(context, '$e');
+      if (context.mounted) showSnack(context, friendlyError(l10n, e));
     }
   }
 
@@ -285,7 +286,7 @@ class _AlertCard extends ConsumerWidget {
       try {
         await action();
       } catch (e) {
-        if (context.mounted) showSnack(context, '$e');
+        if (context.mounted) showSnack(context, friendlyError(l10n, e));
       }
     }
 

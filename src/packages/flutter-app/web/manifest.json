@@ -7,7 +7,7 @@
     "display": "standalone",
     "background_color": "#00695C",
     "theme_color": "#00695C",
-    "description": "Plan trips, optimize routes, and build itineraries with AI.",
+    "description": "Plan trips and build day-by-day itineraries with an AI travel assistant.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

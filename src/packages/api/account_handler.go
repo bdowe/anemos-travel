@@ -137,12 +137,12 @@ func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	if err := q.DeleteSessionsByUser(r.Context(), user.ID); err != nil {
 		log.Printf("change password: could not revoke sessions for %s: %v", user.ID, err)
 	}
-	session, err := issueSession(r.Context(), q, user.ID)
+	token, err := issueSession(r.Context(), q, user.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "password changed — sign in again")
 		return
 	}
-	writeJSON(w, http.StatusOK, AuthResponse{User: toUserResponse(user), Token: session.ID})
+	writeJSON(w, http.StatusOK, AuthResponse{User: toUserResponse(user), Token: token})
 }
 
 func logoutAllHandler(w http.ResponseWriter, r *http.Request) {

@@ -28,6 +28,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _displayNameController = TextEditingController();
   late bool _isLogin = widget.initialIsLogin;
 
+  // Blocking affirmative consent for email sign-up (launch legal gate): the
+  // create-account button stays disabled until this is ticked. Login and SSO
+  // don't use it — SSO shows an informational line under its own buttons.
+  bool _agreedToTerms = false;
+
   // Auto-submit after a password-manager autofill. An extension fill is
   // distinctive: each field goes from empty to its full value within one
   // rapid burst (a single change event, or keystroke-simulated characters
@@ -115,6 +120,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Future<void> _submit() async {
+    // Consent gate for email sign-up: also guards the Enter-key path
+    // (onFieldSubmitted), which reaches here without touching the disabled
+    // create-account button.
+    if (!_isLogin && !_agreedToTerms) return;
     if (!_formKey.currentState!.validate()) return;
     final notifier = ref.read(authProvider.notifier);
     final email = _emailController.text.trim();
@@ -268,9 +277,18 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         textAlign: TextAlign.center,
                       ),
                     ],
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    if (!_isLogin) ...[
+                      LegalConsentCheckbox(
+                        value: _agreedToTerms,
+                        onChanged: (v) => setState(() => _agreedToTerms = v),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     FilledButton(
-                      onPressed: auth.loading ? null : _submit,
+                      onPressed: auth.loading || (!_isLogin && !_agreedToTerms)
+                          ? null
+                          : _submit,
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
@@ -286,10 +304,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                   : l10n.authCreateAccount,
                             ),
                     ),
-                    if (!_isLogin) ...[
-                      const SizedBox(height: 12),
-                      const LegalAgreementText(),
-                    ],
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: auth.loading ? null : _toggleMode,

@@ -216,10 +216,10 @@ func ssoExchangeHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "could not complete sign-in")
 		return
 	}
-	session, err := issueSession(r.Context(), q, user.ID)
+	token, err := issueSession(r.Context(), q, user.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not start session")
 		return
 	}
-	writeJSON(w, http.StatusOK, AuthResponse{User: toUserResponse(user), Token: session.ID})
+	writeJSON(w, http.StatusOK, AuthResponse{User: toUserResponse(user), Token: token})
 }
