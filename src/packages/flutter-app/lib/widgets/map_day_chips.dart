@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
+
 /// Day-filter chips overlaid on a trip map: `All · Day 1 · … · Day N`
 /// (specs/today-mode). [selected] is the 1-based day, null meaning All;
 /// tapping a chip reports the new value through [onSelected] (tapping the
@@ -77,15 +79,18 @@ class MapDayChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (dayCount == 0) return const SizedBox.shrink();
+    // Same keys the trip-detail filter menu uses, so the chip row and the
+    // list agree in every language (specs/i18n-spanish).
+    final l10n = context.l10n;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          _chip(label: 'All', value: null),
+          _chip(label: l10n.tripFilterAll, value: null),
           for (var d = 1; d <= dayCount; d++) ...[
             const SizedBox(width: 6),
             _chip(
-              label: 'Day $d',
+              label: l10n.tripDayN(d),
               value: d,
               muted: mappedDays != null && !mappedDays!.contains(d),
             ),

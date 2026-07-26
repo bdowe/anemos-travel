@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 /// Centers page content and caps its width on wide (web/desktop) layouts.
 ///
 /// Place it *inside* the scroll view, around the content column, so the
-/// scrollable region stays full-width while the content is constrained.
-/// Currently used by the home screen; other scrollable screens (trips list,
-/// preferences) can adopt it later.
+/// scrollable region stays full-width (mouse wheel and scrollbar keep working
+/// in the gutters) while the content is constrained. The house width tiers:
+/// 700 (default, reading/list pages), 760 (chat column), 900 (dense pages
+/// like trip detail).
 class PageContainer extends StatelessWidget {
   final Widget child;
   final double maxWidth;

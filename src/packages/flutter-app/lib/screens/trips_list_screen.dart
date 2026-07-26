@@ -46,8 +46,8 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final state = ref.watch(tripsProvider);
-    final resumable =
-        ref.watch(resumableChatsProvider).valueOrNull ?? const <ChatSessionSummary>[];
+    final resumable = ref.watch(resumableChatsProvider).valueOrNull ??
+        const <ChatSessionSummary>[];
     // Watched before the guard branches: an account whose only trips are
     // shared-with-me must reach the list, not the plan-a-trip empty state.
     final sharedAsync = ref.watch(sharedWithMeProvider);
@@ -88,8 +88,8 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
         message: l10n.tripsListEmptyMessage,
         actions: [
           FilledButton.icon(
-            onPressed: () => ref.read(navIndexProvider.notifier).state =
-                AppTab.plan.index,
+            onPressed: () =>
+                ref.read(navIndexProvider.notifier).state = AppTab.plan.index,
             icon: const Icon(Icons.auto_awesome),
             label: Text(l10n.tripsListPlanTrip),
           ),
@@ -106,6 +106,10 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
         },
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.md),
+          // Pull-to-refresh must arm even when the list is shorter than the
+          // viewport (one or two trips is the common case) — clamping physics
+          // would swallow the gesture on Android/web.
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
             // Centered 700px column on wide layouts, Home's exact pattern:
             // the ListView stays full-width (wheel/scrollbar work in the
@@ -153,8 +157,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(
                           AppSpacing.xs, AppSpacing.lg, 0, AppSpacing.sm),
-                      child:
-                          SectionHeader(title: l10n.tripsListSharedWithYou),
+                      child: SectionHeader(title: l10n.tripsListSharedWithYou),
                     ),
                     for (final t in shared) _TripCard(trip: t, isAdmin: false),
                   ],
@@ -308,7 +311,8 @@ class _DateChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.event, size: 13, color: theme.colorScheme.onSurfaceVariant),
+          Icon(Icons.event,
+              size: 13, color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(width: AppSpacing.xs),
           Text(
             label,
@@ -381,7 +385,8 @@ class _VersionList extends ConsumerWidget {
               ListTile(
                 dense: true,
                 leading: const Icon(Icons.history, size: 20),
-                title: Text(versions[i].title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                title: Text(versions[i].title,
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
                 subtitle: Text(
                   i == 0
                       ? l10n.tripsListVersionLatest(
