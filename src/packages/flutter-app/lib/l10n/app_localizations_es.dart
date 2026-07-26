@@ -2697,6 +2697,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get guidesErrorTitle => 'No se pudieron cargar las guías';
 
   @override
+  String get guidesErrorMessage =>
+      'Comprueba tu conexión e inténtalo de nuevo.';
+
+  @override
   String get guidesEmptyTitle => 'Aún no hay guías';
 
   @override

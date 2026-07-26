@@ -6,7 +6,9 @@ import '../providers/local_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/gradient_app_bar.dart';
 import '../widgets/page_container.dart';
+import '../widgets/section_header.dart';
 import 'local_guide_detail_screen.dart';
 
 /// All published local guides, grouped by city — the "See all" target of the
@@ -20,71 +22,74 @@ class GuidesScreen extends ConsumerWidget {
     final guides = ref.watch(allGuidesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.guidesTitle)),
-      body: PageContainer(
-        child: guides.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => EmptyState(
-            icon: Icons.cloud_off,
-            title: l10n.guidesErrorTitle,
-            message: '$e',
-            actions: [
-              FilledButton(
-                onPressed: () => ref.invalidate(allGuidesProvider),
-                child: Text(l10n.commonRetry),
-              ),
+      appBar: GradientAppBar(title: Text(l10n.guidesTitle)),
+      body: guides.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, __) => EmptyState(
+          icon: Icons.cloud_off,
+          title: l10n.guidesErrorTitle,
+          message: l10n.guidesErrorMessage,
+          actions: [
+            FilledButton(
+              onPressed: () => ref.invalidate(allGuidesProvider),
+              child: Text(l10n.commonRetry),
+            ),
+          ],
+        ),
+        data: (all) {
+          if (all.isEmpty) {
+            return EmptyState(
+              icon: Icons.menu_book_outlined,
+              title: l10n.guidesEmptyTitle,
+              message: l10n.guidesEmptyMessage,
+            );
+          }
+          // Group by city, preserving the server's newest-first order
+          // within and across groups.
+          final byCity = <String, List<LocalGuide>>{};
+          for (final g in all) {
+            final city = g.city.isEmpty ? l10n.guidesElsewhere : g.city;
+            byCity.putIfAbsent(city, () => []).add(g);
+          }
+          // One flat entry per visual row (header / guide tile / group
+          // spacer) so ListView.builder can inflate rows lazily instead of
+          // building every group's children up front.
+          final rows = <({String? header, LocalGuide? guide})>[
+            for (final entry in byCity.entries) ...[
+              (header: entry.key, guide: null),
+              for (final g in entry.value) (header: null, guide: g),
+              (header: null, guide: null), // spacer after each group
             ],
-          ),
-          data: (all) {
-            if (all.isEmpty) {
-              return EmptyState(
-                icon: Icons.menu_book_outlined,
-                title: l10n.guidesEmptyTitle,
-                message: l10n.guidesEmptyMessage,
-              );
-            }
-            // Group by city, preserving the server's newest-first order
-            // within and across groups.
-            final byCity = <String, List<LocalGuide>>{};
-            for (final g in all) {
-              final city = g.city.isEmpty ? l10n.guidesElsewhere : g.city;
-              byCity.putIfAbsent(city, () => []).add(g);
-            }
-            // One flat entry per visual row (header / guide tile / group
-            // spacer) so ListView.builder can inflate rows lazily instead of
-            // building every group's children up front.
-            final rows = <({String? header, LocalGuide? guide})>[
-              for (final entry in byCity.entries) ...[
-                (header: entry.key, guide: null),
-                for (final g in entry.value) (header: null, guide: g),
-                (header: null, guide: null), // spacer after each group
-              ],
-            ];
+          ];
 
-            return ListView.builder(
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(allGuidesProvider),
+            child: ListView.builder(
+              // Always scrollable so pull-to-refresh works on short lists.
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(AppSpacing.lg),
               itemCount: rows.length,
               itemBuilder: (context, i) {
                 final row = rows[i];
+                final Widget child;
                 if (row.header != null) {
-                  return Padding(
+                  child = Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: Text(
-                      row.header!,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
+                    child: SectionHeader(title: row.header!),
                   );
+                } else if (row.guide != null) {
+                  child = _GuideListTile(guide: row.guide!);
+                } else {
+                  child = const SizedBox(height: AppSpacing.lg);
                 }
-                if (row.guide != null) {
-                  return _GuideListTile(guide: row.guide!);
-                }
-                return const SizedBox(height: AppSpacing.lg);
+                // PageContainer inside the scroll view (per its doc comment):
+                // each row is capped at 700px while the scrollable region
+                // stays full-width, so wheel/scrollbar work in the gutters.
+                return PageContainer(child: child);
               },
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -112,8 +117,12 @@ class _GuideListTile extends StatelessWidget {
         title: Text(guide.title, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: guide.sourceName.isEmpty
             ? null
-            : Text('${context.l10n.guidesByline(guide.sourceName)}'
-                '${guide.neighborhood.isNotEmpty ? ' · ${guide.neighborhood}' : ''}'),
+            : Text(
+                '${context.l10n.guidesByline(guide.sourceName)}'
+                '${guide.neighborhood.isNotEmpty ? ' · ${guide.neighborhood}' : ''}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(

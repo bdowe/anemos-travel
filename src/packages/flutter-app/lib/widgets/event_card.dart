@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/event.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../utils/tracked_launch.dart';
 import 'add_to_trip_sheet.dart';
+
+/// "Wed, Jul 1 · 20:00" — date via intl's locale-aware [DateFormat.MMMEd]
+/// (which reads Intl.defaultLocale, set by the locale provider — same pattern
+/// as lib/utils/trip_format.dart), with the raw HH:mm appended. Kept here as a
+/// presentation helper so the [Event] model stays a pure JSON mirror.
+/// Unparseable dates fall back to the raw string.
+String eventWhenLabel(Event event) {
+  final d = DateTime.tryParse(event.startDate);
+  final date = d == null ? event.startDate : DateFormat.MMMEd().format(d);
+  return event.startTime.isEmpty ? date : '$date · ${event.startTime}';
+}
 
 /// A single local event: name, when, venue/category, opening the ticket/info
 /// page externally on tap. Styled to sit beside itinerary and booking rows.
@@ -64,9 +76,9 @@ class EventCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      event.whenLabel,
-                      style: theme.textTheme.labelMedium
-                          ?.copyWith(color: accent, fontWeight: FontWeight.w600),
+                      eventWhenLabel(event),
+                      style: theme.textTheme.labelMedium?.copyWith(
+                          color: accent, fontWeight: FontWeight.w600),
                     ),
                     if (subtitle.isNotEmpty) ...[
                       const SizedBox(height: 2),

@@ -68,6 +68,8 @@ class LocalGuideDetailScreen extends ConsumerWidget {
           fallback: guide,
           pins: data.recommendations,
           theme: theme,
+          onRefresh: () async =>
+              ref.invalidate(localGuideDetailProvider(guide.id)),
           // Add-to-trip needs an account (guides browse stays public).
           onAddPin: ref.watch(authProvider).isSignedIn
               ? (pin) => showAddToTripSheet(context,
@@ -84,6 +86,7 @@ class _GuideBody extends StatelessWidget {
   final LocalGuide fallback;
   final List<LocalRecommendation> pins;
   final ThemeData theme;
+  final Future<void> Function() onRefresh;
   final void Function(LocalRecommendation pin)? onAddPin;
 
   const _GuideBody({
@@ -91,6 +94,7 @@ class _GuideBody extends StatelessWidget {
     required this.fallback,
     required this.pins,
     required this.theme,
+    required this.onRefresh,
     this.onAddPin,
   });
 
@@ -113,114 +117,123 @@ class _GuideBody extends StatelessWidget {
     final mapped =
         pins.where((p) => p.latitude != null && p.longitude != null).toList();
 
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      children: [
-        // Centered 700px reading column on wide layouts (declutter series);
-        // the ListView stays full-width so wheel/scrollbar work in gutters.
-        PageContainer(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (heroUrl.isNotEmpty) ...[
-                _HeroImage(url: heroUrl),
-                const SizedBox(height: AppSpacing.lg),
-              ],
-              Text(
-                title,
-                style: theme.textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              if (placeLine.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  placeLine,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ],
-              // The local behind the guide — same face + name treatment as the
-              // recommendation cards, so attribution reads consistently.
-              if (sourceName.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor: accent.withValues(alpha: 0.15),
-                      foregroundImage: sourcePhotoUrl.isNotEmpty
-                          ? NetworkImage(sourcePhotoUrl)
-                          : null,
-                      child: Text(
-                        sourceName.characters.first.toUpperCase(),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                            color: accent, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        l10n.guideDetailByline(sourceName),
-                        style: theme.textTheme.labelLarge?.copyWith(
-                            color: accent, fontWeight: FontWeight.w600),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Icon(Icons.verified, size: 18, color: accent),
-                  ],
-                ),
-              ],
-              if (body.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.lg),
-                Text(
-                  body,
-                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
-                ),
-              ],
-              if (pins.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xl),
-                Row(
-                  children: [
-                    Icon(Icons.place, size: 18, color: accent),
-                    const SizedBox(width: 6),
-                    Text(
-                      l10n.guideDetailPlacesTitle,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700, color: accent),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      '${pins.length}',
-                      style: theme.textTheme.labelMedium
-                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                if (mapped.isNotEmpty) ...[
-                  _GuideMap(pins: mapped),
-                  const SizedBox(height: AppSpacing.sm),
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        // Always scrollable so pull-to-refresh works on short guides.
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        children: [
+          // Centered 700px reading column on wide layouts (declutter series);
+          // the ListView stays full-width so wheel/scrollbar work in gutters.
+          PageContainer(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (heroUrl.isNotEmpty) ...[
+                  _HeroImage(url: heroUrl),
+                  const SizedBox(height: AppSpacing.lg),
                 ],
-                for (final pin in pins)
-                  LocalRecCard(
-                    rec: pin,
-                    onAddToTrip: onAddPin == null ? null : () => onAddPin!(pin),
-                  ),
-              ] else ...[
-                const SizedBox(height: AppSpacing.xl),
-                EmptyState(
-                  icon: Icons.place,
-                  title: l10n.guideDetailNoPinsTitle,
-                  message: l10n.guideDetailNoPinsMessage,
-                  iconColor: accent.withValues(alpha: 0.5),
+                Text(
+                  title,
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
+                if (placeLine.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    placeLine,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ],
+                // The local behind the guide — same face + name treatment as the
+                // recommendation cards, so attribution reads consistently.
+                if (sourceName.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: accent.withValues(alpha: 0.15),
+                        foregroundImage: sourcePhotoUrl.isNotEmpty
+                            ? NetworkImage(sourcePhotoUrl)
+                            : null,
+                        child: Text(
+                          sourceName.characters.first.toUpperCase(),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: accent, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          l10n.guideDetailByline(sourceName),
+                          style: theme.textTheme.labelLarge?.copyWith(
+                              color: accent, fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Icon(Icons.verified, size: 18, color: accent),
+                    ],
+                  ),
+                ],
+                if (body.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    body,
+                    style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
+                  ),
+                ],
+                if (pins.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xl),
+                  // Accent mini-header, matching trip detail's "Local intel"
+                  // and SourceLinksCard so the local-accent headers read as one
+                  // family (labelLarge / w600 / accent).
+                  Row(
+                    children: [
+                      Icon(Icons.place, size: 16, color: accent),
+                      const SizedBox(width: 6),
+                      Text(
+                        l10n.guideDetailPlacesTitle,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w600, color: accent),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        '${pins.length}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  if (mapped.isNotEmpty) ...[
+                    _GuideMap(pins: mapped),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                  for (final pin in pins)
+                    LocalRecCard(
+                      rec: pin,
+                      onAddToTrip:
+                          onAddPin == null ? null : () => onAddPin!(pin),
+                    ),
+                ] else ...[
+                  const SizedBox(height: AppSpacing.xl),
+                  EmptyState(
+                    icon: Icons.place,
+                    title: l10n.guideDetailNoPinsTitle,
+                    message: l10n.guideDetailNoPinsMessage,
+                    iconColor: accent.withValues(alpha: 0.5),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.xl),
               ],
-              const SizedBox(height: AppSpacing.xl),
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

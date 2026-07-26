@@ -41,21 +41,9 @@ class Event {
     this.imageUrl = '',
   });
 
-  /// "Wed, Jul 1" style date label; empty if unparseable.
-  String get dateLabel {
-    final d = DateTime.tryParse(startDate);
-    if (d == null) return startDate;
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${days[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
-  }
-
-  /// Combined date + time label, e.g. "Wed, Jul 1 · 20:00".
-  String get whenLabel =>
-      startTime.isEmpty ? dateLabel : '$dateLabel · $startTime';
+  // Display labels live with the presentation layer (eventWhenLabel in
+  // event_card.dart) so dates localize via intl instead of hand-rolled
+  // English arrays; the model stays a pure JSON mirror.
 
   factory Event.fromJson(Map<String, dynamic> json) => _$EventFromJson(json);
   Map<String, dynamic> toJson() => _$EventToJson(this);
