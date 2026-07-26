@@ -107,6 +107,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsSaveFailed => 'No se pudieron guardar las preferencias';
 
   @override
+  String get prefsLoadErrorTitle => 'No se pudo cargar tu perfil de viaje';
+
+  @override
+  String get prefsLoadErrorMessage =>
+      'Revisa tu conexión e inténtalo de nuevo.';
+
+  @override
   String get prefsBudgetLow => 'económico';
 
   @override
@@ -399,6 +406,14 @@ class AppLocalizationsEs extends AppLocalizations {
       'Cerrar sesión en todos los dispositivos';
 
   @override
+  String get settingsSignOutEverywhereTitle =>
+      '¿Cerrar sesión en todos los dispositivos?';
+
+  @override
+  String get settingsSignOutEverywhereBody =>
+      'Esto cierra tu sesión en todos los dispositivos, incluido este.';
+
+  @override
   String get settingsEmailPrefsSection => 'Preferencias de correo';
 
   @override
@@ -414,6 +429,9 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get settingsWeeklyIdeasSubtitle =>
       'Un correo semanal con ideas de destinos e inspiración.';
+
+  @override
+  String get settingsEmailPrefsUpdated => 'Preferencias de correo actualizadas';
 
   @override
   String get settingsLegalSection => 'Legal';

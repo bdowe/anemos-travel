@@ -19,6 +19,23 @@ String _initialFor(String displayName) {
   return t.isEmpty ? '?' : t[0].toUpperCase();
 }
 
+/// One style for the avatar initial everywhere it renders, so the popup
+/// header, app-bar avatar and rail avatar can't drift apart.
+TextStyle? _avatarLabelStyle(ThemeData theme) => theme.textTheme.labelLarge
+    ?.copyWith(color: Colors.white, fontWeight: FontWeight.w600);
+
+/// Icon + label row for the popup actions. `Flexible` + ellipsis keeps long
+/// translations inside the 280px popup cap instead of overflowing the row.
+Widget _menuRow(Widget icon, String label) => Row(
+      children: [
+        icon,
+        const SizedBox(width: AppSpacing.md),
+        Flexible(
+          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    );
+
 void _onSelected(BuildContext context, WidgetRef ref, String value) {
   if (value == 'logout') {
     ref.read(authProvider.notifier).logout();
@@ -61,11 +78,7 @@ List<PopupMenuEntry<String>> _items(
               backgroundColor: AppColors.brand,
               child: Text(
                 _initialFor(displayName),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: _avatarLabelStyle(theme),
               ),
             ),
             const SizedBox(width: AppSpacing.md),
@@ -101,86 +114,65 @@ List<PopupMenuEntry<String>> _items(
     ],
     PopupMenuItem<String>(
       value: 'preferences',
-      child: Row(
-        children: [
-          Icon(Icons.tune, size: 20, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: AppSpacing.md),
-          Text(l10n.accountMenuTravelProfile),
-        ],
+      child: _menuRow(
+        Icon(Icons.tune, size: 20, color: theme.colorScheme.onSurfaceVariant),
+        l10n.accountMenuTravelProfile,
       ),
     ),
     PopupMenuItem<String>(
       value: 'alerts',
-      child: Row(
-        children: [
-          unreadAlerts > 0
-              ? Badge.count(
-                  count: unreadAlerts,
-                  child: Icon(Icons.notifications_none,
-                      size: 20, color: theme.colorScheme.onSurfaceVariant),
-                )
-              : Icon(Icons.notifications_none,
-                  size: 20, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: AppSpacing.md),
-          Text(l10n.accountMenuPriceAlerts),
-        ],
+      child: _menuRow(
+        unreadAlerts > 0
+            ? Badge.count(
+                count: unreadAlerts,
+                child: Icon(Icons.notifications_none,
+                    size: 20, color: theme.colorScheme.onSurfaceVariant),
+              )
+            : Icon(Icons.notifications_none,
+                size: 20, color: theme.colorScheme.onSurfaceVariant),
+        l10n.accountMenuPriceAlerts,
       ),
     ),
     PopupMenuItem<String>(
       value: 'retake_quiz',
-      child: Row(
-        children: [
-          Icon(Icons.refresh,
-              size: 20, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: AppSpacing.md),
-          Text(l10n.accountMenuRetakeQuiz),
-        ],
+      child: _menuRow(
+        Icon(Icons.refresh,
+            size: 20, color: theme.colorScheme.onSurfaceVariant),
+        l10n.accountMenuRetakeQuiz,
       ),
     ),
     PopupMenuItem<String>(
       value: 'account_settings',
-      child: Row(
-        children: [
-          Icon(Icons.manage_accounts_outlined,
-              size: 20, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: AppSpacing.md),
-          Text(l10n.accountMenuAccountSettings),
-        ],
+      child: _menuRow(
+        Icon(Icons.manage_accounts_outlined,
+            size: 20, color: theme.colorScheme.onSurfaceVariant),
+        l10n.accountMenuAccountSettings,
       ),
     ),
     if (isAdmin) ...[
       const PopupMenuDivider(),
       PopupMenuItem<String>(
         value: 'local_admin',
-        child: Row(
-          children: [
-            Icon(Icons.verified, size: 20, color: AppColors.toolLocal),
-            const SizedBox(width: AppSpacing.md),
-            Text(l10n.accountMenuLocalIntelAdmin),
-          ],
+        child: _menuRow(
+          Icon(Icons.verified, size: 20, color: AppColors.toolLocal),
+          l10n.accountMenuLocalIntelAdmin,
         ),
       ),
       PopupMenuItem<String>(
         value: 'admin_metrics',
-        child: Row(
-          children: [
-            Icon(Icons.insights,
-                size: 20, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: AppSpacing.md),
-            Text(l10n.accountMenuMetrics),
-          ],
+        child: _menuRow(
+          Icon(Icons.insights,
+              size: 20, color: theme.colorScheme.onSurfaceVariant),
+          l10n.accountMenuMetrics,
         ),
       ),
     ],
     const PopupMenuDivider(),
     PopupMenuItem<String>(
       value: 'logout',
-      child: Row(
-        children: [
-          Icon(Icons.logout, size: 20, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: AppSpacing.md),
-          Text(l10n.accountMenuSignOut),
-        ],
+      child: _menuRow(
+        Icon(Icons.logout, size: 20, color: theme.colorScheme.onSurfaceVariant),
+        l10n.accountMenuSignOut,
       ),
     ),
   ];
@@ -207,11 +199,7 @@ class AccountMenu extends ConsumerWidget {
             backgroundColor: Colors.white.withValues(alpha: 0.25),
             child: Text(
               _initialFor(user.displayName),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
+              style: _avatarLabelStyle(theme),
             ),
           )
         : const Icon(Icons.account_circle);
@@ -247,11 +235,7 @@ class RailAccountButton extends ConsumerWidget {
       backgroundColor: AppColors.brand,
       child: Text(
         user != null ? _initialFor(user.displayName) : '?',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 15,
-          fontWeight: FontWeight.w600,
-        ),
+        style: _avatarLabelStyle(theme),
       ),
     );
     return PopupMenuButton<String>(

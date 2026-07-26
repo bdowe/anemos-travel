@@ -63,7 +63,7 @@ import 'app_localizations_es.dart';
 /// property.
 abstract class AppLocalizations {
   AppLocalizations(String locale)
-      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -86,16 +86,16 @@ abstract class AppLocalizations {
   /// of delegates is preferred or required.
   static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
       <LocalizationsDelegate<dynamic>>[
-    delegate,
-    GlobalMaterialLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-  ];
+        delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
-    Locale('es')
+    Locale('es'),
   ];
 
   /// Product name. Not translated — it is a brand name.
@@ -277,6 +277,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not save preferences'**
   String get prefsSaveFailed;
+
+  /// No description provided for @prefsLoadErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load your travel profile'**
+  String get prefsLoadErrorTitle;
+
+  /// No description provided for @prefsLoadErrorMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get prefsLoadErrorMessage;
 
   /// Budget level option shown on a chip; the stored API value stays 'budget'.
   ///
@@ -830,6 +842,18 @@ abstract class AppLocalizations {
   /// **'Sign out everywhere'**
   String get settingsSignOutEverywhere;
 
+  /// No description provided for @settingsSignOutEverywhereTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out everywhere?'**
+  String get settingsSignOutEverywhereTitle;
+
+  /// No description provided for @settingsSignOutEverywhereBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This signs you out on every device, including this one.'**
+  String get settingsSignOutEverywhereBody;
+
   /// No description provided for @settingsEmailPrefsSection.
   ///
   /// In en, this message translates to:
@@ -859,6 +883,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A weekly email with destination ideas and inspiration.'**
   String get settingsWeeklyIdeasSubtitle;
+
+  /// No description provided for @settingsEmailPrefsUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Email preferences updated'**
+  String get settingsEmailPrefsUpdated;
 
   /// No description provided for @settingsLegalSection.
   ///
@@ -4848,8 +4878,9 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   }
 
   throw FlutterError(
-      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-      'an issue with the localizations generation tool. Please file an issue '
-      'on GitHub with a reproducible sample app and the gen-l10n configuration '
-      'that was used.');
+    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.',
+  );
 }
