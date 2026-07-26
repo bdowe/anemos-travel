@@ -244,6 +244,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authSetNewPassword => 'Set new password';
 
   @override
+  String get authErrorInvalidCredentials => 'Wrong email or password.';
+
+  @override
+  String get authErrorEmailTaken =>
+      'That email already has an account — try signing in instead.';
+
+  @override
+  String get authErrorBadResetCode =>
+      'That code didn\'t match — check it or request a new one.';
+
+  @override
   String get resetAppBarTitle => 'Reset password';
 
   @override
@@ -317,6 +328,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get verifyTitle => 'Verify email';
+
+  @override
+  String get verifyChecking => 'Confirming your email…';
 
   @override
   String get verifySuccessTitle => 'Email verified ✓';

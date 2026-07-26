@@ -5,10 +5,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
+import '../services/auth_service.dart';
+import '../theme/spacing.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/language_menu_button.dart';
+import '../widgets/page_container.dart';
 import '../widgets/sso_buttons.dart';
 import '../widgets/legal_links.dart';
+import '../utils/errors.dart';
 import '../utils/snack.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
@@ -84,8 +88,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     } else if (prev.isEmpty) {
       burstStart = now;
     }
-    final filled =
-        value.isNotEmpty &&
+    final filled = value.isNotEmpty &&
         burstStart != null &&
         now.difference(burstStart) <= _burstWindow;
     final fillAt = filled ? now : null;
@@ -147,6 +150,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   void _toggleMode() {
+    // The previous attempt's failure belongs to the other mode — showing
+    // "wrong password" above a fresh create-account form is just confusing.
+    ref.read(authProvider.notifier).clearError();
     setState(() => _isLogin = !_isLogin);
   }
 
@@ -192,9 +198,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          // The auth family's shared 420px column (see also reset/verify/SSO
+          // screens) — PageContainer inside the scroll view, house pattern.
+          child: PageContainer(
+            maxWidth: 420,
             child: Form(
               key: _formKey,
               // AutofillGroup makes Flutter web expose the fields as a DOM
@@ -206,7 +214,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const BrandLogo.mark(size: 72),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.lg),
                     Text(
                       _isLogin
                           ? l10n.authWelcomeBack
@@ -216,11 +224,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.xl),
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       autocorrect: false,
+                      // Mobile keyboards advance to the password field
+                      // instead of dismissing.
+                      textInputAction: TextInputAction.next,
                       autofillHints: const [
                         AutofillHints.username,
                         AutofillHints.email,
@@ -237,7 +248,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.md),
                     TextFormField(
                       controller: _passwordController,
                       obscureText: true,
@@ -246,8 +257,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             ? AutofillHints.password
                             : AutofillHints.newPassword,
                       ],
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _submit(),
+                      // Last field when signing in; sign-up still has the
+                      // display name below.
+                      textInputAction: _isLogin
+                          ? TextInputAction.done
+                          : TextInputAction.next,
+                      onFieldSubmitted: (_) {
+                        if (_isLogin) _submit();
+                      },
                       decoration: InputDecoration(
                         labelText: l10n.authPasswordLabel,
                       ),
@@ -260,37 +277,41 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       },
                     ),
                     if (!_isLogin) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpacing.md),
                       TextFormField(
                         controller: _displayNameController,
                         autofillHints: const [AutofillHints.name],
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _submit(),
                         decoration: InputDecoration(
                           labelText: l10n.authDisplayNameLabel,
                         ),
                       ),
                     ],
                     if (auth.error != null) ...[
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpacing.lg),
                       Text(
-                        auth.error!,
-                        style: TextStyle(color: theme.colorScheme.error),
+                        friendlyError(l10n, auth.error),
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(color: theme.colorScheme.error),
                         textAlign: TextAlign.center,
                       ),
                     ],
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.lg),
                     if (!_isLogin) ...[
                       LegalConsentCheckbox(
                         value: _agreedToTerms,
                         onChanged: (v) => setState(() => _agreedToTerms = v),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.sm),
                     ],
                     FilledButton(
                       onPressed: auth.loading || (!_isLogin && !_agreedToTerms)
                           ? null
                           : _submit,
                       style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: AppSpacing.lg),
                       ),
                       child: auth.loading
                           ? const SizedBox(
@@ -304,7 +325,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                   : l10n.authCreateAccount,
                             ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.md),
                     TextButton(
                       onPressed: auth.loading ? null : _toggleMode,
                       child: Text(
@@ -366,6 +387,9 @@ class _RequestResetDialogState extends State<_RequestResetDialog> {
       _sending = true;
       _error = null;
     });
+    // Captured before the await — the dialog can be dismissed mid-flight and
+    // an inherited-widget lookup would then throw.
+    final l10n = context.l10n;
     try {
       await widget.onRequest(email);
       if (mounted) Navigator.of(context).pop(true);
@@ -373,7 +397,7 @@ class _RequestResetDialogState extends State<_RequestResetDialog> {
       if (mounted) {
         setState(() {
           _sending = false;
-          _error = e.toString();
+          _error = friendlyError(l10n, e);
         });
       }
     }
@@ -384,16 +408,20 @@ class _RequestResetDialogState extends State<_RequestResetDialog> {
     final l10n = context.l10n;
     return AlertDialog(
       title: Text(l10n.authResetDialogTitle),
+      // Content scrolls under a raised software keyboard instead of
+      // overflowing (360×640-class phones lose ~40% of the viewport).
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(l10n.authResetDialogBody),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           TextField(
             controller: _email,
             keyboardType: TextInputType.emailAddress,
             autocorrect: false,
             autofillHints: const [AutofillHints.email],
+            onSubmitted: (_) => _send(),
             decoration: InputDecoration(
               labelText: l10n.authEmailLabel,
               errorText: _error,
@@ -428,7 +456,11 @@ class _EnterResetCodeDialogState extends State<_EnterResetCodeDialog> {
   final _code = TextEditingController();
   final _password = TextEditingController();
   bool _saving = false;
-  String? _error;
+
+  /// Two error slots so each message renders under the field it refers to:
+  /// a missing/rejected code must not show up beneath the password box.
+  String? _codeError;
+  String? _passwordError;
 
   @override
   void dispose() {
@@ -438,18 +470,20 @@ class _EnterResetCodeDialogState extends State<_EnterResetCodeDialog> {
   }
 
   Future<void> _save() async {
+    final l10n = context.l10n;
+    setState(() {
+      _codeError = null;
+      _passwordError = null;
+    });
     if (_code.text.trim().isEmpty) {
-      setState(() => _error = context.l10n.authCodeRequired);
+      setState(() => _codeError = l10n.authCodeRequired);
       return;
     }
     if (_password.text.length < 8) {
-      setState(() => _error = context.l10n.authPasswordTooShort);
+      setState(() => _passwordError = l10n.authPasswordTooShort);
       return;
     }
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
+    setState(() => _saving = true);
     try {
       await widget.onReset(_code.text.trim(), _password.text);
       if (mounted) Navigator.of(context).pop(true);
@@ -457,7 +491,13 @@ class _EnterResetCodeDialogState extends State<_EnterResetCodeDialog> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = e.toString();
+          // The API 404s a wrong/expired code — that's the code field's
+          // problem, not the password's.
+          if (e is AuthException && e.statusCode == 404) {
+            _codeError = l10n.authErrorBadResetCode;
+          } else {
+            _passwordError = friendlyError(l10n, e);
+          }
         });
       }
     }
@@ -468,26 +508,34 @@ class _EnterResetCodeDialogState extends State<_EnterResetCodeDialog> {
     final l10n = context.l10n;
     return AlertDialog(
       title: Text(l10n.authEnterCodeTitle),
+      // Scrolls under the software keyboard instead of overflowing — this
+      // dialog is exactly what raises it.
+      scrollable: true,
       content: AutofillGroup(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(l10n.authEnterCodeBody),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             TextField(
               controller: _code,
               autocorrect: false,
+              textInputAction: TextInputAction.next,
               autofillHints: const [AutofillHints.oneTimeCode],
-              decoration: InputDecoration(labelText: l10n.authResetCodeLabel),
+              decoration: InputDecoration(
+                labelText: l10n.authResetCodeLabel,
+                errorText: _codeError,
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             TextField(
               controller: _password,
               obscureText: true,
               autofillHints: const [AutofillHints.newPassword],
+              onSubmitted: (_) => _save(),
               decoration: InputDecoration(
                 labelText: l10n.authNewPasswordLabel,
-                errorText: _error,
+                errorText: _passwordError,
               ),
             ),
           ],

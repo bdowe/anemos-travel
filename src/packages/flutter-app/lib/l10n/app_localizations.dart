@@ -548,6 +548,24 @@ abstract class AppLocalizations {
   /// **'Set new password'**
   String get authSetNewPassword;
 
+  /// No description provided for @authErrorInvalidCredentials.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong email or password.'**
+  String get authErrorInvalidCredentials;
+
+  /// No description provided for @authErrorEmailTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'That email already has an account — try signing in instead.'**
+  String get authErrorEmailTaken;
+
+  /// No description provided for @authErrorBadResetCode.
+  ///
+  /// In en, this message translates to:
+  /// **'That code didn\'t match — check it or request a new one.'**
+  String get authErrorBadResetCode;
+
   /// No description provided for @resetAppBarTitle.
   ///
   /// In en, this message translates to:
@@ -691,6 +709,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Verify email'**
   String get verifyTitle;
+
+  /// No description provided for @verifyChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirming your email…'**
+  String get verifyChecking;
 
   /// No description provided for @verifySuccessTitle.
   ///

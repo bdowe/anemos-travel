@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
+import '../theme/spacing.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
+import '../widgets/page_container.dart';
 
 /// Why the handoff didn't produce a session. Internal only — never shown or
 /// sent anywhere; [SsoCallbackScreen.build] maps it to localized copy.
@@ -44,7 +47,8 @@ class _SsoCallbackScreenState extends ConsumerState<SsoCallbackScreen> {
       return;
     }
     try {
-      final res = await ref.read(authServiceProvider).exchangeSsoCode(widget.code);
+      final res =
+          await ref.read(authServiceProvider).exchangeSsoCode(widget.code);
       await ref.read(authProvider.notifier).adoptSession(res.token, res.user);
       if (mounted) {
         // AuthGate takes over: onboarding quiz for new users, app otherwise.
@@ -72,35 +76,22 @@ class _SsoCallbackScreenState extends ConsumerState<SsoCallbackScreen> {
     if (_loading) {
       body = const CircularProgressIndicator();
     } else {
-      body = ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Icon(Icons.link_off, size: 64, color: theme.colorScheme.error),
-            const SizedBox(height: 16),
-            Text(
-              l10n.ssoFailedTitle,
-              style: theme.textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              switch (_failure) {
-                _SsoFailure.cancelled => l10n.ssoErrorCancelled,
-                _SsoFailure.expired => l10n.ssoErrorExpired,
-                null => '',
-              },
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
+      // The shared outcome treatment (EmptyState), same as verify-email and
+      // reset-password.
+      body = PageContainer(
+        maxWidth: 420,
+        child: EmptyState(
+          icon: Icons.link_off,
+          title: l10n.ssoFailedTitle,
+          message: switch (_failure) {
+            _SsoFailure.cancelled => l10n.ssoErrorCancelled,
+            _SsoFailure.expired => l10n.ssoErrorExpired,
+            null => null,
+          },
+          iconColor: theme.colorScheme.error,
+          actions: [
             FilledButton(
               onPressed: _backToSignIn,
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
               child: Text(l10n.ssoBackToSignIn),
             ),
           ],
@@ -111,7 +102,7 @@ class _SsoCallbackScreenState extends ConsumerState<SsoCallbackScreen> {
       appBar: GradientAppBar(title: Text(l10n.ssoTitle)),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.xl),
           child: body,
         ),
       ),

@@ -3,17 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:travel_route_planner/l10n/l10n.dart';
 import 'package:travel_route_planner/services/api_client.dart';
+import 'package:http/http.dart' as http;
+import 'package:travel_route_planner/services/auth_service.dart';
 import 'package:travel_route_planner/utils/errors.dart';
 
 import 'support/l10n_test_app.dart';
 
 /// friendlyError turns caught errors into localized, user-facing copy so raw
 /// ApiException dumps never reach a snackbar or banner.
-ApiException _api(int status) =>
-    ApiException(statusCode: status, message: 'raw internal detail', endpoint: '/x');
+ApiException _api(int status) => ApiException(
+    statusCode: status, message: 'raw internal detail', endpoint: '/x');
 
 void main() {
-  Future<AppLocalizations> pumpL10n(WidgetTester tester, {Locale? locale}) async {
+  Future<AppLocalizations> pumpL10n(WidgetTester tester,
+      {Locale? locale}) async {
     late AppLocalizations l10n;
     await tester.pumpWidget(localizedTestApp(
       locale: locale,
@@ -40,10 +43,12 @@ void main() {
     expect(friendlyError(l10n, _api(404)), l10n.errorGeneric);
 
     // The raw internal message is never surfaced.
-    expect(friendlyError(l10n, _api(500)), isNot(contains('raw internal detail')));
+    expect(
+        friendlyError(l10n, _api(500)), isNot(contains('raw internal detail')));
   });
 
-  testWidgets('passes an already-friendly String (e.g. a /plan SSE error) through',
+  testWidgets(
+      'passes an already-friendly String (e.g. a /plan SSE error) through',
       (tester) async {
     final l10n = await pumpL10n(tester);
     const serverMessage = 'That destination is not supported yet.';
@@ -61,5 +66,27 @@ void main() {
     final l10n = await pumpL10n(tester, locale: const Locale('es'));
     expect(friendlyError(l10n, _api(0)), l10n.errorNetwork);
     expect(l10n.errorNetwork, contains('conexión'));
+  });
+
+  testWidgets('classifies AuthException with auth-specific copy',
+      (tester) async {
+    final l10n = await pumpL10n(tester);
+    AuthException auth(int status) =>
+        AuthException(statusCode: status, message: 'raw server prose');
+
+    // 401 during sign-in means bad credentials, not an expired session.
+    expect(friendlyError(l10n, auth(401)), l10n.authErrorInvalidCredentials);
+    expect(friendlyError(l10n, auth(409)), l10n.authErrorEmailTaken);
+    expect(friendlyError(l10n, auth(429)), l10n.errorTooManyRequests);
+    expect(friendlyError(l10n, auth(500)), l10n.errorServer);
+    expect(friendlyError(l10n, auth(404)), l10n.errorGeneric);
+    expect(friendlyError(l10n, auth(500)), isNot(contains('raw server prose')));
+  });
+
+  testWidgets('maps a socket-level ClientException to the network message',
+      (tester) async {
+    final l10n = await pumpL10n(tester);
+    expect(friendlyError(l10n, http.ClientException('Connection refused')),
+        l10n.errorNetwork);
   });
 }
