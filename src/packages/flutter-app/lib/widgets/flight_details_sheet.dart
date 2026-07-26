@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
+import '../theme/app_colors.dart';
+import '../theme/spacing.dart';
 import '../utils/flight_labels.dart';
 import '../models/flight_leg.dart';
 import '../models/flight_offer.dart';
@@ -7,6 +9,10 @@ import '../utils/money_format.dart';
 import '../utils/tracked_launch.dart';
 import 'airline_logo.dart';
 import '../utils/snack.dart';
+
+/// Left indent that aligns segment/layover detail rows under their leading
+/// 18px icon (icon + the gap after it).
+const double _kSegmentIndent = 18 + AppSpacing.sm;
 
 /// Opens a modal bottom sheet with the segment-by-segment breakdown of [offer]:
 /// each leg's carrier/flight number and depart→arrive clock times, plus the
@@ -22,6 +28,10 @@ Future<void> showFlightDetails(BuildContext context, FlightOffer offer) {
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
+    useSafeArea: true,
+    // Desktop width cap (CreateAlertSheet's pattern): a full-bleed 1440px
+    // segment list reads as a handful of rows stranded across the window.
+    constraints: const BoxConstraints(maxWidth: 700),
     builder: (context) => _FlightDetailsSheet(offer: offer),
   );
 }
@@ -46,10 +56,11 @@ class _FlightDetailsSheet extends StatelessWidget {
           label: l10n.flightSheetOutbound,
           detail: '${offer.durationLabel} · ${stopsLabel(l10n, offer.stops)}'));
       rows.addAll(_sliceRows(offer.segments));
-      rows.add(const Divider(height: 24));
+      rows.add(const Divider(height: AppSpacing.xl));
       rows.add(_DirectionHeader(
           label: l10n.flightSheetReturn,
-          detail: '${offer.returnDurationLabel} · ${stopsLabel(l10n, offer.returnStops)}'));
+          detail:
+              '${offer.returnDurationLabel} · ${stopsLabel(l10n, offer.returnStops)}'));
       rows.addAll(_sliceRows(offer.returnSegments));
     } else {
       rows.addAll(_sliceRows(segments));
@@ -61,7 +72,8 @@ class _FlightDetailsSheet extends StatelessWidget {
           maxHeight: MediaQuery.of(context).size.height * 0.8,
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -71,17 +83,27 @@ class _FlightDetailsSheet extends StatelessWidget {
                   AirlineLogo(url: offer.airlineLogoUrl, size: 28),
                   if (offer.airlineLogoUrl != null &&
                       offer.airlineLogoUrl!.isNotEmpty)
-                    const SizedBox(width: 10),
+                    const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
                       offer.isRoundTrip ? '$from ⇄ $to' : '$from → $to',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleLarge
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
+                  const SizedBox(width: AppSpacing.sm),
+                  // The number the traveler is comparing shouldn't vanish at
+                  // the moment they decide to book.
+                  Text(
+                    formatMoney(offer.displayPrice, offer.currency),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold, color: AppColors.brand),
+                  ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 offer.isRoundTrip
                     ? l10n.flightSheetRoundTrip
@@ -89,12 +111,12 @@ class _FlightDetailsSheet extends StatelessWidget {
                 style: theme.textTheme.bodyMedium
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
-              const Divider(height: 24),
+              const Divider(height: AppSpacing.xl),
               _BaggageRow(offer: offer),
-              const Divider(height: 24),
+              const Divider(height: AppSpacing.xl),
               ...rows,
               if (offer.bookingUrl != null) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
@@ -103,9 +125,6 @@ class _FlightDetailsSheet extends StatelessWidget {
                     label: Text(offer.airlines.isEmpty
                         ? l10n.flightSheetBookThisFlight
                         : l10n.flightSheetBookWith(offer.airlines.first)),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
                   ),
                 ),
               ],
@@ -156,8 +175,8 @@ class _BaggageRow extends StatelessWidget {
     Color? noteColor;
     switch (offer.baggageStatus) {
       case 'paid':
-        note =
-            l10n.flightSheetBagFeeNote(formatMoney(offer.bagFee, offer.currency));
+        note = l10n
+            .flightSheetBagFeeNote(formatMoney(offer.bagFee, offer.currency));
         noteColor = muted;
       case 'unknown':
         note = l10n.flightSheetBagUnknownNote;
@@ -168,7 +187,7 @@ class _BaggageRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(Icons.luggage_outlined, size: 18, color: muted),
-        const SizedBox(width: 8),
+        const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,8 +196,8 @@ class _BaggageRow extends StatelessWidget {
                   style: theme.textTheme.bodyMedium?.copyWith(color: muted)),
               if (note != null)
                 Text(note,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: noteColor)),
+                    style:
+                        theme.textTheme.bodySmall?.copyWith(color: noteColor)),
             ],
           ),
         ),
@@ -198,16 +217,20 @@ class _DirectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: Row(
         children: [
           Text(label,
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(width: 8),
-          Text(detail,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ),
         ],
       ),
     );
@@ -237,17 +260,21 @@ class _SegmentRow extends StatelessWidget {
             children: [
               Icon(Icons.flight_takeoff,
                   size: 18, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Text(
-                _carrierLabel(context.l10n, leg),
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w600),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  _carrierLabel(context.l10n, leg),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           Padding(
-            padding: const EdgeInsets.only(left: 26),
+            padding: const EdgeInsets.only(left: _kSegmentIndent),
             child: Text.rich(
               TextSpan(
                 style: base,
@@ -288,14 +315,19 @@ class _LayoverRow extends StatelessWidget {
         ? l10n.flightSheetLayover(airport)
         : l10n.flightSheetLayoverWithDuration(airport, _hm(duration!));
     return Padding(
-      padding: const EdgeInsets.only(left: 26, top: 4, bottom: 4),
+      padding: const EdgeInsets.only(
+          left: _kSegmentIndent, top: AppSpacing.xs, bottom: AppSpacing.xs),
       child: Row(
         children: [
           Icon(Icons.timelapse, size: 16, color: muted),
-          const SizedBox(width: 8),
-          Text(label,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: muted, fontStyle: FontStyle.italic)),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: muted, fontStyle: FontStyle.italic)),
+          ),
         ],
       ),
     );

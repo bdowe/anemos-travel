@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
+import '../theme/app_colors.dart';
+import '../theme/spacing.dart';
 import '../utils/flight_labels.dart';
 import '../models/flight_leg.dart';
 import '../models/flight_offer.dart';
@@ -83,45 +85,43 @@ class FlightOfferCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    final accent = Colors.teal.shade700;
+    final accent = AppColors.brand;
 
     return Card(
-      elevation: isBest ? 4 : 1,
+      // Elevation/shape come from cardTheme; only the best-match border is
+      // bespoke.
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: isBest ? BorderSide(color: accent, width: 2) : BorderSide.none,
-      ),
+      shape: isBest
+          ? RoundedRectangleBorder(
+              borderRadius: AppRadius.mdAll,
+              side: BorderSide(color: accent, width: 2),
+            )
+          : null,
       child: InkWell(
         onTap: () => showFlightDetails(context, offer),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (isBest || savingsLabel != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       if (isBest)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: accent,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(l10n.flightCardBestMatch,
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold)),
+                        StatusPill.custom(
+                          label: l10n.flightCardBestMatch,
+                          background: accent,
+                          foreground: Colors.white,
                         ),
                       if (savingsLabel case final label?)
+                        // Deferred: swap for AppColors.successContainer/
+                        // onSuccessContainer once the wave2-foundations
+                        // tokens land (not in this branch's ancestry).
                         StatusPill.custom(
                           label: label,
                           background: Colors.green.withValues(alpha: 0.15),
@@ -142,7 +142,7 @@ class FlightOfferCard extends StatelessWidget {
                             AirlineLogo(url: offer.airlineLogoUrl, size: 22),
                             if (offer.airlineLogoUrl != null &&
                                 offer.airlineLogoUrl!.isNotEmpty)
-                              const SizedBox(width: 8),
+                              const SizedBox(width: AppSpacing.sm),
                             Flexible(
                               child: Text(
                                 offer.airlines.isEmpty
@@ -186,24 +186,38 @@ class FlightOfferCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
-                  _Stat(
-                      icon: Icons.schedule,
-                      label: offer.isRoundTrip
-                          ? '${offer.durationLabel} + ${offer.returnDurationLabel}'
-                          : offer.durationLabel),
-                  const SizedBox(width: 16),
-                  _Stat(
-                      icon: Icons.connecting_airports,
-                      label: combinedStopsLabel(l10n, offer)),
-                  if (offer.stops > 0 || offer.returnStops > 0) ...[
-                    const SizedBox(width: 6),
-                    Icon(Icons.chevron_right,
-                        size: 16, color: theme.colorScheme.onSurfaceVariant),
-                  ],
-                  const Spacer(),
+                  // Flexible + ellipsis on both stats: a round-trip duration
+                  // next to a Spanish stops label overflows a 360px card
+                  // otherwise. The inner Row (instead of a Spacer) keeps the
+                  // Book button pinned right without stealing flex space.
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: _Stat(
+                              icon: Icons.schedule,
+                              label: offer.isRoundTrip
+                                  ? '${offer.durationLabel} + ${offer.returnDurationLabel}'
+                                  : offer.durationLabel),
+                        ),
+                        const SizedBox(width: AppSpacing.lg),
+                        Flexible(
+                          child: _Stat(
+                              icon: Icons.connecting_airports,
+                              label: combinedStopsLabel(l10n, offer)),
+                        ),
+                        if (offer.stops > 0 || offer.returnStops > 0) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          Icon(Icons.chevron_right,
+                              size: 16,
+                              color: theme.colorScheme.onSurfaceVariant),
+                        ],
+                      ],
+                    ),
+                  ),
                   if (offer.bookingUrl != null)
                     TextButton.icon(
                       onPressed: () => _book(context),
@@ -290,10 +304,16 @@ class _Stat extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 16, color: color),
-        const SizedBox(width: 4),
-        Text(label,
-            style:
-                Theme.of(context).textTheme.bodySmall?.copyWith(color: color)),
+        const SizedBox(width: AppSpacing.xs),
+        Flexible(
+          child: Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: color)),
+        ),
       ],
     );
   }
