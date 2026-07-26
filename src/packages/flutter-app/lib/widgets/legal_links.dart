@@ -1,7 +1,9 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/l10n.dart';
+import '../theme/spacing.dart';
 
 /// Same-origin legal pages served by the nginx gateway at the site root
 /// (`/privacy`, `/terms`) — outside the Flutter app's own base path, so they
@@ -25,20 +27,32 @@ Future<void> openLegalPage(String path) async {
 Future<void> openPrivacyPolicy() => openLegalPage('/privacy');
 Future<void> openTermsOfService() => openLegalPage('/terms');
 
-/// The "…Terms of Service and Privacy Policy." tail shared by the informational
-/// line and the consent checkbox: the two tappable links joined by the
-/// localized conjunction, followed by a period. The caller supplies the leading
-/// prefix span so it can read either "By signing up you agree to the …" or
-/// "I agree to the …".
-List<Widget> _legalLinkTail(BuildContext context, TextStyle? base) {
+/// The "…Terms of Service and Privacy Policy." tail shared by the
+/// informational line and the consent checkbox: one run of rich text, so the
+/// sentence wraps like a paragraph at any width. The old implementation
+/// composed sibling widgets inside a `Wrap`, which floated the link boxes
+/// mid-paragraph once the prefix wrapped (narrow phones, Spanish copy).
+///
+/// Callers own the [TapGestureRecognizer]s (span recognizers must be
+/// disposed, so they live in the calling State).
+List<InlineSpan> _legalLinkSpans(
+  BuildContext context, {
+  required TapGestureRecognizer terms,
+  required TapGestureRecognizer privacy,
+}) {
   final l10n = context.l10n;
+  final linkStyle = TextStyle(
+    color: Theme.of(context).colorScheme.primary,
+    decoration: TextDecoration.underline,
+    decorationColor: Theme.of(context).colorScheme.primary,
+  );
   return [
-    _InlineLink(
-        label: l10n.legalTermsOfService, style: base, onTap: openTermsOfService),
-    Text(l10n.legalAgreementConjunction, style: base),
-    _InlineLink(
-        label: l10n.legalPrivacyPolicy, style: base, onTap: openPrivacyPolicy),
-    Text('.', style: base),
+    TextSpan(
+        text: l10n.legalTermsOfService, style: linkStyle, recognizer: terms),
+    TextSpan(text: l10n.legalAgreementConjunction),
+    TextSpan(
+        text: l10n.legalPrivacyPolicy, style: linkStyle, recognizer: privacy),
+    const TextSpan(text: '.'),
   ];
 }
 
@@ -46,29 +60,48 @@ List<Widget> _legalLinkTail(BuildContext context, TextStyle? base) {
 /// informational small print with tappable links. Used under the SSO buttons,
 /// where the provider's own click is the agreement (email sign-up uses the
 /// blocking [LegalConsentCheckbox] instead).
-class LegalAgreementText extends StatelessWidget {
+class LegalAgreementText extends StatefulWidget {
   const LegalAgreementText({super.key});
+
+  @override
+  State<LegalAgreementText> createState() => _LegalAgreementTextState();
+}
+
+class _LegalAgreementTextState extends State<LegalAgreementText> {
+  final _terms = TapGestureRecognizer()..onTap = openTermsOfService;
+  final _privacy = TapGestureRecognizer()..onTap = openPrivacyPolicy;
+
+  @override
+  void dispose() {
+    _terms.dispose();
+    _privacy.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final base = theme.textTheme.bodySmall
         ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(context.l10n.legalAgreementPrefix, style: base),
-        ..._legalLinkTail(context, base),
-      ],
+    return Text.rich(
+      TextSpan(
+        style: base,
+        children: [
+          TextSpan(text: context.l10n.legalAgreementPrefix),
+          ..._legalLinkSpans(context, terms: _terms, privacy: _privacy),
+        ],
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }
 
 /// Blocking affirmative-consent checkbox for email sign-up: the create-account
-/// button stays disabled until this is ticked. The label ("I agree to the
-/// Terms of Service and Privacy Policy") carries the same tappable links.
-class LegalConsentCheckbox extends StatelessWidget {
+/// button stays disabled until this is ticked. The whole row toggles (the
+/// label is tappable, not just the box) and keeps the 48px touch minimum; the
+/// inline Terms/Privacy links still open their pages — a span recognizer is
+/// the deepest arena member, so it wins over the row's InkWell.
+class LegalConsentCheckbox extends StatefulWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
@@ -76,53 +109,50 @@ class LegalConsentCheckbox extends StatelessWidget {
       {super.key, required this.value, required this.onChanged});
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final base = theme.textTheme.bodySmall
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Checkbox(
-          value: value,
-          onChanged: (v) => onChanged(v ?? false),
-          visualDensity: VisualDensity.compact,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(context.l10n.legalConsentCheckboxPrefix, style: base),
-              ..._legalLinkTail(context, base),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  State<LegalConsentCheckbox> createState() => _LegalConsentCheckboxState();
 }
 
-class _InlineLink extends StatelessWidget {
-  final String label;
-  final TextStyle? style;
-  final Future<void> Function() onTap;
+class _LegalConsentCheckboxState extends State<LegalConsentCheckbox> {
+  final _terms = TapGestureRecognizer()..onTap = openTermsOfService;
+  final _privacy = TapGestureRecognizer()..onTap = openPrivacyPolicy;
 
-  const _InlineLink(
-      {required this.label, required this.style, required this.onTap});
+  @override
+  void dispose() {
+    _terms.dispose();
+    _privacy.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final base = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
     return InkWell(
-      onTap: onTap,
-      child: Text(
-        label,
-        style: (style ?? const TextStyle()).copyWith(
-          color: theme.colorScheme.primary,
-          decoration: TextDecoration.underline,
-          decorationColor: theme.colorScheme.primary,
+      borderRadius: AppRadius.smAll,
+      onTap: () => widget.onChanged(!widget.value),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: kMinTouchTarget),
+        child: Row(
+          children: [
+            Checkbox(
+              value: widget.value,
+              onChanged: (v) => widget.onChanged(v ?? false),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  style: base,
+                  children: [
+                    TextSpan(text: context.l10n.legalConsentCheckboxPrefix),
+                    ..._legalLinkSpans(context,
+                        terms: _terms, privacy: _privacy),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

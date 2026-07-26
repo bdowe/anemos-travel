@@ -17,6 +17,9 @@ class _FakeAuthNotifier extends StateNotifier<AuthState>
       : super(AuthState(user: user, initialized: true));
 
   @override
+  void clearError() => state = state.copyWith(clearError: true);
+
+  @override
   Future<bool> login(String email, String password) async => false;
 
   @override

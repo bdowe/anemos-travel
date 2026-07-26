@@ -11,7 +11,8 @@ import 'api_client_provider.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) {
   final apiClient = ref.watch(apiClientProvider);
-  return AuthService(baseUrl: apiClient.baseUrl, httpClient: apiClient.httpClient);
+  return AuthService(
+      baseUrl: apiClient.baseUrl, httpClient: apiClient.httpClient);
 });
 
 final authStorageProvider = Provider<AuthStorage>((ref) => AuthStorage());
@@ -31,7 +32,12 @@ class AuthState {
   final UserModel? user;
   final bool initialized; // false until the stored token has been checked
   final bool loading; // an auth request is in flight
-  final String? error;
+
+  /// The raw failure from the last auth attempt. Deliberately an [Object?]:
+  /// providers have no BuildContext, so the auth screen renders it through
+  /// `friendlyError(l10n, error)` — storing a prebuilt sentence here would
+  /// freeze it in whatever language was active when the request failed.
+  final Object? error;
 
   const AuthState({
     this.user,
@@ -46,7 +52,7 @@ class AuthState {
     UserModel? user,
     bool? initialized,
     bool? loading,
-    String? error,
+    Object? error,
     bool clearUser = false,
     bool clearError = false,
   }) {
@@ -101,7 +107,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _authenticate(() => _service.login(email, password));
 
   Future<bool> register(String email, String password, {String? displayName}) =>
-      _authenticate(() => _service.register(email, password, displayName: displayName));
+      _authenticate(
+          () => _service.register(email, password, displayName: displayName));
 
   Future<bool> _authenticate(Future<AuthResponse> Function() call) async {
     state = state.copyWith(loading: true, clearError: true);
@@ -111,14 +118,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _apiClient.authToken = res.token;
       state = state.copyWith(user: res.user, loading: false);
       return true;
-    } on AuthException catch (e) {
-      state = state.copyWith(loading: false, error: e.message);
-      return false;
     } catch (e) {
-      state = state.copyWith(loading: false, error: 'Something went wrong. Please try again.');
+      // Stored raw; the screen localizes it via friendlyError at render time
+      // (an AuthException classifies by status, anything else goes generic).
+      state = state.copyWith(loading: false, error: e);
       return false;
     }
   }
+
+  /// Clears a stale failure message — e.g. when the form flips between
+  /// sign-in and sign-up, where the old error no longer applies.
+  void clearError() => state = state.copyWith(clearError: true);
 
   /// Marks onboarding done (quiz finished or skipped). On failure, unlocks
   /// locally anyway so the user is never trapped in the quiz — it simply

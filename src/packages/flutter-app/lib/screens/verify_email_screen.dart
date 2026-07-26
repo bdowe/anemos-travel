@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
+import '../theme/spacing.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
+import '../widgets/page_container.dart';
 
 /// Deep-link email verification, reachable at /verify/<token> straight from
 /// the email. Consumes the token on load (POST /auth/verify-email) and shows
@@ -52,42 +55,35 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     final l10n = context.l10n;
     final Widget body;
     if (_loading) {
-      body = const CircularProgressIndicator();
+      // Deliberate loading copy — this is a deep-link landing page, so a bare
+      // spinner with no words reads as a hang.
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            l10n.verifyChecking,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ],
+      );
     } else {
       final failed = _failed;
-      body = ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Icon(
-              failed ? Icons.link_off : Icons.mark_email_read_outlined,
-              size: 64,
-              color: failed
-                  ? theme.colorScheme.error
-                  : theme.colorScheme.primary,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              failed ? l10n.verifyLinkExpiredTitle : l10n.verifySuccessTitle,
-              style: theme.textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              failed
-                  ? l10n.verifyLinkExpiredBody
-                  : l10n.verifySuccessBody,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
+      // The shared outcome treatment (EmptyState), same as reset-password
+      // success and SSO failure.
+      body = PageContainer(
+        maxWidth: 420,
+        child: EmptyState(
+          icon: failed ? Icons.link_off : Icons.mark_email_read_outlined,
+          title: failed ? l10n.verifyLinkExpiredTitle : l10n.verifySuccessTitle,
+          message: failed ? l10n.verifyLinkExpiredBody : l10n.verifySuccessBody,
+          iconColor:
+              failed ? theme.colorScheme.error : theme.colorScheme.primary,
+          actions: [
             FilledButton(
               onPressed: _continue,
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
               child: Text(l10n.verifyContinue),
             ),
           ],
@@ -98,7 +94,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
       appBar: GradientAppBar(title: Text(l10n.verifyTitle)),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.xl),
           child: body,
         ),
       ),

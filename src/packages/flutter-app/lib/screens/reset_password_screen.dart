@@ -3,7 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
+import '../theme/spacing.dart';
+import '../utils/errors.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
+import '../widgets/page_container.dart';
 
 /// Deep-link password reset, reachable at /reset/<token> straight from the
 /// email. Works signed-out — the token from the URL is the credential. The
@@ -38,6 +42,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       _saving = true;
       _error = null;
     });
+    // Captured before the await: the route can be popped mid-request, and an
+    // inherited-widget lookup would then throw.
+    final l10n = context.l10n;
     try {
       await ref
           .read(authServiceProvider)
@@ -49,7 +56,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = e.toString();
+          _error = friendlyError(l10n, e);
         });
       }
     }
@@ -66,9 +73,10 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       appBar: GradientAppBar(title: Text(context.l10n.resetAppBarTitle)),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          // The auth family's shared 420px column (see auth_screen.dart).
+          child: PageContainer(
+            maxWidth: 420,
             child: _done ? _buildSuccess(theme) : _buildForm(theme),
           ),
         ),
@@ -78,30 +86,16 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
   Widget _buildSuccess(ThemeData theme) {
     final l10n = context.l10n;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Icon(Icons.check_circle_outline,
-            size: 64, color: theme.colorScheme.primary),
-        const SizedBox(height: 16),
-        Text(
-          l10n.resetSuccessTitle,
-          style: theme.textTheme.headlineSmall
-              ?.copyWith(fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          l10n.resetSuccessBody,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 24),
+    // The shared outcome treatment (EmptyState) so this reads identically to
+    // verify-email, SSO failure, and every other terminal state in the app.
+    return EmptyState(
+      icon: Icons.check_circle_outline,
+      title: l10n.resetSuccessTitle,
+      message: l10n.resetSuccessBody,
+      iconColor: theme.colorScheme.primary,
+      actions: [
         FilledButton(
           onPressed: _goToSignIn,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
           child: Text(l10n.resetSignInButton),
         ),
       ],
@@ -123,11 +117,13 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                   ?.copyWith(fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xl),
             TextFormField(
               controller: _passwordController,
               obscureText: true,
               autofillHints: const [AutofillHints.newPassword],
+              // Advance to the confirm field; Enter submits from there.
+              textInputAction: TextInputAction.next,
               decoration:
                   InputDecoration(labelText: l10n.resetNewPasswordLabel),
               validator: (v) {
@@ -138,13 +134,14 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                 return null;
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _confirmController,
               obscureText: true,
               autofillHints: const [AutofillHints.newPassword],
-              decoration:
-                  InputDecoration(labelText: l10n.resetConfirmLabel),
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => _submit(),
+              decoration: InputDecoration(labelText: l10n.resetConfirmLabel),
               validator: (v) {
                 if ((v ?? '').isEmpty) return l10n.resetConfirmRequired;
                 if (v != _passwordController.text) {
@@ -154,18 +151,19 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
               },
             ),
             if (_error != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               Text(
                 _error!,
-                style: TextStyle(color: theme.colorScheme.error),
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.error),
                 textAlign: TextAlign.center,
               ),
             ],
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xl),
             FilledButton(
               onPressed: _saving ? null : _submit,
               style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
               ),
               child: _saving
                   ? const SizedBox(
