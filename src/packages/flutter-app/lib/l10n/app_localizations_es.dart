@@ -2593,9 +2593,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get flightSearchClearReturnTooltip => 'Borrar fecha de vuelta';
 
   @override
-  String get flightSearchChildAges => 'Edades de los niños';
-
-  @override
   String get flightSearchCabinEconomy => 'Económica';
 
   @override
@@ -2645,6 +2642,72 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get flightSearchHintEmpty =>
       'No se encontraron vuelos para esta ruta y fecha.';
+
+  @override
+  String get flightSearchHintInitialTitle => 'Encuentra tu vuelo';
+
+  @override
+  String get flightSearchNoResultsTitle => 'No se encontraron vuelos';
+
+  @override
+  String get flightSearchFormTitle => 'Búsqueda';
+
+  @override
+  String get flightSearchEditSearch => 'Editar búsqueda';
+
+  @override
+  String flightSearchSummaryTravelers(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count viajeros',
+      one: '1 viajero',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get flightSearchCabinLabel => 'Cabina';
+
+  @override
+  String get flightSearchBaggageLabel => 'Equipaje';
+
+  @override
+  String get flightSearchOptimizeLabel => 'Ordenar resultados por';
+
+  @override
+  String get flightSearchAdults => 'Adultos';
+
+  @override
+  String get flightSearchChildren => 'Niños';
+
+  @override
+  String get flightSearchAddAdult => 'Añadir adulto';
+
+  @override
+  String get flightSearchRemoveAdult => 'Quitar adulto';
+
+  @override
+  String get flightSearchAddChild => 'Añadir niño';
+
+  @override
+  String get flightSearchRemoveChild => 'Quitar niño';
+
+  @override
+  String flightSearchChildN(int n) {
+    return 'Niño $n';
+  }
+
+  @override
+  String flightSearchResultsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count vuelos encontrados',
+      one: '1 vuelo encontrado',
+    );
+    return '$_temp0';
+  }
 
   @override
   String flightCardSavings(String amount) {
@@ -2747,6 +2810,12 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get airportFieldHint => 'Ciudad o aeropuerto';
+
+  @override
+  String get airportFieldClearTooltip => 'Borrar selección';
+
+  @override
+  String get airportFieldNoMatches => 'No hay aeropuertos que coincidan';
 
   @override
   String get guidesTitle => 'Guías locales';

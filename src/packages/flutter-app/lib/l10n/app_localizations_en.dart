@@ -2576,9 +2576,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get flightSearchClearReturnTooltip => 'Clear return date';
 
   @override
-  String get flightSearchChildAges => 'Child ages';
-
-  @override
   String get flightSearchCabinEconomy => 'Economy';
 
   @override
@@ -2627,6 +2624,72 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get flightSearchHintEmpty =>
       'No flights found for this route and date.';
+
+  @override
+  String get flightSearchHintInitialTitle => 'Find your flight';
+
+  @override
+  String get flightSearchNoResultsTitle => 'No flights found';
+
+  @override
+  String get flightSearchFormTitle => 'Search';
+
+  @override
+  String get flightSearchEditSearch => 'Edit search';
+
+  @override
+  String flightSearchSummaryTravelers(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count travelers',
+      one: '1 traveler',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get flightSearchCabinLabel => 'Cabin';
+
+  @override
+  String get flightSearchBaggageLabel => 'Baggage';
+
+  @override
+  String get flightSearchOptimizeLabel => 'Rank results by';
+
+  @override
+  String get flightSearchAdults => 'Adults';
+
+  @override
+  String get flightSearchChildren => 'Children';
+
+  @override
+  String get flightSearchAddAdult => 'Add adult';
+
+  @override
+  String get flightSearchRemoveAdult => 'Remove adult';
+
+  @override
+  String get flightSearchAddChild => 'Add child';
+
+  @override
+  String get flightSearchRemoveChild => 'Remove child';
+
+  @override
+  String flightSearchChildN(int n) {
+    return 'Child $n';
+  }
+
+  @override
+  String flightSearchResultsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count flights found',
+      one: '1 flight found',
+    );
+    return '$_temp0';
+  }
 
   @override
   String flightCardSavings(String amount) {
@@ -2729,6 +2792,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get airportFieldHint => 'City or airport';
+
+  @override
+  String get airportFieldClearTooltip => 'Clear selection';
+
+  @override
+  String get airportFieldNoMatches => 'No matching airports';
 
   @override
   String get guidesTitle => 'Local guides';
