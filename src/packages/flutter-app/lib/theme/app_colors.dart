@@ -30,6 +30,12 @@ abstract final class AppColors {
         ],
       );
 
+  /// Translucent dark scrim behind text and controls overlaid on satellite
+  /// imagery — the map day chips, TripMap's segment labels, and the map
+  /// control buttons all share this one value so the over-map family can't
+  /// drift apart again.
+  static final Color mapScrim = Colors.black.withValues(alpha: 0.6);
+
   // Semantic status pair for positive/complete states (booked checkmarks,
   // Planned pills, published counts) — the exact green pair screens were
   // re-declaring inline before the polish wave.

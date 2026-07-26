@@ -13,6 +13,20 @@ import '../utils/trip_format.dart';
 import 'app_map.dart';
 import 'empty_state.dart';
 
+/// Tap box (px) for interactive map pins. The painted dot stays small; the
+/// surrounding transparent halo brings the target up to the mobile touch
+/// minimum. Markers anchor by their box center (flutter_map's default
+/// alignment), so the enlargement must stay symmetric with the visual
+/// centered inside — anything else drifts pins off their coordinates on all
+/// three map surfaces.
+const double _pinHitBox = 44;
+
+/// Clearance (px) for the day-chip band's visible pills when the empty state
+/// is centered under it: 8px overlay offset + the ~32px pill + breathing
+/// room. See the empty-state branch in [_TripMapState.build] for why this is
+/// less than [TripMap.topOverlayInset]'s usual value.
+const double _emptyStateTopInset = 44;
+
 /// Plots a trip's itinerary on a satellite basemap: a numbered, category-tinted
 /// pin per place, a route line connecting them in itinerary order, auto-fit to
 /// the trip's extent. Tapping a pin calls [onPinTap] with that item's position.
@@ -241,9 +255,15 @@ class _TripMapState extends State<TripMap> {
     if (mapped.isEmpty && stays.isEmpty) {
       return Container(
         color: theme.colorScheme.surfaceContainerHighest,
-        // Keep the centered content clear of the day-chip band overlaid on
-        // the map's top edge (same inset the camera fitting respects).
-        padding: EdgeInsets.only(top: widget.topOverlayInset),
+        // Keep the centered content clear of the day-chip band's *visible*
+        // pills. Deliberately capped below the full camera-fit inset: that
+        // one also covers the band's transparent hit halo, which static
+        // empty-state text can safely sit under — and the fixed-height
+        // inline map cards don't have the room (EmptyState would overflow
+        // at 240px).
+        padding: EdgeInsets.only(
+          top: math.min(widget.topOverlayInset, _emptyStateTopInset),
+        ),
         child: EmptyState(
           compact: true,
           icon: Icons.location_off_outlined,
@@ -367,8 +387,11 @@ class _TripMapState extends State<TripMap> {
                   for (final s in stays)
                     Marker(
                       point: s.point,
-                      width: 26,
-                      height: 26,
+                      // Transparent 44px halo around the 26px square; the
+                      // box stays centered on the coordinate (see
+                      // _pinHitBox).
+                      width: _pinHitBox,
+                      height: _pinHitBox,
                       child: _StayPin(
                         name: s.stay.name,
                         dates: tripDateRange(s.stay.checkIn, s.stay.checkOut),
@@ -389,17 +412,30 @@ class _TripMapState extends State<TripMap> {
                   for (final (k, m) in mapped.indexed)
                     Marker(
                       point: m.point,
-                      width:
-                          widget.selectedPosition == m.item.position ? 28 : 24,
-                      height:
-                          widget.selectedPosition == m.item.position ? 28 : 24,
-                      child: _Pin(
-                        label: '${k + 1}',
-                        category: m.item.category,
-                        selected: widget.selectedPosition == m.item.position,
+                      // Transparent 44px halo around the 24/28px dot, tap
+                      // handling on the whole box; centered so the dot stays
+                      // anchored on its coordinate (see _pinHitBox).
+                      width: _pinHitBox,
+                      height: _pinHitBox,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: widget.onPinTap == null
                             ? null
                             : () => widget.onPinTap!(m.item.position),
+                        child: Center(
+                          child: SizedBox.square(
+                            dimension:
+                                widget.selectedPosition == m.item.position
+                                    ? 28
+                                    : 24,
+                            child: _Pin(
+                              label: '${k + 1}',
+                              category: m.item.category,
+                              selected:
+                                  widget.selectedPosition == m.item.position,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                 ],
@@ -513,9 +549,10 @@ class _SegmentLabel extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         decoration: BoxDecoration(
-          // Dark translucent chip so the time reads cleanly over satellite
-          // imagery and the route line beneath it.
-          color: Colors.black.withValues(alpha: 0.6),
+          // Shared over-map scrim so the time reads cleanly over satellite
+          // imagery and the route line beneath it (same treatment as the day
+          // chips and control buttons).
+          color: AppColors.mapScrim,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: Colors.white24),
         ),
@@ -566,17 +603,17 @@ class _ClusterBubble extends StatelessWidget {
   }
 }
 
+/// The painted itinerary dot. Purely visual: tap handling lives on the
+/// marker-level GestureDetector so the whole [_pinHitBox] halo is tappable.
 class _Pin extends StatelessWidget {
   final String label;
   final String? category;
   final bool selected;
-  final VoidCallback? onTap;
 
   const _Pin({
     required this.label,
     required this.category,
     required this.selected,
-    this.onTap,
   });
 
   Color _color(ColorScheme scheme) => AppColors.forCategory(category, scheme);
@@ -585,31 +622,28 @@ class _Pin extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = _color(scheme);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        // A permanent white ring keeps the small dots crisp over satellite
-        // imagery; selection thickens the ring (and the marker itself grows).
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: selected ? 3 : 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: selected ? 0.5 : 0.35),
-              blurRadius: selected ? 6 : 4,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
+    return Container(
+      // A permanent white ring keeps the small dots crisp over satellite
+      // imagery; selection thickens the ring (and the dot itself grows).
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: selected ? 3 : 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: selected ? 0.5 : 0.35),
+            blurRadius: selected ? 6 : 4,
+            offset: const Offset(0, 1),
           ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );
@@ -630,26 +664,32 @@ class _StayPin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The tooltip's tap detector fills the marker's [_pinHitBox] box, so the
+    // whole transparent halo around the 26px square triggers it.
     return Tooltip(
       message: dates == null ? name : '$name\n$dates',
       triggerMode: TooltipTriggerMode.tap,
-      child: Container(
-        // Same white ring + shadow treatment as _Pin so it reads as part of
-        // the family, but square where itinerary pins are round.
-        decoration: BoxDecoration(
-          color: AppColors.toolAirbnb,
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(color: Colors.white, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.35),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
-            ),
-          ],
+      child: Center(
+        child: Container(
+          width: 26,
+          height: 26,
+          // Same white ring + shadow treatment as _Pin so it reads as part
+          // of the family, but square where itinerary pins are round.
+          decoration: BoxDecoration(
+            color: AppColors.toolAirbnb,
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.hotel, size: 14, color: Colors.white),
         ),
-        alignment: Alignment.center,
-        child: const Icon(Icons.hotel, size: 14, color: Colors.white),
       ),
     );
   }

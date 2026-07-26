@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../l10n/l10n.dart';
+import '../theme/app_colors.dart';
 
 /// Space-dark canvas behind the tiles: unloaded/failed satellite tiles read as
 /// "not lit yet" instead of a broken grey hole. Pass as
@@ -148,9 +149,16 @@ Widget appMapAttribution() {
   );
 }
 
-/// A small circular control overlaid on the map (zoom in/out, reset). Dark
-/// and translucent so it reads as a frosted chip over satellite imagery.
+/// A small circular control overlaid on the map (zoom in/out, reset, expand).
+/// Dark and translucent so it reads as a frosted chip over satellite imagery.
+///
+/// The painted circle stays [_visualSize]; a transparent halo pads the hit
+/// box to [_hitTarget] (the 44px mobile touch minimum — every placement of
+/// these controls is touch-first).
 class MapControlButton extends StatelessWidget {
+  static const double _hitTarget = 44;
+  static const double _visualSize = 36;
+
   final IconData icon;
   final String? tooltip;
   final VoidCallback onTap;
@@ -164,16 +172,29 @@ class MapControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final button = Material(
-      color: Colors.black.withValues(alpha: 0.55),
-      shape: const CircleBorder(side: BorderSide(color: Colors.white24)),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(
-          width: 36,
-          height: 36,
-          child: Icon(icon, size: 20, color: Colors.white),
+    final button = SizedBox(
+      width: _hitTarget,
+      height: _hitTarget,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Center(
+            // Ink (not Container) so the tap ripple still paints over the
+            // frosted chip instead of underneath it.
+            child: Ink(
+              width: _visualSize,
+              height: _visualSize,
+              decoration: ShapeDecoration(
+                color: AppColors.mapScrim,
+                shape: const CircleBorder(
+                  side: BorderSide(color: Colors.white24),
+                ),
+              ),
+              child: Icon(icon, size: 20, color: Colors.white),
+            ),
+          ),
         ),
       ),
     );

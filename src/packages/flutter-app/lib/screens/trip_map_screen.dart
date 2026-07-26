@@ -4,6 +4,7 @@ import '../l10n/l10n.dart';
 import '../models/accommodation.dart';
 import '../models/itinerary_item.dart';
 import '../utils/snack.dart';
+import '../widgets/app_map.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/map_day_chips.dart';
 import '../widgets/trip_map.dart';
@@ -68,59 +69,84 @@ class _TripMapScreenState extends State<TripMapScreen> {
     final items = widget.itemsForDay(_day);
     final onAddPlace = widget.onAddPlace;
     return Scaffold(
-      appBar: GradientAppBar(title: Text(widget.title)),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: TripMap(
-              items: items,
-              accommodations: widget.staysForDay(_day),
-              selectedPosition: _selectedPosition,
-              segmentLabels: widget.segmentLabels,
-              fitSignature: _day,
-              // Keep fitted markers clear of the chip row overlaid below.
-              topOverlayInset:
-                  widget.dayCount > 0 ? MapDayChips.mapTopInset : 0,
-              emptyLabel: _day == null
-                  ? l10n.tripNoMappedPlaces
-                  : l10n.tripNoPlacesOnDay(_day!),
-              emptyMessage:
-                  onAddPlace == null ? null : l10n.tripAddPlaceMapHint,
-              emptyAction: onAddPlace == null
-                  ? null
-                  : FilledButton.tonalIcon(
-                      onPressed: () => onAddPlace(_day),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: Text(l10n.tripAddPlace),
-                    ),
-              onPinTap: (pos) {
-                setState(() => _selectedPosition = pos);
-                for (final it in items) {
-                  if (it.position == pos) {
-                    showSnack(context, it.name);
-                    break;
-                  }
-                }
-              },
+      // The strip the bottom SafeArea leaves below the map reads as part of
+      // the space-dark map canvas instead of a bare scaffold gap.
+      backgroundColor: appMapBackground,
+      appBar: GradientAppBar(
+        // Multi-city titles ("Barcelona, Madrid & 3 more") must ellipsize —
+        // the fullscreenDialog close button already eats leading width.
+        title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        actions: [
+          // Persistent add affordance: the on-map CTA only exists in the
+          // empty state, so once a day has a single pin the full-screen map
+          // would otherwise force a round-trip back to trip detail to add
+          // the next place. Null onAddPlace (offline / read-only) hides it.
+          if (onAddPlace != null)
+            IconButton(
+              tooltip: l10n.tripAddPlace,
+              onPressed: () => onAddPlace(_day),
+              icon: const Icon(Icons.add_location_alt_outlined),
             ),
-          ),
-          // Above the map's gesture layer, so chip taps and row scrolls never
-          // pan the map.
-          Positioned(
-            top: 8,
-            left: 8,
-            right: 8,
-            child: MapDayChips(
-              dayCount: widget.dayCount,
-              selected: _day,
-              mappedDays: widget.mappedDays,
-              onSelected: (d) {
-                setState(() => _day = d);
-                widget.onDaySelected(d);
-              },
-            ),
-          ),
         ],
+      ),
+      // Root-navigator fullscreenDialog: without a bottom SafeArea the
+      // zoom/reset column and the attribution button sit under the iOS home
+      // indicator. Top stays with the app bar.
+      body: SafeArea(
+        top: false,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: TripMap(
+                items: items,
+                accommodations: widget.staysForDay(_day),
+                selectedPosition: _selectedPosition,
+                segmentLabels: widget.segmentLabels,
+                fitSignature: _day,
+                // Keep fitted markers clear of the chip row overlaid below.
+                topOverlayInset:
+                    widget.dayCount > 0 ? MapDayChips.mapTopInset : 0,
+                emptyLabel: _day == null
+                    ? l10n.tripNoMappedPlaces
+                    : l10n.tripNoPlacesOnDay(_day!),
+                emptyMessage:
+                    onAddPlace == null ? null : l10n.tripAddPlaceMapHint,
+                emptyAction: onAddPlace == null
+                    ? null
+                    : FilledButton.tonalIcon(
+                        onPressed: () => onAddPlace(_day),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: Text(l10n.tripAddPlace),
+                      ),
+                onPinTap: (pos) {
+                  setState(() => _selectedPosition = pos);
+                  for (final it in items) {
+                    if (it.position == pos) {
+                      showSnack(context, it.name);
+                      break;
+                    }
+                  }
+                },
+              ),
+            ),
+            // Above the map's gesture layer, so chip taps and row scrolls never
+            // pan the map.
+            Positioned(
+              top: 8,
+              left: 8,
+              right: 8,
+              child: MapDayChips(
+                dayCount: widget.dayCount,
+                selected: _day,
+                mappedDays: widget.mappedDays,
+                onSelected: (d) {
+                  setState(() => _day = d);
+                  widget.onDaySelected(d);
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
