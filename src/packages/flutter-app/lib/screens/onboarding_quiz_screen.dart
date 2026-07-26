@@ -8,8 +8,10 @@ import '../providers/preferences_provider.dart';
 import '../theme/spacing.dart';
 import '../widgets/airport_field.dart';
 import '../widgets/choice_chip_row.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/page_container.dart';
+import '../widgets/section_header.dart';
 import '../utils/snack.dart';
 
 // Canonical API values. These are sent to the server (and, for companions,
@@ -18,9 +20,24 @@ import '../utils/snack.dart';
 const _budgets = ['budget', 'mid', 'luxury'];
 const _paces = ['relaxed', 'balanced', 'packed'];
 const _suggestedInterests = [
-  'museums', 'food', 'nightlife', 'nature', 'history', 'art', 'shopping', 'outdoors', 'beaches', 'architecture',
+  'museums',
+  'food',
+  'nightlife',
+  'nature',
+  'history',
+  'art',
+  'shopping',
+  'outdoors',
+  'beaches',
+  'architecture',
 ];
-const _companionOptions = ['solo', 'partner', 'friends', 'family with kids', 'it varies'];
+const _companionOptions = [
+  'solo',
+  'partner',
+  'friends',
+  'family with kids',
+  'it varies'
+];
 const _tripsMaxLength = 500;
 
 String _budgetLabel(AppLocalizations l10n, String value) => switch (value) {
@@ -65,14 +82,16 @@ String _companionLabel(AppLocalizations l10n, String value) => switch (value) {
 /// Formats the quiz's free-form answers as profile-notes bullet lines, using
 /// the same short-bullet convention the AI profile distiller maintains so the
 /// two sources merge cleanly. Returns '' when there is nothing to note.
-String buildOnboardingProfileNotes({String? companions, required String tripsInMind}) {
+String buildOnboardingProfileNotes(
+    {String? companions, required String tripsInMind}) {
   final lines = <String>[];
   if (companions != null && companions.isNotEmpty) {
     lines.add('- Travels with: $companions');
   }
   final trips = tripsInMind.trim();
   if (trips.isNotEmpty) {
-    lines.add('- Trips in mind: ${trips.replaceAll(RegExp(r'\s*\n+\s*'), '; ')}');
+    lines.add(
+        '- Trips in mind: ${trips.replaceAll(RegExp(r'\s*\n+\s*'), '; ')}');
   }
   return lines.join('\n');
 }
@@ -91,7 +110,8 @@ class OnboardingQuizScreen extends ConsumerStatefulWidget {
   const OnboardingQuizScreen({super.key, this.retake = false});
 
   @override
-  ConsumerState<OnboardingQuizScreen> createState() => _OnboardingQuizScreenState();
+  ConsumerState<OnboardingQuizScreen> createState() =>
+      _OnboardingQuizScreenState();
 }
 
 class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
@@ -118,7 +138,11 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
       if (prefs != null) {
         _seedFrom(prefs);
       } else {
-        ref.read(preferencesProvider.notifier).load();
+        // After the first frame: load() mutates the provider synchronously,
+        // which Riverpod forbids while the widget tree is still building.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) ref.read(preferencesProvider.notifier).load();
+        });
       }
     }
   }
@@ -133,6 +157,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
       _homeAirport = Airport(iataCode: home, name: home);
     }
   }
+
   Airport? _homeAirport;
   final _interestController = TextEditingController();
   final _tripsController = TextEditingController();
@@ -210,10 +235,18 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
   @override
   Widget build(BuildContext context) {
     // Retake with preferences still loading at initState: seed once they land.
+    // A load that completes with a legitimately-empty profile still has a
+    // non-null prefs object, so seeding it releases the gate below too.
     if (widget.retake && !_seededFromPrefs) {
-      ref.listen(preferencesProvider.select((s) => s.prefs), (prev, prefs) {
-        if (prefs != null && !_seededFromPrefs) {
+      ref.listen(preferencesProvider, (prev, next) {
+        if (_seededFromPrefs) return;
+        final prefs = next.prefs;
+        if (prefs != null) {
           setState(() => _seedFrom(prefs));
+        } else if (!next.loading && next.error == null) {
+          // Defensive: the load settled with nothing to seed — release the
+          // gate rather than spin forever.
+          setState(() => _seededFromPrefs = true);
         }
       });
     }
@@ -221,164 +254,227 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
     final l10n = context.l10n;
     final isLast = _step == _stepCount - 1;
 
-    return Scaffold(
-      appBar: GradientAppBar(
-        title: Text(l10n.quizTitle),
-        actions: [
-          TextButton(
-            onPressed: _submitting ? null : _skip,
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
-            child: Text(l10n.quizSkip),
+    return PopScope(
+      // The system back gesture steps to the previous question instead of
+      // tearing down the quiz and discarding the answers (swipe between steps
+      // stays disabled on purpose — the PageView gates progression).
+      canPop: _step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_submitting) _goTo(_step - 1);
+      },
+      child: Scaffold(
+        appBar: GradientAppBar(
+          title: Text(l10n.quizTitle),
+          actions: [
+            TextButton(
+              onPressed: _submitting ? null : _skip,
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              child: Text(l10n.quizSkip),
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: PageContainer(
+            child: _buildBody(theme, l10n, isLast),
           ),
-        ],
+        ),
       ),
-      body: SafeArea(
-        child: PageContainer(
-          child: Column(
+    );
+  }
+
+  /// Body of the quiz. While a retake is still waiting for the saved profile,
+  /// this is a deliberate loading/error gate instead of the form: _finish()
+  /// sends the CURRENT answers as the whole profile, so rendering the form
+  /// unseeded would let a fast tap-through silently wipe saved preferences.
+  Widget _buildBody(ThemeData theme, AppLocalizations l10n, bool isLast) {
+    if (widget.retake && !_seededFromPrefs) {
+      final prefsState = ref.watch(preferencesProvider);
+      if (prefsState.error != null) {
+        // Fixed copy — never the raw provider error string.
+        return EmptyState(
+          icon: Icons.cloud_off,
+          title: l10n.quizLoadErrorTitle,
+          message: l10n.quizLoadErrorBody,
+          actions: [
+            FilledButton.icon(
+              onPressed: () => ref.read(preferencesProvider.notifier).load(),
+              icon: const Icon(Icons.refresh),
+              label: Text(l10n.commonRetry),
+            ),
+          ],
+        );
+      }
+      return const Center(child: CircularProgressIndicator());
+    }
+    return Column(
+      children: [
+        Expanded(
+          child: PageView(
+            controller: _pageController,
+            physics: const NeverScrollableScrollPhysics(),
             children: [
-              Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildStep(
-                      title: l10n.quizStyleTitle,
-                      subtitle: l10n.quizStyleSubtitle,
-                      children: [
-                        Text(l10n.prefsBudget, style: theme.textTheme.titleMedium),
-                        const SizedBox(height: AppSpacing.sm),
-                        ChoiceChipRow(
-                          options: _budgets,
-                          selected: _budget,
-                          onSelected: (v) => setState(() => _budget = v),
-                          labelBuilder: (v) => _budgetLabel(l10n, v),
-                        ),
-                        const SizedBox(height: AppSpacing.xl),
-                        Text(l10n.prefsPace, style: theme.textTheme.titleMedium),
-                        const SizedBox(height: AppSpacing.sm),
-                        ChoiceChipRow(
-                          options: _paces,
-                          selected: _pace,
-                          onSelected: (v) => setState(() => _pace = v),
-                          labelBuilder: (v) => _paceLabel(l10n, v),
-                        ),
-                      ],
-                    ),
-                    _buildStep(
-                      title: l10n.quizInterestsTitle,
-                      subtitle: l10n.quizInterestsSubtitle,
-                      children: [
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.xs,
-                          children: {..._suggestedInterests, ..._interests}.map((label) {
-                            final selected = _interests.contains(label);
-                            return FilterChip(
-                              label: Text(_interestLabel(l10n, label)),
-                              selected: selected,
-                              onSelected: (sel) => setState(() {
-                                if (sel) {
-                                  _interests.add(label);
-                                } else {
-                                  _interests.remove(label);
-                                }
-                              }),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _interestController,
-                                decoration: InputDecoration(hintText: l10n.prefsAddInterest),
-                                onSubmitted: (_) => _addInterest(),
-                              ),
-                            ),
-                            IconButton(icon: const Icon(Icons.add), onPressed: _addInterest),
-                          ],
-                        ),
-                      ],
-                    ),
-                    _buildStep(
-                      title: l10n.quizCompanionsTitle,
-                      children: [
-                        ChoiceChipRow(
-                          options: _companionOptions,
-                          selected: _companions,
-                          onSelected: (v) => setState(() => _companions = v),
-                          labelBuilder: (v) => _companionLabel(l10n, v),
-                        ),
-                      ],
-                    ),
-                    _buildStep(
-                      title: l10n.quizHomeAirportTitle,
-                      subtitle: l10n.prefsHomeAirportHelp,
-                      children: [
-                        AirportField(
-                          label: l10n.prefsHomeAirport,
-                          icon: Icons.home,
-                          selected: _homeAirport,
-                          onSelected: (a) => setState(() => _homeAirport = a),
-                        ),
-                      ],
-                    ),
-                    _buildStep(
-                      title: l10n.quizTripsTitle,
-                      subtitle: l10n.quizTripsSubtitle,
-                      children: [
-                        TextField(
-                          controller: _tripsController,
-                          maxLines: 4,
-                          maxLength: _tripsMaxLength,
-                          decoration: InputDecoration(
-                            hintText: l10n.quizTripsHint,
-                            border: const OutlineInputBorder(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              _buildStep(
+                title: l10n.quizStyleTitle,
+                subtitle: l10n.quizStyleSubtitle,
+                children: [
+                  SectionHeader(title: l10n.prefsBudget),
+                  const SizedBox(height: AppSpacing.sm),
+                  ChoiceChipRow(
+                    options: _budgets,
+                    selected: _budget,
+                    onSelected: (v) => setState(() => _budget = v),
+                    labelBuilder: (v) => _budgetLabel(l10n, v),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  SectionHeader(title: l10n.prefsPace),
+                  const SizedBox(height: AppSpacing.sm),
+                  ChoiceChipRow(
+                    options: _paces,
+                    selected: _pace,
+                    onSelected: (v) => setState(() => _pace = v),
+                    labelBuilder: (v) => _paceLabel(l10n, v),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Row(
-                  children: [
-                    if (_step > 0)
-                      TextButton(
-                        onPressed: _submitting ? null : () => _goTo(_step - 1),
-                        child: Text(l10n.commonBack),
-                      ),
-                    const Spacer(),
-                    _StepDots(count: _stepCount, current: _step),
-                    const Spacer(),
-                    FilledButton(
-                      onPressed: _submitting
-                          ? null
-                          : () => isLast ? _finish() : _goTo(_step + 1),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.xl,
-                          vertical: AppSpacing.md,
+              _buildStep(
+                title: l10n.quizInterestsTitle,
+                subtitle: l10n.quizInterestsSubtitle,
+                children: [
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    children:
+                        {..._suggestedInterests, ..._interests}.map((label) {
+                      final selected = _interests.contains(label);
+                      return FilterChip(
+                        label: Text(_interestLabel(l10n, label)),
+                        selected: selected,
+                        onSelected: (sel) => setState(() {
+                          if (sel) {
+                            _interests.add(label);
+                          } else {
+                            _interests.remove(label);
+                          }
+                        }),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _interestController,
+                          decoration:
+                              InputDecoration(hintText: l10n.prefsAddInterest),
+                          onSubmitted: (_) => _addInterest(),
                         ),
                       ),
-                      child: _submitting
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(isLast ? l10n.quizFinish : l10n.commonNext),
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        tooltip: l10n.prefsAddInterest,
+                        onPressed: _addInterest,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              _buildStep(
+                title: l10n.quizCompanionsTitle,
+                children: [
+                  ChoiceChipRow(
+                    options: _companionOptions,
+                    selected: _companions,
+                    onSelected: (v) => setState(() => _companions = v),
+                    labelBuilder: (v) => _companionLabel(l10n, v),
+                  ),
+                ],
+              ),
+              _buildStep(
+                title: l10n.quizHomeAirportTitle,
+                subtitle: l10n.prefsHomeAirportHelp,
+                children: [
+                  AirportField(
+                    label: l10n.prefsHomeAirport,
+                    icon: Icons.home,
+                    selected: _homeAirport,
+                    onSelected: (a) => setState(() => _homeAirport = a),
+                  ),
+                ],
+              ),
+              _buildStep(
+                title: l10n.quizTripsTitle,
+                subtitle: l10n.quizTripsSubtitle,
+                children: [
+                  TextField(
+                    controller: _tripsController,
+                    maxLines: 4,
+                    maxLength: _tripsMaxLength,
+                    // No border override: inherit the app's themed
+                    // OutlineInputBorder (rounded corners).
+                    decoration: InputDecoration(
+                      hintText: l10n.quizTripsHint,
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          // Flexible buttons: the Spacers collapse first, then the
+          // labels ellipsize, so long Spanish labels at large text
+          // scales never overflow the footer at 320px.
+          child: Row(
+            children: [
+              if (_step > 0)
+                Flexible(
+                  child: TextButton(
+                    onPressed: _submitting ? null : () => _goTo(_step - 1),
+                    child: Text(
+                      l10n.commonBack,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              _StepDots(count: _stepCount, current: _step),
+              const Spacer(),
+              Flexible(
+                child: FilledButton(
+                  onPressed: _submitting
+                      ? null
+                      : () => isLast ? _finish() : _goTo(_step + 1),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xl,
+                      vertical: AppSpacing.md,
+                    ),
+                  ),
+                  child: _submitting
+                      ? SizedBox(
+                          height: 20,
+                          width: 20,
+                          // onPrimary, so the spinner is visible on the
+                          // filled (primary) button surface.
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: theme.colorScheme.onPrimary,
+                          ),
+                        )
+                      : Text(
+                          isLast ? l10n.quizFinish : l10n.commonNext,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                 ),
               ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -417,20 +513,43 @@ class _StepDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(count, (i) {
-        return Container(
-          width: 8,
-          height: 8,
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: i == current ? scheme.primary : scheme.outlineVariant,
-          ),
-        );
-      }),
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final label = context.l10n.quizStepOf(current + 1, count);
+    // One combined semantics node: the dots are decorative; position is both
+    // announced and visibly captioned as "Step n of total".
+    return Semantics(
+      container: true,
+      label: label,
+      child: ExcludeSemantics(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(count, (i) {
+                return Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color:
+                        i == current ? scheme.primary : scheme.outlineVariant,
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

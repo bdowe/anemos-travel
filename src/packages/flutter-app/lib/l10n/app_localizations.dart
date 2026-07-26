@@ -63,7 +63,7 @@ import 'app_localizations_es.dart';
 /// property.
 abstract class AppLocalizations {
   AppLocalizations(String locale)
-      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -86,16 +86,16 @@ abstract class AppLocalizations {
   /// of delegates is preferred or required.
   static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
       <LocalizationsDelegate<dynamic>>[
-    delegate,
-    GlobalMaterialLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-  ];
+        delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
-    Locale('es')
+    Locale('es'),
   ];
 
   /// Product name. Not translated — it is a brand name.
@@ -668,18 +668,6 @@ abstract class AppLocalizations {
   /// **'Describe your dream trip and get a complete itinerary in seconds.'**
   String get landingFeatureAgentDescription;
 
-  /// No description provided for @landingPrivacyPolicy.
-  ///
-  /// In en, this message translates to:
-  /// **'Privacy Policy'**
-  String get landingPrivacyPolicy;
-
-  /// No description provided for @landingTermsOfService.
-  ///
-  /// In en, this message translates to:
-  /// **'Terms of Service'**
-  String get landingTermsOfService;
-
   /// No description provided for @landingCopyright.
   ///
   /// In en, this message translates to:
@@ -1027,6 +1015,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Travel profile updated'**
   String get quizProfileUpdated;
+
+  /// Visible and screen-reader progress caption under the quiz step dots.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {n} of {total}'**
+  String quizStepOf(int n, int total);
+
+  /// No description provided for @quizLoadErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your travel profile'**
+  String get quizLoadErrorTitle;
+
+  /// No description provided for @quizLoadErrorBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your saved answers couldn\'t be loaded, so the quiz can\'t start yet. Check your connection and try again.'**
+  String get quizLoadErrorBody;
 
   /// No description provided for @bookingCardEdit.
   ///
@@ -4848,8 +4854,9 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   }
 
   throw FlutterError(
-      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-      'an issue with the localizations generation tool. Please file an issue '
-      'on GitHub with a reproducible sample app and the gen-l10n configuration '
-      'that was used.');
+    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.',
+  );
 }

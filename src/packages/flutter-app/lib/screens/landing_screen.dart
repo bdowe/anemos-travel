@@ -9,6 +9,7 @@ import '../widgets/gradient_app_bar.dart';
 import '../widgets/language_menu_button.dart';
 import '../widgets/legal_links.dart';
 import '../widgets/page_container.dart';
+import '../widgets/section_header.dart';
 import 'auth_screen.dart';
 
 /// Marketing entry point shown to logged-out visitors. Brands the product and
@@ -62,7 +63,6 @@ class _LandingScreenState extends State<LandingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = context.l10n;
 
     return Scaffold(
@@ -91,38 +91,26 @@ class _LandingScreenState extends State<LandingScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: AppSpacing.sm),
-
                 _LandingHero(
                   onGetStarted: () => _openAuth(context, isLogin: false),
                   onSignIn: () => _openAuth(context, isLogin: true),
                 ),
-
                 const SizedBox(height: AppSpacing.xl + AppSpacing.xs),
-
-                Text(
-                  l10n.landingFeaturesTitle,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-
+                SectionHeader(title: l10n.landingFeaturesTitle),
                 const SizedBox(height: AppSpacing.md),
-
                 _FeatureCard(
                   icon: Icons.auto_awesome,
                   title: l10n.landingFeatureAgentTitle,
                   description: l10n.landingFeatureAgentDescription,
                 ),
-
                 const SizedBox(height: AppSpacing.xl),
-
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: () => _openAuth(context, isLogin: false),
                     style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding:
+                          const EdgeInsets.symmetric(vertical: AppSpacing.lg),
                     ),
                     child: Text(
                       l10n.landingGetStarted,
@@ -131,11 +119,8 @@ class _LandingScreenState extends State<LandingScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: AppSpacing.lg),
-
                 const _LandingFooter(),
-
                 const SizedBox(height: AppSpacing.lg),
               ],
             ),
@@ -164,14 +149,16 @@ class _LandingFooter extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: AppSpacing.sm,
           children: [
+            // Shared legal strings + open helpers from legal_links.dart, so
+            // the footer and the auth screen can never drift apart.
             TextButton(
               onPressed: openPrivacyPolicy,
-              child: Text(l10n.landingPrivacyPolicy),
+              child: Text(l10n.legalPrivacyPolicy),
             ),
             Text('·', style: muted),
             TextButton(
               onPressed: openTermsOfService,
-              child: Text(l10n.landingTermsOfService),
+              child: Text(l10n.legalTermsOfService),
             ),
           ],
         ),
@@ -195,98 +182,136 @@ class _LandingHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: AppRadius.lgAll,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.brandDark.withValues(alpha: 0.4),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: AppRadius.lgAll,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Image.asset(
-                'assets/images/hero_santorini.jpg',
-                fit: BoxFit.cover,
-              ),
-            ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(gradient: AppColors.heroScrim),
-              ),
-            ),
-            Container(
-              constraints: const BoxConstraints(minHeight: 440),
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const BrandBadge(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-                    child: BrandLogo.lockup(height: 132),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    l10n.landingHeroTagline,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.landingHeroSubtitle,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.85),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: onGetStarted,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.teal.shade800,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        l10n.landingGetStarted,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: onSignIn,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: Text(l10n.landingHaveAccount),
-                    ),
-                  ),
-                ],
-              ),
+    return LayoutBuilder(builder: (context, constraints) {
+      // Compact metrics below ~600px so both CTAs stay above the fold even on
+      // a 320x568 phone (the app's primary acquisition surface): smaller
+      // lockup, tighter padding/minHeight, subtitle capped at three lines.
+      final narrow = constraints.maxWidth < 600;
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: AppRadius.lgAll,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.brandDark.withValues(alpha: 0.4),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
-      ),
-    );
+        child: ClipRRect(
+          borderRadius: AppRadius.lgAll,
+          child: Stack(
+            children: [
+              // Branded gradient behind the photo: visible until the image
+              // decodes and whenever it fails to load, so the white hero copy
+              // and CTAs always sit on a dark branded surface.
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(gradient: AppColors.brandGradient),
+                ),
+              ),
+              Positioned.fill(
+                child: Image.asset(
+                  'assets/images/hero_santorini.jpg',
+                  fit: BoxFit.cover,
+                  // Decorative: the tagline below carries the message.
+                  excludeFromSemantics: true,
+                  frameBuilder:
+                      (context, child, frame, wasSynchronouslyLoaded) {
+                    if (wasSynchronouslyLoaded) return child;
+                    return AnimatedOpacity(
+                      opacity: frame == null ? 0 : 1,
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOut,
+                      child: child,
+                    );
+                  },
+                  // The gradient underneath is the fallback.
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(gradient: AppColors.heroScrim),
+                ),
+              ),
+              Container(
+                constraints: BoxConstraints(minHeight: narrow ? 360 : 440),
+                padding: EdgeInsets.all(
+                    narrow ? AppSpacing.xl : AppSpacing.xl + AppSpacing.xs),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BrandBadge(
+                      padding: narrow
+                          ? const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm)
+                          : const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.lg,
+                              vertical: AppSpacing.md),
+                      child: BrandLogo.lockup(height: narrow ? 72 : 132),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Text(
+                      l10n.landingHeroTagline,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      l10n.landingHeroSubtitle,
+                      maxLines: narrow ? 3 : null,
+                      overflow: narrow ? TextOverflow.ellipsis : null,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: onGetStarted,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppColors.brandDark,
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.lg),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: AppRadius.mdAll,
+                          ),
+                        ),
+                        child: Text(
+                          l10n.landingGetStarted,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: onSignIn,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.md),
+                        ),
+                        child: Text(l10n.landingHaveAccount),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
   }
 }
 
@@ -308,21 +333,21 @@ class _FeatureCard extends StatelessWidget {
     final theme = Theme.of(context);
     final accent = AppColors.brand;
     return Card(
-      elevation: 1,
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(AppSpacing.sm),
               decoration: BoxDecoration(
                 color: accent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: AppRadius.smAll,
               ),
               child: Icon(icon, color: accent, size: 26),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpacing.lg),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

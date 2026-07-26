@@ -155,8 +155,6 @@
   "landingFeaturesTitle": "Everything you need to plan the trip",
   "landingFeatureAgentTitle": "AI Travel Agent",
   "landingFeatureAgentDescription": "Describe your dream trip and get a complete itinerary in seconds.",
-  "landingPrivacyPolicy": "Privacy Policy",
-  "landingTermsOfService": "Terms of Service",
   "landingCopyright": "© 2026 Golden Tempo LLC",
   "verifyTitle": "Verify email",
   "verifySuccessTitle": "Email verified ✓",
@@ -215,6 +213,20 @@
   "quizTripsHint": "e.g. Japan for cherry blossom season, a Greek island hop next summer…",
   "quizSaveFailed": "Could not save your answers — try again, or skip for now.",
   "quizProfileUpdated": "Travel profile updated",
+  "quizStepOf": "Step {n} of {total}",
+  "@quizStepOf": {
+    "description": "Visible and screen-reader progress caption under the quiz step dots.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "quizLoadErrorTitle": "Couldn't load your travel profile",
+  "quizLoadErrorBody": "Your saved answers couldn't be loaded, so the quiz can't start yet. Check your connection and try again.",
   "bookingCardEdit": "Edit",
   "bookingCardRemove": "Remove",
   "bookingCardBooked": "Booked",

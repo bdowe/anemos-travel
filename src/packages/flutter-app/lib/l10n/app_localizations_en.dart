@@ -307,12 +307,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Describe your dream trip and get a complete itinerary in seconds.';
 
   @override
-  String get landingPrivacyPolicy => 'Privacy Policy';
-
-  @override
-  String get landingTermsOfService => 'Terms of Service';
-
-  @override
   String get landingCopyright => '© 2026 Golden Tempo LLC';
 
   @override
@@ -497,6 +491,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get quizProfileUpdated => 'Travel profile updated';
+
+  @override
+  String quizStepOf(int n, int total) {
+    return 'Step $n of $total';
+  }
+
+  @override
+  String get quizLoadErrorTitle => 'Couldn\'t load your travel profile';
+
+  @override
+  String get quizLoadErrorBody =>
+      'Your saved answers couldn\'t be loaded, so the quiz can\'t start yet. Check your connection and try again.';
 
   @override
   String get bookingCardEdit => 'Edit';

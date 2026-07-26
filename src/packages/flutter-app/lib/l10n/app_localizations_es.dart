@@ -311,12 +311,6 @@ class AppLocalizationsEs extends AppLocalizations {
       'Describe el viaje de tus sueños y recibe un itinerario completo en segundos.';
 
   @override
-  String get landingPrivacyPolicy => 'Política de privacidad';
-
-  @override
-  String get landingTermsOfService => 'Términos del servicio';
-
-  @override
   String get landingCopyright => '© 2026 Golden Tempo LLC';
 
   @override
@@ -503,6 +497,18 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get quizProfileUpdated => 'Perfil de viaje actualizado';
+
+  @override
+  String quizStepOf(int n, int total) {
+    return 'Paso $n de $total';
+  }
+
+  @override
+  String get quizLoadErrorTitle => 'No se pudo cargar tu perfil de viaje';
+
+  @override
+  String get quizLoadErrorBody =>
+      'No se pudieron cargar tus respuestas guardadas, así que el cuestionario aún no puede empezar. Comprueba tu conexión e inténtalo de nuevo.';
 
   @override
   String get bookingCardEdit => 'Editar';
