@@ -4,15 +4,41 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:travel_route_planner/models/local_guide.dart';
 import 'package:travel_route_planner/models/local_recommendation.dart';
+import 'package:travel_route_planner/models/traveler_preferences.dart';
 import 'package:travel_route_planner/providers/local_provider.dart';
+import 'package:travel_route_planner/providers/preferences_provider.dart';
 import 'package:travel_route_planner/screens/flight_search_screen.dart';
 import 'package:travel_route_planner/screens/local_guide_detail_screen.dart';
 import 'package:travel_route_planner/screens/preferences_screen.dart';
+import 'package:travel_route_planner/services/api_client.dart';
+import 'package:travel_route_planner/services/preferences_api_service.dart';
 import 'package:travel_route_planner/widgets/airport_field.dart';
 import 'package:travel_route_planner/widgets/choice_chip_row.dart';
 import 'package:travel_route_planner/widgets/local_rec_card.dart';
 
 import 'support/l10n_test_app.dart';
+
+/// Preferences now gates its form behind a successful GET (a failed load
+/// shows an error state with no Save button), so the width sweep must feed
+/// it a load that succeeds.
+class _OkPrefsApi implements PreferencesApiService {
+  @override
+  ApiClient get apiClient => throw UnsupportedError('unused in tests');
+
+  @override
+  Future<TravelerPreferences> getPreferences() async =>
+      const TravelerPreferences();
+
+  @override
+  Future<TravelerPreferences> savePreferences({
+    String? budget,
+    String? pace,
+    required List<String> interests,
+    String? homeAirport,
+    String? profileNotes,
+  }) async =>
+      const TravelerPreferences();
+}
 
 /// Declutter sweep: preferences, flight search, and the guide reader cap
 /// their content at PageContainer's 700px on wide layouts.
@@ -44,18 +70,19 @@ void main() {
     await _setSurface(tester, _wide);
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          preferencesApiServiceProvider.overrideWithValue(_OkPrefsApi()),
+        ],
         child: MaterialApp(
             localizationsDelegates: testLocalizationsDelegates,
             home: const PreferencesScreen()),
       ),
     );
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
     _expectCapped(tester, find.byType(ChoiceChipRow).first);
   });
 
-  testWidgets('flight search form caps at 700 on wide layouts',
-      (tester) async {
+  testWidgets('flight search form caps at 700 on wide layouts', (tester) async {
     await _setSurface(tester, _wide);
     await tester.pumpWidget(
       ProviderScope(
@@ -68,14 +95,12 @@ void main() {
     _expectCapped(tester, find.byType(AirportField).first);
   });
 
-  testWidgets('guide reader caps at 700 on wide, fills phones',
-      (tester) async {
+  testWidgets('guide reader caps at 700 on wide, fills phones', (tester) async {
     await _setSurface(tester, _wide);
     Widget app() => ProviderScope(
           overrides: [
-            localGuideDetailProvider('g1').overrideWith(
-                (ref) async =>
-                    (guide: _guide, recommendations: <LocalRecommendation>[])),
+            localGuideDetailProvider('g1').overrideWith((ref) async =>
+                (guide: _guide, recommendations: <LocalRecommendation>[])),
           ],
           child: MaterialApp(
               localizationsDelegates: testLocalizationsDelegates,
@@ -88,7 +113,6 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpAndSettle();
-    expect(tester.getSize(find.text('Alfama on foot')).width,
-        greaterThan(340));
+    expect(tester.getSize(find.text('Alfama on foot')).width, greaterThan(340));
   });
 }

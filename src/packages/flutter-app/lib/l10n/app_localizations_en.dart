@@ -107,6 +107,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsSaveFailed => 'Could not save preferences';
 
   @override
+  String get prefsLoadErrorTitle => 'Could not load your travel profile';
+
+  @override
+  String get prefsLoadErrorMessage => 'Check your connection and try again.';
+
+  @override
   String get prefsBudgetLow => 'budget';
 
   @override
@@ -407,6 +413,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSignOutEverywhere => 'Sign out everywhere';
 
   @override
+  String get settingsSignOutEverywhereTitle => 'Sign out everywhere?';
+
+  @override
+  String get settingsSignOutEverywhereBody =>
+      'This signs you out on every device, including this one.';
+
+  @override
   String get settingsEmailPrefsSection => 'Email preferences';
 
   @override
@@ -422,6 +435,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsWeeklyIdeasSubtitle =>
       'A weekly email with destination ideas and inspiration.';
+
+  @override
+  String get settingsEmailPrefsUpdated => 'Email preferences updated';
 
   @override
   String get settingsLegalSection => 'Legal';

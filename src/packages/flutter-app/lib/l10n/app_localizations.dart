@@ -278,6 +278,18 @@ abstract class AppLocalizations {
   /// **'Could not save preferences'**
   String get prefsSaveFailed;
 
+  /// No description provided for @prefsLoadErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load your travel profile'**
+  String get prefsLoadErrorTitle;
+
+  /// No description provided for @prefsLoadErrorMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get prefsLoadErrorMessage;
+
   /// Budget level option shown on a chip; the stored API value stays 'budget'.
   ///
   /// In en, this message translates to:
@@ -854,6 +866,18 @@ abstract class AppLocalizations {
   /// **'Sign out everywhere'**
   String get settingsSignOutEverywhere;
 
+  /// No description provided for @settingsSignOutEverywhereTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out everywhere?'**
+  String get settingsSignOutEverywhereTitle;
+
+  /// No description provided for @settingsSignOutEverywhereBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This signs you out on every device, including this one.'**
+  String get settingsSignOutEverywhereBody;
+
   /// No description provided for @settingsEmailPrefsSection.
   ///
   /// In en, this message translates to:
@@ -883,6 +907,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A weekly email with destination ideas and inspiration.'**
   String get settingsWeeklyIdeasSubtitle;
+
+  /// No description provided for @settingsEmailPrefsUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Email preferences updated'**
+  String get settingsEmailPrefsUpdated;
 
   /// No description provided for @settingsLegalSection.
   ///

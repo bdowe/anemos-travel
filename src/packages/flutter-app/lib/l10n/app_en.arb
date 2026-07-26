@@ -81,6 +81,8 @@
   "prefsProfileNotesHint": "Nothing noted yet — the agent adds to this as you plan trips.",
   "prefsSaved": "Preferences saved",
   "prefsSaveFailed": "Could not save preferences",
+  "prefsLoadErrorTitle": "Could not load your travel profile",
+  "prefsLoadErrorMessage": "Check your connection and try again.",
   "prefsBudgetLow": "budget",
   "@prefsBudgetLow": {
     "description": "Budget level option shown on a chip; the stored API value stays 'budget'."
@@ -186,11 +188,14 @@
   "settingsSessionsSection": "Sessions",
   "settingsSessionsHelp": "Signs you out on every device, including this one.",
   "settingsSignOutEverywhere": "Sign out everywhere",
+  "settingsSignOutEverywhereTitle": "Sign out everywhere?",
+  "settingsSignOutEverywhereBody": "This signs you out on every device, including this one.",
   "settingsEmailPrefsSection": "Email preferences",
   "settingsTripReminders": "Trip reminders",
   "settingsTripRemindersSubtitle": "Nudges about upcoming trips and things left to book.",
   "settingsWeeklyIdeas": "Weekly planning ideas",
   "settingsWeeklyIdeasSubtitle": "A weekly email with destination ideas and inspiration.",
+  "settingsEmailPrefsUpdated": "Email preferences updated",
   "settingsLegalSection": "Legal",
   "settingsPrivacyPolicy": "Privacy Policy",
   "settingsTermsOfService": "Terms of Service",

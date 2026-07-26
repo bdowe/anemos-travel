@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/airport.dart';
 import '../widgets/airport_field.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
 import '../widgets/choice_chip_row.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../l10n/l10n.dart';
 import '../providers/preferences_provider.dart';
+import '../theme/spacing.dart';
 import '../utils/snack.dart';
 
 // Canonical API values. These are sent to the server and read by the AI agent,
@@ -77,24 +79,32 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await ref.read(preferencesProvider.notifier).load();
-      final prefs = ref.read(preferencesProvider).prefs;
-      if (prefs != null && mounted) {
-        setState(() {
-          _budget = prefs.budget;
-          _pace = prefs.pace;
-          _interests.addAll(prefs.interests);
-          final home = prefs.homeAirport;
-          if (home != null && home.isNotEmpty) {
-            _homeAirport = Airport(iataCode: home, name: home);
-          }
-          _notesController.text = prefs.profileNotes ?? '';
-          _initialized = true;
-        });
-      } else if (mounted) {
-        setState(() => _initialized = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  /// Loads the server profile and seeds the form. `_initialized` is only set
+  /// on a successful load: because Save is a full PUT of every field, a failed
+  /// GET must never reach the form, or saving the resulting blank form would
+  /// silently wipe the traveler's real server-side profile. On failure the
+  /// build stays on the error branch, whose Retry re-runs this.
+  Future<void> _load() async {
+    await ref.read(preferencesProvider.notifier).load();
+    if (!mounted) return;
+    final state = ref.read(preferencesProvider);
+    if (state.error != null) return;
+    final prefs = state.prefs;
+    setState(() {
+      if (prefs != null) {
+        _budget = prefs.budget;
+        _pace = prefs.pace;
+        _interests.addAll(prefs.interests);
+        final home = prefs.homeAirport;
+        if (home != null && home.isNotEmpty) {
+          _homeAirport = Airport(iataCode: home, name: home);
+        }
+        _notesController.text = prefs.profileNotes ?? '';
       }
+      _initialized = true;
     });
   }
 
@@ -136,129 +146,153 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
     // Chips = suggested set plus any custom interests already selected.
     final chipLabels = {..._suggestedInterests, ..._interests}.toList();
 
+    final Widget body;
+    if (!_initialized && state.error != null) {
+      // The load failed and the form was never seeded. Keep Save unreachable:
+      // saving a blank form is a full PUT that would wipe the server profile.
+      body = EmptyState(
+        icon: Icons.cloud_off,
+        title: l10n.prefsLoadErrorTitle,
+        message: l10n.prefsLoadErrorMessage,
+        iconColor: theme.colorScheme.error.withValues(alpha: 0.6),
+        actions: [
+          FilledButton(
+            onPressed: _load,
+            child: Text(l10n.commonRetry),
+          ),
+        ],
+      );
+    } else if (!_initialized) {
+      body = const Center(child: CircularProgressIndicator());
+    } else {
+      body = ListView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        children: [
+          // Centered 700px column on wide layouts (declutter series);
+          // the ListView stays full-width so wheel/scrollbar work in
+          // the gutters.
+          PageContainer(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SectionHeader(title: l10n.prefsBudget),
+                const SizedBox(height: AppSpacing.sm),
+                ChoiceChipRow(
+                  options: _budgets,
+                  selected: _budget,
+                  onSelected: (v) => setState(() => _budget = v),
+                  labelBuilder: (v) => _budgetLabel(l10n, v),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                SectionHeader(title: l10n.prefsPace),
+                const SizedBox(height: AppSpacing.sm),
+                ChoiceChipRow(
+                  options: _paces,
+                  selected: _pace,
+                  onSelected: (v) => setState(() => _pace = v),
+                  labelBuilder: (v) => _paceLabel(l10n, v),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                SectionHeader(title: l10n.prefsInterests),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  children: chipLabels.map((label) {
+                    final selected = _interests.contains(label);
+                    return FilterChip(
+                      label: Text(_interestLabel(l10n, label)),
+                      selected: selected,
+                      onSelected: (sel) => setState(() {
+                        if (sel) {
+                          _interests.add(label);
+                        } else {
+                          _interests.remove(label);
+                        }
+                      }),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _interestController,
+                        decoration: InputDecoration(
+                          hintText: l10n.prefsAddInterest,
+                          border: const OutlineInputBorder(),
+                        ),
+                        onSubmitted: (_) => _addInterest(),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      tooltip: l10n.prefsAddInterest,
+                      onPressed: _addInterest,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                SectionHeader(title: l10n.prefsHomeAirport),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  l10n.prefsHomeAirportHelp,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                AirportField(
+                  label: l10n.prefsHomeAirport,
+                  icon: Icons.home,
+                  selected: _homeAirport,
+                  onSelected: (a) => setState(() => _homeAirport = a),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                SectionHeader(title: l10n.prefsProfileNotes),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  l10n.prefsProfileNotesHelp,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                TextField(
+                  controller: _notesController,
+                  maxLines: 6,
+                  maxLength: 2000,
+                  decoration: InputDecoration(
+                    hintText: l10n.prefsProfileNotesHint,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                FilledButton(
+                  onPressed: state.saving ? null : _save,
+                  style: FilledButton.styleFrom(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: AppSpacing.lg)),
+                  child: state.saving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : Text(l10n.commonSave),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return Scaffold(
       appBar: GradientAppBar(
         title: Text(l10n.prefsTitle),
       ),
-      body: state.loading && !_initialized
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // Centered 700px column on wide layouts (declutter series);
-                // the ListView stays full-width so wheel/scrollbar work in
-                // the gutters.
-                PageContainer(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SectionHeader(title: l10n.prefsBudget),
-                      const SizedBox(height: 8),
-                      ChoiceChipRow(
-                        options: _budgets,
-                        selected: _budget,
-                        onSelected: (v) => setState(() => _budget = v),
-                        labelBuilder: (v) => _budgetLabel(l10n, v),
-                      ),
-                      const SizedBox(height: 24),
-                      SectionHeader(title: l10n.prefsPace),
-                      const SizedBox(height: 8),
-                      ChoiceChipRow(
-                        options: _paces,
-                        selected: _pace,
-                        onSelected: (v) => setState(() => _pace = v),
-                        labelBuilder: (v) => _paceLabel(l10n, v),
-                      ),
-                      const SizedBox(height: 24),
-                      SectionHeader(title: l10n.prefsInterests),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: chipLabels.map((label) {
-                          final selected = _interests.contains(label);
-                          return FilterChip(
-                            label: Text(_interestLabel(l10n, label)),
-                            selected: selected,
-                            onSelected: (sel) => setState(() {
-                              if (sel) {
-                                _interests.add(label);
-                              } else {
-                                _interests.remove(label);
-                              }
-                            }),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _interestController,
-                              decoration: InputDecoration(
-                                  hintText: l10n.prefsAddInterest),
-                              onSubmitted: (_) => _addInterest(),
-                            ),
-                          ),
-                          IconButton(
-                              icon: const Icon(Icons.add),
-                              onPressed: _addInterest),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      SectionHeader(title: l10n.prefsHomeAirport),
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.prefsHomeAirportHelp,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      AirportField(
-                        label: l10n.prefsHomeAirport,
-                        icon: Icons.home,
-                        selected: _homeAirport,
-                        onSelected: (a) => setState(() => _homeAirport = a),
-                      ),
-                      const SizedBox(height: 24),
-                      SectionHeader(title: l10n.prefsProfileNotes),
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.prefsProfileNotesHelp,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _notesController,
-                        maxLines: 6,
-                        maxLength: 2000,
-                        decoration: InputDecoration(
-                          hintText: l10n.prefsProfileNotesHint,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      FilledButton(
-                        onPressed: state.saving ? null : _save,
-                        style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16)),
-                        child: state.saving
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2))
-                            : Text(l10n.commonSave),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+      body: body,
     );
   }
 }
