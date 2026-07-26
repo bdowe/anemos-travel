@@ -63,7 +63,7 @@ import 'app_localizations_es.dart';
 /// property.
 abstract class AppLocalizations {
   AppLocalizations(String locale)
-      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -86,16 +86,16 @@ abstract class AppLocalizations {
   /// of delegates is preferred or required.
   static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
       <LocalizationsDelegate<dynamic>>[
-    delegate,
-    GlobalMaterialLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-  ];
+        delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
-    Locale('es')
+    Locale('es'),
   ];
 
   /// Product name. Not translated — it is a brand name.
@@ -3434,6 +3434,12 @@ abstract class AppLocalizations {
   /// **'Search a flight and tap \"Watch this route\" — we\'ll email you when the price drops.'**
   String get alertsEmptyMessage;
 
+  /// No description provided for @alertsEmptyCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Search flights'**
+  String get alertsEmptyCta;
+
   /// No description provided for @alertsLastSeen.
   ///
   /// In en, this message translates to:
@@ -3457,6 +3463,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} adults'**
   String alertsAdults(int count);
+
+  /// Flexible-dates suffix on an alert card, e.g. "±3 days"
+  ///
+  /// In en, this message translates to:
+  /// **'±{count, plural, one{1 day} other{{count} days}}'**
+  String alertsFlexDays(int count);
 
   /// No description provided for @alertsBaselineDelta.
   ///
@@ -3631,6 +3643,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Price drops on routes you watch will show up here.'**
   String get notifEmptyMessage;
+
+  /// No description provided for @notifUnreadSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get notifUnreadSemantic;
 
   /// No description provided for @notifDownFrom.
   ///
@@ -4848,8 +4866,9 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   }
 
   throw FlutterError(
-      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-      'an issue with the localizations generation tool. Please file an issue '
-      'on GitHub with a reproducible sample app and the gen-l10n configuration '
-      'that was used.');
+    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.',
+  );
 }

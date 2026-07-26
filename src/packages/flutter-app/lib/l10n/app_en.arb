@@ -1229,6 +1229,7 @@
   "alertsLoadErrorTitle": "Could not load alerts",
   "alertsEmptyTitle": "No alerts yet",
   "alertsEmptyMessage": "Search a flight and tap \"Watch this route\" — we'll email you when the price drops.",
+  "alertsEmptyCta": "Search flights",
   "alertsLastSeen": "Last seen {price}",
   "@alertsLastSeen": {
     "placeholders": {
@@ -1248,6 +1249,15 @@
   "alertsWatchingAnyDrop": "watching for any drop",
   "alertsAdults": "{count} adults",
   "@alertsAdults": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertsFlexDays": "±{count, plural, one{1 day} other{{count} days}}",
+  "@alertsFlexDays": {
+    "description": "Flexible-dates suffix on an alert card, e.g. \"±3 days\"",
     "placeholders": {
       "count": {
         "type": "int"
@@ -1314,6 +1324,7 @@
   "notifLoadErrorTitle": "Could not load notifications",
   "notifEmptyTitle": "No notifications yet",
   "notifEmptyMessage": "Price drops on routes you watch will show up here.",
+  "notifUnreadSemantic": "Unread",
   "notifDownFrom": "{price}, down from {previous}",
   "@notifDownFrom": {
     "placeholders": {

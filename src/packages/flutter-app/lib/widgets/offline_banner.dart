@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
+import '../theme/spacing.dart';
 
 /// Coarse relative-time label for cache staleness: "just now",
 /// "5 minutes ago", "2 hours ago", "3 days ago". [now] is injectable for
@@ -22,7 +23,8 @@ class OfflineBanner extends StatelessWidget {
   final DateTime savedAt;
   final VoidCallback onRetry;
 
-  const OfflineBanner({super.key, required this.savedAt, required this.onRetry});
+  const OfflineBanner(
+      {super.key, required this.savedAt, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -32,11 +34,12 @@ class OfflineBanner extends StatelessWidget {
     return Material(
       color: scheme.tertiaryContainer,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, AppSpacing.sm, AppSpacing.sm, AppSpacing.sm),
         child: Row(
           children: [
             Icon(Icons.cloud_off, size: 18, color: scheme.onTertiaryContainer),
-            const SizedBox(width: 10),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Text(
                 l10n.offlineBannerMessage(relativeTime(l10n, savedAt)),
@@ -46,11 +49,12 @@ class OfflineBanner extends StatelessWidget {
                 ),
               ),
             ),
+            // No compact density: this is the recovery affordance on a flaky
+            // connection, so it keeps the default >=48px tap target.
             TextButton(
               onPressed: onRetry,
               style: TextButton.styleFrom(
                 foregroundColor: scheme.onTertiaryContainer,
-                visualDensity: VisualDensity.compact,
               ),
               child: Text(l10n.commonRetry),
             ),

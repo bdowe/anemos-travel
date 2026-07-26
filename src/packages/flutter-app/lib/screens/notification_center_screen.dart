@@ -4,8 +4,10 @@ import '../l10n/l10n.dart';
 import '../models/notification.dart';
 import '../providers/notifications_provider.dart';
 import '../theme/spacing.dart';
+import '../utils/errors.dart';
 import '../utils/money_format.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/gradient_app_bar.dart';
 import '../widgets/offline_banner.dart' show relativeTime;
 import '../widgets/page_container.dart';
 
@@ -49,14 +51,14 @@ class _NotificationCenterScreenState
     final notifs = ref.watch(notificationsProvider);
     final l10n = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.notifTitle)),
-      body: PageContainer(
-        child: notifs.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => EmptyState(
+      appBar: GradientAppBar(title: Text(l10n.notifTitle)),
+      body: notifs.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => PageContainer(
+          child: EmptyState(
             icon: Icons.cloud_off,
             title: l10n.notifLoadErrorTitle,
-            message: '$e'.replaceFirst('Exception: ', ''),
+            message: friendlyError(l10n, e),
             actions: [
               FilledButton(
                 onPressed: () => ref.invalidate(notificationsProvider),
@@ -64,27 +66,33 @@ class _NotificationCenterScreenState
               ),
             ],
           ),
-          data: (list) {
-            if (list.isEmpty) {
-              return EmptyState(
+        ),
+        data: (list) {
+          if (list.isEmpty) {
+            return PageContainer(
+              child: EmptyState(
                 icon: Icons.notifications_none,
                 title: l10n.notifEmptyTitle,
                 message: l10n.notifEmptyMessage,
-              );
-            }
-            return RefreshIndicator(
-              onRefresh: () async => ref.invalidate(notificationsProvider),
-              child: ListView.separated(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                itemCount: list.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(height: AppSpacing.sm),
-                itemBuilder: (_, i) => _NotificationTile(notification: list[i]),
               ),
             );
-          },
-        ),
+          }
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(notificationsProvider),
+            // The list stays full-width (wheel/scrollbar/pull-to-refresh live
+            // in the desktop gutters) while each row is capped by
+            // PageContainer — the pattern page_container.dart documents.
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              itemCount: list.length,
+              separatorBuilder: (_, __) =>
+                  const SizedBox(height: AppSpacing.sm),
+              itemBuilder: (_, i) => PageContainer(
+                  child: _NotificationTile(notification: list[i])),
+            ),
+          );
+        },
       ),
     );
   }
@@ -102,8 +110,12 @@ class _NotificationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final unread = notification.isUnread;
-    final when = relativeTime(
-        context.l10n, DateTime.parse(notification.createdAt).toLocal());
+    // tryParse: one malformed timestamp must degrade to a row without a
+    // "when" line, never a FormatException that red-screens the whole center.
+    final createdAt = DateTime.tryParse(notification.createdAt);
+    final when = createdAt == null
+        ? null
+        : relativeTime(context.l10n, createdAt.toLocal());
 
     final content = switch (notification.type) {
       'price_drop' =>
@@ -126,17 +138,21 @@ class _NotificationTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Unread accent dot; a spacer keeps read rows aligned.
+            // Unread accent dot; a spacer keeps read rows aligned. The
+            // Semantics label announces unread state to screen readers —
+            // color/weight alone don't.
             Padding(
               padding: const EdgeInsets.only(top: 6, right: AppSpacing.md),
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: unread
-                      ? theme.colorScheme.primary
-                      : Colors.transparent,
+              child: Semantics(
+                label: unread ? context.l10n.notifUnreadSemantic : null,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color:
+                        unread ? theme.colorScheme.primary : Colors.transparent,
+                  ),
                 ),
               ),
             ),
@@ -145,13 +161,15 @@ class _NotificationTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   content,
-                  const SizedBox(height: 2),
-                  Text(
-                    when,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  if (when != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      when,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
