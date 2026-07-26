@@ -234,8 +234,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          adminMetricsProvider(30).overrideWith((ref) async =>
-              const AdminMetrics(days: 30)),
+          adminMetricsProvider(30)
+              .overrideWith((ref) async => const AdminMetrics(days: 30)),
           adminTotalsProvider.overrideWith((ref) async => _totals),
           // The pane inherits Overview's 30-day default window.
           adminTimeseriesProvider(30).overrideWith((ref) async => ts),
@@ -262,6 +262,37 @@ void main() {
     }
     // Signups window total = 2 + 5.
     expect(find.text('7'), findsWidgets);
+  });
+
+  testWidgets('Overview and Trends panes expose pull-to-refresh',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          adminMetricsProvider(30)
+              .overrideWith((ref) async => const AdminMetrics(days: 30)),
+          adminTotalsProvider.overrideWith((ref) async => _totals),
+          adminTimeseriesProvider(30).overrideWith((ref) async =>
+              AdminTimeseries(
+                  days: 30,
+                  startDay: DateTime.utc(2026, 7, 1),
+                  series: const {})),
+        ],
+        child: const MaterialApp(home: AdminMetricsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Overview (the default tab) is refreshable like Activity/Users.
+    expect(find.byType(RefreshIndicator), findsOneWidget);
+
+    await tester.tap(find.text('Trends'));
+    await tester.pumpAndSettle();
+    expect(find.byType(RefreshIndicator), findsOneWidget);
   });
 
   testWidgets('Activity tab lists events with anonymous handling and paging',
@@ -292,8 +323,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          adminMetricsProvider(30).overrideWith((ref) async =>
-              const AdminMetrics(days: 30)),
+          adminMetricsProvider(30)
+              .overrideWith((ref) async => const AdminMetrics(days: 30)),
           adminTotalsProvider.overrideWith((ref) async => _totals),
           adminActivityProvider.overrideWith((ref) async => feed),
         ],
@@ -351,8 +382,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          adminMetricsProvider(30).overrideWith((ref) async =>
-              const AdminMetrics(days: 30)),
+          adminMetricsProvider(30)
+              .overrideWith((ref) async => const AdminMetrics(days: 30)),
           adminTotalsProvider.overrideWith((ref) async => _totals),
           adminUsersProvider(0).overrideWith((ref) async => list),
         ],
@@ -362,8 +393,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // 'Users' is also a totals tile label — target the tab specifically.
-    await tester.tap(find.descendant(
-        of: find.byType(TabBar), matching: find.text('Users')));
+    await tester.tap(
+        find.descendant(of: find.byType(TabBar), matching: find.text('Users')));
     await tester.pumpAndSettle();
 
     expect(find.text('2 users'), findsOneWidget);

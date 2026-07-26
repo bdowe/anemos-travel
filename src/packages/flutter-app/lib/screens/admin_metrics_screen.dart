@@ -22,8 +22,7 @@ class AdminMetricsScreen extends ConsumerStatefulWidget {
   const AdminMetricsScreen({super.key});
 
   @override
-  ConsumerState<AdminMetricsScreen> createState() =>
-      _AdminMetricsScreenState();
+  ConsumerState<AdminMetricsScreen> createState() => _AdminMetricsScreenState();
 }
 
 class _AdminMetricsScreenState extends ConsumerState<AdminMetricsScreen> {
@@ -113,13 +112,21 @@ class _OverviewPane extends ConsumerWidget {
                 message: '$e',
                 actions: [
                   FilledButton(
-                    onPressed: () =>
-                        ref.invalidate(adminMetricsProvider(days)),
+                    onPressed: () => ref.invalidate(adminMetricsProvider(days)),
                     child: const Text('Retry'),
                   ),
                 ],
               ),
-              data: (m) => _MetricsBody(metrics: m, header: _TotalsSection()),
+              // Pull-to-refresh re-polls both async sources this pane shows,
+              // matching the Activity/Users panes' affordance.
+              data: (m) => RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(adminTotalsProvider);
+                  ref.invalidate(adminMetricsProvider(days));
+                  await ref.read(adminMetricsProvider(days).future);
+                },
+                child: _MetricsBody(metrics: m, header: _TotalsSection()),
+              ),
             ),
           ),
         ],
@@ -166,8 +173,7 @@ class _TotalsSection extends ConsumerWidget {
             _Stat('Users', '${t.users}',
                 caption:
                     '${t.verifiedUsers} verified · ${t.onboardedUsers} onboarded'),
-            _Stat('Trips', '${t.trips}',
-                caption: '${t.tripLineages} lineages'),
+            _Stat('Trips', '${t.trips}', caption: '${t.tripLineages} lineages'),
             _Stat('Itinerary items', '${t.itineraryItems}'),
             _Stat('Booking todos', '${t.bookingTodos}'),
             _Stat('Active price alerts', '${t.activePriceAlerts}'),
@@ -226,15 +232,23 @@ class _TrendsPane extends ConsumerWidget {
                   ),
                 ],
               ),
-              data: (t) => ListView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                children: [
-                  for (final (key, title) in _series) ...[
-                    DailyCountChart(title: title, data: t.denseSeries(key)),
+              // Pull-to-refresh, matching the Activity/Users panes.
+              data: (t) => RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(adminTimeseriesProvider(days));
+                  await ref.read(adminTimeseriesProvider(days).future);
+                },
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  children: [
+                    for (final (key, title) in _series) ...[
+                      DailyCountChart(title: title, data: t.denseSeries(key)),
+                      const SizedBox(height: AppSpacing.xl),
+                    ],
                     const SizedBox(height: AppSpacing.xl),
                   ],
-                  const SizedBox(height: AppSpacing.xl),
-                ],
+                ),
               ),
             ),
           ),
@@ -266,6 +280,9 @@ class _MetricsBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = metrics;
     return ListView(
+      // Always scrollable so Overview's pull-to-refresh works even when the
+      // tiles fit the viewport.
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
         if (header != null) header!,
@@ -331,8 +348,8 @@ class _MetricsBody extends StatelessWidget {
           _Stat('Would hit plan cap', '${m.freeCapWouldHits['plan_runs'] ?? 0}',
               caption:
                   '${m.freeCapUsersAffected['plan_runs'] ?? 0} users affected'),
-          _Stat(
-              'Would hit trip cap', '${m.freeCapWouldHits['active_trips'] ?? 0}',
+          _Stat('Would hit trip cap',
+              '${m.freeCapWouldHits['active_trips'] ?? 0}',
               caption:
                   '${m.freeCapUsersAffected['active_trips'] ?? 0} users affected'),
           _Stat('Tokens in', _tokens(m.planInputTokens),
@@ -700,8 +717,9 @@ class _UsersPaneState extends ConsumerState<_UsersPane>
   Future<void> _loadMore(int offset) async {
     setState(() => _loadingMore = true);
     try {
-      final page =
-          await ref.read(adminMetricsApiServiceProvider).fetchUsers(offset: offset);
+      final page = await ref
+          .read(adminMetricsApiServiceProvider)
+          .fetchUsers(offset: offset);
       if (!mounted) return;
       setState(() => _more.addAll(page.users));
     } catch (_) {
@@ -815,7 +833,10 @@ class _UserTile extends StatelessWidget {
         ),
       ),
       childrenPadding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg,
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.lg,
       ),
       expandedCrossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -77,6 +77,11 @@ class _IngestPaneState extends ConsumerState<_IngestPane> {
   String? _result;
   String? _error;
 
+  /// Separate from [_error] (ingest/validation failures shown under the
+  /// submit button): a sources-load failure renders inline where the source
+  /// dropdown would be, so it is visible on phones without scrolling.
+  String? _sourcesError;
+
   @override
   void initState() {
     super.initState();
@@ -91,17 +96,21 @@ class _IngestPaneState extends ConsumerState<_IngestPane> {
   }
 
   Future<void> _loadSources() async {
-    setState(() => _loadingSources = true);
+    setState(() {
+      _loadingSources = true;
+      _sourcesError = null;
+    });
     try {
       final s = await ref.read(localApiServiceProvider).listSources();
+      if (!mounted) return;
       setState(() {
         _sources = s;
         _sourceId ??= s.isNotEmpty ? s.first['id'] as String : null;
       });
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _sourcesError = '$e');
     } finally {
-      setState(() => _loadingSources = false);
+      if (mounted) setState(() => _loadingSources = false);
     }
   }
 
@@ -156,6 +165,7 @@ class _IngestPaneState extends ConsumerState<_IngestPane> {
           'photo_url': photo.text.trim(),
           'consent_ref': consent.text.trim(),
         });
+        if (!mounted) return;
         setState(() => _sourceId = row['id'] as String);
         await _loadSources();
       } catch (e) {
@@ -186,6 +196,7 @@ class _IngestPaneState extends ConsumerState<_IngestPane> {
       final recs = (res['recommendations'] as List?)?.length ?? 0;
       final verified = res['verified'] ?? 0;
       final unverified = res['unverified'] ?? 0;
+      if (!mounted) return;
       setState(() {
         _result =
             'Drafted $recs recommendation(s): $verified verified, $unverified need coordinates.'
@@ -193,11 +204,11 @@ class _IngestPaneState extends ConsumerState<_IngestPane> {
         _raw.clear();
       });
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = '$e');
     } finally {
-      setState(() => _busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -220,12 +231,34 @@ class _IngestPaneState extends ConsumerState<_IngestPane> {
         const SizedBox(height: AppSpacing.lg),
         if (_loadingSources)
           const LinearProgressIndicator()
+        else if (_sourcesError != null)
+          // Inline where the dropdown would be — a load failure used to hide
+          // at the bottom of this ListView, off-screen on phones.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Banner(
+                icon: Icons.error_outline,
+                color: theme.colorScheme.error,
+                text: 'Could not load sources: $_sourcesError',
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: _loadSources,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+              ),
+            ],
+          )
         else
           Row(
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
                   initialValue: _sourceId,
+                  // Constrain to the row: an unexpanded dropdown sizes to its
+                  // widest item, so a long source name overflows narrow phones.
+                  isExpanded: true,
                   decoration: const InputDecoration(
                       labelText: 'Local source', border: OutlineInputBorder()),
                   items: _sources
@@ -259,6 +292,7 @@ class _IngestPaneState extends ConsumerState<_IngestPane> {
             Expanded(
               child: DropdownButtonFormField<String>(
                 initialValue: _kind,
+                isExpanded: true,
                 decoration: const InputDecoration(
                     labelText: 'Kind', border: OutlineInputBorder()),
                 items: const [
@@ -296,7 +330,8 @@ class _IngestPaneState extends ConsumerState<_IngestPane> {
         ),
         if (_result != null) ...[
           const SizedBox(height: AppSpacing.md),
-          _Banner(icon: Icons.check_circle, color: Colors.green, text: _result!),
+          _Banner(
+              icon: Icons.check_circle, color: Colors.green, text: _result!),
         ],
         if (_error != null) ...[
           const SizedBox(height: AppSpacing.md),
@@ -336,11 +371,11 @@ class _ReviewPaneState extends ConsumerState<_ReviewPane> {
     });
     try {
       final d = await ref.read(localApiServiceProvider).listByStatus('draft');
-      setState(() => _drafts = d);
+      if (mounted) setState(() => _drafts = d);
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = '$e');
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -359,25 +394,32 @@ class _ReviewPaneState extends ConsumerState<_ReviewPane> {
     final theme = Theme.of(context);
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return EmptyState(
-        icon: Icons.error_outline,
-        title: 'Could not load drafts',
-        message: _error!,
-        actions: [
-          FilledButton(onPressed: _load, child: const Text('Retry')),
-        ],
+      return _RefreshableState(
+        onRefresh: _load,
+        child: EmptyState(
+          icon: Icons.error_outline,
+          title: 'Could not load drafts',
+          message: _error!,
+          actions: [
+            FilledButton(onPressed: _load, child: const Text('Retry')),
+          ],
+        ),
       );
     }
     if (_drafts.isEmpty) {
-      return const EmptyState(
-        icon: Icons.inbox,
-        title: 'No drafts to review',
-        message: 'Ingest raw material to generate draft recommendations.',
+      return _RefreshableState(
+        onRefresh: _load,
+        child: const EmptyState(
+          icon: Icons.inbox,
+          title: 'No drafts to review',
+          message: 'Ingest raw material to generate draft recommendations.',
+        ),
       );
     }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(AppSpacing.md),
         itemCount: _drafts.length,
         itemBuilder: (_, i) {
@@ -423,13 +465,19 @@ class _ReviewPaneState extends ConsumerState<_ReviewPane> {
                   ],
                   const SizedBox(height: AppSpacing.sm),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
+                      // Flexible so the hint ellipsizes instead of pushing
+                      // the Publish button off a narrow card.
                       if (!hasCoords)
-                        Text('Needs coordinates to publish',
-                            style: theme.textTheme.labelSmall
-                                ?.copyWith(color: theme.colorScheme.error)),
-                      const Spacer(),
+                        Expanded(
+                          child: Text('Needs coordinates to publish',
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(color: theme.colorScheme.error)),
+                        )
+                      else
+                        const Spacer(),
+                      const SizedBox(width: AppSpacing.sm),
                       FilledButton.tonalIcon(
                         onPressed: hasCoords
                             ? () => _publish(d['id'] as String)
@@ -475,11 +523,11 @@ class _CoveragePaneState extends ConsumerState<_CoveragePane> {
     });
     try {
       final r = await ref.read(localApiServiceProvider).coverage();
-      setState(() => _rows = r);
+      if (mounted) setState(() => _rows = r);
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = '$e');
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -487,38 +535,54 @@ class _CoveragePaneState extends ConsumerState<_CoveragePane> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return EmptyState(
-        icon: Icons.error_outline,
-        title: 'Could not load coverage',
-        message: _error!,
-        actions: [FilledButton(onPressed: _load, child: const Text('Retry'))],
+      return _RefreshableState(
+        onRefresh: _load,
+        child: EmptyState(
+          icon: Icons.error_outline,
+          title: 'Could not load coverage',
+          message: _error!,
+          actions: [FilledButton(onPressed: _load, child: const Text('Retry'))],
+        ),
       );
     }
     if (_rows.isEmpty) {
-      return const EmptyState(
-        icon: Icons.map_outlined,
-        title: 'No coverage yet',
-        message: 'Publish recommendations to build city coverage.',
+      return _RefreshableState(
+        onRefresh: _load,
+        child: const EmptyState(
+          icon: Icons.map_outlined,
+          title: 'No coverage yet',
+          message: 'Publish recommendations to build city coverage.',
+        ),
       );
     }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
-          DataTable(
-            columns: const [
-              DataColumn(label: Text('City')),
-              DataColumn(label: Text('Published'), numeric: true),
-              DataColumn(label: Text('Draft'), numeric: true),
-            ],
-            rows: _rows
-                .map((r) => DataRow(cells: [
-                      DataCell(Text(r['city'] as String? ?? '—')),
-                      DataCell(Text('${r['published'] ?? 0}')),
-                      DataCell(Text('${r['draft'] ?? 0}')),
-                    ]))
-                .toList(),
+          // Horizontally scrollable so long city names never overflow narrow
+          // widths — the same pattern as health_pane.dart's _RouteTable.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columnSpacing: AppSpacing.xl,
+              headingRowHeight: 36,
+              dataRowMinHeight: 36,
+              dataRowMaxHeight: 44,
+              columns: const [
+                DataColumn(label: Text('City')),
+                DataColumn(label: Text('Published'), numeric: true),
+                DataColumn(label: Text('Draft'), numeric: true),
+              ],
+              rows: _rows
+                  .map((r) => DataRow(cells: [
+                        DataCell(Text(r['city'] as String? ?? '—')),
+                        DataCell(Text('${r['published'] ?? 0}')),
+                        DataCell(Text('${r['draft'] ?? 0}')),
+                      ]))
+                  .toList(),
+            ),
           ),
         ],
       ),
@@ -527,6 +591,30 @@ class _CoveragePaneState extends ConsumerState<_CoveragePane> {
 }
 
 // --- shared ------------------------------------------------------------------
+
+/// Wraps a non-list state (error / empty) in a viewport-filling scrollable
+/// inside a RefreshIndicator, so pull-to-refresh still works when there are
+/// no rows to scroll — the exact case an admin hits right after ingesting.
+class _RefreshableState extends StatelessWidget {
+  final Future<void> Function() onRefresh;
+  final Widget child;
+  const _RefreshableState({required this.onRefresh, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: LayoutBuilder(
+        builder: (context, constraints) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(height: constraints.maxHeight, child: child),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _Banner extends StatelessWidget {
   final IconData icon;
