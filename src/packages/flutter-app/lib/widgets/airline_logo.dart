@@ -17,7 +17,12 @@ class AirlineLogo extends StatelessWidget {
       u,
       width: size,
       height: size,
+      // The airline name always renders adjacently, so the logo is decorative.
+      excludeFromSemantics: true,
       placeholderBuilder: (_) => SizedBox(width: size, height: size),
+      // A failed/404 logo truly collapses (the doc-comment promise) instead
+      // of leaving an empty reserved box.
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
     );
   }
 }

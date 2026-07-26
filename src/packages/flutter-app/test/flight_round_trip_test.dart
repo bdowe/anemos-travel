@@ -162,6 +162,10 @@ String _fmt(DateTime d) =>
 Future<AppLocalizations> _en() =>
     AppLocalizations.delegate.load(const Locale('en'));
 
+/// The localized label the date buttons render (polish/flights replaced the
+/// raw ISO labels with flightDateLabel); requests still carry [_fmt] ISO.
+Future<String> _disp(DateTime d) async => flightDateLabel(await _en(), _fmt(d));
+
 void main() {
   group('FlightSearchRequest JSON', () {
     test('omits return_date when null (one-way unchanged)', () {
@@ -402,6 +406,11 @@ void main() {
         ),
       ));
       await tester.pumpAndSettle();
+      // polish/flights: a successful prefill auto-search collapses the form
+      // to its summary row; expand it back so the tests below can edit
+      // fields and re-search (one tap, same as the user path).
+      await tester.tap(find.text('Edit search'));
+      await tester.pumpAndSettle();
       return (flights, alerts);
     }
 
@@ -422,7 +431,9 @@ void main() {
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
       final expectedReturn = _fmt(depart.add(const Duration(days: 7)));
-      expect(find.text(expectedReturn), findsOneWidget);
+      // The button shows the localized display date, not the ISO payload.
+      expect(find.text(await _disp(depart.add(const Duration(days: 7)))),
+          findsOneWidget);
 
       await tester.tap(find.text('Search Flights'));
       await tester.pumpAndSettle();
@@ -484,8 +495,8 @@ void main() {
       // The departure was clamped to the window's end, not kept raw.
       final windowEnd =
           DateUtils.dateOnly(DateTime.now()).add(const Duration(days: 365));
-      expect(find.text(_fmt(farOut)), findsNothing);
-      expect(find.text(_fmt(windowEnd)), findsOneWidget);
+      expect(find.text(await _disp(farOut)), findsNothing);
+      expect(find.text(await _disp(windowEnd)), findsOneWidget);
 
       // The return picker opens and a return can be picked without asserting.
       await tester.tap(find.text('Return (optional)'));
@@ -495,7 +506,7 @@ void main() {
       await tester.pumpAndSettle();
       // Depart == window end, so the only pickable return is that same day.
       expect(find.text('Return (optional)'), findsNothing);
-      expect(find.text(_fmt(windowEnd)), findsNWidgets(2));
+      expect(find.text(await _disp(windowEnd)), findsNWidgets(2));
     });
 
     testWidgets('prefilled past departure is floored at today', (tester) async {
@@ -503,8 +514,8 @@ void main() {
       await pumpScreen(tester, _fmt(past));
 
       final today = DateUtils.dateOnly(DateTime.now());
-      expect(find.text(_fmt(past)), findsNothing);
-      expect(find.text(_fmt(today)), findsOneWidget);
+      expect(find.text(await _disp(past)), findsNothing);
+      expect(find.text(await _disp(today)), findsOneWidget);
 
       await tester.tap(find.text('Return (optional)'));
       await tester.pumpAndSettle();
@@ -527,7 +538,7 @@ void main() {
       expect(find.text('Return (optional)'), findsNothing);
 
       // Move the departure into the next month (always past return).
-      await tester.tap(find.text(_fmt(depart)));
+      await tester.tap(find.text(await _disp(depart)));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Next month'));
       await tester.pumpAndSettle();
@@ -683,6 +694,10 @@ void main() {
           ),
         ),
       ));
+      await tester.pumpAndSettle();
+      // polish/flights: expand the auto-collapsed form (see the round-trip
+      // group's helper).
+      await tester.tap(find.text('Edit search'));
       await tester.pumpAndSettle();
       return (flights, alerts);
     }

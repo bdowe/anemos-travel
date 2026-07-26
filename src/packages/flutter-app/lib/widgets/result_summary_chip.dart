@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
+import '../theme/spacing.dart';
 
 /// A quiet one-line summary of a result set the agent found (flights, events,
 /// local picks, ferries) — replaces inline card stacks in the chat. The full
@@ -28,38 +29,46 @@ class ResultSummaryChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Material(
           color: accent.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: AppRadius.lgAll,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 18, color: accent),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+            borderRadius: AppRadius.lgAll,
+            // When tappable it's a real navigation control: grow the hit box
+            // to the touch floor (the Row centers within the constraint).
+            child: ConstrainedBox(
+              constraints: onTap != null
+                  ? const BoxConstraints(minHeight: kMinTouchTarget)
+                  : const BoxConstraints(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 18, color: accent),
+                    const SizedBox(width: AppSpacing.sm),
+                    Flexible(
+                      child: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
-                  ),
-                  if (onTap != null) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      context.l10n.resultChipViewInTrip,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: accent,
-                        fontWeight: FontWeight.w600,
+                    if (onTap != null) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        context.l10n.resultChipViewInTrip,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    Icon(Icons.chevron_right, size: 16, color: accent),
+                      Icon(Icons.chevron_right, size: 16, color: accent),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

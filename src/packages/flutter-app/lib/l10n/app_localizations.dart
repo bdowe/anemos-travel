@@ -62,7 +62,8 @@ import 'app_localizations_es.dart';
 /// be consistent with the languages listed in the AppLocalizations.supportedLocales
 /// property.
 abstract class AppLocalizations {
-  AppLocalizations(String locale) : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+  AppLocalizations(String locale)
+      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -70,7 +71,8 @@ abstract class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations)!;
   }
 
-  static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
+  static const LocalizationsDelegate<AppLocalizations> delegate =
+      _AppLocalizationsDelegate();
 
   /// A list of this localizations delegate along with the default localizations
   /// delegates.
@@ -82,7 +84,8 @@ abstract class AppLocalizations {
   /// Additional delegates can be added by appending to this list in
   /// MaterialApp. This list does not have to be used at all if a custom list
   /// of delegates is preferred or required.
-  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = <LocalizationsDelegate<dynamic>>[
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
+      <LocalizationsDelegate<dynamic>>[
     delegate,
     GlobalMaterialLocalizations.delegate,
     GlobalCupertinoLocalizations.delegate,
@@ -4475,12 +4478,6 @@ abstract class AppLocalizations {
   /// **'Clear return date'**
   String get flightSearchClearReturnTooltip;
 
-  /// No description provided for @flightSearchChildAges.
-  ///
-  /// In en, this message translates to:
-  /// **'Child ages'**
-  String get flightSearchChildAges;
-
   /// No description provided for @flightSearchCabinEconomy.
   ///
   /// In en, this message translates to:
@@ -4576,6 +4573,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No flights found for this route and date.'**
   String get flightSearchHintEmpty;
+
+  /// No description provided for @flightSearchHintInitialTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find your flight'**
+  String get flightSearchHintInitialTitle;
+
+  /// No description provided for @flightSearchNoResultsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No flights found'**
+  String get flightSearchNoResultsTitle;
+
+  /// No description provided for @flightSearchFormTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get flightSearchFormTitle;
+
+  /// No description provided for @flightSearchEditSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit search'**
+  String get flightSearchEditSearch;
+
+  /// Passenger-count fragment of the collapsed search summary, e.g. "JFK → CDG · Sep 1 · 2 travelers · Business"
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 traveler} other{{count} travelers}}'**
+  String flightSearchSummaryTravelers(int count);
+
+  /// No description provided for @flightSearchCabinLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cabin'**
+  String get flightSearchCabinLabel;
+
+  /// No description provided for @flightSearchBaggageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Baggage'**
+  String get flightSearchBaggageLabel;
+
+  /// No description provided for @flightSearchOptimizeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rank results by'**
+  String get flightSearchOptimizeLabel;
+
+  /// No description provided for @flightSearchAdults.
+  ///
+  /// In en, this message translates to:
+  /// **'Adults'**
+  String get flightSearchAdults;
+
+  /// No description provided for @flightSearchChildren.
+  ///
+  /// In en, this message translates to:
+  /// **'Children'**
+  String get flightSearchChildren;
+
+  /// No description provided for @flightSearchAddAdult.
+  ///
+  /// In en, this message translates to:
+  /// **'Add adult'**
+  String get flightSearchAddAdult;
+
+  /// No description provided for @flightSearchRemoveAdult.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove adult'**
+  String get flightSearchRemoveAdult;
+
+  /// No description provided for @flightSearchAddChild.
+  ///
+  /// In en, this message translates to:
+  /// **'Add child'**
+  String get flightSearchAddChild;
+
+  /// No description provided for @flightSearchRemoveChild.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove child'**
+  String get flightSearchRemoveChild;
+
+  /// Label on each child-age picker, e.g. "Child 1"
+  ///
+  /// In en, this message translates to:
+  /// **'Child {n}'**
+  String flightSearchChildN(int n);
+
+  /// No description provided for @flightSearchResultsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 flight found} other{{count} flights found}}'**
+  String flightSearchResultsCount(int count);
 
   /// No description provided for @flightCardSavings.
   ///
@@ -4714,6 +4807,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'City or airport'**
   String get airportFieldHint;
+
+  /// No description provided for @airportFieldClearTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get airportFieldClearTooltip;
+
+  /// No description provided for @airportFieldNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching airports'**
+  String get airportFieldNoMatches;
 
   /// No description provided for @guidesTitle.
   ///
@@ -4902,7 +5007,8 @@ abstract class AppLocalizations {
   String get errorGeneric;
 }
 
-class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
@@ -4911,25 +5017,25 @@ class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> 
   }
 
   @override
-  bool isSupported(Locale locale) => <String>['en', 'es'].contains(locale.languageCode);
+  bool isSupported(Locale locale) =>
+      <String>['en', 'es'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
 }
 
 AppLocalizations lookupAppLocalizations(Locale locale) {
-
-
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
-    case 'en': return AppLocalizationsEn();
-    case 'es': return AppLocalizationsEs();
+    case 'en':
+      return AppLocalizationsEn();
+    case 'es':
+      return AppLocalizationsEs();
   }
 
   throw FlutterError(
-    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-    'an issue with the localizations generation tool. Please file an issue '
-    'on GitHub with a reproducible sample app and the gen-l10n configuration '
-    'that was used.'
-  );
+      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+      'an issue with the localizations generation tool. Please file an issue '
+      'on GitHub with a reproducible sample app and the gen-l10n configuration '
+      'that was used.');
 }

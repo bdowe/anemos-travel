@@ -1685,7 +1685,6 @@
   "flightSearchDepartDate": "Departure date",
   "flightSearchReturnOptional": "Return (optional)",
   "flightSearchClearReturnTooltip": "Clear return date",
-  "flightSearchChildAges": "Child ages",
   "flightSearchCabinEconomy": "Economy",
   "flightSearchCabinPremiumEconomy": "Premium economy",
   "flightSearchCabinBusiness": "Business",
@@ -1702,6 +1701,45 @@
   "flightSearchErrorTitle": "Could not load flights",
   "flightSearchHintInitial": "Choose an origin, destination, and date to find flights.",
   "flightSearchHintEmpty": "No flights found for this route and date.",
+  "flightSearchHintInitialTitle": "Find your flight",
+  "flightSearchNoResultsTitle": "No flights found",
+  "flightSearchFormTitle": "Search",
+  "flightSearchEditSearch": "Edit search",
+  "flightSearchSummaryTravelers": "{count, plural, =1{1 traveler} other{{count} travelers}}",
+  "@flightSearchSummaryTravelers": {
+    "description": "Passenger-count fragment of the collapsed search summary, e.g. \"JFK → CDG · Sep 1 · 2 travelers · Business\"",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "flightSearchCabinLabel": "Cabin",
+  "flightSearchBaggageLabel": "Baggage",
+  "flightSearchOptimizeLabel": "Rank results by",
+  "flightSearchAdults": "Adults",
+  "flightSearchChildren": "Children",
+  "flightSearchAddAdult": "Add adult",
+  "flightSearchRemoveAdult": "Remove adult",
+  "flightSearchAddChild": "Add child",
+  "flightSearchRemoveChild": "Remove child",
+  "flightSearchChildN": "Child {n}",
+  "@flightSearchChildN": {
+    "description": "Label on each child-age picker, e.g. \"Child 1\"",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "flightSearchResultsCount": "{count, plural, =1{1 flight found} other{{count} flights found}}",
+  "@flightSearchResultsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "flightCardSavings": "Saves {amount} vs next option",
   "@flightCardSavings": {
     "placeholders": {
@@ -1798,6 +1836,8 @@
     }
   },
   "airportFieldHint": "City or airport",
+  "airportFieldClearTooltip": "Clear selection",
+  "airportFieldNoMatches": "No matching airports",
   "guidesTitle": "Local guides",
   "guidesErrorTitle": "Could not load guides",
   "guidesErrorMessage": "Check your connection and try again.",

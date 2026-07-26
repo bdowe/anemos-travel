@@ -90,11 +90,18 @@ class StatusPill extends StatelessWidget {
             Icon(icon, size: 13, color: fg),
             const SizedBox(width: AppSpacing.xs),
           ],
-          Text(
-            label,
-            style: style?.copyWith(
-              color: fg,
-              fontWeight: FontWeight.w600,
+          // Flexible + ellipsis: a long custom label (e.g. the Spanish
+          // flight-savings pill at 360px) truncates instead of overflowing
+          // the pill's Row.
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style?.copyWith(
+                color: fg,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           if (trailing != null)

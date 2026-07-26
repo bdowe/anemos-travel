@@ -6,13 +6,18 @@ import '../models/flight_search_request.dart';
 import '../providers/auth_provider.dart';
 import '../providers/flights_provider.dart';
 import '../providers/preferences_provider.dart';
+import '../theme/spacing.dart';
 import '../utils/errors.dart';
 import '../utils/flight_labels.dart';
 import '../widgets/airport_field.dart';
+import '../widgets/choice_chip_row.dart';
+import '../widgets/collapsible_section.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/page_container.dart';
 import '../widgets/create_alert_sheet.dart';
 import '../widgets/flight_offer_card.dart';
 import '../widgets/gradient_app_bar.dart';
+import '../widgets/section_header.dart';
 
 // Canonical API values. These are sent to the Duffel-backed API, so they are
 // NEVER translated — only their display labels are (specs/i18n-spanish).
@@ -79,9 +84,14 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
   final List<int> _childAges = [];
   String _cabinClass = 'economy';
 
+  /// Whether the search form is open. Parent-owned (CollapsibleSection house
+  /// rule): a successful search collapses it to a one-line summary so results
+  /// own the viewport on phones; tapping the row re-opens it to edit.
+  bool _formExpanded = true;
+
   /// The parameters of the last submitted search (see _search); the alert
-  /// entry point reads these so an edited-but-unsearched form can't mislabel
-  /// a watch.
+  /// entry point and the collapsed-form summary read these so an
+  /// edited-but-unsearched form can't mislabel either.
   ({
     String origin,
     String destination,
@@ -90,8 +100,12 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
     int adults,
     String cabinClass,
     String baggage,
-    bool hasChildren,
+    int children,
   })? _watched;
+
+  /// The exact request last handed to the provider, so the error state's
+  /// Retry re-runs what actually failed rather than the live form.
+  FlightSearchRequest? _lastRequest;
 
   /// Age a newly added child starts at before the traveler adjusts it.
   static const _defaultChildAge = 8;
@@ -175,8 +189,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       {({double lat, double lng})? coord}) async {
     final q = query.trim();
     final isCode = q.length == 3 && RegExp(r'^[A-Za-z]{3}$').hasMatch(q);
-    if (isCode)
+    if (isCode) {
       return Airport(iataCode: q.toUpperCase(), name: q.toUpperCase());
+    }
 
     final cleaned = _cleanLabel(q);
     final attempts = <String>[q, if (cleaned != q) cleaned];
@@ -231,8 +246,15 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
   bool get _canSearch =>
       _origin != null && _destination != null && _departDate != null;
 
+  /// Machine-facing YYYY-MM-DD for the API payload. User-facing labels go
+  /// through [flightDateLabel] (localized DateFormat) instead.
   String _fmtDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Localized short display date for a picked [DateTime], e.g. "Sep 1" /
+  /// "1 sept".
+  String _displayDate(AppLocalizations l10n, DateTime d) =>
+      flightDateLabel(l10n, _fmtDate(d));
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -290,8 +312,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
 
   void _search() {
     if (!_canSearch) return;
-    // Snapshot what was actually searched: the "Watch this route" alert must
-    // describe these parameters, not whatever the form says later.
+    // Snapshot what was actually searched: the "Watch this route" alert and
+    // the collapsed-form summary must describe these parameters, not whatever
+    // the form says later.
     final returnDate = _returnDate == null ? null : _fmtDate(_returnDate!);
     _watched = (
       origin: _origin!.iataCode,
@@ -301,213 +324,95 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       adults: _adults,
       cabinClass: _cabinClass,
       baggage: _baggage,
-      hasChildren: _childAges.isNotEmpty,
+      children: _childAges.length,
     );
-    ref.read(flightsProvider.notifier).search(FlightSearchRequest(
-          origin: _origin!.iataCode,
-          destination: _destination!.iataCode,
-          departDate: _fmtDate(_departDate!),
-          returnDate: returnDate,
-          adults: _adults,
-          childAges: _childAges.isEmpty ? null : List.of(_childAges),
-          cabinClass: _cabinClass == 'economy' ? null : _cabinClass,
-          baggage: _baggage == 'personal_item' ? null : _baggage,
-          optimizeFor: _optimizeFor,
-        ));
+    final request = FlightSearchRequest(
+      origin: _origin!.iataCode,
+      destination: _destination!.iataCode,
+      departDate: _fmtDate(_departDate!),
+      returnDate: returnDate,
+      adults: _adults,
+      childAges: _childAges.isEmpty ? null : List.of(_childAges),
+      cabinClass: _cabinClass == 'economy' ? null : _cabinClass,
+      baggage: _baggage == 'personal_item' ? null : _baggage,
+      optimizeFor: _optimizeFor,
+    );
+    _lastRequest = request;
+    ref.read(flightsProvider.notifier).search(request);
+  }
+
+  /// Re-runs the last submitted request (error-state Retry). Falls back to a
+  /// fresh submit if somehow none was recorded.
+  void _retry() {
+    final request = _lastRequest;
+    if (request != null) {
+      ref.read(flightsProvider.notifier).search(request);
+    } else {
+      _search();
+    }
+  }
+
+  /// One-line summary of the last search for the collapsed form row, e.g.
+  /// "JFK → CDG · Sep 1 – Sep 10 · 2 travelers · Business".
+  String? _searchSummary(AppLocalizations l10n) {
+    final w = _watched;
+    if (w == null) return null;
+    final dates = w.returnDate == null
+        ? flightDateLabel(l10n, w.departDate)
+        : '${flightDateLabel(l10n, w.departDate)} – ${flightDateLabel(l10n, w.returnDate!)}';
+    final travelers = l10n.flightSearchSummaryTravelers(w.adults + w.children);
+    final cabin = cabinClassLabel(l10n, w.cabinClass);
+    return '${w.origin} → ${w.destination} · $dates · $travelers · $cabin';
   }
 
   @override
   Widget build(BuildContext context) {
+    // Auto-collapse the form on the loading -> loaded edge of a SUCCESSFUL
+    // search so the results own the viewport; a failed search keeps the form
+    // open for fixing inputs.
+    ref.listen<FlightsState>(flightsProvider, (prev, next) {
+      final wasLoading = prev?.loading ?? false;
+      if (wasLoading &&
+          !next.loading &&
+          next.error == null &&
+          next.hasSearched &&
+          _formExpanded) {
+        setState(() => _formExpanded = false);
+      }
+    });
+
     final state = ref.watch(flightsProvider);
     final theme = Theme.of(context);
     final l10n = context.l10n;
 
     return Scaffold(
       appBar: GradientAppBar(title: Text(l10n.flightSearchTitle)),
-      body: Column(
-        children: [
-          // Search form: the surface color stays full-bleed; the fields
-          // cap to the shared 700px column (declutter series).
-          Container(
-            color: theme.colorScheme.surface,
-            padding: const EdgeInsets.all(16),
-            child: PageContainer(
-              child: Column(
-                children: [
-                  AirportField(
-                    label: l10n.flightSearchFrom,
-                    icon: Icons.flight_takeoff,
-                    selected: _origin,
-                    onSelected: (a) => setState(() => _origin = a),
-                  ),
-                  const SizedBox(height: 12),
-                  AirportField(
-                    label: l10n.flightSearchTo,
-                    icon: Icons.flight_land,
-                    selected: _destination,
-                    onSelected: (a) => setState(() => _destination = a),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _pickDate,
-                          icon: const Icon(Icons.calendar_today, size: 18),
-                          label: Text(_departDate == null
-                              ? l10n.flightSearchDepartDate
-                              : _fmtDate(_departDate!)),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _pickReturnDate,
-                          icon: const Icon(Icons.calendar_today, size: 18),
-                          label: Text(_returnDate == null
-                              ? l10n.flightSearchReturnOptional
-                              : _fmtDate(_returnDate!)),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                        ),
-                      ),
-                      if (_returnDate != null)
-                        IconButton(
-                          tooltip: l10n.flightSearchClearReturnTooltip,
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () => setState(() => _returnDate = null),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _PassengerStepper(
-                        icon: Icons.person_outline,
-                        count: _adults,
-                        min: 1,
-                        onChanged: (v) => setState(() => _adults = v),
-                      ),
-                      const SizedBox(width: 8),
-                      _PassengerStepper(
-                        icon: Icons.child_care_outlined,
-                        count: _childAges.length,
-                        min: 0,
-                        onChanged: (v) => setState(() {
-                          while (_childAges.length < v) {
-                            _childAges.add(_defaultChildAge);
-                          }
-                          while (_childAges.length > v) {
-                            _childAges.removeLast();
-                          }
-                        }),
-                      ),
-                    ],
-                  ),
-                  if (_childAges.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Wrap(
-                        spacing: 12,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(l10n.flightSearchChildAges,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant)),
-                          for (var i = 0; i < _childAges.length; i++)
-                            DropdownButton<int>(
-                              value: _childAges[i],
-                              isDense: true,
-                              items: [
-                                for (var age = 0; age <= 17; age++)
-                                  DropdownMenuItem(
-                                    value: age,
-                                    child: Text('$age'),
-                                  ),
-                              ],
-                              onChanged: (age) {
-                                if (age != null) {
-                                  setState(() => _childAges[i] = age);
-                                }
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Wrap(
-                      spacing: 8,
-                      children: [
-                        for (final value in _cabinClasses)
-                          ChoiceChip(
-                            label: Text(cabinClassLabel(l10n, value)),
-                            selected: _cabinClass == value,
-                            onSelected: (_) =>
-                                setState(() => _cabinClass = value),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<String>(
-                    segments: _baggageValues
-                        .map((value) => ButtonSegment(
-                              value: value,
-                              label: Text(_baggageLabel(l10n, value)),
-                            ))
-                        .toList(),
-                    selected: {_baggage},
-                    onSelectionChanged: (s) =>
-                        setState(() => _baggage = s.first),
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<String>(
-                    segments: _presets
-                        .map((value) => ButtonSegment(
-                              value: value,
-                              label: Text(_presetLabel(l10n, value)),
-                            ))
-                        .toList(),
-                    selected: {_optimizeFor},
-                    onSelectionChanged: (s) =>
-                        setState(() => _optimizeFor = s.first),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _canSearch && !state.loading ? _search : null,
-                      icon: state.loading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.search),
-                      label: Text(state.loading
-                          ? l10n.flightSearchSearching
-                          : l10n.flightSearchSubmit),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
-                ],
+      // One scroll surface for form + results (declutter series): the form
+      // can't push results off a phone viewport, and the whole page scrolls.
+      body: CustomScrollView(
+        slivers: [
+          // Search form: the surface color stays full-bleed; the fields cap
+          // to the shared 700px column (PageContainer INSIDE the scrollable).
+          SliverToBoxAdapter(
+            child: Container(
+              color: theme.colorScheme.surface,
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: PageContainer(
+                child: CollapsibleSection(
+                  icon: Icons.search,
+                  title: _formExpanded
+                      ? l10n.flightSearchFormTitle
+                      : l10n.flightSearchEditSearch,
+                  summary: _formExpanded ? null : _searchSummary(l10n),
+                  expanded: _formExpanded,
+                  onToggle: () =>
+                      setState(() => _formExpanded = !_formExpanded),
+                  child: _buildForm(context, state, l10n, theme),
+                ),
               ),
             ),
           ),
-          const Divider(height: 1),
+          const SliverToBoxAdapter(child: Divider(height: 1)),
           // Watch-this-route entry (specs/price-alerts): only over a real
           // result set and only signed in — alerts need an email to notify.
           // Uses the searched snapshot, never the live form (which may have
@@ -518,159 +423,343 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
               state.offers.isNotEmpty &&
               _watched != null &&
               ref.watch(authProvider.select((s) => s.isSignedIn)))
-            PageContainer(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: TextButton.icon(
-                    icon: const Icon(Icons.notifications_none, size: 18),
-                    label: Text(l10n.flightSearchWatchRoute),
-                    onPressed: () {
-                      final w = _watched!;
-                      // Seed the baseline from the cheapest EFFECTIVE price —
-                      // the checker tracks fare + bag fee on baggage-aware
-                      // watches, so a bare-fare baseline would read as a drop.
-                      // Unknown-fee offers can't seed a comparable baseline.
-                      final priced =
-                          state.offers.where((o) => !o.bagFeeUnknown).toList();
-                      final cheapest = priced.isEmpty
-                          ? null
-                          : priced.reduce((a, b) =>
-                              a.displayPrice <= b.displayPrice ? a : b);
-                      final seedPrice = w.hasChildren ? null : cheapest;
-                      CreateAlertSheet.show(
-                        context,
-                        CreateAlertSheet(
-                          origin: w.origin,
-                          destination: w.destination,
-                          departDate: w.departDate,
-                          returnDate: w.returnDate,
-                          adults: w.adults,
-                          cabinClass: w.cabinClass,
-                          baggage: w.baggage,
-                          currentPrice: seedPrice?.displayPrice,
-                          currency: seedPrice?.currency,
-                        ),
-                      );
-                    },
+            SliverToBoxAdapter(
+              child: PageContainer(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.notifications_none, size: 18),
+                      label: Text(l10n.flightSearchWatchRoute),
+                      onPressed: () {
+                        final w = _watched!;
+                        // Seed the baseline from the cheapest EFFECTIVE price —
+                        // the checker tracks fare + bag fee on baggage-aware
+                        // watches, so a bare-fare baseline would read as a drop.
+                        // Unknown-fee offers can't seed a comparable baseline.
+                        final priced = state.offers
+                            .where((o) => !o.bagFeeUnknown)
+                            .toList();
+                        final cheapest = priced.isEmpty
+                            ? null
+                            : priced.reduce((a, b) =>
+                                a.displayPrice <= b.displayPrice ? a : b);
+                        final seedPrice = w.children > 0 ? null : cheapest;
+                        CreateAlertSheet.show(
+                          context,
+                          CreateAlertSheet(
+                            origin: w.origin,
+                            destination: w.destination,
+                            departDate: w.departDate,
+                            returnDate: w.returnDate,
+                            adults: w.adults,
+                            cabinClass: w.cabinClass,
+                            baggage: w.baggage,
+                            currentPrice: seedPrice?.displayPrice,
+                            currency: seedPrice?.currency,
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
             ),
-          // Results (whole-scrollable cap, alerts/guides pattern)
-          Expanded(child: PageContainer(child: _Results(state: state))),
+          ..._resultSlivers(state, l10n, theme),
         ],
       ),
     );
   }
-}
 
-class _Results extends StatelessWidget {
-  final FlightsState state;
-  const _Results({required this.state});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = context.l10n;
-
-    if (state.error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  /// The expanded search form. Built only while [_formExpanded]
+  /// (CollapsibleSection contract); all values live on this State, so
+  /// collapse/expand loses nothing.
+  Widget _buildForm(BuildContext context, FlightsState state,
+      AppLocalizations l10n, ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AirportField(
+          label: l10n.flightSearchFrom,
+          icon: Icons.flight_takeoff,
+          selected: _origin,
+          onSelected: (a) => setState(() => _origin = a),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AirportField(
+          label: l10n.flightSearchTo,
+          icon: Icons.flight_land,
+          selected: _destination,
+          onSelected: (a) => setState(() => _destination = a),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _pickDate,
+                icon: const Icon(Icons.calendar_today, size: 18),
+                label: Text(
+                  _departDate == null
+                      ? l10n.flightSearchDepartDate
+                      : _displayDate(l10n, _departDate!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _pickReturnDate,
+                icon: const Icon(Icons.calendar_today, size: 18),
+                label: Text(
+                  _returnDate == null
+                      ? l10n.flightSearchReturnOptional
+                      : _displayDate(l10n, _returnDate!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            if (_returnDate != null)
+              IconButton(
+                tooltip: l10n.flightSearchClearReturnTooltip,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () => setState(() => _returnDate = null),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        // Wrap, not Row: the labeled steppers don't fit side by side at
+        // 360px (especially in Spanish), so they stack instead of clipping.
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            _PassengerStepper(
+              icon: Icons.person_outline,
+              label: l10n.flightSearchAdults,
+              addTooltip: l10n.flightSearchAddAdult,
+              removeTooltip: l10n.flightSearchRemoveAdult,
+              count: _adults,
+              min: 1,
+              onChanged: (v) => setState(() => _adults = v),
+            ),
+            _PassengerStepper(
+              icon: Icons.child_care_outlined,
+              label: l10n.flightSearchChildren,
+              addTooltip: l10n.flightSearchAddChild,
+              removeTooltip: l10n.flightSearchRemoveChild,
+              count: _childAges.length,
+              min: 0,
+              onChanged: (v) => setState(() {
+                while (_childAges.length < v) {
+                  _childAges.add(_defaultChildAge);
+                }
+                while (_childAges.length > v) {
+                  _childAges.removeLast();
+                }
+              }),
+            ),
+          ],
+        ),
+        if (_childAges.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.sm,
             children: [
-              Icon(Icons.error_outline,
-                  size: 48, color: theme.colorScheme.error),
-              const SizedBox(height: 12),
-              Text(l10n.flightSearchErrorTitle,
-                  style: theme.textTheme.titleMedium),
-              const SizedBox(height: 4),
-              Text(
-                friendlyError(l10n, state.error),
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              for (var i = 0; i < _childAges.length; i++)
+                SizedBox(
+                  width: 132,
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _childAges[i],
+                    decoration: InputDecoration(
+                      labelText: l10n.flightSearchChildN(i + 1),
+                    ),
+                    items: [
+                      for (var age = 0; age <= 17; age++)
+                        DropdownMenuItem(value: age, child: Text('$age')),
+                    ],
+                    onChanged: (age) {
+                      if (age != null) {
+                        setState(() => _childAges[i] = age);
+                      }
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: AppSpacing.lg),
+        SectionHeader(title: l10n.flightSearchCabinLabel),
+        const SizedBox(height: AppSpacing.sm),
+        // Single-select with a value at all times: re-tapping the selected
+        // chip reports null (ChoiceChipRow's deselect), which we ignore.
+        ChoiceChipRow(
+          options: _cabinClasses,
+          selected: _cabinClass,
+          labelBuilder: (v) => cabinClassLabel(l10n, v),
+          onSelected: (v) => setState(() => _cabinClass = v ?? _cabinClass),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SectionHeader(title: l10n.flightSearchBaggageLabel),
+        const SizedBox(height: AppSpacing.sm),
+        ChoiceChipRow(
+          options: _baggageValues,
+          selected: _baggage,
+          labelBuilder: (v) => _baggageLabel(l10n, v),
+          onSelected: (v) => setState(() => _baggage = v ?? _baggage),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SectionHeader(title: l10n.flightSearchOptimizeLabel),
+        const SizedBox(height: AppSpacing.sm),
+        ChoiceChipRow(
+          options: _presets,
+          selected: _optimizeFor,
+          labelBuilder: (v) => _presetLabel(l10n, v),
+          onSelected: (v) => setState(() => _optimizeFor = v ?? _optimizeFor),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _canSearch && !state.loading ? _search : null,
+            icon: state.loading
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: theme.colorScheme.onPrimary),
+                  )
+                : const Icon(Icons.search),
+            label: Text(state.loading
+                ? l10n.flightSearchSearching
+                : l10n.flightSearchSubmit),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Results region of the scroll view. Hint/empty/error states fill the
+  /// leftover viewport (SliverFillRemaining) so they center like every other
+  /// EmptyState screen; real results are a lazy SliverList with each row
+  /// capped by PageContainer (gutters stay wheel/scrollbar-live).
+  List<Widget> _resultSlivers(
+      FlightsState state, AppLocalizations l10n, ThemeData theme) {
+    if (state.error != null) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: EmptyState(
+            icon: Icons.cloud_off,
+            title: l10n.flightSearchErrorTitle,
+            message: friendlyError(l10n, state.error),
+            iconColor: theme.colorScheme.error.withValues(alpha: 0.6),
+            actions: [
+              FilledButton(
+                onPressed: _retry,
+                child: Text(l10n.commonRetry),
               ),
             ],
           ),
         ),
-      );
+      ];
     }
 
     if (!state.hasSearched) {
-      return _Hint(
-        icon: Icons.flight,
-        text: l10n.flightSearchHintInitial,
-      );
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: EmptyState(
+            icon: Icons.flight,
+            title: l10n.flightSearchHintInitialTitle,
+            message: l10n.flightSearchHintInitial,
+          ),
+        ),
+      ];
     }
 
     if (state.loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
     }
 
     if (state.offers.isEmpty) {
-      return _Hint(
-        icon: Icons.search_off,
-        text: l10n.flightSearchHintEmpty,
-      );
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: EmptyState(
+            icon: Icons.search_off,
+            title: l10n.flightSearchNoResultsTitle,
+            message: l10n.flightSearchHintEmpty,
+          ),
+        ),
+      ];
     }
 
     final savingsLabel = savingsLabelFor(l10n, state.offers, state.bestOfferId);
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: state.offers.length,
-      itemBuilder: (context, i) {
-        final offer = state.offers[i];
-        final isBest = offer.id == state.bestOfferId;
-        return FlightOfferCard(
-          offer: offer,
-          isBest: isBest,
-          savingsLabel: isBest ? savingsLabel : null,
-        );
-      },
-    );
-  }
-}
-
-class _Hint extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _Hint({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onSurfaceVariant;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 56, color: color),
-            const SizedBox(height: 12),
-            Text(text,
-                textAlign: TextAlign.center,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: color)),
-          ],
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, i) {
+              if (i == 0) {
+                return PageContainer(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: SectionHeader(
+                      title: l10n.flightSearchResultsCount(state.offers.length),
+                      action: Text(
+                        _presetLabel(l10n, state.optimizeFor),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ),
+                );
+              }
+              final offer = state.offers[i - 1];
+              final isBest = offer.id == state.bestOfferId;
+              return PageContainer(
+                child: FlightOfferCard(
+                  offer: offer,
+                  isBest: isBest,
+                  savingsLabel: isBest ? savingsLabel : null,
+                ),
+              );
+            },
+            childCount: state.offers.length + 1,
+          ),
         ),
       ),
-    );
+    ];
   }
 }
 
 class _PassengerStepper extends StatelessWidget {
   final IconData icon;
+  final String label;
+  final String addTooltip;
+  final String removeTooltip;
   final int count;
   final int min;
   final ValueChanged<int> onChanged;
   const _PassengerStepper({
     required this.icon,
+    required this.label,
+    required this.addTooltip,
+    required this.removeTooltip,
     required this.count,
     required this.min,
     required this.onChanged,
@@ -678,30 +767,41 @@ class _PassengerStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).dividerColor),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: Icon(icon, size: 16),
-          ),
-          IconButton(
-            icon: const Icon(Icons.remove, size: 18),
-            onPressed: count > min ? () => onChanged(count - 1) : null,
-            visualDensity: VisualDensity.compact,
-          ),
-          Text('$count', style: const TextStyle(fontWeight: FontWeight.bold)),
-          IconButton(
-            icon: const Icon(Icons.add, size: 18),
-            onPressed: count < 8 ? () => onChanged(count + 1) : null,
-            visualDensity: VisualDensity.compact,
-          ),
-        ],
+    final theme = Theme.of(context);
+    return Semantics(
+      container: true,
+      label: label,
+      value: '$count',
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.dividerColor),
+          borderRadius: AppRadius.smAll,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: AppSpacing.sm),
+              child: Icon(icon,
+                  size: 16, color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Text(label,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            IconButton(
+              tooltip: removeTooltip,
+              icon: const Icon(Icons.remove, size: 18),
+              onPressed: count > min ? () => onChanged(count - 1) : null,
+            ),
+            Text('$count', style: const TextStyle(fontWeight: FontWeight.bold)),
+            IconButton(
+              tooltip: addTooltip,
+              icon: const Icon(Icons.add, size: 18),
+              onPressed: count < 8 ? () => onChanged(count + 1) : null,
+            ),
+          ],
+        ),
       ),
     );
   }
