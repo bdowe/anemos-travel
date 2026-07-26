@@ -17,7 +17,6 @@ import '../models/chat_session.dart';
 import '../models/trip.dart';
 import '../providers/auth_provider.dart';
 import '../providers/live_trip_provider.dart';
-import '../providers/plan_provider.dart';
 import '../providers/resumable_chats_provider.dart';
 import '../providers/shared_with_me_provider.dart';
 import '../providers/trips_provider.dart';
@@ -50,14 +49,10 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
         const <ChatSessionSummary>[];
     // Watched before the guard branches: an account whose only trips are
     // shared-with-me must reach the list, not the plan-a-trip empty state.
+    // (The saved-trip graduation listen lives inside ContinueChatsSection —
+    // no duplicate listener here.)
     final sharedAsync = ref.watch(sharedWithMeProvider);
     final shared = sharedAsync.valueOrNull ?? const <Trip>[];
-
-    // A conversation that just produced a saved trip graduates out of the
-    // continue section — refetch when the agent reports a saved trip.
-    ref.listen(planProvider.select((s) => s.savedTripId), (prev, next) {
-      if (next != null && next != prev) ref.invalidate(resumableChatsProvider);
-    });
 
     Widget body;
     if ((state.loading || sharedAsync.isLoading) &&
@@ -132,21 +127,17 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                     ),
                   // In-progress AI conversations that haven't produced a
                   // trip yet (specs/continue-where-you-left-off) — the
-                  // discussion phase, above the trips they may become.
-                  if (resumable.isNotEmpty) ...[
+                  // discussion phase, above the trips they may become. Same
+                  // shared section as Home; it collapses to nothing when
+                  // empty and already ends in an AppSpacing.lg gap, so the
+                  // My Trips header below needs no top padding of its own.
+                  const ContinueChatsSection(),
+                  if (resumable.isNotEmpty && state.trips.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(
                           AppSpacing.xs, 0, 0, AppSpacing.sm),
-                      child: SectionHeader(title: l10n.continueChatsTitle),
+                      child: SectionHeader(title: l10n.tripsListTitle),
                     ),
-                    for (final c in resumable) ContinueChatCard(chat: c),
-                    if (state.trips.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                            AppSpacing.xs, AppSpacing.lg, 0, AppSpacing.sm),
-                        child: SectionHeader(title: l10n.tripsListTitle),
-                      ),
-                  ],
                   for (final t in state.trips)
                     _TripCard(trip: t, isAdmin: isAdmin),
                   // Trips others invited this user to co-plan. Kept as a

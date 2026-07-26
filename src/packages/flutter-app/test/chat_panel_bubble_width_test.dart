@@ -11,9 +11,10 @@ import 'package:travel_route_planner/widgets/result_summary_chip.dart';
 
 import 'support/l10n_test_app.dart';
 
-/// Chat bubbles span 78% of the window on phones but cap at 720px on wide
-/// desktop windows, keeping line lengths readable. Plus the es spot-check for
-/// the result chip's newly localized "View in trip" label.
+/// Chat bubbles span 78% of the hosting panel's own width — not the window —
+/// capping at 720px on wide panels, keeping line lengths readable. Covers the
+/// full-width phone/desktop hosts plus the 400px refine-dock host. Plus the
+/// es spot-check for the result chip's newly localized "View in trip" label.
 
 class _SeededPlanNotifier extends PlanNotifier {
   _SeededPlanNotifier(PlanState seeded)
@@ -22,7 +23,11 @@ class _SeededPlanNotifier extends PlanNotifier {
   }
 }
 
-Future<void> _pumpLongMessageAt(WidgetTester tester, Size logicalSize) async {
+Future<void> _pumpLongMessageAt(
+  WidgetTester tester,
+  Size logicalSize, {
+  double? hostWidth,
+}) async {
   tester.view.physicalSize = logicalSize;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -33,12 +38,19 @@ Future<void> _pumpLongMessageAt(WidgetTester tester, Size logicalSize) async {
   ]);
   final provider = StateNotifierProvider<PlanNotifier, PlanState>(
       (ref) => _SeededPlanNotifier(seeded));
+  Widget panel = ChatPanel(state: provider, notifier: provider.notifier);
+  if (hostWidth != null) {
+    // Mimics the trip-detail refine dock: a fixed-width panel pinned to the
+    // right edge of a much wider window.
+    panel = Align(
+      alignment: Alignment.centerRight,
+      child: SizedBox(width: hostWidth, child: panel),
+    );
+  }
   await tester.pumpWidget(
     ProviderScope(
       child: localizedTestApp(
-        home: Scaffold(
-          body: ChatPanel(state: provider, notifier: provider.notifier),
-        ),
+        home: Scaffold(body: panel),
       ),
     ),
   );
@@ -66,6 +78,15 @@ void main() {
   testWidgets('bubbles keep the 78% constraint on narrow screens',
       (WidgetTester tester) async {
     await _pumpLongMessageAt(tester, const Size(400, 800));
+    expect(_bubbleMaxWidth(tester), closeTo(312, 0.01));
+  });
+
+  testWidgets('bubbles size to the hosting panel, not the window (400px dock)',
+      (WidgetTester tester) async {
+    await _pumpLongMessageAt(tester, const Size(1200, 900), hostWidth: 400);
+    // 0.78 × the dock's own 400px — were the cap still window-derived,
+    // 0.78 × 1200 would blow past the dock and clamp bubbles to its full
+    // width (the pre-fix regression).
     expect(_bubbleMaxWidth(tester), closeTo(312, 0.01));
   });
 

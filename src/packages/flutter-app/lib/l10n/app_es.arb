@@ -640,6 +640,7 @@
   "offlineBannerMessage": "Sin conexión: mostrando la copia guardada {when}",
   "chatInputHint": "Describe tu viaje...",
   "chatFollowUpHint": "Haz una pregunta de seguimiento…",
+  "chatSend": "Enviar",
   "chatAttachImages": "Adjuntar imágenes",
   "chatStopDictating": "Dejar de dictar",
   "chatDictate": "Dictar",

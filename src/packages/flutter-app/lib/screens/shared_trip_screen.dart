@@ -58,6 +58,16 @@ class SharedTripScreen extends ConsumerWidget {
           message: linkKind == SharedLinkKind.invite
               ? l10n.sharedInviteUnavailableMessage
               : l10n.sharedLinkUnavailableMessage,
+          actions: [
+            // A transient network blip shouldn't read as a dead link — let
+            // the viewer refetch before giving up.
+            FilledButton(
+              onPressed: () => ref.invalidate(linkKind == SharedLinkKind.invite
+                  ? invitedTripProvider(token)
+                  : sharedTripProvider(token)),
+              child: Text(l10n.commonRetry),
+            ),
+          ],
         ),
         data: (s) =>
             _SharedTripBody(shared: s, token: token, linkKind: linkKind),
@@ -65,6 +75,12 @@ class SharedTripScreen extends ConsumerWidget {
     );
   }
 }
+
+/// Scroll clearance for the pinned bottom action bar (excluding the SafeArea
+/// inset, added at the call site): the bar measures ~104px at its tallest —
+/// 2 x AppSpacing.md container padding + two stacked ~40px buttons — so this
+/// keeps the last row fully revealable with breathing room to spare.
+const double _actionBarClearance = 128;
 
 class _SharedTripBody extends ConsumerStatefulWidget {
   final SharedTrip shared;
@@ -120,16 +136,15 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
     if (!await _ensureSignedIn()) return;
     setState(() => _saving = true);
     try {
-      await ref
-          .read(tripsApiServiceProvider)
-          .duplicateSharedTrip(widget.token);
+      await ref.read(tripsApiServiceProvider).duplicateSharedTrip(widget.token);
       if (!mounted) return;
       // Land the viewer on their Trips tab, where the copy now lives.
       ref.read(navIndexProvider.notifier).state = AppTab.trips.index;
-      Navigator.of(context)
-          .pushNamedAndRemoveUntil('/', (route) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } catch (e) {
-      if (mounted) showSnack(context, l10n.sharedSaveCopyError(friendlyError(l10n, e)));
+      if (mounted) {
+        showSnack(context, l10n.sharedSaveCopyError(friendlyError(l10n, e)));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -171,7 +186,9 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
 
       WidgetsBinding.instance.addPostFrameCallback((_) => openOnTripsTab());
     } catch (e) {
-      if (mounted) showSnack(context, l10n.sharedJoinError(friendlyError(l10n, e)));
+      if (mounted) {
+        showSnack(context, l10n.sharedJoinError(friendlyError(l10n, e)));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -206,7 +223,8 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
       ],
       [
         for (final a in stays)
-          if (TripMap.stayHasCoords(a)) (checkIn: a.checkIn, checkOut: a.checkOut),
+          if (TripMap.stayHasCoords(a))
+            (checkIn: a.checkIn, checkOut: a.checkOut),
       ],
     );
     final dayItems = _selectedDay == null
@@ -232,8 +250,15 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
     return Stack(
       children: [
         ListView(
-          padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 96),
+          // Bottom pad must clear the pinned action bar: 12+12 container
+          // padding + two stacked ~40px buttons ≈ 104px, plus the SafeArea
+          // bottom inset the bar consumes on gesture-bar phones — otherwise
+          // the last row hides behind the opaque bar even fully scrolled.
+          padding: EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              _actionBarClearance + MediaQuery.paddingOf(context).bottom),
           children: [
             // Centered 700px column on wide layouts (declutter series):
             // the ListView stays full-width (wheel/scrollbar work in the
@@ -242,118 +267,118 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-            Text(trip.title, style: theme.textTheme.headlineSmall),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '${l10n.sharedBy(widget.shared.ownerName)}'
-              '${dates != null ? ' · $dates' : ''}',
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-            if (trip.summary != null && trip.summary!.trim().isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.md),
-              Text(trip.summary!, style: theme.textTheme.bodyMedium),
-            ],
-            if (hasCoords) ...[
-              const SizedBox(height: AppSpacing.lg),
-              ClipRRect(
-                borderRadius: AppRadius.lgAll,
-                child: SizedBox(
-                  height: 240,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: TripMap(
-                          items: dayItems,
-                          accommodations: dayStays,
-                          selectedPosition: _selectedPosition,
-                          fitSignature: _selectedDay,
-                          // Keep fitted markers clear of the chip row
-                          // overlaid below.
-                          topOverlayInset: mapDayCount > 0
-                              ? MapDayChips.mapTopInset
-                              : 0,
-                          emptyLabel: _selectedDay == null
-                              ? l10n.sharedNoMappedPlaces
-                              : l10n.sharedNoPlacesOnDay(_selectedDay!),
-                          onPinTap: (pos) =>
-                              setState(() => _selectedPosition = pos),
-                        ),
-                      ),
-                      // Above the map's gesture layer, so chip taps and row
-                      // scrolls never pan the map.
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        right: 8,
-                        child: MapDayChips(
-                          dayCount: mapDayCount,
-                          selected: _selectedDay,
-                          mappedDays: mappedDays,
-                          onSelected: (d) =>
-                              setState(() => _selectedDay = d),
-                        ),
-                      ),
-                    ],
+                  Text(trip.title, style: theme.textTheme.headlineSmall),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '${l10n.sharedBy(widget.shared.ownerName)}'
+                    '${dates != null ? ' · $dates' : ''}',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            if (items.isEmpty)
-              EmptyState(
-                icon: Icons.place_outlined,
-                title: l10n.sharedEmptyTitle,
-                message: l10n.sharedEmptyMessage,
-              )
-            else
-              for (final group in _groups(l10n)) ...[
-                Padding(
-                  padding: const EdgeInsets.only(
-                      top: AppSpacing.md, bottom: AppSpacing.xs),
-                  child: Text(
-                    group.label,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(color: theme.colorScheme.primary),
-                  ),
-                ),
-                for (final it in group.items)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(
-                      radius: 14,
-                      backgroundColor:
-                          theme.colorScheme.primary.withValues(alpha: 0.12),
-                      child: Text(
-                        '${it.position + 1}',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: theme.colorScheme.primary),
+                  if (trip.summary != null &&
+                      trip.summary!.trim().isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Text(trip.summary!, style: theme.textTheme.bodyMedium),
+                  ],
+                  if (hasCoords) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    ClipRRect(
+                      borderRadius: AppRadius.lgAll,
+                      child: SizedBox(
+                        height: 240,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: TripMap(
+                                items: dayItems,
+                                accommodations: dayStays,
+                                selectedPosition: _selectedPosition,
+                                fitSignature: _selectedDay,
+                                // Keep fitted markers clear of the chip row
+                                // overlaid below.
+                                topOverlayInset: mapDayCount > 0
+                                    ? MapDayChips.mapTopInset
+                                    : 0,
+                                emptyLabel: _selectedDay == null
+                                    ? l10n.sharedNoMappedPlaces
+                                    : l10n.sharedNoPlacesOnDay(_selectedDay!),
+                                onPinTap: (pos) =>
+                                    setState(() => _selectedPosition = pos),
+                              ),
+                            ),
+                            // Above the map's gesture layer, so chip taps and row
+                            // scrolls never pan the map.
+                            Positioned(
+                              top: 8,
+                              left: 8,
+                              right: 8,
+                              child: MapDayChips(
+                                dayCount: mapDayCount,
+                                selected: _selectedDay,
+                                mappedDays: mappedDays,
+                                onSelected: (d) =>
+                                    setState(() => _selectedDay = d),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    title: Text(it.name),
-                    subtitle: it.address != null ? Text(it.address!) : null,
-                    trailing: it.day != null
-                        ? Chip(
-                            label: Text(l10n.sharedDayN(it.day!)),
-                            visualDensity: VisualDensity.compact,
-                          )
-                        : null,
-                    selected: _selectedPosition == it.position,
-                    onTap: () =>
-                        setState(() => _selectedPosition = it.position),
-                  ),
-              ],
-            if ((trip.accommodations ?? const []).isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.lg),
-              SectionHeader(title: l10n.sharedStays),
-              for (final a in trip.accommodations!)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.hotel_outlined),
-                  title: Text(a.name),
-                  subtitle: a.address != null ? Text(a.address!) : null,
-                ),
-            ],
+                  ],
+                  const SizedBox(height: AppSpacing.lg),
+                  if (items.isEmpty)
+                    EmptyState(
+                      icon: Icons.place_outlined,
+                      title: l10n.sharedEmptyTitle,
+                      message: l10n.sharedEmptyMessage,
+                    )
+                  else
+                    for (final group in _groups(l10n)) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(
+                            top: AppSpacing.md, bottom: AppSpacing.xs),
+                        // Same header treatment as the Stays section below — one
+                        // type system per screen.
+                        child: SectionHeader(title: group.label),
+                      ),
+                      for (final it in group.items)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            radius: 14,
+                            backgroundColor: theme.colorScheme.primary
+                                .withValues(alpha: 0.12),
+                            child: Text(
+                              '${it.position + 1}',
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(color: theme.colorScheme.primary),
+                            ),
+                          ),
+                          title: Text(it.name),
+                          subtitle:
+                              it.address != null ? Text(it.address!) : null,
+                          trailing: it.day != null
+                              ? Chip(
+                                  label: Text(l10n.sharedDayN(it.day!)),
+                                  visualDensity: VisualDensity.compact,
+                                )
+                              : null,
+                          selected: _selectedPosition == it.position,
+                          onTap: () =>
+                              setState(() => _selectedPosition = it.position),
+                        ),
+                    ],
+                  if ((trip.accommodations ?? const []).isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    SectionHeader(title: l10n.sharedStays),
+                    for (final a in trip.accommodations!)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.hotel_outlined),
+                        title: Text(a.name),
+                        subtitle: a.address != null ? Text(a.address!) : null,
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -371,56 +396,56 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
             child: SafeArea(
               child: PageContainer(
                 child: widget.shared.isEditorLink
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: _saving ? null : _joinAsCoPlanner,
-                          icon: _saving
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.group_add_outlined),
-                          label: Text(l10n.sharedJoinCoPlanner),
-                        ),
-                        // Invite tokens have no duplicate endpoint — they're
-                        // single-use join capabilities, not browse links.
-                        if (widget.linkKind == SharedLinkKind.share)
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: _saving ? null : _joinAsCoPlanner,
+                            icon: _saving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.group_add_outlined),
+                            label: Text(l10n.sharedJoinCoPlanner),
+                          ),
+                          // Invite tokens have no duplicate endpoint — they're
+                          // single-use join capabilities, not browse links.
+                          if (widget.linkKind == SharedLinkKind.share)
+                            TextButton(
+                              onPressed: _saving ? null : _saveCopy,
+                              child: Text(l10n.sharedSaveSeparateCopy),
+                            ),
+                        ],
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Viewer follow (specs/share-ux-viewer-follow): the
+                          // trip appears read-only in "Shared with you" and
+                          // stays current as the owner plans.
+                          FilledButton.icon(
+                            onPressed: _saving ? null : _joinAsCoPlanner,
+                            icon: _saving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.bookmark_add_outlined),
+                            label: Text(l10n.sharedKeepInTrips),
+                          ),
                           TextButton(
                             onPressed: _saving ? null : _saveCopy,
                             child: Text(l10n.sharedSaveSeparateCopy),
                           ),
-                      ],
-                    )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Viewer follow (specs/share-ux-viewer-follow): the
-                        // trip appears read-only in "Shared with you" and
-                        // stays current as the owner plans.
-                        FilledButton.icon(
-                          onPressed: _saving ? null : _joinAsCoPlanner,
-                          icon: _saving
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.bookmark_add_outlined),
-                          label: Text(l10n.sharedKeepInTrips),
-                        ),
-                        TextButton(
-                          onPressed: _saving ? null : _saveCopy,
-                          child: Text(l10n.sharedSaveSeparateCopy),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
               ),
             ),
           ),
