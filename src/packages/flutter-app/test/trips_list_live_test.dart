@@ -53,8 +53,7 @@ class _QueuedTripsApiService extends TripsApiService {
   }
 }
 
-String _iso(DateTime d) =>
-    '${d.year.toString().padLeft(4, '0')}-'
+String _iso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
     '${d.month.toString().padLeft(2, '0')}-'
     '${d.day.toString().padLeft(2, '0')}';
 
@@ -71,8 +70,7 @@ Trip _trip(String id, String title, {String? start, String? end}) => Trip(
     );
 
 /// Yesterday → tomorrow: today is Day 2 of 3.
-Trip _liveTrip() =>
-    _trip('live', 'Athens Trip', start: _rel(-1), end: _rel(1));
+Trip _liveTrip() => _trip('live', 'Athens Trip', start: _rel(-1), end: _rel(1));
 
 ChatSessionSummary _chat() => ChatSessionSummary(
       chatId: 'c1',
@@ -97,7 +95,8 @@ Future<void> _pumpList(
         resumableChatsProvider.overrideWith((ref) async => chats),
       ],
       child: MaterialApp(
-      localizationsDelegates: testLocalizationsDelegates,home: TripsListScreen()),
+          localizationsDelegates: testLocalizationsDelegates,
+          home: TripsListScreen()),
     ),
   );
 }
@@ -107,11 +106,13 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets(
-      'live card renders above the continue section and above My Trips',
+  testWidgets('live card renders above the continue section and above My Trips',
       (WidgetTester tester) async {
     final service = _QueuedTripsApiService([
-      [_trip('future', 'Lisbon Trip', start: _rel(5), end: _rel(8)), _liveTrip()]
+      [
+        _trip('future', 'Lisbon Trip', start: _rel(5), end: _rel(8)),
+        _liveTrip()
+      ]
     ]);
 
     await _pumpList(tester, service, chats: [_chat()]);
@@ -211,5 +212,24 @@ void main() {
     await tester.pumpAndSettle();
     final phoneCard = tester.getSize(find.byType(Card).first);
     expect(phoneCard.width, greaterThan(340)); // full width minus padding
+  });
+
+  testWidgets('short list keeps pull-to-refresh armed (always-scrollable)',
+      (WidgetTester tester) async {
+    final service = _QueuedTripsApiService([
+      [_trip('t1', 'Lisbon Trip', start: _rel(30), end: _rel(33))],
+    ]);
+    await _pumpList(tester, service);
+    await tester.pumpAndSettle();
+
+    // One trip card is far shorter than the viewport; with clamping physics
+    // the drag would be swallowed and onRefresh could never fire.
+    final list = tester.widget<ListView>(find.byType(ListView).first);
+    expect(list.physics, isA<AlwaysScrollableScrollPhysics>());
+
+    await tester.fling(find.byType(ListView).first, const Offset(0, 300), 1000);
+    await tester.pump();
+    expect(find.byType(RefreshProgressIndicator), findsOneWidget);
+    await tester.pumpAndSettle();
   });
 }

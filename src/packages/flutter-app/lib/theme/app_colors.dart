@@ -30,6 +30,17 @@ abstract final class AppColors {
         ],
       );
 
+  // Semantic status pair for positive/complete states (booked checkmarks,
+  // Planned pills, published counts) — the exact green pair screens were
+  // re-declaring inline before the polish wave.
+  static Color get successContainer => Colors.green.withValues(alpha: 0.15);
+  static Color get onSuccessContainer => Colors.green.shade800;
+
+  // Semantic status pair for attention/pending states (review counts, draft
+  // badges) — the matching amber pair.
+  static Color get warningContainer => Colors.amber.withValues(alpha: 0.20);
+  static Color get onWarningContainer => Colors.amber.shade900;
+
   /// Accent color for an itinerary place by its category. `scheme` supplies the
   /// theme-derived fallbacks so this stays in sync with the seed.
   static Color forCategory(String? category, ColorScheme scheme) {

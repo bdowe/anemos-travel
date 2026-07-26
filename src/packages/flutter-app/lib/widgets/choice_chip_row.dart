@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/spacing.dart';
+
 /// A single-select row of [ChoiceChip]s. Tapping the selected chip again
 /// clears the selection (passes null).
 class ChoiceChipRow extends StatelessWidget {
@@ -24,7 +26,9 @@ class ChoiceChipRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 8,
+      spacing: AppSpacing.sm,
+      // Long localized labels (es) wrap onto extra runs; keep them breathing.
+      runSpacing: AppSpacing.xs,
       children: options.map((o) {
         return ChoiceChip(
           label: Text(labelBuilder?.call(o) ?? o),
