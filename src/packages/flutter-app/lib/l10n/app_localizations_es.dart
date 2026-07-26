@@ -1948,6 +1948,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'Busca un vuelo y toca «Seguir esta ruta»: te avisaremos por correo cuando baje el precio.';
 
   @override
+  String get alertsEmptyCta => 'Buscar vuelos';
+
+  @override
   String alertsLastSeen(String price) {
     return 'Visto por última vez $price';
   }
@@ -1963,6 +1966,17 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String alertsAdults(int count) {
     return '$count adultos';
+  }
+
+  @override
+  String alertsFlexDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count días',
+      one: '1 día',
+    );
+    return '±$_temp0';
   }
 
   @override
@@ -2063,6 +2077,9 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get notifEmptyMessage =>
       'Aquí aparecerán las bajadas de precio de las rutas que sigas.';
+
+  @override
+  String get notifUnreadSemantic => 'No leída';
 
   @override
   String notifDownFrom(String price, String previous) {

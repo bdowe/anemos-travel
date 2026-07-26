@@ -1935,6 +1935,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Search a flight and tap \"Watch this route\" — we\'ll email you when the price drops.';
 
   @override
+  String get alertsEmptyCta => 'Search flights';
+
+  @override
   String alertsLastSeen(String price) {
     return 'Last seen $price';
   }
@@ -1950,6 +1953,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String alertsAdults(int count) {
     return '$count adults';
+  }
+
+  @override
+  String alertsFlexDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+    );
+    return '±$_temp0';
   }
 
   @override
@@ -2050,6 +2064,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notifEmptyMessage =>
       'Price drops on routes you watch will show up here.';
+
+  @override
+  String get notifUnreadSemantic => 'Unread';
 
   @override
   String notifDownFrom(String price, String previous) {

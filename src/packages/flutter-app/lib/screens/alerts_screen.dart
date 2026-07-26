@@ -7,12 +7,15 @@ import '../providers/notifications_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/spacing.dart';
 import '../utils/errors.dart';
+import '../utils/flight_labels.dart';
 import '../utils/money_format.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/gradient_app_bar.dart';
 import '../widgets/offline_banner.dart' show relativeTime;
 import '../widgets/page_container.dart';
 import '../widgets/status_pill.dart';
 import 'auth_screen.dart';
+import 'flight_search_screen.dart';
 import 'notification_center_screen.dart';
 import '../utils/snack.dart';
 
@@ -70,56 +73,78 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
 
     Widget body;
     if (!auth.isSignedIn) {
-      body = EmptyState(
-        icon: Icons.notifications_none,
-        title: l10n.alertsSignInTitle,
-        message: l10n.alertsSignInMessage,
-        actions: [
-          FilledButton(
-            onPressed: _signIn,
-            child: Text(l10n.alertsSignIn),
-          ),
-        ],
+      body = PageContainer(
+        child: EmptyState(
+          icon: Icons.notifications_none,
+          title: l10n.alertsSignInTitle,
+          message: l10n.alertsSignInMessage,
+          actions: [
+            FilledButton(
+              onPressed: _signIn,
+              child: Text(l10n.alertsSignIn),
+            ),
+          ],
+        ),
       );
     } else if (state.loading && !state.loaded) {
       body = const Center(child: CircularProgressIndicator());
     } else if (state.error != null && state.alerts.isEmpty) {
-      body = EmptyState(
-        icon: Icons.cloud_off,
-        title: l10n.alertsLoadErrorTitle,
-        message: state.error,
-        actions: [
-          FilledButton(
-            onPressed: () => ref.read(alertsProvider.notifier).load(),
-            child: Text(l10n.commonRetry),
-          ),
-        ],
+      body = PageContainer(
+        child: EmptyState(
+          icon: Icons.cloud_off,
+          title: l10n.alertsLoadErrorTitle,
+          message: state.error,
+          actions: [
+            FilledButton(
+              onPressed: () => ref.read(alertsProvider.notifier).load(),
+              child: Text(l10n.commonRetry),
+            ),
+          ],
+        ),
       );
     } else if (state.alerts.isEmpty) {
-      body = EmptyState(
-        icon: Icons.notifications_none,
-        title: l10n.alertsEmptyTitle,
-        message: l10n.alertsEmptyMessage,
+      // Alerts are created from flight search ("Watch this route"), so the
+      // empty state routes there — the /alerts email deep link must never be
+      // a dead end (same pattern as the trips list's "Plan a trip" CTA).
+      body = PageContainer(
+        child: EmptyState(
+          icon: Icons.notifications_none,
+          title: l10n.alertsEmptyTitle,
+          message: l10n.alertsEmptyMessage,
+          actions: [
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const FlightSearchScreen()),
+              ),
+              icon: const Icon(Icons.flight_takeoff),
+              label: Text(l10n.alertsEmptyCta),
+            ),
+          ],
+        ),
       );
     } else {
       body = RefreshIndicator(
         onRefresh: () => ref.read(alertsProvider.notifier).load(),
+        // The list stays full-width (wheel/scrollbar/pull-to-refresh live in
+        // the desktop gutters) while each row is capped by PageContainer —
+        // the pattern page_container.dart documents.
         child: ListView.separated(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(AppSpacing.lg),
           itemCount: state.alerts.length,
           separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
-          itemBuilder: (context, i) => _AlertCard(alert: state.alerts[i]),
+          itemBuilder: (context, i) =>
+              PageContainer(child: _AlertCard(alert: state.alerts[i])),
         ),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GradientAppBar(
         title: Text(l10n.alertsTitle),
         actions: [if (auth.isSignedIn) const _NotificationBell()],
       ),
-      body: PageContainer(child: body),
+      body: body,
     );
   }
 }
@@ -165,12 +190,14 @@ class _AlertCard extends ConsumerWidget {
   }
 
   String _datesLine(AppLocalizations l10n) {
-    var s = alert.departDate;
-    if (alert.returnDate != null) s += ' → ${alert.returnDate}';
-    if (alert.flexDays > 0) s += ' · ±${alert.flexDays}d';
+    var s = flightDateLabel(l10n, alert.departDate);
+    if (alert.returnDate != null) {
+      s += ' → ${flightDateLabel(l10n, alert.returnDate!)}';
+    }
+    if (alert.flexDays > 0) s += ' · ${l10n.alertsFlexDays(alert.flexDays)}';
     if (alert.adults > 1) s += ' · ${l10n.alertsAdults(alert.adults)}';
     if (alert.cabinClass != 'economy') {
-      s += ' · ${alert.cabinClass.replaceAll('_', ' ')}';
+      s += ' · ${cabinClassLabel(l10n, alert.cabinClass)}';
     }
     return s;
   }
@@ -207,6 +234,9 @@ class _AlertCard extends ConsumerWidget {
         String? error;
         return StatefulBuilder(
           builder: (ctx, setState) => AlertDialog(
+            // Scrollable: with autofocus raising the keyboard, a short or
+            // landscape phone would otherwise overflow the dialog column.
+            scrollable: true,
             title: Text(l10n.alertsSetTargetTitle),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -347,7 +377,9 @@ class _AlertCard extends ConsumerWidget {
               tooltip: l10n.alertsActionsTooltip,
               onSelected: (v) {
                 if (v == 'edit_target') _editTarget(context, ref);
-                if (v == 'pause') guard(() => notifier.setPaused(alert.id, true));
+                if (v == 'pause') {
+                  guard(() => notifier.setPaused(alert.id, true));
+                }
                 if (v == 'resume') {
                   guard(() => notifier.setPaused(alert.id, false));
                 }

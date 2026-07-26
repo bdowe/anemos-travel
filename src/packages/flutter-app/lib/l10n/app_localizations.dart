@@ -3494,6 +3494,12 @@ abstract class AppLocalizations {
   /// **'Search a flight and tap \"Watch this route\" — we\'ll email you when the price drops.'**
   String get alertsEmptyMessage;
 
+  /// No description provided for @alertsEmptyCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Search flights'**
+  String get alertsEmptyCta;
+
   /// No description provided for @alertsLastSeen.
   ///
   /// In en, this message translates to:
@@ -3517,6 +3523,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} adults'**
   String alertsAdults(int count);
+
+  /// Flexible-dates suffix on an alert card, e.g. "±3 days"
+  ///
+  /// In en, this message translates to:
+  /// **'±{count, plural, one{1 day} other{{count} days}}'**
+  String alertsFlexDays(int count);
 
   /// No description provided for @alertsBaselineDelta.
   ///
@@ -3691,6 +3703,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Price drops on routes you watch will show up here.'**
   String get notifEmptyMessage;
+
+  /// No description provided for @notifUnreadSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get notifUnreadSemantic;
 
   /// No description provided for @notifDownFrom.
   ///

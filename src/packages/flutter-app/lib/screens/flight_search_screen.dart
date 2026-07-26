@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/flights_provider.dart';
 import '../providers/preferences_provider.dart';
 import '../utils/errors.dart';
+import '../utils/flight_labels.dart';
 import '../widgets/airport_field.dart';
 import '../widgets/page_container.dart';
 import '../widgets/create_alert_sheet.dart';
@@ -18,14 +19,6 @@ import '../widgets/gradient_app_bar.dart';
 const _cabinClasses = ['economy', 'premium_economy', 'business', 'first'];
 const _presets = ['cost', 'time', 'balanced'];
 const _baggageValues = ['personal_item', 'carry_on', 'checked'];
-
-String _cabinLabel(AppLocalizations l10n, String value) => switch (value) {
-      'economy' => l10n.flightSearchCabinEconomy,
-      'premium_economy' => l10n.flightSearchCabinPremiumEconomy,
-      'business' => l10n.flightSearchCabinBusiness,
-      'first' => l10n.flightSearchCabinFirst,
-      _ => value,
-    };
 
 String _presetLabel(AppLocalizations l10n, String value) => switch (value) {
       'cost' => l10n.flightSearchPresetCheapest,
@@ -457,7 +450,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                       children: [
                         for (final value in _cabinClasses)
                           ChoiceChip(
-                            label: Text(_cabinLabel(l10n, value)),
+                            label: Text(cabinClassLabel(l10n, value)),
                             selected: _cabinClass == value,
                             onSelected: (_) =>
                                 setState(() => _cabinClass = value),
