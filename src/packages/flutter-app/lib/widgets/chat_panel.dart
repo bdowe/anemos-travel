@@ -274,7 +274,9 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
     final messages = ref.watch(widget.state.select((s) => s.messages));
     final isStreaming = ref.watch(widget.state.select((s) => s.isStreaming));
     final isEmpty = ref.watch(widget.state.select((s) =>
-        s.messages.isEmpty && s.streamingText == null && s.queuedMessages.isEmpty));
+        s.messages.isEmpty &&
+        s.streamingText == null &&
+        s.queuedMessages.isEmpty));
 
     ref.listen(widget.state.select((s) => s.streamingText),
         (_, __) => _scrollToBottom());
@@ -283,82 +285,92 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
     ref.listen(widget.state.select((s) => s.queuedMessages.length),
         (_, __) => _scrollToBottom());
 
-    final panel = Column(
-      children: [
-        Expanded(
-          child: isEmpty
-              ? (widget.emptyState ?? const SizedBox.shrink())
-              : NotificationListener<ScrollNotification>(
-                  onNotification: _onScrollNotification,
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-                    itemCount: messages.length + 1,
-                    itemBuilder: (context, i) {
-                      if (i < messages.length) {
-                        final msg = messages[i];
-                        // Labeled messages (e.g. the machine-built refine
-                        // seed) collapse to a context chip; the full content
-                        // still went to the server history.
-                        if (msg.displayLabel != null) {
-                          return _SeedContextChip(
+    // LayoutBuilder (house rule: widths computed from the panel's own
+    // constraints): the bubble cap must track the surface the panel actually
+    // occupies — the 400px refine dock and the 760px agent column — not the
+    // window, or dock bubbles run the full dock width on desktop.
+    return LayoutBuilder(builder: (context, constraints) {
+      final bubbleMaxWidth = _bubbleMaxWidthFor(constraints.maxWidth);
+      final panel = Column(
+        children: [
+          Expanded(
+            child: isEmpty
+                ? (widget.emptyState ?? const SizedBox.shrink())
+                : NotificationListener<ScrollNotification>(
+                    onNotification: _onScrollNotification,
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                      itemCount: messages.length + 1,
+                      itemBuilder: (context, i) {
+                        if (i < messages.length) {
+                          final msg = messages[i];
+                          // Labeled messages (e.g. the machine-built refine
+                          // seed) collapse to a context chip; the full content
+                          // still went to the server history.
+                          if (msg.displayLabel != null) {
+                            return _SeedContextChip(
+                              key: ValueKey('msg-$i'),
+                              label: msg.displayLabel!,
+                            );
+                          }
+                          // Append-only list, so index keys are stable.
+                          return ChatMessageBubble(
                             key: ValueKey('msg-$i'),
-                            label: msg.displayLabel!,
+                            message: msg,
+                            maxWidth: bubbleMaxWidth,
                           );
                         }
-                        // Append-only list, so index keys are stable.
-                        return ChatMessageBubble(
-                          key: ValueKey('msg-$i'),
-                          message: msg,
+                        return _ChatTail(
+                          key: const ValueKey('chat-tail'),
+                          state: widget.state,
+                          notifier: widget.notifier,
+                          footerBuilder: widget.footerBuilder,
+                          onViewTrip: widget.onViewTrip,
+                          bubbleMaxWidth: bubbleMaxWidth,
                         );
-                      }
-                      return _ChatTail(
-                        key: const ValueKey('chat-tail'),
-                        state: widget.state,
-                        notifier: widget.notifier,
-                        footerBuilder: widget.footerBuilder,
-                        onViewTrip: widget.onViewTrip,
-                      );
-                    },
+                      },
+                    ),
                   ),
-                ),
-        ),
-        if (_pending.isNotEmpty || _processingCount > 0)
-          _PendingAttachmentsRow(
-            pending: _pending,
-            processingCount: _processingCount,
-            onRemove: (i) => setState(() => _pending.removeAt(i)),
           ),
-        _InputBar(
-          controller: _controller,
-          focusNode: _inputFocus,
-          isStreaming: isStreaming,
-          hint: widget.inputHint ?? context.l10n.chatInputHint,
-          onSend: _send,
-          onAttach: _pickImages,
-          dictation: _dictation,
-        ),
-      ],
-    );
-
-    // DropTarget is a no-op on platforms without drag-drop (mobile), so the
-    // wrap is unconditional. The overlay invites the drop while a drag hovers.
-    return DropTarget(
-      onDragEntered: (_) => setState(() => _dragging = true),
-      onDragExited: (_) => setState(() => _dragging = false),
-      onDragDone: (detail) {
-        setState(() => _dragging = false);
-        _onDragDone(detail);
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          panel,
-          if (_dragging) const _DropOverlay(),
+          if (_pending.isNotEmpty || _processingCount > 0)
+            _PendingAttachmentsRow(
+              pending: _pending,
+              processingCount: _processingCount,
+              onRemove: (i) => setState(() => _pending.removeAt(i)),
+            ),
+          _InputBar(
+            controller: _controller,
+            focusNode: _inputFocus,
+            isStreaming: isStreaming,
+            hint: widget.inputHint ?? context.l10n.chatInputHint,
+            onSend: _send,
+            onAttach: _pickImages,
+            dictation: _dictation,
+          ),
         ],
-      ),
-    );
+      );
+
+      // DropTarget is a no-op on platforms without drag-drop (mobile), so the
+      // wrap is unconditional. The overlay invites the drop while a drag
+      // hovers.
+      return DropTarget(
+        onDragEntered: (_) => setState(() => _dragging = true),
+        onDragExited: (_) => setState(() => _dragging = false),
+        onDragDone: (detail) {
+          setState(() => _dragging = false);
+          _onDragDone(detail);
+        },
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            panel,
+            if (_dragging) const _DropOverlay(),
+          ],
+        ),
+      );
+    });
   }
 }
 
@@ -443,23 +455,34 @@ class _PendingAttachmentsRow extends StatelessWidget {
                         ),
                       ),
                     ),
+                    // ≥ kMinTouchTarget hit box; the visible badge stays
+                    // small and pinned to the thumbnail corner via the
+                    // topRight alignment.
                     Positioned(
                       top: 0,
                       right: 0,
                       child: Semantics(
                         button: true,
                         label: context.l10n.chatRemoveImage,
-                        child: InkWell(
-                          onTap: () => onRemove(i),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.inverseSurface,
-                              shape: BoxShape.circle,
+                        child: SizedBox(
+                          width: kMinTouchTarget,
+                          height: kMinTouchTarget,
+                          child: InkWell(
+                            onTap: () => onRemove(i),
+                            customBorder: const CircleBorder(),
+                            child: Align(
+                              alignment: Alignment.topRight,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.inverseSurface,
+                                  shape: BoxShape.circle,
+                                ),
+                                padding: const EdgeInsets.all(2),
+                                child: Icon(Icons.close,
+                                    size: 12,
+                                    color: theme.colorScheme.onInverseSurface),
+                              ),
                             ),
-                            padding: const EdgeInsets.all(2),
-                            child: Icon(Icons.close,
-                                size: 12,
-                                color: theme.colorScheme.onInverseSurface),
                           ),
                         ),
                       ),
@@ -501,6 +524,7 @@ class _ChatTail extends StatelessWidget {
   final ProviderListenable<PlanNotifier> notifier;
   final Widget Function(BuildContext context, PlanState state)? footerBuilder;
   final void Function(String tripId)? onViewTrip;
+  final double bubbleMaxWidth;
 
   const _ChatTail({
     super.key,
@@ -508,6 +532,7 @@ class _ChatTail extends StatelessWidget {
     required this.notifier,
     required this.footerBuilder,
     required this.onViewTrip,
+    required this.bubbleMaxWidth,
   });
 
   @override
@@ -518,7 +543,7 @@ class _ChatTail extends StatelessWidget {
         // Compaction runs before the model call, so its chip leads the tail.
         _CompactingChip(state: state),
         _TypingIndicatorBubble(state: state),
-        _StreamingBubble(state: state),
+        _StreamingBubble(state: state, maxWidth: bubbleMaxWidth),
         _ActiveToolChips(state: state),
         _ProfileNoteChip(state: state),
         _ItineraryUpdatedChip(state: state),
@@ -529,7 +554,11 @@ class _ChatTail extends StatelessWidget {
         _ErrorBanner(state: state, notifier: notifier),
         // Last: queued messages read as "up next", below the current turn and
         // any error it produced.
-        _QueuedMessages(state: state, notifier: notifier),
+        _QueuedMessages(
+          state: state,
+          notifier: notifier,
+          bubbleMaxWidth: bubbleMaxWidth,
+        ),
       ],
     );
   }
@@ -537,8 +566,9 @@ class _ChatTail extends StatelessWidget {
 
 class _StreamingBubble extends ConsumerWidget {
   final ProviderListenable<PlanState> state;
+  final double maxWidth;
 
-  const _StreamingBubble({required this.state});
+  const _StreamingBubble({required this.state, required this.maxWidth});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -547,6 +577,7 @@ class _StreamingBubble extends ConsumerWidget {
     return ChatMessageBubble(
       message: PlanMessage(role: MessageRole.assistant, content: text),
       isStreaming: true,
+      maxWidth: maxWidth,
     );
   }
 }
@@ -607,8 +638,8 @@ class _TypingDotsBubbleState extends State<_TypingDotsBubble>
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-        padding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: AppSpacing.md),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: AppSpacing.md),
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest,
           borderRadius: const BorderRadius.only(
@@ -909,8 +940,8 @@ class _ResultChips extends ConsumerWidget {
         ResultSummaryChip(
           icon: Icons.directions_boat,
           accent: AppColors.toolFerries,
-          label: label(
-              l10n.chatChipFerryOptions(r.ferries!.length), r.ferryRoute),
+          label:
+              label(l10n.chatChipFerryOptions(r.ferries!.length), r.ferryRoute),
           onTap: onTap,
         ),
       if (r.eventLinks != null && r.eventLinks!.isNotEmpty)
@@ -926,7 +957,8 @@ class _ResultChips extends ConsumerWidget {
     if (chips.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: chips),
+      child:
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: chips),
     );
   }
 }
@@ -1002,8 +1034,8 @@ class _ErrorBanner extends ConsumerWidget {
     if (error == null) return const SizedBox.shrink();
     // Narrow derived select: retry only makes sense once a user turn exists
     // for [PlanNotifier.retryLastSend] to re-run.
-    final canRetry = ref.watch(state
-        .select((s) => s.messages.any((m) => m.role == MessageRole.user)));
+    final canRetry = ref.watch(
+        state.select((s) => s.messages.any((m) => m.role == MessageRole.user)));
     final theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -1043,8 +1075,13 @@ class _ErrorBanner extends ConsumerWidget {
 class _QueuedMessages extends ConsumerWidget {
   final ProviderListenable<PlanState> state;
   final ProviderListenable<PlanNotifier> notifier;
+  final double bubbleMaxWidth;
 
-  const _QueuedMessages({required this.state, required this.notifier});
+  const _QueuedMessages({
+    required this.state,
+    required this.notifier,
+    required this.bubbleMaxWidth,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1058,6 +1095,7 @@ class _QueuedMessages extends ConsumerWidget {
           _QueuedBubble(
             key: ValueKey('queued-${m.id}'),
             message: m,
+            maxWidth: bubbleMaxWidth,
             onRemove: () => ref.read(notifier).removeQueued(m.id),
           ),
       ],
@@ -1067,9 +1105,15 @@ class _QueuedMessages extends ConsumerWidget {
 
 class _QueuedBubble extends StatelessWidget {
   final QueuedMessage message;
+  final double maxWidth;
   final VoidCallback onRemove;
 
-  const _QueuedBubble({super.key, required this.message, required this.onRemove});
+  const _QueuedBubble({
+    super.key,
+    required this.message,
+    required this.maxWidth,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1079,7 +1123,7 @@ class _QueuedBubble extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
         padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
-        constraints: BoxConstraints(maxWidth: _bubbleMaxWidth(context)),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         decoration: BoxDecoration(
           color: theme.colorScheme.primary.withValues(alpha: 0.45),
           borderRadius: const BorderRadius.only(
@@ -1133,18 +1177,28 @@ class _QueuedBubble extends StatelessWidget {
   }
 }
 
-/// Bubbles span 78% of the window on phones but cap at a readable measure on
-/// wide desktop windows.
+/// Bubbles span 78% of the hosting panel's width but cap at a readable
+/// measure on wide panels. Derived from the panel's own LayoutBuilder
+/// constraints — never the window — so the 400px refine dock and the 760px
+/// agent column both keep the ragged 78% edge.
 const double _kBubbleMaxWidth = 720;
 
-double _bubbleMaxWidth(BuildContext context) =>
-    min(MediaQuery.of(context).size.width * 0.78, _kBubbleMaxWidth);
+double _bubbleMaxWidthFor(double panelWidth) =>
+    min(panelWidth * 0.78, _kBubbleMaxWidth);
 
 class ChatMessageBubble extends StatelessWidget {
   final PlanMessage message;
   final bool isStreaming;
 
-  const ChatMessageBubble({super.key, required this.message, this.isStreaming = false});
+  /// Cap for the bubble, computed by the hosting panel from its own width.
+  final double maxWidth;
+
+  const ChatMessageBubble({
+    super.key,
+    required this.message,
+    required this.maxWidth,
+    this.isStreaming = false,
+  });
 
   Future<void> _openLink(BuildContext context, String url) async {
     final uri = Uri.tryParse(url);
@@ -1169,7 +1223,7 @@ class ChatMessageBubble extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints: BoxConstraints(maxWidth: _bubbleMaxWidth(context)),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         decoration: BoxDecoration(
           color: isUser
               ? theme.colorScheme.primary
@@ -1250,8 +1304,7 @@ class _BubbleAttachments extends StatelessWidget {
             )
           else
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: theme.colorScheme.onPrimary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
@@ -1377,6 +1430,7 @@ class _InputBar extends StatelessWidget {
           _MicButton(dictation: dictation),
           const SizedBox(width: AppSpacing.sm),
           IconButton.filled(
+            tooltip: context.l10n.chatSend,
             onPressed: onSend,
             icon: const Icon(Icons.send),
           ),

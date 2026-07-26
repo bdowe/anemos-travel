@@ -3938,6 +3938,12 @@ abstract class AppLocalizations {
   /// **'Ask a follow-up…'**
   String get chatFollowUpHint;
 
+  /// No description provided for @chatSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get chatSend;
+
   /// No description provided for @chatAttachImages.
   ///
   /// In en, this message translates to:

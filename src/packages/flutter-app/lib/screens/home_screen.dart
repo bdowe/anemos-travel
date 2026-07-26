@@ -46,6 +46,11 @@ String greetingText(AppLocalizations l10n, Greeting greeting) =>
       Greeting.evening => l10n.homeGreetingEvening,
     };
 
+/// Below this app-bar-title width the wordmark would ellipsize next to the
+/// badge (Playfair 20px "Golden Tempo Travel" ≈ 210px + badge + gap), so the
+/// header drops to the brand mark alone.
+const double _wordmarkMinWidth = 280;
+
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -78,45 +83,55 @@ class HomeScreen extends ConsumerWidget {
       appBar: GradientAppBar(
         centerTitle: false,
         // Brand mark on a light badge (so the black/gold logo reads on the teal
-        // app bar) next to the wordmark in white.
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            BrandBadge(
-              padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-              child: BrandLogo.mark(size: 28),
-            ),
-            SizedBox(width: AppSpacing.sm),
-            Flexible(
-              child: Text(
-                AppInfo.name,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'Playfair Display',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 20,
-                  letterSpacing: 0.5,
-                  color: Colors.white,
+        // app bar) next to the wordmark in white. LayoutBuilder inside the
+        // title's own constraints: with the globe + avatar actions a phone
+        // can't fit the full wordmark ("Golden Tempo Tra…"), so narrow widths
+        // show the mark alone rather than an ellipsized brand.
+        title: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < _wordmarkMinWidth;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const BrandBadge(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                  child: BrandLogo.mark(size: 28),
                 ),
-              ),
-            ),
-          ],
+                if (!compact) ...const [
+                  SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      AppInfo.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Playfair Display',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 20,
+                        letterSpacing: 0.5,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
         ),
         actions: const [LanguageMenuButton(), AccountMenu()],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: PageContainer(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
 
                 _GreetingHeader(displayName: user?.displayName),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
 
                 // AI Travel Agent entry: the full photo hero sells the
                 // product to a brand-new account; returning users get a slim
@@ -126,7 +141,7 @@ class HomeScreen extends ConsumerWidget {
                 else
                   _AgentHeroCard(onStart: startPlanning),
 
-                SizedBox(height: returning ? AppSpacing.lg : 28),
+                SizedBox(height: returning ? AppSpacing.lg : AppSpacing.xl),
 
                 // The trip happening today (specs/happening-now), then the
                 // most recently viewed trip — the latter hidden when it *is*
@@ -140,7 +155,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.lg),
                 ],
                 // In-progress AI conversations that haven't produced a trip
                 // yet (specs/continue-where-you-left-off) — same section as
@@ -161,7 +176,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.lg),
                 ],
 
                 // Local guides discover row — published narrative guides
@@ -170,7 +185,7 @@ class HomeScreen extends ConsumerWidget {
                 // included) only appears when there is something to show.
                 const _LocalGuidesRow(),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
               ],
             ),
           ),
@@ -197,13 +212,7 @@ class _PlanStrip extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: AppRadius.mdAll,
         gradient: AppColors.brandGradient,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.brandDark.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: AppShadows.brandCard,
       ),
       child: Material(
         color: Colors.transparent,
@@ -227,7 +236,10 @@ class _PlanStrip extends StatelessWidget {
                 Expanded(
                   child: Text(
                     l10n.homeHeroTitle,
-                    maxLines: 1,
+                    // Two lines before ellipsis: at phone widths the CTA
+                    // starves the row and one line truncates the tagline
+                    // ("Plan less. Trav…").
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
@@ -309,13 +321,7 @@ class _AgentHeroCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: AppRadius.lgAll,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.brandDark.withValues(alpha: 0.4),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        boxShadow: AppShadows.hero,
       ),
       child: ClipRRect(
         borderRadius: AppRadius.lgAll,
@@ -342,16 +348,17 @@ class _AgentHeroCard extends StatelessWidget {
   }
 
   Widget _heroContent(BuildContext context) {
+    final theme = Theme.of(context);
     final l10n = context.l10n;
     return Container(
       constraints: const BoxConstraints(minHeight: 440),
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.15),
               shape: BoxShape.circle,
@@ -359,22 +366,22 @@ class _AgentHeroCard extends StatelessWidget {
             child:
                 const Icon(Icons.flight_takeoff, size: 44, color: Colors.white),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             l10n.homeHeroTitle,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             l10n.homeHeroSubtitle,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.85),
-                ),
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: Colors.white.withValues(alpha: 0.85),
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xl),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -389,21 +396,24 @@ class _AgentHeroCard extends StatelessWidget {
               ),
               child: Text(
                 l10n.homeHeroCta,
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 16),
+                // titleMedium keeps the deliberate 16px hero-CTA size while
+                // deriving from the type scale instead of a raw fontSize.
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: AppColors.brandDark,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
             children: _suggestions(l10n)
                 .map((s) => ActionChip(
                       label: Text(s,
-                          style: TextStyle(
+                          style: theme.textTheme.labelMedium?.copyWith(
                               color: AppColors.brandDark,
-                              fontSize: 12,
                               fontWeight: FontWeight.w500)),
                       backgroundColor: Colors.white,
                       side: BorderSide.none,
@@ -456,13 +466,7 @@ class _RecentTripCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: AppRadius.mdAll,
         gradient: AppColors.brandGradient,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.brandDark.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: AppShadows.brandCard,
       ),
       child: Material(
         color: Colors.transparent,
@@ -564,8 +568,7 @@ class _LocalGuidesRow extends ConsumerWidget {
             // the horizontal viewport.
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             itemCount: guides.length,
-            separatorBuilder: (_, __) =>
-                const SizedBox(width: AppSpacing.md),
+            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
             itemBuilder: (context, i) => _GuideCard(guide: guides[i]),
           ),
         ),

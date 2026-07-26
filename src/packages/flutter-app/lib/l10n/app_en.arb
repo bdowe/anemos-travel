@@ -1487,6 +1487,7 @@
   },
   "chatInputHint": "Describe your trip...",
   "chatFollowUpHint": "Ask a follow-up…",
+  "chatSend": "Send",
   "chatAttachImages": "Attach images",
   "chatStopDictating": "Stop dictating",
   "chatDictate": "Dictate",

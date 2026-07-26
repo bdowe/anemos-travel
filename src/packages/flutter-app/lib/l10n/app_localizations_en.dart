@@ -2229,6 +2229,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatFollowUpHint => 'Ask a follow-up…';
 
   @override
+  String get chatSend => 'Send';
+
+  @override
   String get chatAttachImages => 'Attach images';
 
   @override
