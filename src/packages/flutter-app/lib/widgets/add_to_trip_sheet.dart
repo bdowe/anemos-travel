@@ -5,12 +5,14 @@ import '../models/event.dart';
 import '../models/itinerary_item.dart';
 import '../models/local_recommendation.dart';
 import '../models/trip.dart';
+import '../navigation/app_nav.dart';
 import '../providers/analytics_provider.dart';
 import '../providers/trips_provider.dart';
 import '../screens/trip_detail_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../utils/trip_days.dart';
+import 'empty_state.dart';
 
 /// What a browse surface (local rec card, event card, guide pin) hands the
 /// add-to-trip sheet: the place fields that map onto an itinerary item, the
@@ -116,6 +118,11 @@ Future<Trip?> showAddToTripSheet(
   final trip = await showModalBottomSheet<Trip>(
     context: context,
     isScrollControlled: true,
+    showDragHandle: true,
+    // Cap the sheet on web/desktop — the picker is a narrow form, not a
+    // full-bleed surface; Flutter centers a constrained modal sheet, and
+    // phones stay unchanged (already under the cap).
+    constraints: const BoxConstraints(maxWidth: 560),
     builder: (_) => _AddToTripSheet(
       payload: payload,
       initialTripId: currentTripId,
@@ -351,8 +358,7 @@ class _AddToTripSheetState extends ConsumerState<_AddToTripSheet> {
               ],
               const SizedBox(height: AppSpacing.md),
               FilledButton(
-                onPressed:
-                    (detail == null || _submitting) ? null : _submit,
+                onPressed: (detail == null || _submitting) ? null : _submit,
                 child: _submitting
                     ? const SizedBox(
                         width: 18,
@@ -379,28 +385,47 @@ class _AddToTripSheetState extends ConsumerState<_AddToTripSheet> {
       );
     }
     if (trips.error != null && trips.trips.isEmpty) {
+      // The min-Column wrapper keeps the sheet hugging its content:
+      // EmptyState's Center would otherwise expand to the sheet's maxHeight.
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(l10n.addToTripLoadTripsError,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error)),
-          TextButton(
-            onPressed: () => ref.read(tripsProvider.notifier).loadTrips(),
-            child: Text(l10n.commonRetry),
+          EmptyState(
+            compact: true,
+            icon: Icons.cloud_off,
+            title: l10n.addToTripLoadTripsError,
+            actions: [
+              FilledButton(
+                onPressed: () => ref.read(tripsProvider.notifier).loadTrips(),
+                child: Text(l10n.commonRetry),
+              ),
+            ],
           ),
         ],
       );
     }
     if (trips.trips.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Text(
-          l10n.addToTripNoTrips,
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          textAlign: TextAlign.center,
-        ),
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          EmptyState(
+            compact: true,
+            icon: Icons.luggage,
+            title: l10n.addToTripNoTrips,
+            actions: [
+              FilledButton.icon(
+                // No trip to add to: close the picker and land on the plan
+                // tab, the same CTA the trips list's empty state offers.
+                onPressed: () {
+                  Navigator.pop(context);
+                  ref.read(navIndexProvider.notifier).state = AppTab.plan.index;
+                },
+                icon: const Icon(Icons.auto_awesome),
+                label: Text(l10n.tripsListPlanTrip),
+              ),
+            ],
+          ),
+        ],
       );
     }
     return ListView(

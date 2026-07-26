@@ -4730,6 +4730,12 @@ abstract class AppLocalizations {
   /// **'Could not load guides'**
   String get guidesErrorTitle;
 
+  /// No description provided for @guidesErrorMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get guidesErrorMessage;
+
   /// No description provided for @guidesEmptyTitle.
   ///
   /// In en, this message translates to:

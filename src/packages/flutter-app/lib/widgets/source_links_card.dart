@@ -21,12 +21,10 @@ class SourceLinksCard extends StatelessWidget {
   });
 
   Future<void> _open(BuildContext context, SourceLink link) async {
-    if (link.url.isEmpty) return;
     await trackedLaunchUrl(
       context,
       link.url,
-      provider:
-          link.provider.isEmpty ? 'unknown' : link.provider.toLowerCase(),
+      provider: link.provider.isEmpty ? 'unknown' : link.provider.toLowerCase(),
       surface: 'source_links',
     );
   }
@@ -34,7 +32,10 @@ class SourceLinksCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (links.isEmpty) return const SizedBox.shrink();
+    // A blank-URL link would paint an enabled chip that does nothing — drop
+    // them up front, and the whole card when none survive.
+    final usable = links.where((l) => l.url.isNotEmpty).toList();
+    if (usable.isEmpty) return const SizedBox.shrink();
     return Card(
       margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Padding(
@@ -62,10 +63,11 @@ class SourceLinksCard extends StatelessWidget {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.xs,
               children: [
-                for (final link in links)
+                for (final link in usable)
                   ActionChip(
                     avatar: Icon(Icons.open_in_new, size: 14, color: accent),
-                    label: Text(link.label.isEmpty ? link.provider : link.label),
+                    label:
+                        Text(link.label.isEmpty ? link.provider : link.label),
                     onPressed: () => _open(context, link),
                   ),
               ],

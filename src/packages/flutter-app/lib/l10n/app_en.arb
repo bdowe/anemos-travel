@@ -1800,6 +1800,7 @@
   "airportFieldHint": "City or airport",
   "guidesTitle": "Local guides",
   "guidesErrorTitle": "Could not load guides",
+  "guidesErrorMessage": "Check your connection and try again.",
   "guidesEmptyTitle": "No guides yet",
   "guidesEmptyMessage": "Guides from real locals appear here as they publish.",
   "guidesElsewhere": "Elsewhere",

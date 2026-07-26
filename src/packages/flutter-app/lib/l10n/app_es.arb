@@ -772,6 +772,7 @@
   "airportFieldHint": "Ciudad o aeropuerto",
   "guidesTitle": "Guías locales",
   "guidesErrorTitle": "No se pudieron cargar las guías",
+  "guidesErrorMessage": "Comprueba tu conexión e inténtalo de nuevo.",
   "guidesEmptyTitle": "Aún no hay guías",
   "guidesEmptyMessage": "Las guías de locales de verdad aparecerán aquí a medida que se publiquen.",
   "guidesElsewhere": "En otros lugares",
