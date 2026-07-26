@@ -24,7 +24,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageSpanish => 'Español';
 
   @override
-  String get languageChangeNote => 'Trips and notes you already saved stay in the language they were written in.';
+  String get languageChangeNote =>
+      'Trips and notes you already saved stay in the language they were written in.';
 
   @override
   String get languageMenuTooltip => 'Change language';
@@ -85,16 +86,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsHomeAirport => 'Home airport';
 
   @override
-  String get prefsHomeAirportHelp => 'Used as the default origin when planning flights.';
+  String get prefsHomeAirportHelp =>
+      'Used as the default origin when planning flights.';
 
   @override
   String get prefsProfileNotes => 'Profile notes';
 
   @override
-  String get prefsProfileNotesHelp => 'Your AI agent keeps these notes as it learns about you. Edit or clear them anytime.';
+  String get prefsProfileNotesHelp =>
+      'Your AI agent keeps these notes as it learns about you. Edit or clear them anytime.';
 
   @override
-  String get prefsProfileNotesHint => 'Nothing noted yet — the agent adds to this as you plan trips.';
+  String get prefsProfileNotesHint =>
+      'Nothing noted yet — the agent adds to this as you plan trips.';
 
   @override
   String get prefsSaved => 'Preferences saved';
@@ -208,13 +212,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authForgotPassword => 'Forgot password?';
 
   @override
-  String get authPasswordUpdatedSnack => 'Password updated — sign in with your new password';
+  String get authPasswordUpdatedSnack =>
+      'Password updated — sign in with your new password';
 
   @override
   String get authResetDialogTitle => 'Reset your password';
 
   @override
-  String get authResetDialogBody => 'We\'ll email you a reset code if this address has an account.';
+  String get authResetDialogBody =>
+      'We\'ll email you a reset code if this address has an account.';
 
   @override
   String get authSending => 'Sending…';
@@ -247,10 +253,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authErrorInvalidCredentials => 'Wrong email or password.';
 
   @override
-  String get authErrorEmailTaken => 'That email already has an account — try signing in instead.';
+  String get authErrorEmailTaken =>
+      'That email already has an account — try signing in instead.';
 
   @override
-  String get authErrorBadResetCode => 'That code didn\'t match — check it or request a new one.';
+  String get authErrorBadResetCode =>
+      'That code didn\'t match — check it or request a new one.';
 
   @override
   String get resetAppBarTitle => 'Reset password';
@@ -259,7 +267,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resetSuccessTitle => 'Password updated';
 
   @override
-  String get resetSuccessBody => 'Sign in with your new password. Any other sessions were signed out.';
+  String get resetSuccessBody =>
+      'Sign in with your new password. Any other sessions were signed out.';
 
   @override
   String get resetSignInButton => 'Sign in';
@@ -295,7 +304,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get landingHeroTagline => 'Plan less. Travel more.';
 
   @override
-  String get landingHeroSubtitle => 'Your AI travel companion — describe the trip you want and get a full day-by-day itinerary with routes, places, and flights.';
+  String get landingHeroSubtitle =>
+      'Your AI travel companion — describe the trip you want and get a full day-by-day itinerary with routes, places, and flights.';
 
   @override
   String get landingHaveAccount => 'I already have an account';
@@ -310,7 +320,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get landingFeatureAgentTitle => 'AI Travel Agent';
 
   @override
-  String get landingFeatureAgentDescription => 'Describe your dream trip and get a complete itinerary in seconds.';
+  String get landingFeatureAgentDescription =>
+      'Describe your dream trip and get a complete itinerary in seconds.';
 
   @override
   String get landingCopyright => '© 2026 Golden Tempo LLC';
@@ -325,13 +336,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get verifySuccessTitle => 'Email verified ✓';
 
   @override
-  String get verifySuccessBody => 'You\'re all set — thanks for confirming your address.';
+  String get verifySuccessBody =>
+      'You\'re all set — thanks for confirming your address.';
 
   @override
   String get verifyLinkExpiredTitle => 'Link expired or already used';
 
   @override
-  String get verifyLinkExpiredBody => 'Request a new verification email from your account.';
+  String get verifyLinkExpiredBody =>
+      'Request a new verification email from your account.';
 
   @override
   String get verifyContinue => 'Continue';
@@ -343,7 +356,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ssoFailedTitle => 'Sign-in didn\'t complete';
 
   @override
-  String get ssoErrorCancelled => 'Sign-in was cancelled or failed. Please try again.';
+  String get ssoErrorCancelled =>
+      'Sign-in was cancelled or failed. Please try again.';
 
   @override
   String get ssoErrorExpired => 'This sign-in link expired. Please try again.';
@@ -379,13 +393,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsChangePassword => 'Change password';
 
   @override
-  String get settingsPasswordChanged => 'Password changed — other devices were signed out';
+  String get settingsPasswordChanged =>
+      'Password changed — other devices were signed out';
 
   @override
   String get settingsSessionsSection => 'Sessions';
 
   @override
-  String get settingsSessionsHelp => 'Signs you out on every device, including this one.';
+  String get settingsSessionsHelp =>
+      'Signs you out on every device, including this one.';
 
   @override
   String get settingsSignOutEverywhere => 'Sign out everywhere';
@@ -394,7 +410,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSignOutEverywhereTitle => 'Sign out everywhere?';
 
   @override
-  String get settingsSignOutEverywhereBody => 'This signs you out on every device, including this one.';
+  String get settingsSignOutEverywhereBody =>
+      'This signs you out on every device, including this one.';
 
   @override
   String get settingsEmailPrefsSection => 'Email preferences';
@@ -403,13 +420,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTripReminders => 'Trip reminders';
 
   @override
-  String get settingsTripRemindersSubtitle => 'Nudges about upcoming trips and things left to book.';
+  String get settingsTripRemindersSubtitle =>
+      'Nudges about upcoming trips and things left to book.';
 
   @override
   String get settingsWeeklyIdeas => 'Weekly planning ideas';
 
   @override
-  String get settingsWeeklyIdeasSubtitle => 'A weekly email with destination ideas and inspiration.';
+  String get settingsWeeklyIdeasSubtitle =>
+      'A weekly email with destination ideas and inspiration.';
 
   @override
   String get settingsEmailPrefsUpdated => 'Email preferences updated';
@@ -433,7 +452,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDeleteAccountTitle => 'Delete account?';
 
   @override
-  String get settingsDeleteAccountBody => 'This permanently deletes your account, trips, preferences and alerts. There is no undo.';
+  String get settingsDeleteAccountBody =>
+      'This permanently deletes your account, trips, preferences and alerts. There is no undo.';
 
   @override
   String get settingsConfirmPassword => 'Confirm your password';
@@ -454,7 +474,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quizStyleTitle => 'What\'s your travel style?';
 
   @override
-  String get quizStyleSubtitle => 'Helps the planner match stays and activities to you.';
+  String get quizStyleSubtitle =>
+      'Helps the planner match stays and activities to you.';
 
   @override
   String get quizInterestsTitle => 'What do you love doing on a trip?';
@@ -487,13 +508,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quizTripsTitle => 'Any trips you\'re dreaming about?';
 
   @override
-  String get quizTripsSubtitle => 'Places, seasons, occasions — the planner will keep them in mind.';
+  String get quizTripsSubtitle =>
+      'Places, seasons, occasions — the planner will keep them in mind.';
 
   @override
-  String get quizTripsHint => 'e.g. Japan for cherry blossom season, a Greek island hop next summer…';
+  String get quizTripsHint =>
+      'e.g. Japan for cherry blossom season, a Greek island hop next summer…';
 
   @override
-  String get quizSaveFailed => 'Could not save your answers — try again, or skip for now.';
+  String get quizSaveFailed =>
+      'Could not save your answers — try again, or skip for now.';
 
   @override
   String get quizProfileUpdated => 'Travel profile updated';
@@ -507,7 +531,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quizLoadErrorTitle => 'Couldn\'t load your travel profile';
 
   @override
-  String get quizLoadErrorBody => 'Your saved answers couldn\'t be loaded, so the quiz can\'t start yet. Check your connection and try again.';
+  String get quizLoadErrorBody =>
+      'Your saved answers couldn\'t be loaded, so the quiz can\'t start yet. Check your connection and try again.';
 
   @override
   String get bookingCardEdit => 'Edit';
@@ -556,7 +581,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookingsAddBooking => 'Add booking';
 
   @override
-  String get bookingsEmptyMessage => 'Nothing saved yet — add the stays, transport, and other bookings for your trip so it all lives in one place.';
+  String get bookingsEmptyMessage =>
+      'Nothing saved yet — add the stays, transport, and other bookings for your trip so it all lives in one place.';
 
   @override
   String get bookingsStays => 'Stays';
@@ -682,7 +708,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get budgetEmptyTitle => 'No budget yet';
 
   @override
-  String get budgetEmptyMessage => 'Set a target above, or add expenses below to track your spending.';
+  String get budgetEmptyMessage =>
+      'Set a target above, or add expenses below to track your spending.';
 
   @override
   String budgetTargetSet(String amount, String currency) {
@@ -717,7 +744,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get budgetTargetHint => 'Leave blank for none';
 
   @override
-  String get budgetTargetHelp => 'Leave the target blank to just track spending.';
+  String get budgetTargetHelp =>
+      'Leave the target blank to just track spending.';
 
   @override
   String get budgetExpenseOptions => 'Expense options';
@@ -776,7 +804,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get checklistEmptyTitle => 'Nothing packed yet';
 
   @override
-  String get checklistEmptyMessage => 'Add items below, or ask the AI assistant to help build your list.';
+  String get checklistEmptyMessage =>
+      'Add items below, or ask the AI assistant to help build your list.';
 
   @override
   String get checklistEditItemTitle => 'Edit item';
@@ -873,10 +902,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get itemDialogAdd => 'Add';
 
   @override
-  String get itemDialogNoResults => 'No places found — try a different search, or add the place manually.';
+  String get itemDialogNoResults =>
+      'No places found — try a different search, or add the place manually.';
 
   @override
-  String get itemDialogSearchUnavailable => 'Search unavailable — add the place manually below.';
+  String get itemDialogSearchUnavailable =>
+      'Search unavailable — add the place manually below.';
 
   @override
   String get itemDialogErrorEnterName => 'Enter a name for the place.';
@@ -1089,7 +1120,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripLeaveTitle => 'Remove from my trips?';
 
   @override
-  String get tripLeaveBody => 'You\'ll lose access until you\'re invited again. The trip itself is not deleted.';
+  String get tripLeaveBody =>
+      'You\'ll lose access until you\'re invited again. The trip itself is not deleted.';
 
   @override
   String get tripRemove => 'Remove';
@@ -1098,7 +1130,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripUndo => 'Undo';
 
   @override
-  String get tripAddPlacesBeforeRefine => 'Add some places before refining with AI.';
+  String get tripAddPlacesBeforeRefine =>
+      'Add some places before refining with AI.';
 
   @override
   String get tripAssistantLabel => 'Trip assistant';
@@ -1126,7 +1159,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripShareLinkCopied => 'Share link copied to clipboard';
 
   @override
-  String get tripSharingTurnedOff => 'Sharing turned off — links no longer work (existing co-planners and followers keep access)';
+  String get tripSharingTurnedOff =>
+      'Sharing turned off — links no longer work (existing co-planners and followers keep access)';
 
   @override
   String tripCoPlanInviteMessage(String summary) {
@@ -1134,7 +1168,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get tripInviteCopied => 'Co-planner invite copied — anyone with it can edit';
+  String get tripInviteCopied =>
+      'Co-planner invite copied — anyone with it can edit';
 
   @override
   String get tripCoPlannerRemoved => 'Co-planner removed';
@@ -1293,7 +1328,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripNoPlacesYet => 'No places yet';
 
   @override
-  String get tripNoPlacesYetMessage => 'Refine with AI or add a place to start your itinerary.';
+  String get tripNoPlacesYetMessage =>
+      'Refine with AI or add a place to start your itinerary.';
 
   @override
   String get tripNoMappedPlaces => 'No mapped places';
@@ -1434,7 +1470,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get tripCoPlanningShared => 'Co-planning a shared trip — your changes save for everyone.';
+  String get tripCoPlanningShared =>
+      'Co-planning a shared trip — your changes save for everyone.';
 
   @override
   String tripSharedBy(String name) {
@@ -1486,7 +1523,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripInvite => 'Invite';
 
   @override
-  String get tripNoCoPlanners => 'No co-planners yet. Invite a friend by email above, or copy an invite link from the share menu.';
+  String get tripNoCoPlanners =>
+      'No co-planners yet. Invite a friend by email above, or copy an invite link from the share menu.';
 
   @override
   String get tripRoleViewer => 'Viewer';
@@ -1552,7 +1590,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripReorderPlaces => 'Reorder places';
 
   @override
-  String get tripReorderHint => 'Drag to change the visit order within this section.';
+  String get tripReorderHint =>
+      'Drag to change the visit order within this section.';
 
   @override
   String get tripSaveOrder => 'Save order';
@@ -1570,7 +1609,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripsListEmptyTitle => 'No trips yet';
 
   @override
-  String get tripsListEmptyMessage => 'Chat with the AI agent to create your first trip.';
+  String get tripsListEmptyMessage =>
+      'Chat with the AI agent to create your first trip.';
 
   @override
   String get tripsListPlanTrip => 'Plan a trip';
@@ -1627,7 +1667,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeHeroTitle => 'Plan less. Travel more.';
 
   @override
-  String get homeHeroSubtitle => 'Describe the trip you\'re dreaming of and I\'ll build the full itinerary — places, days, and routes.';
+  String get homeHeroSubtitle =>
+      'Describe the trip you\'re dreaming of and I\'ll build the full itinerary — places, days, and routes.';
 
   @override
   String get homeHeroCta => 'Let\'s go';
@@ -1783,7 +1824,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reviewEmptyTitle => 'Looks good';
 
   @override
-  String get reviewEmptyMessage => 'No issues found — your trip is in good shape.';
+  String get reviewEmptyMessage =>
+      'No issues found — your trip is in good shape.';
 
   @override
   String get reviewSeverityCritical => 'Critical';
@@ -1795,7 +1837,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reviewSeverityInfo => 'Info';
 
   @override
-  String get reviewOfflineSnack => 'You\'re offline — reconnect to run more checks.';
+  String get reviewOfflineSnack =>
+      'You\'re offline — reconnect to run more checks.';
 
   @override
   String get reviewHoursChecked => 'Opening hours checked';
@@ -1826,7 +1869,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get continueChatsReopenError => 'Could not reopen that conversation.';
 
   @override
-  String get continueChatsDismissError => 'Could not dismiss that conversation.';
+  String get continueChatsDismissError =>
+      'Could not dismiss that conversation.';
 
   @override
   String get continueChatsDismiss => 'Dismiss';
@@ -1874,7 +1918,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alertsSignInTitle => 'Sign in to watch fares';
 
   @override
-  String get alertsSignInMessage => 'Price alerts email you when a flight you care about drops.';
+  String get alertsSignInMessage =>
+      'Price alerts email you when a flight you care about drops.';
 
   @override
   String get alertsSignIn => 'Sign in';
@@ -1886,7 +1931,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alertsEmptyTitle => 'No alerts yet';
 
   @override
-  String get alertsEmptyMessage => 'Search a flight and tap \"Watch this route\" — we\'ll email you when the price drops.';
+  String get alertsEmptyMessage =>
+      'Search a flight and tap \"Watch this route\" — we\'ll email you when the price drops.';
 
   @override
   String get alertsEmptyCta => 'Search flights';
@@ -1934,7 +1980,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alertsSetTargetTitle => 'Set target price';
 
   @override
-  String get alertsSetTargetBody => 'Get notified when the fare hits or drops below this price.';
+  String get alertsSetTargetBody =>
+      'Get notified when the fare hits or drops below this price.';
 
   @override
   String get alertsNotifyAtOrBelow => 'Notify me at or below';
@@ -1981,13 +2028,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alertSheetAnyDropTitle => 'Notify me on any real price drop';
 
   @override
-  String get alertSheetAnyDropSubtitle => 'At least 5% and \$5 below the last price';
+  String get alertSheetAnyDropSubtitle =>
+      'At least 5% and \$5 below the last price';
 
   @override
   String get alertSheetFlexTitle => 'Date flexibility';
 
   @override
-  String get alertSheetFlexHelp => 'Watch a few days around your departure and we\'ll flag the cheapest one.';
+  String get alertSheetFlexHelp =>
+      'Watch a few days around your departure and we\'ll flag the cheapest one.';
 
   @override
   String get alertSheetFlexExact => 'Exact';
@@ -2013,7 +2062,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifEmptyTitle => 'No notifications yet';
 
   @override
-  String get notifEmptyMessage => 'Price drops on routes you watch will show up here.';
+  String get notifEmptyMessage =>
+      'Price drops on routes you watch will show up here.';
 
   @override
   String get notifUnreadSemantic => 'Unread';
@@ -2060,10 +2110,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sharedUnavailableTitle => 'This link isn\'t available';
 
   @override
-  String get sharedInviteUnavailableMessage => 'The invite may have expired, been revoked, or already used.';
+  String get sharedInviteUnavailableMessage =>
+      'The invite may have expired, been revoked, or already used.';
 
   @override
-  String get sharedLinkUnavailableMessage => 'The trip may have been unshared, or the link is incorrect.';
+  String get sharedLinkUnavailableMessage =>
+      'The trip may have been unshared, or the link is incorrect.';
 
   @override
   String get sharedPlacesGroup => 'Places';
@@ -2195,7 +2247,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatImagePlaceholder => 'Image';
 
   @override
-  String get chatStillPreparingImage => 'Still preparing an image — one moment.';
+  String get chatStillPreparingImage =>
+      'Still preparing an image — one moment.';
 
   @override
   String chatAttachLimit(int count) {
@@ -2203,7 +2256,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get chatImageUnreadable => 'Couldn\'t read that image — try a JPEG, PNG, GIF, or WebP under 10 MB.';
+  String get chatImageUnreadable =>
+      'Couldn\'t read that image — try a JPEG, PNG, GIF, or WebP under 10 MB.';
 
   @override
   String get chatOnlyImages => 'Only image files can be attached.';
@@ -2315,7 +2369,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentScreenEmptyTitle => 'Tell me about your dream trip';
 
   @override
-  String get agentScreenEmptyMessage => 'I\'ll search for places and build a day-by-day itinerary for your trip.';
+  String get agentScreenEmptyMessage =>
+      'I\'ll search for places and build a day-by-day itinerary for your trip.';
 
   @override
   String get agentScreenSuggestionParis => '2 days in Paris';
@@ -2368,16 +2423,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get refineHint => 'Ask for changes...';
 
   @override
-  String get chatDictationPermission => 'Microphone access was blocked. Check your browser settings.';
+  String get chatDictationPermission =>
+      'Microphone access was blocked. Check your browser settings.';
 
   @override
-  String get chatDictationUnsupported => 'Voice input isn\'t available in this browser.';
+  String get chatDictationUnsupported =>
+      'Voice input isn\'t available in this browser.';
 
   @override
-  String get chatDictationUnavailable => 'Voice input isn\'t available right now.';
+  String get chatDictationUnavailable =>
+      'Voice input isn\'t available right now.';
 
   @override
-  String get chatDictationFailed => 'Couldn\'t transcribe audio. You can type instead.';
+  String get chatDictationFailed =>
+      'Couldn\'t transcribe audio. You can type instead.';
 
   @override
   String get placeSearchAddTitle => 'Add Location';
@@ -2389,7 +2448,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get placeSearchManualCoords => 'Use Manual Coordinates';
 
   @override
-  String get placeSearchManualCoordsSubtitle => 'Enter latitude/longitude manually instead of searching places';
+  String get placeSearchManualCoordsSubtitle =>
+      'Enter latitude/longitude manually instead of searching places';
 
   @override
   String get placeSearchNameLabel => 'Location Name *';
@@ -2404,16 +2464,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get placeSearchCategoryHint => 'e.g., restaurant, museum, coffee_shop';
 
   @override
-  String get placeSearchVisitDurationLabel => 'Visit Duration (minutes, optional)';
+  String get placeSearchVisitDurationLabel =>
+      'Visit Duration (minutes, optional)';
 
   @override
-  String get placeSearchDurationInvalid => 'Please enter a valid duration in minutes';
+  String get placeSearchDurationInvalid =>
+      'Please enter a valid duration in minutes';
 
   @override
   String get placeSearchSearchLabel => 'Search for a place';
 
   @override
-  String get placeSearchSearchHint => 'Type to search for restaurants, attractions, etc.';
+  String get placeSearchSearchHint =>
+      'Type to search for restaurants, attractions, etc.';
 
   @override
   String get placeSearchLatitude => 'Latitude';
@@ -2437,10 +2500,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get placeSearchLatitudeInvalid => 'Enter valid latitude (-90 to 90)';
 
   @override
-  String get placeSearchLongitudeInvalid => 'Enter valid longitude (-180 to 180)';
+  String get placeSearchLongitudeInvalid =>
+      'Enter valid longitude (-180 to 180)';
 
   @override
-  String get placeSearchNoResults => 'No places found. Try a different search term.';
+  String get placeSearchNoResults =>
+      'No places found. Try a different search term.';
 
   @override
   String placeSearchError(String error) {
@@ -2478,7 +2543,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addToTripLoadTripsError => 'Could not load your trips.';
 
   @override
-  String get addToTripNoTrips => 'No trips yet — plan a trip first, then add places to it.';
+  String get addToTripNoTrips =>
+      'No trips yet — plan a trip first, then add places to it.';
 
   @override
   String get addToTripUnscheduled => 'Unscheduled';
@@ -2552,10 +2618,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get flightSearchErrorTitle => 'Could not load flights';
 
   @override
-  String get flightSearchHintInitial => 'Choose an origin, destination, and date to find flights.';
+  String get flightSearchHintInitial =>
+      'Choose an origin, destination, and date to find flights.';
 
   @override
-  String get flightSearchHintEmpty => 'No flights found for this route and date.';
+  String get flightSearchHintEmpty =>
+      'No flights found for this route and date.';
 
   @override
   String flightCardSavings(String amount) {
@@ -2643,7 +2711,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get flightSheetBagUnknownNote => 'Your bag is not included — check the fee with the airline';
+  String get flightSheetBagUnknownNote =>
+      'Your bag is not included — check the fee with the airline';
 
   @override
   String flightSheetLayover(String airport) {
@@ -2671,7 +2740,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guidesEmptyTitle => 'No guides yet';
 
   @override
-  String get guidesEmptyMessage => 'Guides from real locals appear here as they publish.';
+  String get guidesEmptyMessage =>
+      'Guides from real locals appear here as they publish.';
 
   @override
   String get guidesElsewhere => 'Elsewhere';
@@ -2761,13 +2831,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorNetwork => 'Check your internet connection and try again.';
 
   @override
-  String get errorTooManyRequests => 'You\'re going a little too fast — wait a moment and try again.';
+  String get errorTooManyRequests =>
+      'You\'re going a little too fast — wait a moment and try again.';
 
   @override
   String get errorSession => 'Your session has expired. Please sign in again.';
 
   @override
-  String get errorServer => 'Something went wrong on our end. Please try again in a moment.';
+  String get errorServer =>
+      'Something went wrong on our end. Please try again in a moment.';
 
   @override
   String get errorGeneric => 'Something went wrong. Please try again.';
