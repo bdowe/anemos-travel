@@ -4082,6 +4082,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{{count} local pick} other{{count} local picks}}'**
   String chatChipLocalPicks(int count);
 
+  /// No description provided for @chatStripPlaces.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} place} other{{count} places}}'**
+  String chatStripPlaces(int count);
+
   /// No description provided for @chatChipEvents.
   ///
   /// In en, this message translates to:

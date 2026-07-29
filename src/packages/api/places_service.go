@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -20,6 +21,7 @@ var (
 	placesTextSearchURL   = "https://maps.googleapis.com/maps/api/place/textsearch/json"
 	placesAutocompleteURL = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
 	placesDetailsURL      = "https://maps.googleapis.com/maps/api/place/details/json"
+	placesPhotoURL        = "https://maps.googleapis.com/maps/api/place/photo"
 )
 
 // upstreamCallCounters tracks billable upstream calls vs cache hits for one
@@ -68,12 +70,32 @@ type GooglePlacesService struct {
 	APIKey string
 	Client *http.Client
 
+	// PhotoClient mirrors Client but stops at the first redirect
+	// (CheckRedirect: ErrUseLastResponse) so ResolvePhotoURL can capture the
+	// Place Photo API's 302 Location header instead of downloading the image
+	// bytes.
+	PhotoClient *http.Client
+
 	// Every Google call is billable; identical lookups within the TTL are
 	// served from memory. Autocomplete/details cache long (place data is
 	// stable), text search shorter (result sets shift more).
 	searchCache       *ttlCache[[]PlaceSearchResult]
 	autocompleteCache *ttlCache[[]PlaceAutocompleteResult]
 	detailsCache      *ttlCache[*PlaceDetailsResult]
+
+	// photoRefCache: place_id → first photo ref + stripped attribution, from
+	// fields=photo details lookups (local-rec venue enrichment). Empty results
+	// are cached too, so photo-less venues cost one call per TTL, not one per
+	// chat turn. photoURLCache: "ref|width" → googleusercontent URL captured
+	// from the Place Photo 302; those URLs carry signed tokens with no
+	// documented lifetime, so the TTL stays conservative. knownPhotoRefs is
+	// the anti-abuse gate: /places/photo only serves refs this process itself
+	// handed to a client (SSE place cards / rec enrichment) — unknown ref →
+	// 404 with zero Google spend, so the endpoint can't be used as an open
+	// photo proxy billed to us.
+	photoRefCache  *ttlCache[placePhotoRef]
+	photoURLCache  *ttlCache[string]
+	knownPhotoRefs *ttlCache[struct{}]
 
 	// Process-lifetime call counters per endpoint class (see
 	// upstreamCallCounters — reset on restart, atomic, never persisted).
@@ -84,6 +106,15 @@ type GooglePlacesService struct {
 	searchCalls       upstreamCallCounters
 	autocompleteCalls upstreamCallCounters
 	detailsCalls      upstreamCallCounters
+	photoLookupCalls  upstreamCallCounters
+	photoCalls        upstreamCallCounters
+}
+
+// placePhotoRef is one cached venue-photo lookup; both fields empty means the
+// venue has no photo (negative results are cached deliberately).
+type placePhotoRef struct {
+	Ref         string
+	Attribution string
 }
 
 // PlaceSearchResult represents a place from Google Places API
@@ -96,6 +127,13 @@ type PlaceSearchResult struct {
 	Types      []string `json:"types"`
 	Rating     *float64 `json:"rating,omitempty"`
 	PriceLevel *int     `json:"price_level,omitempty"`
+
+	// PhotoRef/PhotoAttribution are json:"-" on purpose: they ride the struct
+	// into the SSE `places` cards but must never serialize into the
+	// model-facing tool_result (refs are ~150 opaque chars of token bloat) or
+	// the public /places/search response.
+	PhotoRef         string `json:"-"`
+	PhotoAttribution string `json:"-"`
 }
 
 // PlaceAutocompleteResult represents autocomplete suggestions
@@ -140,10 +178,19 @@ func NewGooglePlacesService() *GooglePlacesService {
 		// with a zero-value (no-timeout) client would stall the whole SSE
 		// stream forever. This is a hard backstop on top of the per-call
 		// context deadline threaded through each method.
-		Client:            &http.Client{Timeout: 15 * time.Second},
+		Client: &http.Client{Timeout: 15 * time.Second},
+		PhotoClient: &http.Client{
+			Timeout: 15 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 		searchCache:       newTTLCache[[]PlaceSearchResult](1*time.Hour, 2000),
 		autocompleteCache: newTTLCache[[]PlaceAutocompleteResult](24*time.Hour, 5000),
 		detailsCache:      newTTLCache[*PlaceDetailsResult](24*time.Hour, 5000),
+		photoRefCache:     newTTLCache[placePhotoRef](24*time.Hour, 5000),
+		photoURLCache:     newTTLCache[string](12*time.Hour, 5000),
+		knownPhotoRefs:    newTTLCache[struct{}](24*time.Hour, 10000),
 	}
 }
 
@@ -216,6 +263,10 @@ func (gps *GooglePlacesService) SearchPlaces(ctx context.Context, query string) 
 			Types      []string `json:"types"`
 			Rating     *float64 `json:"rating"`
 			PriceLevel *int     `json:"price_level"`
+			Photos     []struct {
+				PhotoReference   string   `json:"photo_reference"`
+				HTMLAttributions []string `json:"html_attributions"`
+			} `json:"photos"`
 		} `json:"results"`
 		Status string `json:"status"`
 	}
@@ -239,6 +290,12 @@ func (gps *GooglePlacesService) SearchPlaces(ctx context.Context, query string) 
 			Types:      place.Types,
 			Rating:     place.Rating,
 			PriceLevel: place.PriceLevel,
+		}
+		if len(place.Photos) > 0 {
+			places[i].PhotoRef = place.Photos[0].PhotoReference
+			if len(place.Photos[0].HTMLAttributions) > 0 {
+				places[i].PhotoAttribution = stripHTMLTags(place.Photos[0].HTMLAttributions[0])
+			}
 		}
 	}
 
@@ -385,6 +442,175 @@ func (gps *GooglePlacesService) GetPlaceDetails(ctx context.Context, placeID str
 
 	gps.detailsCache.set(placeID, place)
 	return place, nil
+}
+
+// errPhotoNotFound marks a photo_reference Google refused to resolve (invalid,
+// expired, or denied). The handler maps it to 404 — to the client it just
+// means "no image", indistinguishable from the known-ref gate's 404.
+var errPhotoNotFound = errors.New("photo not found upstream")
+
+// allowPhotoRef marks a photo_reference as servable by /places/photo for the
+// gate TTL. Called at the two points a ref is handed to a client: SSE place
+// cards and local-rec venue enrichment.
+func (gps *GooglePlacesService) allowPhotoRef(ref string) {
+	if ref != "" {
+		gps.knownPhotoRefs.set(ref, struct{}{})
+	}
+}
+
+// photoRefAllowed reports whether /places/photo may serve this ref.
+func (gps *GooglePlacesService) photoRefAllowed(ref string) bool {
+	_, ok := gps.knownPhotoRefs.get(ref)
+	return ok
+}
+
+// GetPlacePhotoRef resolves place_id → (photoRef, attribution) via a legacy
+// Place Details call restricted to fields=photo — Basic Data, the cheapest
+// details SKU. Deliberately separate from GetPlaceDetails: widening that
+// call's field mask would change its billing class, and its cache is shared
+// with other callers. No language param — photos aren't localized, so the
+// cache stays locale-free. Empty ref + nil error means the venue has no
+// photo; that negative result is cached so photo-less venues bill once per
+// TTL, not once per chat turn.
+func (gps *GooglePlacesService) GetPlacePhotoRef(ctx context.Context, placeID string) (string, string, error) {
+	if gps.APIKey == "" {
+		return "", "", fmt.Errorf("Google Places API key not configured")
+	}
+
+	if cached, ok := gps.photoRefCache.get(placeID); ok {
+		gps.photoLookupCalls.cacheHits.Add(1)
+		// Re-arm the serving gate on every hand-out, not just the original
+		// lookup: the gate cache can evict entries independently (capacity),
+		// and a ref we're about to emit must stay servable.
+		gps.allowPhotoRef(cached.Ref)
+		return cached.Ref, cached.Attribution, nil
+	}
+
+	params := url.Values{}
+	params.Add("place_id", placeID)
+	params.Add("fields", "photo")
+	params.Add("key", gps.APIKey)
+
+	gps.photoLookupCalls.upstream.Add(1)
+	resp, err := gps.doGet(ctx, placesDetailsURL+"?"+params.Encode())
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get place photo: %w", redactTransportError(err))
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var result struct {
+		Result struct {
+			Photos []struct {
+				PhotoReference   string   `json:"photo_reference"`
+				HTMLAttributions []string `json:"html_attributions"`
+			} `json:"photos"`
+		} `json:"result"`
+		Status string `json:"status"`
+	}
+
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	switch result.Status {
+	case "OK":
+		// fall through to the photo extraction below
+	case "NOT_FOUND", "ZERO_RESULTS", "INVALID_REQUEST":
+		// Deterministic dead ends (retired/invalid place_id): cache the empty
+		// result like a photo-less venue, or every chat turn re-bills the same
+		// doomed Details call. Transient statuses (OVER_QUERY_LIMIT etc.) stay
+		// uncached so they retry.
+		gps.photoRefCache.set(placeID, placePhotoRef{})
+		return "", "", nil
+	default:
+		return "", "", fmt.Errorf("Google Places API error: %s", result.Status)
+	}
+
+	var entry placePhotoRef
+	if len(result.Result.Photos) > 0 {
+		entry.Ref = result.Result.Photos[0].PhotoReference
+		if len(result.Result.Photos[0].HTMLAttributions) > 0 {
+			entry.Attribution = stripHTMLTags(result.Result.Photos[0].HTMLAttributions[0])
+		}
+	}
+	gps.photoRefCache.set(placeID, entry)
+	gps.allowPhotoRef(entry.Ref)
+	return entry.Ref, entry.Attribution, nil
+}
+
+// ResolvePhotoURL exchanges a photo_reference for the googleusercontent image
+// URL by capturing the Place Photo API's 302 Location — image bytes never
+// transit this server. maxWidth must already be clamped by the caller. Two
+// simultaneous resolutions of the same uncached ref can double-bill one photo
+// call; not worth singleflight at this traffic.
+func (gps *GooglePlacesService) ResolvePhotoURL(ctx context.Context, photoRef string, maxWidth int) (string, error) {
+	if gps.APIKey == "" {
+		return "", fmt.Errorf("Google Places API key not configured")
+	}
+
+	cacheKey := photoRef + "|" + strconv.Itoa(maxWidth)
+	if cached, ok := gps.photoURLCache.get(cacheKey); ok {
+		gps.photoCalls.cacheHits.Add(1)
+		return cached, nil
+	}
+
+	params := url.Values{}
+	params.Add("maxwidth", strconv.Itoa(maxWidth))
+	params.Add("photo_reference", photoRef)
+	params.Add("key", gps.APIKey)
+
+	gps.photoCalls.upstream.Add(1)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, placesPhotoURL+"?"+params.Encode(), nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := gps.PhotoClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve photo: %w", redactTransportError(err))
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+
+	switch {
+	case resp.StatusCode >= 300 && resp.StatusCode < 400:
+		loc := resp.Header.Get("Location")
+		if loc == "" {
+			return "", fmt.Errorf("photo redirect missing Location")
+		}
+		gps.photoURLCache.set(cacheKey, loc)
+		return loc, nil
+	case resp.StatusCode == http.StatusBadRequest,
+		resp.StatusCode == http.StatusForbidden,
+		resp.StatusCode == http.StatusNotFound:
+		return "", errPhotoNotFound
+	default:
+		return "", fmt.Errorf("unexpected photo response status %d", resp.StatusCode)
+	}
+}
+
+// stripHTMLTags reduces Google's html_attributions entries
+// (`<a href="...">Photographer</a>`) to their text content. Dependency-free
+// single pass; not a general HTML sanitizer — Google's attribution strings
+// are simple anchor tags.
+func stripHTMLTags(s string) string {
+	var b strings.Builder
+	inTag := false
+	for _, r := range s {
+		switch {
+		case r == '<':
+			inTag = true
+		case r == '>':
+			inTag = false
+		case !inTag:
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // ConvertGoogleHoursToOperatingHours converts Google's opening hours to our format

@@ -374,6 +374,54 @@ var updateSectionTool = anthropic.ToolParam{
 
 // --- dispatchers ----------------------------------------------------------------
 
+// planPlacesCardCap bounds the `places` SSE payload; the model still gets the
+// full result list in its tool_result.
+const planPlacesCardCap = 8
+
+// placeCard is the client-facing shape of one photo card in the `places` SSE
+// event — a wire struct separate from PlaceSearchResult so photo refs reach
+// the client but never the model (PhotoRef is json:"-" there). Carries what
+// the card needs for Add-to-trip and a Google Maps link.
+type placeCard struct {
+	Name             string   `json:"name"`
+	PlaceID          string   `json:"place_id"`
+	Address          string   `json:"address"`
+	Latitude         float64  `json:"lat"`
+	Longitude        float64  `json:"lng"`
+	Rating           *float64 `json:"rating,omitempty"`
+	PriceLevel       *int     `json:"price_level,omitempty"`
+	Category         string   `json:"category,omitempty"`
+	PhotoRef         string   `json:"photo_ref,omitempty"`
+	PhotoAttribution string   `json:"photo_attribution,omitempty"`
+}
+
+// placeCards converts up to max results into cards and registers each emitted
+// photo ref with the /places/photo known-ref gate — registration at emit time
+// means the gate covers exactly what a client was shown, including
+// cache-served searches.
+func placeCards(results []PlaceSearchResult, max int) []placeCard {
+	if len(results) > max {
+		results = results[:max]
+	}
+	cards := make([]placeCard, len(results))
+	for i, r := range results {
+		cards[i] = placeCard{
+			Name:             r.Name,
+			PlaceID:          r.PlaceID,
+			Address:          r.Address,
+			Latitude:         r.Latitude,
+			Longitude:        r.Longitude,
+			Rating:           r.Rating,
+			PriceLevel:       r.PriceLevel,
+			Category:         MapGoogleTypeToCategory(r.Types),
+			PhotoRef:         r.PhotoRef,
+			PhotoAttribution: r.PhotoAttribution,
+		}
+		placesService.allowPhotoRef(r.PhotoRef)
+	}
+	return cards
+}
+
 func runSearchPlacesTool(s *planSession, input json.RawMessage) (string, bool) {
 	var in struct {
 		Query string `json:"query"`
@@ -383,6 +431,14 @@ func runSearchPlacesTool(s *planSession, input json.RawMessage) (string, bool) {
 	results, err := placesService.SearchPlaces(s.ctx, in.Query)
 	if err != nil {
 		return fmt.Sprintf("Error searching places: %v", err), true
+	}
+	// Photo cards for the chat window; the model's tool_result below is
+	// unchanged (photo fields are json:"-" on PlaceSearchResult).
+	if len(results) > 0 {
+		sendSSE(s.w, "places", map[string]any{
+			"query":  in.Query,
+			"places": placeCards(results, planPlacesCardCap),
+		})
 	}
 	b, _ := json.Marshal(results)
 	return string(b), false
@@ -723,6 +779,7 @@ func runSearchLocalRecsTool(s *planSession, input json.RawMessage) (string, bool
 
 	recs, err := localRecsService.SearchByCity(s.ctx, in.City, in.Category)
 	if len(recs) > 0 {
+		enrichLocalRecPhotos(s.ctx, recs)
 		sendSSE(s.w, "local_recs", map[string]any{"city": in.City, "recommendations": recs})
 	}
 	summary := summarizeLocalRecs(in.City, recs)

@@ -27,6 +27,8 @@ LocalRecommendation _$LocalRecommendationFromJson(Map<String, dynamic> json) =>
       sourcePhotoUrl: json['source_photo_url'] as String? ?? '',
       sourceExpertise: json['source_expertise'] as String? ?? '',
       sourceCredibility: json['source_credibility'] as String? ?? '',
+      photoRef: json['photo_ref'] as String? ?? '',
+      photoAttribution: json['photo_attribution'] as String? ?? '',
     );
 
 Map<String, dynamic> _$LocalRecommendationToJson(
@@ -49,4 +51,6 @@ Map<String, dynamic> _$LocalRecommendationToJson(
       'source_photo_url': instance.sourcePhotoUrl,
       'source_expertise': instance.sourceExpertise,
       'source_credibility': instance.sourceCredibility,
+      'photo_ref': instance.photoRef,
+      'photo_attribution': instance.photoAttribution,
     };

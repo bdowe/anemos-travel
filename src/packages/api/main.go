@@ -662,6 +662,13 @@ func buildRouter() *mux.Router {
 	api.HandleFunc("/places/search", placesSearchHandler).Methods("GET")
 	api.HandleFunc("/places/autocomplete", placesAutocompleteHandler).Methods("GET")
 	api.HandleFunc("/places/details", placesDetailsHandler).Methods("GET")
+	// Place-photo redirects fan out ~8 per chat recommendation strip, so they
+	// get their own bucket (like /transcribe): sharing strict would starve
+	// /plan, and image bursts shouldn't eat the general JSON-API budget.
+	// Burst 20 absorbs two full card strips back-to-back.
+	photoLimiter := newIPRateLimiter(40, 20)
+	photo := rateLimitMiddleware(photoLimiter)
+	api.Handle("/places/photo", photo(http.HandlerFunc(placesPhotoHandler))).Methods("GET")
 	api.HandleFunc("/flights/search", flightsSearchHandler).Methods("POST")
 	api.HandleFunc("/flights/airports", airportsSearchHandler).Methods("GET")
 	api.HandleFunc("/events/search", eventsSearchHandler).Methods("GET")
@@ -875,6 +882,7 @@ func startServer(router *mux.Router) {
 	log.Printf("  GET  /api/v1/places/search      - Search Places")
 	log.Printf("  GET  /api/v1/places/autocomplete - Place Autocomplete")
 	log.Printf("  GET  /api/v1/places/details     - Place Details")
+	log.Printf("  GET  /api/v1/places/photo       - Place Photo (302 redirect)")
 	log.Printf("  POST /api/v1/flights/search     - Ranked Flight Search (Duffel)")
 	log.Printf("  GET  /api/v1/flights/airports   - Airport/City Autocomplete (Duffel)")
 	log.Printf("  POST /api/v1/auth/register      - Register")

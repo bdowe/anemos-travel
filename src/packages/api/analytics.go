@@ -68,9 +68,10 @@ var clientEventMetadataKeys = map[string]bool{
 // key (itinerary_item_added) — it feeds dashboard GROUP BYs, so free-form
 // client values are dropped, not stored.
 var clientEventSourceValues = map[string]bool{
-	"local_rec": true,
-	"event":     true,
-	"guide_pin": true,
+	"local_rec":  true,
+	"event":      true,
+	"guide_pin":  true,
+	"chat_place": true,
 }
 
 // maxClientMetadataValueLen caps each accepted metadata value; real values
@@ -265,6 +266,9 @@ func estClaudeCostUSD(inTok, outTok, cacheWriteTok, cacheReadTok int64) float64 
 //   - Text Search:            $32 / 1000 requests
 //   - Autocomplete (per-req): $2.83 / 1000 requests (no session tokens used)
 //   - Place Details:          $17 / 1000 requests (contact+atmosphere fields)
+//   - Photo lookup:           $17 / 1000 requests (details base; fields=photo
+//     is Basic Data, $0 on top)
+//   - Place Photo:            $7 / 1000 requests
 //
 // ESTIMATES ONLY: actual billing varies with field masks, session tokens,
 // volume tiers, and the monthly free credit. Update alongside any endpoint
@@ -273,6 +277,8 @@ const (
 	placesCostSearchUSDPerCall       = 32.0 / 1000
 	placesCostAutocompleteUSDPerCall = 2.83 / 1000
 	placesCostDetailsUSDPerCall      = 17.0 / 1000
+	placesCostPhotoLookupUSDPerCall  = 17.0 / 1000
+	placesCostPhotoUSDPerCall        = 7.0 / 1000
 )
 
 // PlacesCallsSnapshot is the places_calls_since_process_start object: per-
@@ -284,6 +290,8 @@ type PlacesCallsSnapshot struct {
 	Search       UpstreamCallCounts `json:"search"`
 	Autocomplete UpstreamCallCounts `json:"autocomplete"`
 	Details      UpstreamCallCounts `json:"details"`
+	PhotoLookup  UpstreamCallCounts `json:"photo_lookup"`
+	Photo        UpstreamCallCounts `json:"photo"`
 	// EstPlacesCostUSD prices the upstream counts with the placesCost*
 	// constants above. An estimate of list price, not a bill.
 	EstPlacesCostUSD float64 `json:"est_places_cost_usd"`
@@ -296,10 +304,14 @@ func placesCallsSnapshot(gps *GooglePlacesService) PlacesCallsSnapshot {
 		Search:       gps.searchCalls.snapshot(),
 		Autocomplete: gps.autocompleteCalls.snapshot(),
 		Details:      gps.detailsCalls.snapshot(),
+		PhotoLookup:  gps.photoLookupCalls.snapshot(),
+		Photo:        gps.photoCalls.snapshot(),
 	}
 	s.EstPlacesCostUSD = float64(s.Search.Upstream)*placesCostSearchUSDPerCall +
 		float64(s.Autocomplete.Upstream)*placesCostAutocompleteUSDPerCall +
-		float64(s.Details.Upstream)*placesCostDetailsUSDPerCall
+		float64(s.Details.Upstream)*placesCostDetailsUSDPerCall +
+		float64(s.PhotoLookup.Upstream)*placesCostPhotoLookupUSDPerCall +
+		float64(s.Photo.Upstream)*placesCostPhotoUSDPerCall
 	return s
 }
 
