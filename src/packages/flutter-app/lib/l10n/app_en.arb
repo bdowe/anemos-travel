@@ -1532,6 +1532,14 @@
       }
     }
   },
+  "chatStripPlaces": "{count, plural, =1{{count} place} other{{count} places}}",
+  "@chatStripPlaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "chatChipEvents": "{count, plural, =1{{count} event} other{{count} events}}",
   "@chatChipEvents": {
     "placeholders": {

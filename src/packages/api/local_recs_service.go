@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"travel-route-planner/store"
 )
@@ -31,6 +33,43 @@ type LocalRec struct {
 	SourcePhotoURL    string   `json:"source_photo_url,omitempty"`
 	SourceExpertise   string   `json:"source_expertise,omitempty"`
 	SourceCredibility string   `json:"source_credibility,omitempty"`
+
+	// PhotoRef/PhotoAttribution are the VENUE's Google photo, resolved from
+	// place_id by enrichLocalRecPhotos on the agent SSE path only — distinct
+	// from SourcePhotoURL (the human recommender's headshot). omitempty keeps
+	// the public /local/* browse responses, which never enrich, byte-identical.
+	PhotoRef         string `json:"photo_ref,omitempty"`
+	PhotoAttribution string `json:"photo_attribution,omitempty"`
+}
+
+// enrichLocalRecPhotos fills venue photo refs for recs that carry a place_id.
+// Bounded concurrency (4 in flight) and a hard time-box keep a city full of
+// uncached recs from holding the local_recs SSE event — and the agent loop
+// behind it — hostage; the 24h photoRefCache makes every later turn free.
+// Failures and photo-less venues are silently skipped (missing photo ≠ error).
+func enrichLocalRecPhotos(ctx context.Context, recs []LocalRec) {
+	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
+	defer cancel()
+	sem := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	for i := range recs {
+		if recs[i].PlaceID == "" {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		r := &recs[i]
+		safeGo("enrichLocalRecPhotos", func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			ref, attr, err := placesService.GetPlacePhotoRef(ctx, r.PlaceID)
+			if err != nil || ref == "" {
+				return
+			}
+			r.PhotoRef, r.PhotoAttribution = ref, attr
+		})
+	}
+	wg.Wait()
 }
 
 // LocalRecsService is a stateless singleton (like eventsService) that reads the

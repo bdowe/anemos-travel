@@ -2321,6 +2321,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String chatStripPlaces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count places',
+      one: '$count place',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String chatChipEvents(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

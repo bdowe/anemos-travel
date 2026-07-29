@@ -38,6 +38,13 @@ class LocalRecommendation {
   @JsonKey(name: 'source_credibility', defaultValue: '')
   final String sourceCredibility;
 
+  /// The VENUE's Google photo (agent-enriched on the /plan path only) —
+  /// distinct from [sourcePhotoUrl], the human recommender's headshot.
+  @JsonKey(name: 'photo_ref', defaultValue: '')
+  final String photoRef;
+  @JsonKey(name: 'photo_attribution', defaultValue: '')
+  final String photoAttribution;
+
   const LocalRecommendation({
     required this.id,
     required this.name,
@@ -56,6 +63,8 @@ class LocalRecommendation {
     this.sourcePhotoUrl = '',
     this.sourceExpertise = '',
     this.sourceCredibility = '',
+    this.photoRef = '',
+    this.photoAttribution = '',
   });
 
   /// "Ana · Lisbon chef, 20yr resident" style credit line for the card.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
+import '../models/agent_place.dart';
 import '../models/event.dart';
 import '../models/itinerary_item.dart';
 import '../models/local_recommendation.dart';
@@ -30,7 +31,7 @@ class AddToTripPayload {
   final String? localRecommendationId;
   final String? eventDate; // YYYY-MM-DD, events only
   final String? eventTime; // HH:mm, events only
-  final String source; // 'local_rec' | 'event' | 'guide_pin'
+  final String source; // 'local_rec' | 'event' | 'guide_pin' | 'chat_place'
 
   const AddToTripPayload({
     required this.name,
@@ -70,6 +71,29 @@ class AddToTripPayload {
       localSourceName: _blankToNull(rec.sourceName),
       localRecommendationId: rec.id,
       source: source,
+    );
+  }
+
+  /// A Google Places result surfaced in the plan chat's photo cards. No local
+  /// attribution and no rec id — duplicate detection falls through to the
+  /// case-insensitive name match, the same id-less path events use. City is
+  /// deliberately null: the strip's query label is a search phrase, not a
+  /// city, and the trip screen derives locality from the address instead.
+  factory AddToTripPayload.fromPlace(AgentPlace place) {
+    final category =
+        (place.category == 'attraction' || place.category == 'restaurant')
+            ? place.category
+            : null;
+    // (0,0) is the wire's "no coordinates" placeholder.
+    final hasCoords = place.lat != 0 || place.lng != 0;
+    return AddToTripPayload(
+      name: place.name,
+      latitude: hasCoords ? place.lat : null,
+      longitude: hasCoords ? place.lng : null,
+      address: _blankToNull(place.address),
+      placeId: _blankToNull(place.placeId),
+      category: category,
+      source: 'chat_place',
     );
   }
 

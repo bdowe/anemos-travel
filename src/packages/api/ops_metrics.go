@@ -290,6 +290,8 @@ func upstreamCountsSnapshot() map[string]int64 {
 			"places_search":       &placesService.searchCalls,
 			"places_autocomplete": &placesService.autocompleteCalls,
 			"places_details":      &placesService.detailsCalls,
+			"places_photo_lookup": &placesService.photoLookupCalls,
+			"places_photo":        &placesService.photoCalls,
 		} {
 			m[name+"_upstream"] = c.upstream.Load()
 			m[name+"_cache_hits"] = c.cacheHits.Load()

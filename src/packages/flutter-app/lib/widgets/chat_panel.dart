@@ -9,6 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import '../l10n/l10n.dart';
 import '../models/plan_message.dart';
+import '../providers/auth_provider.dart';
+import '../providers/api_client_provider.dart';
 import '../providers/dictation_provider.dart';
 import '../providers/plan_provider.dart';
 import '../services/dictation_controller.dart';
@@ -18,7 +20,10 @@ import '../theme/spacing.dart';
 import '../utils/errors.dart';
 import '../utils/clipboard_images_stub.dart'
     if (dart.library.js_interop) '../utils/clipboard_images_web.dart';
+import '../utils/place_links.dart';
 import '../utils/tracked_launch.dart';
+import 'add_to_trip_sheet.dart';
+import 'place_photo_card.dart';
 import 'result_summary_chip.dart';
 
 /// The plan-agent chat surface (messages, tool chips, result chips, input bar)
@@ -547,6 +552,7 @@ class _ChatTail extends StatelessWidget {
         _ActiveToolChips(state: state),
         _ProfileNoteChip(state: state),
         _ItineraryUpdatedChip(state: state),
+        _ResultStrips(state: state, notifier: notifier, onViewTrip: onViewTrip),
         _ResultChips(state: state, notifier: notifier, onViewTrip: onViewTrip),
         _QuickReplyChips(state: state, notifier: notifier),
         if (footerBuilder != null)
@@ -866,9 +872,140 @@ class _SeedContextChip extends StatelessWidget {
   }
 }
 
+/// Horizontal photo-card rails for the recommendation-shaped results (Google
+/// places, local picks, events) — the sources where seeing the place matters.
+/// Replaces those sources' summary chips; link-shaped results (flights,
+/// ferries, event sources) stay chips in [_ResultChips]. Fixed-height rails,
+/// single-slot per-turn state: images can pop in but never reflow the tail.
+class _ResultStrips extends ConsumerWidget {
+  final ProviderListenable<PlanState> state;
+  final ProviderListenable<PlanNotifier> notifier;
+  final void Function(String tripId)? onViewTrip;
+
+  /// Cards per rail — matches the server's places cap; local picks/events are
+  /// capped client-side to keep the rails skimmable.
+  static const _maxCards = 8;
+
+  const _ResultStrips({
+    required this.state,
+    required this.notifier,
+    required this.onViewTrip,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Record equality compares the lists by identity, which works because the
+    // provider replaces each list whole on its SSE event — never mutates one
+    // in place (the _ResultChips invariant).
+    final r = ref.watch(state.select((s) => (
+          places: s.places,
+          placesQuery: s.placesQuery,
+          localRecs: s.localRecs,
+          localRecsCity: s.localRecsCity,
+          events: s.eventResults,
+          eventsCity: s.eventsCityLabel,
+          savedTripId: s.savedTripId,
+        )));
+    final signedIn = ref.watch(authProvider.select((s) => s.isSignedIn));
+    final apiBase = ref.watch(apiClientProvider).baseUrl;
+    final scheme = Theme.of(context).colorScheme;
+
+    final tripId = r.savedTripId ?? ref.read(notifier).tripId;
+    final onHeaderTap = (onViewTrip != null && tripId != null)
+        ? () => onViewTrip!(tripId)
+        : null;
+
+    String label(String base, String? suffix) =>
+        (suffix == null || suffix.trim().isEmpty) ? base : '$base · $suffix';
+
+    Future<void> addToTrip(AddToTripPayload payload) async {
+      await showAddToTripSheet(context, payload, currentTripId: tripId);
+    }
+
+    Future<void> openMaps(String name, String placeId) async {
+      await trackedLaunchUrl(context, googleMapsSearchUrl(name, placeId),
+          provider: 'google_maps', surface: 'chat_place_card');
+    }
+
+    String? photoUrl(String ref) =>
+        ref.isEmpty ? null : placePhotoUrl(apiBase, ref);
+
+    final l10n = context.l10n;
+    final strips = <Widget>[
+      if (r.places != null && r.places!.isNotEmpty)
+        PlacePhotoStrip(
+          icon: Icons.place_outlined,
+          accent: scheme.primary,
+          label: label(l10n.chatStripPlaces(r.places!.length), r.placesQuery),
+          onViewTrip: onHeaderTap,
+          cards: [
+            for (final place in r.places!.take(_maxCards))
+              PlacePhotoCard(
+                data: PlaceCardData.place(place,
+                    photoUrl: photoUrl(place.photoRef), scheme: scheme),
+                onTap: () => openMaps(place.name, place.placeId),
+                onAddToTrip: signedIn
+                    ? () => addToTrip(AddToTripPayload.fromPlace(place))
+                    : null,
+              ),
+          ],
+        ),
+      if (r.localRecs != null && r.localRecs!.isNotEmpty)
+        PlacePhotoStrip(
+          icon: Icons.verified,
+          accent: AppColors.toolLocal,
+          label: label(
+              l10n.chatChipLocalPicks(r.localRecs!.length), r.localRecsCity),
+          onViewTrip: onHeaderTap,
+          cards: [
+            for (final rec in r.localRecs!.take(_maxCards))
+              PlacePhotoCard(
+                data: PlaceCardData.localRec(rec,
+                    photoUrl: photoUrl(rec.photoRef)),
+                onTap: () => openMaps(rec.name, rec.placeId),
+                onAddToTrip: signedIn
+                    ? () => addToTrip(AddToTripPayload.fromLocalRec(rec))
+                    : null,
+              ),
+          ],
+        ),
+      if (r.events != null && r.events!.isNotEmpty)
+        PlacePhotoStrip(
+          icon: Icons.local_activity,
+          accent: AppColors.toolEvents,
+          label: label(l10n.chatChipEvents(r.events!.length), r.eventsCity),
+          onViewTrip: onHeaderTap,
+          cards: [
+            for (final event in r.events!.take(_maxCards))
+              PlacePhotoCard(
+                data: PlaceCardData.event(event),
+                onTap: event.url.isEmpty
+                    ? null
+                    : () => trackedLaunchUrl(context, event.url,
+                        provider: 'ticketmaster',
+                        surface: 'chat_event_card'),
+                onAddToTrip: signedIn
+                    ? () => addToTrip(AddToTripPayload.fromEvent(event))
+                    : null,
+              ),
+          ],
+        ),
+    ];
+
+    if (strips.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch, children: strips),
+    );
+  }
+}
+
 /// One quiet summary line per result set the agent found. The full results
 /// live on the trip detail screen (booking checklist, embedded events,
 /// itinerary pins), so the chat only names what arrived and links there.
+/// Recommendation-shaped results (places, local picks, events) render as
+/// photo rails in [_ResultStrips] instead of chips here.
 class _ResultChips extends ConsumerWidget {
   final ProviderListenable<PlanState> state;
   final ProviderListenable<PlanNotifier> notifier;
@@ -888,10 +1025,6 @@ class _ResultChips extends ConsumerWidget {
     final r = ref.watch(state.select((s) => (
           flights: s.flightOffers,
           flightRoute: s.flightRouteLabel,
-          localRecs: s.localRecs,
-          localRecsCity: s.localRecsCity,
-          events: s.eventResults,
-          eventsCity: s.eventsCityLabel,
           ferries: s.ferryOptions,
           ferryRoute: s.ferryRouteLabel,
           eventLinks: s.eventLinks,
@@ -919,21 +1052,6 @@ class _ResultChips extends ConsumerWidget {
           accent: AppColors.toolFlights,
           label: label(
               l10n.chatChipFlightOptions(r.flights!.length), r.flightRoute),
-          onTap: onTap,
-        ),
-      if (r.localRecs != null && r.localRecs!.isNotEmpty)
-        ResultSummaryChip(
-          icon: Icons.verified,
-          accent: AppColors.toolLocal,
-          label: label(
-              l10n.chatChipLocalPicks(r.localRecs!.length), r.localRecsCity),
-          onTap: onTap,
-        ),
-      if (r.events != null && r.events!.isNotEmpty)
-        ResultSummaryChip(
-          icon: Icons.local_activity,
-          accent: AppColors.toolEvents,
-          label: label(l10n.chatChipEvents(r.events!.length), r.eventsCity),
           onTap: onTap,
         ),
       if (r.ferries != null && r.ferries!.isNotEmpty)

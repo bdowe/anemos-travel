@@ -21,8 +21,8 @@ class AnalyticsApiService {
 
   /// Records a place added to a trip from a browse surface
   /// (specs/add-to-itinerary). [source] is one of the server's closed set:
-  /// 'local_rec', 'event', or 'guide_pin'. Authed-only: _record drops it
-  /// for anonymous sessions since it isn't on the anonymous whitelist.
+  /// 'local_rec', 'event', 'guide_pin', or 'chat_place'. Authed-only: _record
+  /// drops it for anonymous sessions since it isn't on the anonymous whitelist.
   Future<void> recordItineraryItemAdded({
     required String tripId,
     required String source,

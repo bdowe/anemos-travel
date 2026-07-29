@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/plan_message.dart';
+import '../models/agent_place.dart';
 import '../models/flight_offer.dart';
 import '../models/event.dart';
 import '../models/ferry_option.dart';
@@ -46,6 +47,16 @@ class PlanState {
   final String? eventLinksCity;
   final List<LocalRecommendation>? localRecs;
   final String? localRecsCity;
+
+  /// Google places the agent surfaced this turn (SSE `places`) — the photo
+  /// card strip's data. Replaced whole, never mutated; nulled per turn and on
+  /// itinerary turns (search_places doubles as geocoding there, so a leftover
+  /// strip would be noise under the itinerary banner).
+  final List<AgentPlace>? places;
+
+  /// The search query behind [places], for the strip's header label.
+  final String? placesQuery;
+
   // Either a friendly String the /plan SSE stream sent, or a raw caught error
   // (ApiException) from a failed connect. friendlyError() renders both: it
   // passes a String through unchanged and classifies an ApiException.
@@ -106,6 +117,8 @@ class PlanState {
     this.eventLinksCity,
     this.localRecs,
     this.localRecsCity,
+    this.places,
+    this.placesQuery,
     this.error,
     this.queuedMessages = const [],
     this.suggestedReplies = const [],
@@ -135,6 +148,8 @@ class PlanState {
     Object? eventLinksCity = _sentinel,
     Object? localRecs = _sentinel,
     Object? localRecsCity = _sentinel,
+    Object? places = _sentinel,
+    Object? placesQuery = _sentinel,
     Object? error = _sentinel,
     List<QueuedMessage>? queuedMessages,
     List<String>? suggestedReplies,
@@ -165,6 +180,8 @@ class PlanState {
       eventLinksCity: eventLinksCity == _sentinel ? this.eventLinksCity : eventLinksCity as String?,
       localRecs: localRecs == _sentinel ? this.localRecs : localRecs as List<LocalRecommendation>?,
       localRecsCity: localRecsCity == _sentinel ? this.localRecsCity : localRecsCity as String?,
+      places: places == _sentinel ? this.places : places as List<AgentPlace>?,
+      placesQuery: placesQuery == _sentinel ? this.placesQuery : placesQuery as String?,
       error: error == _sentinel ? this.error : error,
       queuedMessages: queuedMessages ?? this.queuedMessages,
       suggestedReplies: suggestedReplies ?? this.suggestedReplies,
@@ -316,6 +333,8 @@ class PlanNotifier extends StateNotifier<PlanState> {
       eventLinksCity: null,
       localRecs: null,
       localRecsCity: null,
+      places: null,
+      placesQuery: null,
       error: null,
       suggestedReplies: [],
       profileUpdateNote: null,
@@ -415,6 +434,10 @@ class PlanNotifier extends StateNotifier<PlanState> {
               completedSummary: summary,
               savedTripId: event.data['trip_id'] as String?,
               suggestedReplies: [],
+              // The itinerary banner owns this turn; any places strip would be
+              // geocoding leftovers (covers the places-then-done order).
+              places: null,
+              placesQuery: null,
             );
 
           case 'trip_updated':
@@ -423,6 +446,8 @@ class PlanNotifier extends StateNotifier<PlanState> {
               tripUpdateCount: state.tripUpdateCount + 1,
               tripUpdatedThisTurn: true,
               suggestedReplies: [],
+              places: null,
+              placesQuery: null,
             );
 
           case 'profile_updated':
@@ -511,6 +536,23 @@ class PlanNotifier extends StateNotifier<PlanState> {
             state = state.copyWith(
               localRecs: recs,
               localRecsCity: event.data['city'] as String?,
+            );
+
+          case 'places':
+            // search_places also runs as geocoding during itinerary builds; an
+            // itinerary turn's banner owns the tail, so drop the strip data —
+            // same guard suggest_replies uses (covers the done-then-places
+            // order; places-then-done is cleared in the done case).
+            if (itineraryThisTurn) break;
+            final raw = event.data['places'] as List<dynamic>? ?? [];
+            final places = raw
+                .map((e) => AgentPlace.fromJson(e as Map<String, dynamic>))
+                .toList();
+            // Replaced whole (record-select invariant); last-write-wins
+            // within a turn, matching flights/events.
+            state = state.copyWith(
+              places: places,
+              placesQuery: event.data['query'] as String?,
             );
 
           case 'error':
