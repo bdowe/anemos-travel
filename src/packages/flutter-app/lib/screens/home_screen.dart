@@ -20,6 +20,7 @@ import '../widgets/continue_chats_section.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/language_menu_button.dart';
 import '../widgets/live_trip_card.dart';
+import '../widgets/near_me_chip.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
 import 'guides_screen.dart';
@@ -72,10 +73,14 @@ class HomeScreen extends ConsumerWidget {
 
     // The chat is a persistent tab, so "Let's go" / a suggestion switches to it
     // (and seeds the message) rather than pushing a one-off screen.
-    void startPlanning({String? initialMessage}) {
+    // displayLabel renders the seed as a compact context chip (near-me sends
+    // coordinates the traveler shouldn't have to read back).
+    void startPlanning({String? initialMessage, String? displayLabel}) {
       ref.read(navIndexProvider.notifier).state = AppTab.plan.index;
       if (initialMessage != null && initialMessage.isNotEmpty) {
-        ref.read(planProvider.notifier).sendMessage(initialMessage);
+        ref
+            .read(planProvider.notifier)
+            .sendMessage(initialMessage, displayLabel: displayLabel);
       }
     }
 
@@ -136,9 +141,19 @@ class HomeScreen extends ConsumerWidget {
                 // AI Travel Agent entry: the full photo hero sells the
                 // product to a brand-new account; returning users get a slim
                 // strip with the same CTA so their trips stay above the fold.
-                if (returning)
-                  _PlanStrip(onStart: startPlanning)
-                else
+                if (returning) ...[
+                  _PlanStrip(onStart: startPlanning),
+                  // The strip row is width-starved on phones, so the near-me
+                  // starter sits on its own line beneath it.
+                  const SizedBox(height: AppSpacing.sm),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: NearMeChip(
+                      onSend: (text, {displayLabel}) => startPlanning(
+                          initialMessage: text, displayLabel: displayLabel),
+                    ),
+                  ),
+                ] else
                   _AgentHeroCard(onStart: startPlanning),
 
                 SizedBox(height: returning ? AppSpacing.lg : AppSpacing.xl),
@@ -200,7 +215,7 @@ class HomeScreen extends ConsumerWidget {
 /// [_RecentTripCard]/[LiveTripCard]. No photo, no suggestion chips; the Plan
 /// tab has free input.
 class _PlanStrip extends StatelessWidget {
-  final void Function({String? initialMessage}) onStart;
+  final void Function({String? initialMessage, String? displayLabel}) onStart;
 
   const _PlanStrip({required this.onStart});
 
@@ -304,7 +319,7 @@ class _GreetingHeader extends StatelessWidget {
 }
 
 class _AgentHeroCard extends StatelessWidget {
-  final void Function({String? initialMessage}) onStart;
+  final void Function({String? initialMessage, String? displayLabel}) onStart;
 
   const _AgentHeroCard({required this.onStart});
 
@@ -409,17 +424,25 @@ class _AgentHeroCard extends StatelessWidget {
           Wrap(
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
-            children: _suggestions(l10n)
-                .map((s) => ActionChip(
-                      label: Text(s,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                              color: AppColors.brandDark,
-                              fontWeight: FontWeight.w500)),
-                      backgroundColor: Colors.white,
-                      side: BorderSide.none,
-                      onPressed: () => onStart(initialMessage: s),
-                    ))
-                .toList(),
+            children: [
+              NearMeChip(
+                onSend: (text, {displayLabel}) => onStart(
+                    initialMessage: text, displayLabel: displayLabel),
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.brandDark,
+                labelStyle: theme.textTheme.labelMedium?.copyWith(
+                    color: AppColors.brandDark, fontWeight: FontWeight.w500),
+              ),
+              ..._suggestions(l10n).map((s) => ActionChip(
+                    label: Text(s,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                            color: AppColors.brandDark,
+                            fontWeight: FontWeight.w500)),
+                    backgroundColor: Colors.white,
+                    side: BorderSide.none,
+                    onPressed: () => onStart(initialMessage: s),
+                  )),
+            ],
           ),
         ],
       ),

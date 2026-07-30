@@ -3070,4 +3070,33 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get errorGeneric => 'Algo salió mal. Inténtalo de nuevo.';
+
+  @override
+  String get nearMeChipLabel => '¿Qué hay cerca de mí?';
+
+  @override
+  String get nearMeSeedLabel => 'Cerca de mi ubicación actual';
+
+  @override
+  String nearMeSeedMessage(String lat, String lng, String accuracy) {
+    return 'Mi ubicación actual es latitud $lat, longitud $lng (precisión de unos $accuracy m). ¿Qué hay bueno para ver, hacer o comer cerca de mí ahora mismo?';
+  }
+
+  @override
+  String nearMeManualMessage(String place) {
+    return 'Estoy en $place. ¿Qué hay bueno para ver, hacer o comer por la zona ahora mismo?';
+  }
+
+  @override
+  String get nearMeDialogTitle => '¿Dónde estás?';
+
+  @override
+  String get nearMeDialogMessage =>
+      'No pudimos obtener tu ubicación. Escribe una ciudad o un barrio, o activa el acceso a la ubicación e inténtalo de nuevo.';
+
+  @override
+  String get nearMeDialogHint => 'p. ej. Atenas, Plaka';
+
+  @override
+  String get nearMeDialogCta => 'Preguntar';
 }

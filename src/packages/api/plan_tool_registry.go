@@ -125,6 +125,10 @@ var planToolRegistry = []planTool{
 	// shape, and gate-free keeps each shape's tools array a pure append
 	// (prompt-cache prefix rule).
 	{def: suggestRepliesTool, run: runSuggestRepliesTool},
+	// Location-biased place search for "what's near me" sessions. No gate, and
+	// tail-appended: the tools array is part of the prompt-cache prefix (see
+	// header comment) — never insert mid-list.
+	{def: searchNearbyTool, run: runSearchNearbyTool},
 }
 
 // planToolByName dispatches tool_use blocks; derived from the registry so the
@@ -163,6 +167,28 @@ var searchPlacesTool = anthropic.ToolParam{
 			},
 		},
 		Required: []string{"query"},
+	},
+}
+
+var searchNearbyTool = anthropic.ToolParam{
+	Name:        "search_nearby",
+	Description: anthropic.String("Search for places near specific GPS coordinates — use this INSTEAD of search_places whenever the traveler shares their current location or asks what's around them right now. Results are biased to within a short walk or ride of the coordinates; prefer the closest good options and mention rough distances. The result addresses tell you which city the traveler is in — once you know it, also call search_local_recommendations with that city for curated local picks."),
+	InputSchema: anthropic.ToolInputSchemaParam{
+		Properties: map[string]any{
+			"query": map[string]any{
+				"type":        "string",
+				"description": "What to look for, e.g. 'restaurants', 'coffee', 'things to do', 'live music tonight'",
+			},
+			"latitude": map[string]any{
+				"type":        "number",
+				"description": "Latitude in decimal degrees, e.g. 37.9838",
+			},
+			"longitude": map[string]any{
+				"type":        "number",
+				"description": "Longitude in decimal degrees, e.g. 23.7276",
+			},
+		},
+		Required: []string{"query", "latitude", "longitude"},
 	},
 }
 
@@ -434,6 +460,38 @@ func runSearchPlacesTool(s *planSession, input json.RawMessage) (string, bool) {
 	}
 	// Photo cards for the chat window; the model's tool_result below is
 	// unchanged (photo fields are json:"-" on PlaceSearchResult).
+	if len(results) > 0 {
+		sendSSE(s.w, "places", map[string]any{
+			"query":  in.Query,
+			"places": placeCards(results, planPlacesCardCap),
+		})
+	}
+	b, _ := json.Marshal(results)
+	return string(b), false
+}
+
+func runSearchNearbyTool(s *planSession, input json.RawMessage) (string, bool) {
+	var in struct {
+		Query     string  `json:"query"`
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	}
+	json.Unmarshal(input, &in)
+
+	// (0,0) is the null island a zero-valued unmarshal produces, never a real
+	// traveler position — reject it along with out-of-range values before
+	// spending a Google call.
+	if in.Latitude < -90 || in.Latitude > 90 || in.Longitude < -180 || in.Longitude > 180 ||
+		(in.Latitude == 0 && in.Longitude == 0) {
+		return "Invalid coordinates; ask the traveler where they are instead.", true
+	}
+
+	results, err := placesService.SearchPlacesNearby(s.ctx, in.Query, in.Latitude, in.Longitude)
+	if err != nil {
+		return fmt.Sprintf("Error searching nearby: %v", err), true
+	}
+	// Same `places` SSE side event as search_places, so the client photo strip
+	// renders nearby results with zero changes.
 	if len(results) > 0 {
 		sendSSE(s.w, "places", map[string]any{
 			"query":  in.Query,

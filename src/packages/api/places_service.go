@@ -218,11 +218,38 @@ var placesService = NewGooglePlacesService()
 // slow Google lookup instead of blocking — critical on the synchronous /plan
 // agent path.
 func (gps *GooglePlacesService) SearchPlaces(ctx context.Context, query string) ([]PlaceSearchResult, error) {
+	cacheKey := strings.ToLower(strings.TrimSpace(query))
+	return gps.textSearch(ctx, cacheKey, query, nil)
+}
+
+// nearbySearchRadiusMeters is the location-bias radius sent with
+// SearchPlacesNearby. Text Search treats location+radius as a bias, not a hard
+// filter — Google may still return farther results for sparse queries.
+const nearbySearchRadiusMeters = 3000
+
+// SearchPlacesNearby is SearchPlaces with a location bias, for "what's near
+// me" lookups. Coordinates are rounded to 4 decimals (~11 m) before both the
+// request and the cache key, so jittery client GPS fixes share cache entries
+// and precise positions never reach the URL.
+func (gps *GooglePlacesService) SearchPlacesNearby(ctx context.Context, query string, lat, lng float64) ([]PlaceSearchResult, error) {
+	loc := fmt.Sprintf("%.4f,%.4f", lat, lng)
+	// The "|lat,lng|radius" suffix keeps biased entries disjoint from plain
+	// SearchPlaces keys in the shared cache.
+	cacheKey := fmt.Sprintf("%s|%s|%d", strings.ToLower(strings.TrimSpace(query)), loc, nearbySearchRadiusMeters)
+	return gps.textSearch(ctx, cacheKey, query, func(params url.Values) {
+		params.Add("location", loc)
+		params.Add("radius", strconv.Itoa(nearbySearchRadiusMeters))
+	})
+}
+
+// textSearch is the shared Text Search body behind SearchPlaces and
+// SearchPlacesNearby: cache check, request, decode. extraParams (optional)
+// appends variant-specific query parameters.
+func (gps *GooglePlacesService) textSearch(ctx context.Context, cacheKey, query string, extraParams func(url.Values)) ([]PlaceSearchResult, error) {
 	if gps.APIKey == "" {
 		return nil, fmt.Errorf("Google Places API key not configured")
 	}
 
-	cacheKey := strings.ToLower(strings.TrimSpace(query))
 	if cached, ok := gps.searchCache.get(cacheKey); ok {
 		gps.searchCalls.cacheHits.Add(1)
 		return cached, nil
@@ -236,6 +263,9 @@ func (gps *GooglePlacesService) SearchPlaces(ctx context.Context, query string) 
 	// come back localized (specs/i18n-spanish). Falls back to "en" outside a
 	// request, which is what background callers want anyway.
 	params.Add("language", requestLocale(ctx))
+	if extraParams != nil {
+		extraParams(params)
+	}
 
 	gps.searchCalls.upstream.Add(1)
 	resp, err := gps.doGet(ctx, placesTextSearchURL+"?"+params.Encode())

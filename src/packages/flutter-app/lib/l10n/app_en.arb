@@ -1996,5 +1996,33 @@
   "errorTooManyRequests": "You're going a little too fast — wait a moment and try again.",
   "errorSession": "Your session has expired. Please sign in again.",
   "errorServer": "Something went wrong on our end. Please try again in a moment.",
-  "errorGeneric": "Something went wrong. Please try again."
+  "errorGeneric": "Something went wrong. Please try again.",
+  "nearMeChipLabel": "What's near me?",
+  "nearMeSeedLabel": "Near my current location",
+  "nearMeSeedMessage": "My current location is latitude {lat}, longitude {lng} (accuracy about {accuracy} m). What's good to see, do, or eat near me right now?",
+  "@nearMeSeedMessage": {
+    "placeholders": {
+      "lat": {
+        "type": "String"
+      },
+      "lng": {
+        "type": "String"
+      },
+      "accuracy": {
+        "type": "String"
+      }
+    }
+  },
+  "nearMeManualMessage": "I'm in {place}. What's good to see, do, or eat nearby right now?",
+  "@nearMeManualMessage": {
+    "placeholders": {
+      "place": {
+        "type": "String"
+      }
+    }
+  },
+  "nearMeDialogTitle": "Where are you?",
+  "nearMeDialogMessage": "We couldn't get your location. Type a city or neighborhood instead, or enable location access and try again.",
+  "nearMeDialogHint": "e.g. Athens, Plaka",
+  "nearMeDialogCta": "Ask"
 }

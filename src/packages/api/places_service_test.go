@@ -426,3 +426,88 @@ func TestStripHTMLTags(t *testing.T) {
 		}
 	}
 }
+
+// urlRecordingTransport is countingTransport plus a capture of each request
+// URL, so tests can assert exactly which query parameters reach Google.
+type urlRecordingTransport struct {
+	calls int
+	body  string
+	urls  []string
+}
+
+func (u *urlRecordingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	u.calls++
+	u.urls = append(u.urls, r.URL.String())
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(u.body)),
+	}, nil
+}
+
+// SearchPlacesNearby must send the location bias (rounded to 4 decimals) and
+// radius; plain SearchPlaces must keep sending neither.
+func TestSearchPlacesNearbySendsLocationBias(t *testing.T) {
+	rt := &urlRecordingTransport{body: fakeTextSearchJSON}
+	svc := NewGooglePlacesService()
+	svc.APIKey = "test-key"
+	svc.Client = &http.Client{Transport: rt}
+
+	if _, err := svc.SearchPlacesNearby(context.Background(), "coffee", 37.98381, 23.72759); err != nil {
+		t.Fatalf("nearby search failed: %v", err)
+	}
+	if _, err := svc.SearchPlaces(context.Background(), "coffee shops athens"); err != nil {
+		t.Fatalf("plain search failed: %v", err)
+	}
+	if len(rt.urls) != 2 {
+		t.Fatalf("Google called %d times, want 2", len(rt.urls))
+	}
+
+	nearby, plain := rt.urls[0], rt.urls[1]
+	if !strings.Contains(nearby, "location=37.9838%2C23.7276") {
+		t.Fatalf("nearby URL missing rounded location bias: %s", nearby)
+	}
+	if !strings.Contains(nearby, "radius=3000") {
+		t.Fatalf("nearby URL missing radius: %s", nearby)
+	}
+	for _, param := range []string{"location=", "radius="} {
+		if strings.Contains(plain, param) {
+			t.Fatalf("plain search URL gained %q: %s", param, plain)
+		}
+	}
+}
+
+// Biased and unbiased lookups of the same query must occupy disjoint cache
+// entries, distinct coordinates must not collide, and GPS jitter past 4
+// decimals must land on the same entry (no per-fix billing).
+func TestSearchPlacesNearbyCacheKeySeparation(t *testing.T) {
+	rt := &countingTransport{body: fakeTextSearchJSON}
+	svc := NewGooglePlacesService()
+	svc.APIKey = "test-key"
+	svc.Client = &http.Client{Transport: rt}
+	ctx := context.Background()
+
+	if _, err := svc.SearchPlaces(ctx, "coffee"); err != nil {
+		t.Fatalf("plain search failed: %v", err)
+	}
+	if _, err := svc.SearchPlacesNearby(ctx, "coffee", 37.9838, 23.7276); err != nil {
+		t.Fatalf("nearby A failed: %v", err)
+	}
+	if _, err := svc.SearchPlacesNearby(ctx, "coffee", 38.7223, -9.1393); err != nil {
+		t.Fatalf("nearby B failed: %v", err)
+	}
+	if rt.calls != 3 {
+		t.Fatalf("Google called %d times, want 3 (plain + two coordinate sets)", rt.calls)
+	}
+
+	// Same position modulo sub-11m jitter: must be a cache hit.
+	if _, err := svc.SearchPlacesNearby(ctx, "coffee", 37.98381, 23.72757); err != nil {
+		t.Fatalf("nearby A repeat failed: %v", err)
+	}
+	if rt.calls != 3 {
+		t.Fatalf("jittered repeat hit Google (calls=%d), want cache hit", rt.calls)
+	}
+	if got := svc.searchCalls.snapshot(); got.Upstream != 3 || got.CacheHits != 1 {
+		t.Fatalf("search counters = %+v, want upstream=3 cache_hits=1", got)
+	}
+}
