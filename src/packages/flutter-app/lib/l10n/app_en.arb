@@ -1093,6 +1093,18 @@
       }
     }
   },
+  "importFromAi": "Import from AI chat",
+  "importExplainer": "Planned a trip in ChatGPT or Claude? Paste the conversation — or its final summary — and we'll turn it into a trip you can edit.",
+  "importCopyPrompt": "Copy planning prompt",
+  "importPromptCopied": "Prompt copied — paste it into ChatGPT or Claude to start planning.",
+  "importPasteButton": "Paste",
+  "importPasteHint": "Paste your conversation or trip summary here…",
+  "importButton": "Import trip",
+  "importProgressReading": "Reading your conversation…",
+  "importProgressLocating": "Finding places on the map…",
+  "importWarningsTitle": "Some places need attention",
+  "importViewTrip": "View trip",
+  "importPlanningPrompt": "Help me plan a trip. Ask about my destination, dates, interests, pace, and budget, then build a day-by-day itinerary. When we're done, finish with a section titled TRIP SUMMARY that lists: the destination(s) and exact travel dates; each day as \"Day N — City\" with Morning / Afternoon / Evening entries, each written as \"Place Name — City\" using real, mappable place names; day trips marked as \"day trip from [city]\"; and how I'm traveling between cities (flight, car, train, bus, or ferry).",
   "homeGreetingMorning": "Good morning",
   "homeGreetingAfternoon": "Good afternoon",
   "homeGreetingEvening": "Good evening",

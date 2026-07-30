@@ -1660,6 +1660,46 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get importFromAi => 'Importar de un chat de IA';
+
+  @override
+  String get importExplainer =>
+      '¿Planeaste un viaje en ChatGPT o Claude? Pega la conversación — o su resumen final — y la convertiremos en un viaje que puedes editar.';
+
+  @override
+  String get importCopyPrompt => 'Copiar prompt de planificación';
+
+  @override
+  String get importPromptCopied =>
+      'Prompt copiado — pégalo en ChatGPT o Claude para empezar a planear.';
+
+  @override
+  String get importPasteButton => 'Pegar';
+
+  @override
+  String get importPasteHint =>
+      'Pega aquí tu conversación o el resumen del viaje…';
+
+  @override
+  String get importButton => 'Importar viaje';
+
+  @override
+  String get importProgressReading => 'Leyendo tu conversación…';
+
+  @override
+  String get importProgressLocating => 'Ubicando lugares en el mapa…';
+
+  @override
+  String get importWarningsTitle => 'Algunos lugares necesitan atención';
+
+  @override
+  String get importViewTrip => 'Ver viaje';
+
+  @override
+  String get importPlanningPrompt =>
+      'Ayúdame a planear un viaje. Pregúntame por el destino, las fechas, mis intereses, el ritmo y el presupuesto, y luego arma un itinerario día por día. Al terminar, cierra con una sección titulada TRIP SUMMARY que incluya: el o los destinos y las fechas exactas del viaje; cada día como \"Día N — Ciudad\" con entradas de Mañana / Tarde / Noche, cada una escrita como \"Nombre del lugar — Ciudad\" usando nombres reales que se puedan ubicar en el mapa; las excursiones marcadas como \"excursión desde [ciudad]\"; y cómo me traslado entre ciudades (avión, coche, tren, autobús o ferry).';
+
+  @override
   String get homeGreetingMorning => 'Buenos días';
 
   @override

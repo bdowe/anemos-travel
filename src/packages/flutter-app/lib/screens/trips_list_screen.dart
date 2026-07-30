@@ -20,6 +20,7 @@ import '../providers/live_trip_provider.dart';
 import '../providers/resumable_chats_provider.dart';
 import '../providers/shared_with_me_provider.dart';
 import '../providers/trips_provider.dart';
+import 'import_trip_screen.dart';
 import 'trip_detail_screen.dart';
 
 class TripsListScreen extends ConsumerStatefulWidget {
@@ -87,6 +88,13 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                 ref.read(navIndexProvider.notifier).state = AppTab.plan.index,
             icon: const Icon(Icons.auto_awesome),
             label: Text(l10n.tripsListPlanTrip),
+          ),
+          // Planned elsewhere (ChatGPT/Claude)? Paste it in instead
+          // (specs/import-trip-from-ai-chat).
+          OutlinedButton.icon(
+            onPressed: () => _openImport(context),
+            icon: const Icon(Icons.content_paste_go, size: 18),
+            label: Text(l10n.importFromAi),
           ),
         ],
       );
@@ -178,7 +186,14 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     return Scaffold(
       appBar: GradientAppBar(
         title: Text(l10n.tripsListTitle),
-        actions: const [AccountMenu()],
+        actions: [
+          IconButton(
+            tooltip: l10n.importFromAi,
+            icon: const Icon(Icons.content_paste_go),
+            onPressed: () => _openImport(context),
+          ),
+          const AccountMenu(),
+        ],
       ),
       body: body,
     );
@@ -188,6 +203,12 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
 void _openTrip(BuildContext context, String tripId) {
   Navigator.of(context).push(
     MaterialPageRoute(builder: (_) => TripDetailScreen(tripId: tripId)),
+  );
+}
+
+void _openImport(BuildContext context) {
+  Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => const ImportTripScreen()),
   );
 }
 

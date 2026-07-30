@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../models/import_trip_result.dart';
 import '../models/itinerary_item.dart';
 import '../models/shared_trip.dart';
 import '../models/trip.dart';
@@ -308,6 +309,33 @@ class TripsApiService {
     throw Exception('Shared trip not found (${res.statusCode})');
   }
 
+  /// Turns a pasted external-AI conversation into a persisted trip
+  /// (specs/import-trip-from-ai-chat). Server-side this is one extraction call
+  /// plus place resolution, so expect seconds, not milliseconds. Throws
+  /// [ImportTripException] carrying the server's localized message (422s like
+  /// "no trip found" are user-displayable).
+  Future<ImportTripResult> importTrip(String text, {String? source}) async {
+    final res = await apiClient.httpClient.post(
+      Uri.parse('${apiClient.baseUrl}/trips/import'),
+      headers: apiClient.jsonHeaders(json: true),
+      body: jsonEncode({
+        'text': text,
+        if (source != null) 'source': source,
+      }),
+    );
+    if (res.statusCode == 201) {
+      return ImportTripResult.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    }
+    String message = '';
+    try {
+      final body = jsonDecode(res.body);
+      if (body is Map && body['message'] is String) {
+        message = body['message'] as String;
+      }
+    } catch (_) {}
+    throw ImportTripException(statusCode: res.statusCode, message: message);
+  }
+
   /// Copies a shared trip into the signed-in caller's trips (status draft).
   Future<Trip> duplicateSharedTrip(String token) async {
     final res = await apiClient.httpClient.post(
@@ -364,4 +392,17 @@ class TripsApiService {
       throw Exception('Failed to delete trip (${res.statusCode})');
     }
   }
+}
+
+/// Import failure with the server's localized message when one was provided.
+/// 422s ("no trip found in the text", trip cap) are written for end users;
+/// [message] is empty when the response carried none.
+class ImportTripException implements Exception {
+  final int statusCode;
+  final String message;
+
+  const ImportTripException({required this.statusCode, this.message = ''});
+
+  @override
+  String toString() => 'ImportTripException($statusCode): $message';
 }
