@@ -1647,6 +1647,49 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get connectAppBarTitle => 'Connect app';
+
+  @override
+  String connectTitle(String app) {
+    return 'Connect $app to Golden Tempo?';
+  }
+
+  @override
+  String get connectUnverifiedCaution =>
+      'This name was provided by the app itself and hasn\'t been verified by us. Only continue if you started this from an app you trust.';
+
+  @override
+  String get connectWillBeAbleTo => 'It will be able to:';
+
+  @override
+  String get connectScopeTripsWrite =>
+      'Create trips in your account and see your trip list';
+
+  @override
+  String get connectScopeRecsRead =>
+      'Search Golden Tempo\'s local recommendations';
+
+  @override
+  String get connectSignInPrompt =>
+      'Sign in to your Golden Tempo account to continue.';
+
+  @override
+  String get connectSignInCta => 'Sign in';
+
+  @override
+  String get connectApprove => 'Connect';
+
+  @override
+  String get connectDeny => 'Cancel';
+
+  @override
+  String get connectExpiredTitle => 'This request expired';
+
+  @override
+  String get connectExpiredMessage =>
+      'Start the connection again from your AI assistant.';
+
+  @override
   String get importFromAi => 'Import from AI chat';
 
   @override

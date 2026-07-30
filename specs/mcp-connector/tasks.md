@@ -15,9 +15,9 @@
 - [x] Integration tests: full dance + negative matrix
 
 ## PR 3 — Flutter consent
-- [ ] `connect/<request-token>` + `trip/<id>` routes in generateRoute
-- [ ] `ConnectAppScreen` (sign-in gate, consent, deny, expired states)
-- [ ] ARB strings en+es + regen
+- [x] `connect/<request-token>` + `trip/<id>` routes in generateRoute
+- [x] `ConnectAppScreen` (sign-in gate, consent, deny, expired states)
+- [x] ARB strings en+es + regen
 
 ## PR 4 — MCP server
 - [ ] go-sdk dep; stateless StreamableHTTP handler at /mcp
