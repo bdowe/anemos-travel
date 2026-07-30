@@ -52,7 +52,10 @@ func corsMiddleware(next http.Handler) http.Handler {
 		if allowed[origin] {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept")
+			// Mcp-* headers are what browser-based MCP clients (the MCP
+			// Inspector) send; without them /mcp preflight fails there.
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id, Mcp-Protocol-Version")
+			w.Header().Set("Access-Control-Expose-Headers", "Mcp-Session-Id, WWW-Authenticate")
 			w.Header().Add("Vary", "Origin")
 		}
 
@@ -661,6 +664,11 @@ func buildRouter() *mux.Router {
 	router.HandleFunc("/.well-known/oauth-authorization-server", oauthServerMetadataHandler).Methods("GET")
 	router.HandleFunc("/.well-known/openid-configuration", oauthServerMetadataHandler).Methods("GET")
 
+	// The MCP endpoint itself: Streamable HTTP, Bearer-authenticated with the
+	// OAuth tokens above. Root-level because connector URLs are configured by
+	// hand and /api/v1 would be noise; nginx proxies it like /api/.
+	router.Handle("/mcp", newMCPHandler()).Methods("POST", "GET", "DELETE")
+
 	// API versioning
 	api := router.PathPrefix("/api/v1").Subrouter()
 	api.HandleFunc("/hello", helloHandler).Methods("GET")
@@ -735,6 +743,7 @@ func buildRouter() *mux.Router {
 	api.Handle("/oauth/authorize/context", strict(http.HandlerFunc(oauthAuthorizeContextHandler))).Methods("POST")
 	api.Handle("/oauth/authorize/decision", strict(authMiddleware(http.HandlerFunc(oauthAuthorizeDecisionHandler)))).Methods("POST")
 	api.Handle("/oauth/token", strict(http.HandlerFunc(oauthTokenHandler))).Methods("POST")
+	api.HandleFunc("/mcp/availability", mcpAvailabilityHandler).Methods("GET")
 	// admin composes the auth + admin gate; used for curation and version-history routes.
 	admin := func(h http.HandlerFunc) http.Handler { return authMiddleware(adminMiddleware(h)) }
 	api.Handle("/trips", authMiddleware(http.HandlerFunc(listTripsHandler))).Methods("GET")
