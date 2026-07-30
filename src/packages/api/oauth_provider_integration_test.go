@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -357,5 +358,66 @@ func TestOAuthDiscoveryDocuments(t *testing.T) {
 	methods := meta["code_challenge_methods_supported"].([]any)
 	if len(methods) != 1 || methods[0] != "S256" {
 		t.Errorf("code_challenge_methods = %v", methods)
+	}
+}
+
+// A connector links an account in five rapid calls (register, authorize,
+// context, decision, token) and vendors egress from shared IPs — the OAuth
+// endpoints must not sit on the strict 5/min tier, where one user's link
+// would throttle the next user's (found end-to-end against the dev stack).
+func TestOAuthDanceSurvivesFromOneIP(t *testing.T) {
+	resetDB(t)
+	mcpTestEnv(t)
+	const redirectURI = "https://ai.example/callback"
+	ip := nextTestIP()
+
+	// Three consecutive full links from the SAME address, as three users
+	// behind one connector egress IP would produce.
+	for i := 0; i < 3; i++ {
+		user, sessionToken := createTestUser(t, fmt.Sprintf("shared%d@example.com", i))
+		_ = user
+
+		rec := doJSONFromIP(t, http.MethodPost, "/api/v1/oauth/register", "", ip, map[string]any{
+			"client_name": "Shared AI", "redirect_uris": []string{redirectURI},
+		})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("link %d register: status = %d, body %s", i, rec.Code, rec.Body.String())
+		}
+		clientID := decode(t, rec)["client_id"].(string)
+
+		verifier, _ := randomURLToken()
+		authURL := "/api/v1/oauth/authorize?" + url.Values{
+			"client_id": {clientID}, "redirect_uri": {redirectURI}, "response_type": {"code"},
+			"code_challenge": {pkceChallenge(verifier)}, "code_challenge_method": {"S256"},
+		}.Encode()
+		rec = doJSONFromIP(t, http.MethodGet, authURL, "", ip, nil)
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("link %d authorize: status = %d", i, rec.Code)
+		}
+		requestToken := strings.TrimPrefix(rec.Header().Get("Location"), "http://gt.test/connect/")
+
+		if rec = doJSONFromIP(t, http.MethodPost, "/api/v1/oauth/authorize/context", "", ip,
+			map[string]any{"request_token": requestToken}); rec.Code != http.StatusOK {
+			t.Fatalf("link %d context: status = %d", i, rec.Code)
+		}
+		rec = doJSONFromIP(t, http.MethodPost, "/api/v1/oauth/authorize/decision", sessionToken, ip,
+			map[string]any{"request_token": requestToken, "approve": true})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("link %d decision: status = %d, body %s", i, rec.Code, rec.Body.String())
+		}
+		redirectURL, _ := url.Parse(decode(t, rec)["redirect_url"].(string))
+		code := redirectURL.Query().Get("code")
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/oauth/token", strings.NewReader(url.Values{
+			"grant_type": {"authorization_code"}, "code": {code}, "code_verifier": {verifier},
+			"client_id": {clientID}, "redirect_uri": {redirectURI},
+		}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Forwarded-For", ip)
+		tokRec := httptest.NewRecorder()
+		testRouter.ServeHTTP(tokRec, req)
+		if tokRec.Code != http.StatusOK {
+			t.Fatalf("link %d token: status = %d, body %s", i, tokRec.Code, tokRec.Body.String())
+		}
 	}
 }

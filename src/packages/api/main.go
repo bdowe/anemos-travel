@@ -736,13 +736,23 @@ func buildRouter() *mux.Router {
 
 	// MCP connector OAuth provider (specs/mcp-connector): ChatGPT/claude.ai
 	// register via DCR, the browser consents at the app's /connect/ screen,
-	// tokens redeem here. All handlers gate on MCP_ENABLED. Credential-bearing
-	// endpoints take the strict tier; decision additionally requires auth.
-	api.Handle("/oauth/register", strict(http.HandlerFunc(oauthRegisterHandler))).Methods("POST")
-	api.Handle("/oauth/authorize", strict(http.HandlerFunc(oauthAuthorizeHandler))).Methods("GET")
-	api.Handle("/oauth/authorize/context", strict(http.HandlerFunc(oauthAuthorizeContextHandler))).Methods("POST")
-	api.Handle("/oauth/authorize/decision", strict(authMiddleware(http.HandlerFunc(oauthAuthorizeDecisionHandler)))).Methods("POST")
-	api.Handle("/oauth/token", strict(http.HandlerFunc(oauthTokenHandler))).Methods("POST")
+	// tokens redeem here. All handlers gate on MCP_ENABLED.
+	//
+	// Its OWN bucket, not the strict (5/min) tier: linking an account is five
+	// calls in a few seconds (register, authorize, context, decision, token),
+	// and connector vendors egress from shared IPs — on the strict tier one
+	// user's link would rate-limit the next user's, and could starve
+	// login/reset for anyone behind the same address. 30/min burst 15 fits
+	// several concurrent links while still bounding abuse; every endpoint
+	// underneath is independently protected (PKCE, single-use codes, and
+	// authMiddleware on the decision step).
+	oauthLimiter := newIPRateLimiter(30, 15)
+	oauthTier := rateLimitMiddleware(oauthLimiter)
+	api.Handle("/oauth/register", oauthTier(http.HandlerFunc(oauthRegisterHandler))).Methods("POST")
+	api.Handle("/oauth/authorize", oauthTier(http.HandlerFunc(oauthAuthorizeHandler))).Methods("GET")
+	api.Handle("/oauth/authorize/context", oauthTier(http.HandlerFunc(oauthAuthorizeContextHandler))).Methods("POST")
+	api.Handle("/oauth/authorize/decision", oauthTier(authMiddleware(http.HandlerFunc(oauthAuthorizeDecisionHandler)))).Methods("POST")
+	api.Handle("/oauth/token", oauthTier(http.HandlerFunc(oauthTokenHandler))).Methods("POST")
 	api.HandleFunc("/mcp/availability", mcpAvailabilityHandler).Methods("GET")
 	// Connected apps: always reachable (even with MCP_ENABLED off) so a user
 	// can always see and revoke a connection granted while it was on.
