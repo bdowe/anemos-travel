@@ -67,7 +67,10 @@ other failures → `error=` redirect; success → park + 302 to
 mint code; deny → access_denied; expired/used → 410); `POST /oauth/token`
 (form-encoded; constant-time S256 compare via `pkceChallenge`; code reuse →
 `RevokeOAuthTokensByAuthCode`; refresh rotation). Metadata on the general
-limiter tier, the rest strict. Integration tests drive the full dance with a
+limiter tier; the OAuth endpoints get their **own** bucket (30/min burst 15),
+NOT the strict 5/min tier — linking is five calls in seconds and connector
+vendors egress from shared IPs, so strict would make one user's link throttle
+the next user's and could starve login/reset behind the same address. Integration tests drive the full dance with a
 locally computed PKCE pair.
 
 ### PR 4 — MCP server (`mcp_server.go`, `mcp_tools.go`)
