@@ -179,6 +179,53 @@ type Notification struct {
 	CreatedAt time.Time          `json:"created_at"`
 }
 
+type OauthAuthCode struct {
+	ID               uuid.UUID          `json:"id"`
+	ClientID         uuid.UUID          `json:"client_id"`
+	RequestTokenHash string             `json:"request_token_hash"`
+	RedirectUri      string             `json:"redirect_uri"`
+	Scope            string             `json:"scope"`
+	State            string             `json:"state"`
+	CodeChallenge    string             `json:"code_challenge"`
+	UserID           pgtype.UUID        `json:"user_id"`
+	CodeHash         *string            `json:"code_hash"`
+	ApprovedAt       pgtype.Timestamptz `json:"approved_at"`
+	CodeUsedAt       pgtype.Timestamptz `json:"code_used_at"`
+	ExpiresAt        time.Time          `json:"expires_at"`
+	CreatedAt        time.Time          `json:"created_at"`
+}
+
+type OauthClient struct {
+	ID                      uuid.UUID          `json:"id"`
+	ClientName              string             `json:"client_name"`
+	RedirectUris            []string           `json:"redirect_uris"`
+	TokenEndpointAuthMethod string             `json:"token_endpoint_auth_method"`
+	CreatedAt               time.Time          `json:"created_at"`
+	LastUsedAt              pgtype.Timestamptz `json:"last_used_at"`
+}
+
+type OauthGrant struct {
+	ID         uuid.UUID          `json:"id"`
+	UserID     uuid.UUID          `json:"user_id"`
+	ClientID   uuid.UUID          `json:"client_id"`
+	Scope      string             `json:"scope"`
+	CreatedAt  time.Time          `json:"created_at"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+}
+
+type OauthToken struct {
+	ID               uuid.UUID          `json:"id"`
+	GrantID          uuid.UUID          `json:"grant_id"`
+	AuthCodeID       pgtype.UUID        `json:"auth_code_id"`
+	AccessTokenHash  string             `json:"access_token_hash"`
+	RefreshTokenHash string             `json:"refresh_token_hash"`
+	AccessExpiresAt  time.Time          `json:"access_expires_at"`
+	RefreshExpiresAt time.Time          `json:"refresh_expires_at"`
+	RevokedAt        pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt        time.Time          `json:"created_at"`
+}
+
 type PlanChatSession struct {
 	ID           uuid.UUID `json:"id"`
 	UserID       uuid.UUID `json:"user_id"`
