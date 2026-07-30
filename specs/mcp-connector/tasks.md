@@ -27,8 +27,8 @@
 - [x] Integration tests via go-sdk client (incl. context-propagation check)
 
 ## PR 5 — gateway + env
-- [ ] nginx blocks (deployment snippet + development conf)
-- [x] `GET /api/v1/mcp/availability` (env samples in PR 5)
+- [x] nginx blocks (deployment snippet + development conf)
+- [x] `MCP_ENABLED` in `.env.sample`s; `GET /api/v1/mcp/availability`
 - [ ] MCP Inspector pass on dev stack; deploy; ChatGPT + claude.ai manual pass
 
 ## PR 6 — connected apps
