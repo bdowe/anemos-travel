@@ -1660,6 +1660,49 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get connectAppBarTitle => 'Conectar app';
+
+  @override
+  String connectTitle(String app) {
+    return '¿Conectar $app a Golden Tempo?';
+  }
+
+  @override
+  String get connectUnverifiedCaution =>
+      'Este nombre lo proporcionó la propia app y no lo hemos verificado. Continúa solo si iniciaste esto desde una app en la que confías.';
+
+  @override
+  String get connectWillBeAbleTo => 'Podrá:';
+
+  @override
+  String get connectScopeTripsWrite =>
+      'Crear viajes en tu cuenta y ver tu lista de viajes';
+
+  @override
+  String get connectScopeRecsRead =>
+      'Buscar las recomendaciones locales de Golden Tempo';
+
+  @override
+  String get connectSignInPrompt =>
+      'Inicia sesión en tu cuenta de Golden Tempo para continuar.';
+
+  @override
+  String get connectSignInCta => 'Iniciar sesión';
+
+  @override
+  String get connectApprove => 'Conectar';
+
+  @override
+  String get connectDeny => 'Cancelar';
+
+  @override
+  String get connectExpiredTitle => 'Esta solicitud caducó';
+
+  @override
+  String get connectExpiredMessage =>
+      'Vuelve a iniciar la conexión desde tu asistente de IA.';
+
+  @override
   String get importFromAi => 'Importar de un chat de IA';
 
   @override

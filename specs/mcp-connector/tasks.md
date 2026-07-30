@@ -15,20 +15,20 @@
 - [x] Integration tests: full dance + negative matrix
 
 ## PR 3 — Flutter consent
-- [ ] `connect/<request-token>` + `trip/<id>` routes in generateRoute
-- [ ] `ConnectAppScreen` (sign-in gate, consent, deny, expired states)
-- [ ] ARB strings en+es + regen
+- [x] `connect/<request-token>` + `trip/<id>` routes in generateRoute
+- [x] `ConnectAppScreen` (sign-in gate, consent, deny, expired states)
+- [x] ARB strings en+es + regen
 
 ## PR 4 — MCP server
-- [ ] go-sdk dep; stateless StreamableHTTP handler at /mcp
-- [ ] `mcpAuthMiddleware` (Bearer→user, WWW-Authenticate, 503-vs-401)
-- [ ] Tools: `create_trip`, `search_local_recommendations`, `list_trips` (+ scope enforcement)
-- [ ] Per-grant rate limiter; 100K result cap; /mcp CORS
-- [ ] Integration tests via go-sdk client (incl. context-propagation check)
+- [x] go-sdk dep; stateless StreamableHTTP handler at /mcp
+- [x] `mcpAuthMiddleware` (Bearer→user, WWW-Authenticate, 503-vs-401)
+- [x] Tools: `create_trip`, `search_local_recommendations`, `list_trips` (+ scope enforcement)
+- [x] Per-grant rate limiter; 100K result cap; /mcp CORS
+- [x] Integration tests via go-sdk client (incl. context-propagation check)
 
 ## PR 5 — gateway + env
 - [ ] nginx blocks (deployment snippet + development conf)
-- [ ] `MCP_ENABLED` in `.env.sample`s; `GET /api/v1/mcp/availability`
+- [x] `GET /api/v1/mcp/availability` (env samples in PR 5)
 - [ ] MCP Inspector pass on dev stack; deploy; ChatGPT + claude.ai manual pass
 
 ## PR 6 — connected apps

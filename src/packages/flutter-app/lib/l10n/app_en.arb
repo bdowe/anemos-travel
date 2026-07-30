@@ -1093,6 +1093,25 @@
       }
     }
   },
+  "connectAppBarTitle": "Connect app",
+  "connectTitle": "Connect {app} to Golden Tempo?",
+  "@connectTitle": {
+    "placeholders": {
+      "app": {
+        "type": "String"
+      }
+    }
+  },
+  "connectUnverifiedCaution": "This name was provided by the app itself and hasn't been verified by us. Only continue if you started this from an app you trust.",
+  "connectWillBeAbleTo": "It will be able to:",
+  "connectScopeTripsWrite": "Create trips in your account and see your trip list",
+  "connectScopeRecsRead": "Search Golden Tempo's local recommendations",
+  "connectSignInPrompt": "Sign in to your Golden Tempo account to continue.",
+  "connectSignInCta": "Sign in",
+  "connectApprove": "Connect",
+  "connectDeny": "Cancel",
+  "connectExpiredTitle": "This request expired",
+  "connectExpiredMessage": "Start the connection again from your AI assistant.",
   "importFromAi": "Import from AI chat",
   "importExplainer": "Planned a trip in ChatGPT or Claude? Paste the conversation — or its final summary — and we'll turn it into a trip you can edit.",
   "importCopyPrompt": "Copy planning prompt",

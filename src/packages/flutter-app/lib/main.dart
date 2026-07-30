@@ -8,12 +8,14 @@ import 'providers/auth_provider.dart';
 import 'providers/locale_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/alerts_screen.dart';
+import 'screens/connect_app_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/app_shell.dart';
 import 'screens/onboarding_quiz_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'screens/shared_trip_screen.dart';
 import 'screens/sso_callback_screen.dart';
+import 'screens/trip_detail_screen.dart';
 import 'screens/verify_email_screen.dart';
 import 'screens/splash_screen.dart';
 
@@ -77,6 +79,23 @@ Route<dynamic> generateRoute(RouteSettings settings) {
     return MaterialPageRoute(
       settings: settings,
       builder: (_) => SsoCallbackScreen(code: segments[1]),
+    );
+  }
+  // AI-connector consent (specs/mcp-connector): ChatGPT/claude.ai send the
+  // browser to /connect/<request-token> during account linking. The screen
+  // handles the signed-out case with its own sign-in step.
+  if (segments.length == 2 && segments[0] == 'connect') {
+    return MaterialPageRoute(
+      settings: settings,
+      builder: (_) => ConnectAppScreen(requestToken: segments[1]),
+    );
+  }
+  // A connector's create_trip returns a /trip/<id> URL so the AI's answer can
+  // link straight into the app.
+  if (segments.length == 2 && segments[0] == 'trip') {
+    return MaterialPageRoute(
+      settings: settings,
+      builder: (_) => TripDetailScreen(tripId: segments[1]),
     );
   }
   // Price-alert emails deep-link here; the screen itself handles the

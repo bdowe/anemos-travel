@@ -2966,6 +2966,78 @@ abstract class AppLocalizations {
   /// **'v{version} · {date}'**
   String tripsListVersionNumbered(int version, String date);
 
+  /// No description provided for @connectAppBarTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect app'**
+  String get connectAppBarTitle;
+
+  /// No description provided for @connectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect {app} to Golden Tempo?'**
+  String connectTitle(String app);
+
+  /// No description provided for @connectUnverifiedCaution.
+  ///
+  /// In en, this message translates to:
+  /// **'This name was provided by the app itself and hasn\'t been verified by us. Only continue if you started this from an app you trust.'**
+  String get connectUnverifiedCaution;
+
+  /// No description provided for @connectWillBeAbleTo.
+  ///
+  /// In en, this message translates to:
+  /// **'It will be able to:'**
+  String get connectWillBeAbleTo;
+
+  /// No description provided for @connectScopeTripsWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Create trips in your account and see your trip list'**
+  String get connectScopeTripsWrite;
+
+  /// No description provided for @connectScopeRecsRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Golden Tempo\'s local recommendations'**
+  String get connectScopeRecsRead;
+
+  /// No description provided for @connectSignInPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to your Golden Tempo account to continue.'**
+  String get connectSignInPrompt;
+
+  /// No description provided for @connectSignInCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get connectSignInCta;
+
+  /// No description provided for @connectApprove.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get connectApprove;
+
+  /// No description provided for @connectDeny.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get connectDeny;
+
+  /// No description provided for @connectExpiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This request expired'**
+  String get connectExpiredTitle;
+
+  /// No description provided for @connectExpiredMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Start the connection again from your AI assistant.'**
+  String get connectExpiredMessage;
+
   /// No description provided for @importFromAi.
   ///
   /// In en, this message translates to:
