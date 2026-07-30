@@ -26,13 +26,21 @@ Design decisions:
   Haiku downgrade once eval fixtures exist.
 - **Head+tail truncation** (not head-only like local ingest): destination and
   dates live at the start of a conversation, the final itinerary at the end.
-- **Tiered coordinates**: Google hit → verified; miss but plausible model
-  coords (range-checked, not (0,0)) → kept + "approximate" warning; neither →
-  dropped + warning. Degraded (no `GOOGLE_PLACES_API_KEY`): everything rides
-  the model tier + one aggregate warning. `itinerary_items.latitude/longitude`
-  are NOT NULL, and a (0,0) pin ruins the map; but failing the whole import in
-  degraded mode would be worse. Unlike the local-content publish gate this is
-  the user's own private trip, so approximate+flagged is acceptable.
+- **Tiered coordinates**: Google hit → verified; genuine miss (ZERO_RESULTS)
+  with plausible model coords (range-checked, not (0,0)) → kept +
+  "approximate" warning; neither → dropped + warning. **Lookup failures
+  (outage/quota/transport) are distinguished from misses**: affected places
+  ride the same tiers but under one aggregate "verification unavailable"
+  warning instead of per-place blame, and if nothing survives the import
+  returns a retryable 503 rather than the user-blaming 422. Degraded (no
+  `GOOGLE_PLACES_API_KEY`): everything rides the model tier + the same
+  aggregate warning. `itinerary_items.latitude/longitude` are NOT NULL, and a
+  (0,0) pin ruins the map; but failing the whole import in degraded mode would
+  be worse. Unlike the local-content publish gate this is the user's own
+  private trip, so approximate+flagged is acceptable.
+- **Location cap is visible**: extractions beyond `importMaxLocations` (80)
+  add a "only the first N were imported" warning and an `omitted` analytics
+  count — never a silent cut.
 - **chat_id yes, plan_chat_sessions row no**: `trips.chat_id` alone makes
   refine-in-chat work (plan_handler binds by chat_id) and keeps the trip out of
   the resumable-chats list (`NOT EXISTS trips.chat_id` filter); the first
@@ -43,9 +51,14 @@ Design decisions:
 ## Go API Changes
 
 ### Routes
-- `POST /api/v1/trips/import` — `strict(authMiddleware(importTripHandler))`
-  (each request = 1 Claude call + ≤50 Places calls; deliberate rare action,
-  same tier as `/trips/{id}/refine`).
+- `POST /api/v1/trips/import` — auth + a **dedicated** 5/min-burst-3 IP bucket
+  (like `/transcribe`: sharing the strict bucket would let imports starve
+  login/plan and vice versa). Each request = 1 Claude call + ≤50 Places calls.
+- **Per-user daily cap** `FREE_IMPORTS_PER_DAY` (default 10, abuse_caps.go
+  `importAllowed`) → 429 with a localized message — bounds one account's
+  upstream spend regardless of how many IPs it uses.
+- **Trip-lineage cap is pre-checked** in `importTripCore` before any
+  model/Places spend (persistTrip still re-checks transactionally) → 422.
 - `bodyLimitMiddleware`: new `/api/v1/trips/import` lane at 2 MiB
   (`importMaxRequestBodyBytes`) — long transcripts blow the 256 KiB default.
 
@@ -78,8 +91,9 @@ empty locations when no trip is present.
 ## Flutter Changes
 
 ### Models
-`lib/models/import_trip_result.dart` — `@JsonSerializable`
-(`trip_id`, `title`, `item_count`, `warnings`) → `make flutter-build-models`.
+`lib/models/import_trip_result.dart` — plain hand-written model with a manual
+`fromJson` (`trip_id`, `title`, `item_count`, `warnings`), the SharedTrip
+treatment — no codegen, no `.g.dart`.
 
 ### Service
 `trips_api_service.dart`: `importTrip(String text, {String? source})` →
@@ -87,11 +101,17 @@ empty locations when no trip is present.
 
 ### Provider
 `lib/providers/import_trip_provider.dart` — StateNotifier: idle → importing →
-success(result)/error(message); invalidates `tripsProvider` on success.
+success(result)/error(message); awaits `tripsProvider.notifier.loadTrips()`
+before reporting success. Only 422/429 server messages (written for end users,
+localized by the API) surface verbatim; anything else falls back to the
+generic error copy.
 
 ### Screens
 `lib/screens/import_trip_screen.dart` — explainer + copy-prompt button +
-paste field (`maxLines: null`) + import button + staged progress + error state.
+paste field (`minLines: 10`, `maxLines: 20`) + import button + staged
+progress + error state. The `source` request field is not sent by the v1 UI
+(server defaults to `other`); it's reserved for system integrations like the
+MCP connector.
 Entry points: Trips list app-bar `IconButton` and empty-state action.
 Planning prompt text = ARB constant (en+es), asks for a final "TRIP SUMMARY"
 (Day N — City; Morning/Afternoon/Evening entries as "Place — City"; dates;
@@ -110,8 +130,9 @@ day trips; inter-city travel mode).
 
 ## Cross-cutting
 
-- No new env vars; behavior with missing `ANTHROPIC_API_KEY` (503) and missing
-  `GOOGLE_PLACES_API_KEY` (degraded, warnings) documented in spec.
+- New env var: `FREE_IMPORTS_PER_DAY` (default 10) in `.env.sample`. Behavior
+  with missing `ANTHROPIC_API_KEY` (503) and missing `GOOGLE_PLACES_API_KEY`
+  (degraded, warnings) documented in spec.
 - nginx: no change (`client_max_body_size` already ≥ 20 MiB).
 - Server i18n: new `import.*` keys in the `messages` catalog (i18n.go), en+es.
 

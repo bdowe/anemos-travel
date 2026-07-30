@@ -1647,6 +1647,45 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get importFromAi => 'Import from AI chat';
+
+  @override
+  String get importExplainer =>
+      'Planned a trip in ChatGPT or Claude? Paste the conversation — or its final summary — and we\'ll turn it into a trip you can edit.';
+
+  @override
+  String get importCopyPrompt => 'Copy planning prompt';
+
+  @override
+  String get importPromptCopied =>
+      'Prompt copied — paste it into ChatGPT or Claude to start planning.';
+
+  @override
+  String get importPasteButton => 'Paste';
+
+  @override
+  String get importPasteHint => 'Paste your conversation or trip summary here…';
+
+  @override
+  String get importButton => 'Import trip';
+
+  @override
+  String get importProgressReading => 'Reading your conversation…';
+
+  @override
+  String get importProgressLocating => 'Finding places on the map…';
+
+  @override
+  String get importWarningsTitle => 'Some places need attention';
+
+  @override
+  String get importViewTrip => 'View trip';
+
+  @override
+  String get importPlanningPrompt =>
+      'Help me plan a trip. Ask about my destination, dates, interests, pace, and budget, then build a day-by-day itinerary. When we\'re done, finish with a section titled TRIP SUMMARY that lists: the destination(s) and exact travel dates; each day as \"Day N — City\" with Morning / Afternoon / Evening entries, each written as \"Place Name — City\" using real, mappable place names; day trips marked as \"day trip from [city]\"; and how I\'m traveling between cities (flight, car, train, bus, or ferry).';
+
+  @override
   String get homeGreetingMorning => 'Good morning';
 
   @override

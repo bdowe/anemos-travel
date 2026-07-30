@@ -2966,6 +2966,78 @@ abstract class AppLocalizations {
   /// **'v{version} · {date}'**
   String tripsListVersionNumbered(int version, String date);
 
+  /// No description provided for @importFromAi.
+  ///
+  /// In en, this message translates to:
+  /// **'Import from AI chat'**
+  String get importFromAi;
+
+  /// No description provided for @importExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned a trip in ChatGPT or Claude? Paste the conversation — or its final summary — and we\'ll turn it into a trip you can edit.'**
+  String get importExplainer;
+
+  /// No description provided for @importCopyPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy planning prompt'**
+  String get importCopyPrompt;
+
+  /// No description provided for @importPromptCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Prompt copied — paste it into ChatGPT or Claude to start planning.'**
+  String get importPromptCopied;
+
+  /// No description provided for @importPasteButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get importPasteButton;
+
+  /// No description provided for @importPasteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste your conversation or trip summary here…'**
+  String get importPasteHint;
+
+  /// No description provided for @importButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Import trip'**
+  String get importButton;
+
+  /// No description provided for @importProgressReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading your conversation…'**
+  String get importProgressReading;
+
+  /// No description provided for @importProgressLocating.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding places on the map…'**
+  String get importProgressLocating;
+
+  /// No description provided for @importWarningsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Some places need attention'**
+  String get importWarningsTitle;
+
+  /// No description provided for @importViewTrip.
+  ///
+  /// In en, this message translates to:
+  /// **'View trip'**
+  String get importViewTrip;
+
+  /// No description provided for @importPlanningPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Help me plan a trip. Ask about my destination, dates, interests, pace, and budget, then build a day-by-day itinerary. When we\'re done, finish with a section titled TRIP SUMMARY that lists: the destination(s) and exact travel dates; each day as \"Day N — City\" with Morning / Afternoon / Evening entries, each written as \"Place Name — City\" using real, mappable place names; day trips marked as \"day trip from [city]\"; and how I\'m traveling between cities (flight, car, train, bus, or ferry).'**
+  String get importPlanningPrompt;
+
   /// No description provided for @homeGreetingMorning.
   ///
   /// In en, this message translates to:

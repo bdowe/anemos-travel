@@ -60,9 +60,14 @@ degraded place verification).
 Errors:
 - `400` empty/invalid body
 - `401` unauthenticated
-- `422` no trip found in the text; or per-user trip cap reached
+- `422` no trip found in the text; or per-user trip cap reached (checked
+  before any model/Places spend)
+- `429` per-IP rate limit (own bucket, 5/min) or per-user daily import cap
+  (`FREE_IMPORTS_PER_DAY`, default 10) — the daily-cap message is localized
 - `502` extraction failed (provider detail logged server-side only)
-- `413` body over 2 MiB; `429` rate limited
+- `503` place lookups failing (Google outage/quota) with nothing importable —
+  retryable, localized message; also missing `ANTHROPIC_API_KEY`
+- `413` body over 2 MiB
 
 ## Data Model
 
@@ -90,6 +95,13 @@ No schema changes. Writes `trips` + `itinerary_items` through the existing
 - Pasted text > 60k chars → server keeps head (10k) + tail (50k) around a
   truncation marker; start (destination/dates) and end (final itinerary) of a
   conversation both survive.
+- Google Places outage/quota failure with the key configured → affected places
+  keep model-approximate coordinates (or drop) under one aggregate
+  "verification unavailable" warning — never per-place "couldn't be located"
+  blame; if nothing survives, a retryable 503, not a 422.
+- More than 80 extracted places → capped with a visible "only the first 80
+  were imported — N more were left out" warning (and an `omitted` analytics
+  count); never a silent cut.
 - Text with no recognizable trip (recipes, homework…) → 422, no trip created.
 - Trip cap reached → 422 with the cap message from persistTrip.
 - Duplicate import of the same text → a second, independent trip (new lineage);
