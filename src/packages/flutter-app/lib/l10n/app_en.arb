@@ -1093,6 +1093,37 @@
       }
     }
   },
+  "settingsConnectedAppsSection": "Connected apps",
+  "settingsConnectedAppsHelp": "AI assistants you've allowed to create trips in your account.",
+  "settingsConnectedAppsEmpty": "No apps connected.",
+  "settingsConnectedAppsError": "Could not load connected apps",
+  "settingsConnectedLastUsed": "Last used {date}",
+  "@settingsConnectedLastUsed": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsConnectedNeverUsed": "Not used yet",
+  "settingsRevokeAction": "Revoke",
+  "settingsRevokeConfirmTitle": "Revoke {app}?",
+  "@settingsRevokeConfirmTitle": {
+    "placeholders": {
+      "app": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsRevokeConfirmBody": "It will stop being able to create trips in your account right away. You can connect it again later.",
+  "settingsRevokedToast": "{app} disconnected",
+  "@settingsRevokedToast": {
+    "placeholders": {
+      "app": {
+        "type": "String"
+      }
+    }
+  },
   "connectAppBarTitle": "Connect app",
   "connectTitle": "Connect {app} to Golden Tempo?",
   "@connectTitle": {

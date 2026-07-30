@@ -744,6 +744,10 @@ func buildRouter() *mux.Router {
 	api.Handle("/oauth/authorize/decision", strict(authMiddleware(http.HandlerFunc(oauthAuthorizeDecisionHandler)))).Methods("POST")
 	api.Handle("/oauth/token", strict(http.HandlerFunc(oauthTokenHandler))).Methods("POST")
 	api.HandleFunc("/mcp/availability", mcpAvailabilityHandler).Methods("GET")
+	// Connected apps: always reachable (even with MCP_ENABLED off) so a user
+	// can always see and revoke a connection granted while it was on.
+	api.Handle("/oauth/connections", authMiddleware(http.HandlerFunc(listOAuthConnectionsHandler))).Methods("GET")
+	api.Handle("/oauth/connections/{id}", authMiddleware(http.HandlerFunc(revokeOAuthConnectionHandler))).Methods("DELETE")
 	// admin composes the auth + admin gate; used for curation and version-history routes.
 	admin := func(h http.HandlerFunc) http.Handler { return authMiddleware(adminMiddleware(h)) }
 	api.Handle("/trips", authMiddleware(http.HandlerFunc(listTripsHandler))).Methods("GET")

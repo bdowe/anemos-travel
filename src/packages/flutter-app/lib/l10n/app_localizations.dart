@@ -2966,6 +2966,66 @@ abstract class AppLocalizations {
   /// **'v{version} · {date}'**
   String tripsListVersionNumbered(int version, String date);
 
+  /// No description provided for @settingsConnectedAppsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected apps'**
+  String get settingsConnectedAppsSection;
+
+  /// No description provided for @settingsConnectedAppsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'AI assistants you\'ve allowed to create trips in your account.'**
+  String get settingsConnectedAppsHelp;
+
+  /// No description provided for @settingsConnectedAppsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No apps connected.'**
+  String get settingsConnectedAppsEmpty;
+
+  /// No description provided for @settingsConnectedAppsError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load connected apps'**
+  String get settingsConnectedAppsError;
+
+  /// No description provided for @settingsConnectedLastUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Last used {date}'**
+  String settingsConnectedLastUsed(String date);
+
+  /// No description provided for @settingsConnectedNeverUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Not used yet'**
+  String get settingsConnectedNeverUsed;
+
+  /// No description provided for @settingsRevokeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke'**
+  String get settingsRevokeAction;
+
+  /// No description provided for @settingsRevokeConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke {app}?'**
+  String settingsRevokeConfirmTitle(String app);
+
+  /// No description provided for @settingsRevokeConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It will stop being able to create trips in your account right away. You can connect it again later.'**
+  String get settingsRevokeConfirmBody;
+
+  /// No description provided for @settingsRevokedToast.
+  ///
+  /// In en, this message translates to:
+  /// **'{app} disconnected'**
+  String settingsRevokedToast(String app);
+
   /// No description provided for @connectAppBarTitle.
   ///
   /// In en, this message translates to:

@@ -11,6 +11,7 @@ import '../widgets/legal_links.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
 import '../utils/errors.dart';
+import '../utils/trip_format.dart';
 import '../utils/snack.dart';
 
 final accountApiServiceProvider = Provider<AccountApiService>((ref) {
@@ -264,6 +265,16 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
+                      SectionHeader(title: l10n.settingsConnectedAppsSection),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        l10n.settingsConnectedAppsHelp,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      const _ConnectedAppsList(),
+                      const SizedBox(height: AppSpacing.xl),
                       SectionHeader(title: l10n.languageSectionTitle),
                       const SizedBox(height: AppSpacing.sm),
                       const _LanguagePicker(),
@@ -457,6 +468,125 @@ class _LanguagePicker extends ConsumerWidget {
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
       ],
+    );
+  }
+}
+
+/// The AI connectors this account has authorized (specs/mcp-connector), with
+/// a revoke that takes effect immediately. Self-loading and self-contained so
+/// the settings screen's own busy/error plumbing stays untouched.
+class _ConnectedAppsList extends ConsumerStatefulWidget {
+  const _ConnectedAppsList();
+
+  @override
+  ConsumerState<_ConnectedAppsList> createState() => _ConnectedAppsListState();
+}
+
+class _ConnectedAppsListState extends ConsumerState<_ConnectedAppsList> {
+  late Future<List<ConnectedApp>> _future;
+  String? _revoking;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ref.read(accountApiServiceProvider).listConnectedApps();
+  }
+
+  void _reload() {
+    setState(() {
+      _future = ref.read(accountApiServiceProvider).listConnectedApps();
+    });
+  }
+
+  Future<void> _revoke(ConnectedApp app) async {
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.settingsRevokeConfirmTitle(app.clientName)),
+        content: Text(l10n.settingsRevokeConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.settingsRevokeAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _revoking = app.id);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(accountApiServiceProvider).revokeConnectedApp(app.id);
+      if (!mounted) return;
+      messenger.showSnackBar(
+          SnackBar(content: Text(l10n.settingsRevokedToast(app.clientName))));
+      _reload();
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(l10n.errorGeneric)));
+      }
+    } finally {
+      if (mounted) setState(() => _revoking = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    return FutureBuilder<List<ConnectedApp>>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snap.hasError) {
+          return Text(l10n.settingsConnectedAppsError,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.error));
+        }
+        final apps = snap.data ?? const <ConnectedApp>[];
+        if (apps.isEmpty) {
+          return Text(l10n.settingsConnectedAppsEmpty,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant));
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final app in apps)
+              Card(
+                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: ListTile(
+                  leading: const Icon(Icons.smart_toy_outlined),
+                  title: Text(app.clientName),
+                  subtitle: Text(app.lastUsedAt != null
+                      ? l10n.settingsConnectedLastUsed(
+                          shortDate(app.lastUsedAt!.toIso8601String()))
+                      : l10n.settingsConnectedNeverUsed),
+                  trailing: _revoking == app.id
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : TextButton(
+                          onPressed: () => _revoke(app),
+                          child: Text(l10n.settingsRevokeAction),
+                        ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
