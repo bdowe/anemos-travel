@@ -114,18 +114,18 @@ both `.env.sample`s; `GET /api/v1/mcp/availability`.
 
 | JSON key | Go type | Dart type | Nullable? | ✓ |
 |---|---|---|---|---|
-| client_name (context resp) | string | String | no | |
-| scopes (context resp) | []string | List<String> | no | |
-| request_token (decision req) | string | String | no | |
-| approve (decision req) | bool | bool | no | |
-| redirect_url (decision resp) | string | String | no | |
-| id (connections item) | string | String | no | |
-| client_name (connections item) | string | String | no | |
-| scopes (connections item) | []string | List<String> | no | |
-| created_at (connections item) | time.Time | DateTime | no | |
-| last_used_at (connections item) | *time.Time | DateTime? | yes | |
+| client_name (context resp) | string | String | no | ✓ |
+| scopes (context resp) | []string | List<String> | no | ✓ |
+| request_token (decision req) | string | String | no | ✓ |
+| approve (decision req) | bool | bool | no | ✓ |
+| redirect_url (decision resp) | string | String | no | ✓ |
+| id (connections item) | string | String | no | ✓ |
+| client_name (connections item) | string | String | no | ✓ |
+| scopes (connections item) | []string | List<String> | no | ✓ |
+| created_at (connections item) | time.Time | DateTime | no | ✓ |
+| last_used_at (connections item) | *time.Time | DateTime? | yes | ✓ |
 
-(✓ column checked as each PR lands.)
+(All rows verified against the shipped Go handlers and Dart models.)
 
 ## Cross-cutting
 

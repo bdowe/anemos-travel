@@ -108,4 +108,59 @@ class AccountApiService {
       throw Exception(_message(res.body, res.statusCode));
     }
   }
+  /// AI connectors (ChatGPT, claude.ai) this account has authorized
+  /// (specs/mcp-connector).
+  Future<List<ConnectedApp>> listConnectedApps() async {
+    final res = await apiClient.httpClient.get(
+      Uri.parse('${apiClient.baseUrl}/oauth/connections'),
+      headers: apiClient.jsonHeaders(),
+    );
+    if (res.statusCode == 200) {
+      final list = jsonDecode(res.body) as List<dynamic>;
+      return list
+          .map((e) => ConnectedApp.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    throw Exception(_message(res.body, res.statusCode));
+  }
+
+  /// Revokes a connection: the grant and every token minted under it die, so
+  /// the connector stops working immediately.
+  Future<void> revokeConnectedApp(String id) async {
+    final res = await apiClient.httpClient.delete(
+      Uri.parse('${apiClient.baseUrl}/oauth/connections/$id'),
+      headers: apiClient.jsonHeaders(json: true),
+    );
+    if (res.statusCode != 204) {
+      throw Exception(_message(res.body, res.statusCode));
+    }
+  }
+}
+
+/// One authorized AI connector.
+class ConnectedApp {
+  final String id;
+  final String clientName;
+  final List<String> scopes;
+  final DateTime createdAt;
+  final DateTime? lastUsedAt;
+
+  const ConnectedApp({
+    required this.id,
+    required this.clientName,
+    required this.scopes,
+    required this.createdAt,
+    this.lastUsedAt,
+  });
+
+  factory ConnectedApp.fromJson(Map<String, dynamic> json) => ConnectedApp(
+        id: json['id'] as String,
+        clientName: (json['client_name'] as String?) ?? '',
+        scopes:
+            ((json['scopes'] as List?) ?? const []).whereType<String>().toList(),
+        createdAt: DateTime.parse(json['created_at'] as String),
+        lastUsedAt: json['last_used_at'] == null
+            ? null
+            : DateTime.parse(json['last_used_at'] as String),
+      );
 }

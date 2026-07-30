@@ -32,6 +32,6 @@
 - [ ] MCP Inspector pass on dev stack; deploy; ChatGPT + claude.ai manual pass
 
 ## PR 6 — connected apps
-- [ ] `GET/DELETE /api/v1/oauth/connections`
-- [ ] Settings "Connected apps" section + revoke dialog + l10n
-- [ ] Contract Parity table checked
+- [x] `GET/DELETE /api/v1/oauth/connections`
+- [x] Settings "Connected apps" section + revoke dialog + l10n
+- [x] Contract Parity table checked

@@ -1647,6 +1647,44 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get settingsConnectedAppsSection => 'Connected apps';
+
+  @override
+  String get settingsConnectedAppsHelp =>
+      'AI assistants you\'ve allowed to create trips in your account.';
+
+  @override
+  String get settingsConnectedAppsEmpty => 'No apps connected.';
+
+  @override
+  String get settingsConnectedAppsError => 'Could not load connected apps';
+
+  @override
+  String settingsConnectedLastUsed(String date) {
+    return 'Last used $date';
+  }
+
+  @override
+  String get settingsConnectedNeverUsed => 'Not used yet';
+
+  @override
+  String get settingsRevokeAction => 'Revoke';
+
+  @override
+  String settingsRevokeConfirmTitle(String app) {
+    return 'Revoke $app?';
+  }
+
+  @override
+  String get settingsRevokeConfirmBody =>
+      'It will stop being able to create trips in your account right away. You can connect it again later.';
+
+  @override
+  String settingsRevokedToast(String app) {
+    return '$app disconnected';
+  }
+
+  @override
   String get connectAppBarTitle => 'Connect app';
 
   @override

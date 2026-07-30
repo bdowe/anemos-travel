@@ -64,6 +64,14 @@ class _FakeAccountApi implements AccountApiService {
   @override
   ApiClient get apiClient => throw UnsupportedError('unused in tests');
 
+  /// The settings screen renders a Connected-apps section on load; these
+  /// tests don't exercise it, so serve an empty list.
+  @override
+  Future<List<ConnectedApp>> listConnectedApps() async => const [];
+
+  @override
+  Future<void> revokeConnectedApp(String id) async {}
+
   @override
   Future<UserModel> updateDisplayName(String displayName) async => _user();
 
