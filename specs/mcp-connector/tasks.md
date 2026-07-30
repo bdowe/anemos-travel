@@ -7,12 +7,12 @@
 - [x] resetDB TRUNCATE additions
 
 ## PR 2 — OAuth provider
-- [ ] Well-known documents (RFC 9728 both paths, RFC 8414, openid-configuration alias)
-- [ ] `POST /oauth/register` (DCR, redirect-URI validation)
-- [ ] `GET /oauth/authorize` (park request, 302 to /connect/; HTML error for bad client/redirect)
-- [ ] `POST /oauth/authorize/context` + `POST /oauth/authorize/decision`
-- [ ] `POST /oauth/token` (S256 verify, single-use + reuse revocation, refresh rotation)
-- [ ] Integration tests: full dance + negative matrix
+- [x] Well-known documents (RFC 9728 both paths, RFC 8414, openid-configuration alias)
+- [x] `POST /oauth/register` (DCR, redirect-URI validation)
+- [x] `GET /oauth/authorize` (park request, 302 to /connect/; HTML error for bad client/redirect)
+- [x] `POST /oauth/authorize/context` + `POST /oauth/authorize/decision`
+- [x] `POST /oauth/token` (S256 verify, single-use + reuse revocation, refresh rotation)
+- [x] Integration tests: full dance + negative matrix
 
 ## PR 3 — Flutter consent
 - [ ] `connect/<request-token>` + `trip/<id>` routes in generateRoute
