@@ -170,6 +170,7 @@ const (
 	maxRequestBodyBytes       = 256 << 10 // 256 KiB, all endpoints by default
 	planMaxRequestBodyBytes   = 20 << 20  // 20 MiB for the /plan chat history incl. images (see above)
 	transcribeMaxRequestBytes = 10 << 20  // 10 MiB for /transcribe audio clips (60s opus is well under)
+	importMaxRequestBodyBytes = 2 << 20   // 2 MiB for /trips/import pasted transcripts (server truncates to 60k chars)
 )
 
 // bodyLimitMiddleware caps request body size. It wraps the request body ONLY
@@ -186,6 +187,8 @@ func bodyLimitMiddleware(next http.Handler) http.Handler {
 			limit = planMaxRequestBodyBytes
 		case "/api/v1/transcribe":
 			limit = transcribeMaxRequestBytes
+		case "/api/v1/trips/import":
+			limit = importMaxRequestBodyBytes
 		}
 		if r.ContentLength > limit {
 			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")

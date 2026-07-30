@@ -213,6 +213,12 @@ var messages = map[string]map[string]string{
 	"ics.segmentTitle":  {"en": "%s: %s", "es": "%s: %s"},
 	"ics.stayTitle":     {"en": "Stay: %s", "es": "Alojamiento: %s"},
 
+	"import.error.no_trip":         {"en": "We couldn't find a trip in that text — paste the conversation or its final summary.", "es": "No encontramos un viaje en ese texto — pega la conversación o su resumen final."},
+	"import.error.nothing_located": {"en": "We couldn't locate any of the places in that text on the map.", "es": "No pudimos ubicar en el mapa ninguno de los lugares de ese texto."},
+	"import.warning.approximate":   {"en": "%s: location is approximate — check it on the map", "es": "%s: la ubicación es aproximada — revísala en el mapa"},
+	"import.warning.dropped":       {"en": "%s couldn't be located and was left out — add it manually", "es": "%s no se pudo ubicar y quedó fuera — agrégalo manualmente"},
+	"import.warning.unverified":    {"en": "Place verification is unavailable right now — imported locations are approximate.", "es": "La verificación de lugares no está disponible ahora — las ubicaciones importadas son aproximadas."},
+
 	"notif.aTraveler": {"en": "A traveler", "es": "Un viajero"},
 
 	"page.verify.expired.body":  {"en": "Request a new verification email from your account.", "es": "Pide un nuevo correo de verificación desde tu cuenta."},

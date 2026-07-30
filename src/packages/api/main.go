@@ -723,6 +723,9 @@ func buildRouter() *mux.Router {
 	api.Handle("/trips", authMiddleware(http.HandlerFunc(listTripsHandler))).Methods("GET")
 	api.Handle("/trips/versions", admin(listTripVersionsHandler)).Methods("GET")
 	// Literal routes must precede /trips/{id} or mux binds them as an id.
+	// Import runs one Claude call + up to 50 Places lookups per request —
+	// strict tier, same class as /trips/{id}/refine (specs/import-trip-from-ai-chat).
+	api.Handle("/trips/import", strict(authMiddleware(http.HandlerFunc(importTripHandler)))).Methods("POST")
 	api.Handle("/trips/shared-with-me", authMiddleware(http.HandlerFunc(listSharedWithMeHandler))).Methods("GET")
 	// Resumable plan conversations (specs/continue-where-you-left-off).
 	api.Handle("/chats", authMiddleware(http.HandlerFunc(listChatSessionsHandler))).Methods("GET")
