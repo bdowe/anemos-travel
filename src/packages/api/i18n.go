@@ -21,6 +21,9 @@ import (
 // print/share export pages and .ics labels. The writeJSONError strings are
 // deliberately NOT localized — they are developer- and edge-case-facing, and
 // the right fix there is machine-readable error codes mapped client-side.
+// Exception: the import.* error/warning strings, which the import screen
+// displays verbatim to end users (specs/import-trip-from-ai-chat) — those go
+// through tr() like any other user-facing copy.
 //
 // The catalog is a plain map rather than golang.org/x/text/message: the
 // server-side surface is a few dozen strings across a handful of locales, so a
@@ -213,11 +216,15 @@ var messages = map[string]map[string]string{
 	"ics.segmentTitle":  {"en": "%s: %s", "es": "%s: %s"},
 	"ics.stayTitle":     {"en": "Stay: %s", "es": "Alojamiento: %s"},
 
-	"import.error.no_trip":         {"en": "We couldn't find a trip in that text — paste the conversation or its final summary.", "es": "No encontramos un viaje en ese texto — pega la conversación o su resumen final."},
-	"import.error.nothing_located": {"en": "We couldn't locate any of the places in that text on the map.", "es": "No pudimos ubicar en el mapa ninguno de los lugares de ese texto."},
-	"import.warning.approximate":   {"en": "%s: location is approximate — check it on the map", "es": "%s: la ubicación es aproximada — revísala en el mapa"},
-	"import.warning.dropped":       {"en": "%s couldn't be located and was left out — add it manually", "es": "%s no se pudo ubicar y quedó fuera — agrégalo manualmente"},
-	"import.warning.unverified":    {"en": "Place verification is unavailable right now — imported locations are approximate.", "es": "La verificación de lugares no está disponible ahora — las ubicaciones importadas son aproximadas."},
+	"import.error.daily_limit":        {"en": "You've reached today's import limit — try again tomorrow.", "es": "Alcanzaste el límite de importaciones de hoy — inténtalo de nuevo mañana."},
+	"import.error.no_trip":            {"en": "We couldn't find a trip in that text — paste the conversation or its final summary.", "es": "No encontramos un viaje en ese texto — pega la conversación o su resumen final."},
+	"import.error.nothing_located":    {"en": "We couldn't locate any of the places in that text on the map.", "es": "No pudimos ubicar en el mapa ninguno de los lugares de ese texto."},
+	"import.error.places_unavailable": {"en": "Place lookups are temporarily unavailable — please try again in a few minutes.", "es": "La búsqueda de lugares no está disponible temporalmente — inténtalo de nuevo en unos minutos."},
+	"import.error.trip_limit":         {"en": "You've reached your trip limit — delete an old trip first.", "es": "Alcanzaste tu límite de viajes — elimina primero un viaje antiguo."},
+	"import.warning.approximate":      {"en": "%s: location is approximate — check it on the map", "es": "%s: la ubicación es aproximada — revísala en el mapa"},
+	"import.warning.capped":           {"en": "Only the first %d places were imported — %d more were left out.", "es": "Solo se importaron los primeros %d lugares — %d más quedaron fuera."},
+	"import.warning.dropped":          {"en": "%s couldn't be located and was left out — add it manually", "es": "%s no se pudo ubicar y quedó fuera — agrégalo manualmente"},
+	"import.warning.unverified":       {"en": "Place verification is unavailable right now — imported locations are approximate.", "es": "La verificación de lugares no está disponible ahora — las ubicaciones importadas son aproximadas."},
 
 	"notif.aTraveler": {"en": "A traveler", "es": "Un viajero"},
 

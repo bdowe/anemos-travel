@@ -15,7 +15,7 @@
 
 ## Models & codegen (Flutter)
 
-- [x] `lib/models/import_trip_result.dart` + `make flutter-build-models`
+- [x] `lib/models/import_trip_result.dart` (plain model, no codegen)
 
 ## UI (Flutter)
 

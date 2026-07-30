@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 // trip_import_handler.go: POST /api/v1/trips/import — paste an external-AI
@@ -59,23 +60,34 @@ func importTripHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	locale := requestLocale(r.Context())
+
+	// Per-user daily spend ceiling (abuse_caps.go) — checked after the free
+	// validations so bad requests don't consume the day's quota.
+	if !importAllowed(user.ID.String(), time.Now()) {
+		writeJSONError(w, http.StatusTooManyRequests, tr(locale, "import.error.daily_limit"))
+		return
+	}
+
 	res, err := importTripCore(r.Context(), newAnthropicClient(apiKey), user.ID, text, source)
 	if err != nil {
-		locale := requestLocale(r.Context())
 		var phase *importPhaseError
 		switch {
 		case errors.Is(err, errImportNoTrip):
 			writeJSONError(w, http.StatusUnprocessableEntity, tr(locale, "import.error.no_trip"))
 		case errors.Is(err, errImportNothingLocated):
 			writeJSONError(w, http.StatusUnprocessableEntity, tr(locale, "import.error.nothing_located"))
+		case errors.Is(err, errImportPlacesUnavailable):
+			// Places outage/quota, not a bad paste — retryable.
+			writeJSONError(w, http.StatusServiceUnavailable, tr(locale, "import.error.places_unavailable"))
+		case errors.Is(err, errImportTripLimit),
+			strings.Contains(err.Error(), "trip limit reached"): // persistTrip's transactional re-check (race path)
+			writeJSONError(w, http.StatusUnprocessableEntity, tr(locale, "import.error.trip_limit"))
 		case errors.As(err, &phase) && phase.phase == "extract":
 			// Provider/internal detail stays in the server log (tees to
 			// Sentry); the client gets a generic message.
 			ctxLog(r.Context()).Error("trip import: extraction failed", "error", err)
 			writeJSONError(w, http.StatusBadGateway, "extraction failed")
-		case strings.Contains(err.Error(), "trip limit reached"):
-			// persistTrip's per-user lineage cap; its message is user-ready.
-			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
 		default:
 			ctxLog(r.Context()).Error("trip import: persist failed", "error", err)
 			writeJSONError(w, http.StatusInternalServerError, "could not save trip")

@@ -60,7 +60,22 @@ const (
 var (
 	errImportNoTrip         = errors.New("no trip found in text")
 	errImportNothingLocated = errors.New("no places could be located")
+	// errImportPlacesUnavailable: nothing could be kept because Places lookups
+	// were FAILING (outage/quota), not because the places don't exist — a
+	// retryable condition, never the user's fault.
+	errImportPlacesUnavailable = errors.New("place lookups unavailable")
+	// errImportTripLimit: the per-user trip-lineage cap, checked before any
+	// model/Places spend (persistTrip re-checks transactionally).
+	errImportTripLimit = errors.New("trip limit reached")
 )
+
+// isPlacesZeroResults distinguishes a genuine "Google found nothing" from an
+// outage/quota/transport failure. SearchPlaces folds both into an error;
+// ZERO_RESULTS is the one non-OK status that means the query itself came up
+// empty (places_service.go returns "Google Places API error: <status>").
+func isPlacesZeroResults(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "ZERO_RESULTS")
+}
 
 // importPhaseError tags a failure with the pipeline phase so the handler can
 // map extraction problems to 502 and persistence problems to 500/422 without
@@ -101,6 +116,13 @@ type importStats struct {
 	Resolved    int
 	Approximate int
 	Dropped     int
+	// LookupFailures counts Places calls that errored for reasons other than
+	// ZERO_RESULTS (outage, quota, transport) — places affected by these ride
+	// the approximate/dropped tiers under one aggregate warning instead of
+	// per-place "couldn't be located" blame.
+	LookupFailures int
+	// Omitted counts extracted places cut by the importMaxLocations cap.
+	Omitted int
 }
 
 type importResult struct {
@@ -263,9 +285,12 @@ func resolveImportedLocations(ctx context.Context, locs []ImportedLocation) ([]m
 		}
 
 		resolved := false
+		lookupFailed := false
 		if placesAvailable && lookups < importMaxPlaceLookups {
 			lookups++
-			if hits, err := placesService.SearchPlaces(ctx, placeQuery(l.SearchHint, name, l.City)); err == nil && len(hits) > 0 {
+			hits, lerr := placesService.SearchPlaces(ctx, placeQuery(l.SearchHint, name, l.City))
+			switch {
+			case lerr == nil && len(hits) > 0:
 				hit := hits[0]
 				loc["latitude"] = hit.Latitude
 				loc["longitude"] = hit.Longitude
@@ -277,6 +302,15 @@ func resolveImportedLocations(ctx context.Context, locs []ImportedLocation) ([]m
 				}
 				resolved = true
 				stats.Resolved++
+			case lerr != nil && !isPlacesZeroResults(lerr):
+				// Outage/quota/transport — NOT evidence the place doesn't
+				// exist. Log the first occurrence; affected places fall to the
+				// tiers below without per-place "couldn't be located" blame.
+				if stats.LookupFailures == 0 {
+					ctxLog(ctx).Error("trip import: place lookup failed", "error", lerr)
+				}
+				stats.LookupFailures++
+				lookupFailed = true
 			}
 		}
 		if !resolved {
@@ -284,16 +318,26 @@ func resolveImportedLocations(ctx context.Context, locs []ImportedLocation) ([]m
 				loc["latitude"] = *l.Latitude
 				loc["longitude"] = *l.Longitude
 				stats.Approximate++
-				if placesAvailable {
+				if placesAvailable && !lookupFailed {
 					warnings = append(warnings, tr(locale, "import.warning.approximate", name))
 				}
 			} else {
 				stats.Dropped++
-				warnings = append(warnings, tr(locale, "import.warning.dropped", name))
+				// Name every dropped place EXCEPT ones a failing lookup
+				// touched (the aggregate outage warning covers those — a
+				// place we never searched earned no "couldn't be located").
+				if !lookupFailed {
+					warnings = append(warnings, tr(locale, "import.warning.dropped", name))
+				}
 				continue
 			}
 		}
 		out = append(out, loc)
+	}
+	// One aggregate notice covers every place a failing lookup touched — same
+	// copy as the no-key degraded mode, since the user-visible effect matches.
+	if stats.LookupFailures > 0 {
+		warnings = append(warnings, tr(locale, "import.warning.unverified"))
 	}
 	return out, stats, warnings
 }
@@ -301,6 +345,14 @@ func resolveImportedLocations(ctx context.Context, locs []ImportedLocation) ([]m
 // importTripCore is the reusable extract -> resolve -> persist pipeline behind
 // POST /trips/import (and, later, the MCP connector's create_trip tool).
 func importTripCore(ctx context.Context, client anthropic.Client, userID uuid.UUID, rawText, source string) (importResult, error) {
+	// Trip-lineage cap BEFORE any model/Places spend: an import always mints a
+	// new lineage, so a capped user's request would only burn upstream dollars
+	// to fail inside persistTrip. Fail-open on a check error — persistTrip
+	// re-checks transactionally.
+	if n, err := store.New(dbPool).CountActiveTripLineagesByOwner(ctx, userID); err == nil && int(n) >= maxTripsPerUser() {
+		return importResult{}, errImportTripLimit
+	}
+
 	extracted, err := extractImportedTrip(ctx, client, rawText)
 	if err != nil {
 		return importResult{}, &importPhaseError{phase: "extract", err: err}
@@ -308,12 +360,24 @@ func importTripCore(ctx context.Context, client anthropic.Client, userID uuid.UU
 	if len(extracted.Locations) == 0 {
 		return importResult{}, errImportNoTrip
 	}
+	omitted := 0
 	if len(extracted.Locations) > importMaxLocations {
+		omitted = len(extracted.Locations) - importMaxLocations
 		extracted.Locations = extracted.Locations[:importMaxLocations]
 	}
 
 	locations, stats, warnings := resolveImportedLocations(ctx, extracted.Locations)
+	stats.Omitted = omitted
+	if omitted > 0 {
+		// Never silently lose places the user's conversation named — the cap
+		// must be visible (spec: "dropped and named in a warning" applies in
+		// spirit; at this volume we name the count, not 10+ places).
+		warnings = append(warnings, tr(requestLocale(ctx), "import.warning.capped", importMaxLocations, omitted))
+	}
 	if len(locations) == 0 {
+		if stats.LookupFailures > 0 {
+			return importResult{}, errImportPlacesUnavailable
+		}
 		return importResult{}, errImportNothingLocated
 	}
 
@@ -352,11 +416,13 @@ func importTripCore(ctx context.Context, client anthropic.Client, userID uuid.UU
 				"source":     "import",
 			})
 			recordEvent(userID, "trip_imported", &parsed, map[string]any{
-				"item_count":  res.ItemCount,
-				"resolved":    stats.Resolved,
-				"approximate": stats.Approximate,
-				"dropped":     stats.Dropped,
-				"provider":    source,
+				"item_count":      res.ItemCount,
+				"resolved":        stats.Resolved,
+				"approximate":     stats.Approximate,
+				"dropped":         stats.Dropped,
+				"omitted":         stats.Omitted,
+				"lookup_failures": stats.LookupFailures,
+				"provider":        source,
 			})
 		})
 		// Free-cap active_trips crossing signal — imports always mint a fresh

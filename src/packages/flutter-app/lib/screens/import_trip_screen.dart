@@ -45,7 +45,14 @@ class _ImportTripScreenState extends ConsumerState<ImportTripScreen> {
   }
 
   Future<void> _pasteFromClipboard() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    ClipboardData? data;
+    try {
+      data = await Clipboard.getData(Clipboard.kTextPlain);
+    } catch (_) {
+      // Web clipboard read can be denied by the browser; the user can still
+      // paste natively into the field.
+      return;
+    }
     final text = data?.text;
     if (text == null || text.isEmpty || !mounted) return;
     setState(() => _controller.text = text);

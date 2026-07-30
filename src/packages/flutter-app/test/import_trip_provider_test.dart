@@ -103,6 +103,33 @@ void main() {
     expect(fake.listCalls, 0);
   });
 
+  test('server 429 (daily import cap) surfaces its localized message',
+      () async {
+    final fake = _FakeTripsApiService(
+      importError: const ImportTripException(
+          statusCode: 429, message: "You've reached today's import limit"),
+    );
+    final container = _container(fake);
+
+    await container.read(importTripProvider.notifier).import('plan');
+
+    expect(container.read(importTripProvider).error,
+        "You've reached today's import limit");
+  });
+
+  test('non-user-facing server messages (5xx/config) are hidden', () async {
+    final fake = _FakeTripsApiService(
+      importError: const ImportTripException(
+          statusCode: 503, message: 'ANTHROPIC_API_KEY not configured'),
+    );
+    final container = _container(fake);
+
+    await container.read(importTripProvider.notifier).import('plan');
+
+    expect(container.read(importTripProvider).error, isEmpty,
+        reason: 'operator-facing English must fall back to generic copy');
+  });
+
   test('unexpected failure falls back to the generic-error state', () async {
     final fake = _FakeTripsApiService(importError: Exception('boom'));
     final container = _container(fake);

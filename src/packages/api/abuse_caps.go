@@ -34,6 +34,12 @@ const (
 	// New accounts allowed per client IP per UTC day.
 	defaultRegistrationsPerIPPerDay = 10
 
+	// Trip imports allowed per user per UTC day. Each import is one Sonnet
+	// extraction call plus up to importMaxPlaceLookups paid Places lookups, and
+	// the per-IP strict tier alone doesn't bound a single account driving many
+	// IPs — this is the per-account spend ceiling.
+	defaultImportsPerDay = 10
+
 	// Minimum seconds between transactional emails (verify / reset) to the same
 	// address, per purpose.
 	defaultEmailMinIntervalSeconds = 60
@@ -47,6 +53,7 @@ func loginLockWindow() time.Duration {
 	return time.Duration(envInt("LOGIN_LOCK_MINUTES", defaultLoginLockMinutes)) * time.Minute
 }
 func anonPlanPerDay() int { return envInt("FREE_ANON_PLAN_PER_DAY", defaultAnonPlanPerDay) }
+func importsPerDay() int  { return envInt("FREE_IMPORTS_PER_DAY", defaultImportsPerDay) }
 func registrationsPerIPPerDay() int {
 	return envInt("MAX_REGISTRATIONS_PER_IP_PER_DAY", defaultRegistrationsPerIPPerDay)
 }
@@ -69,6 +76,7 @@ var (
 	loginLockouts       = newLockoutTracker(loginMaxFailures, loginLockWindow)
 	anonPlanCounter     = newDailyCounter()
 	registrationCounter = newDailyCounter()
+	importCounter       = newDailyCounter()
 	emailSendThrottle   = newIntervalThrottle()
 )
 
@@ -296,6 +304,14 @@ func anonPlanAllowed(authed bool, ip string, now time.Time) bool {
 		return true
 	}
 	return anonPlanCounter.incr(ip, now) <= anonPlanPerDay()
+}
+
+// importAllowed reports whether a /trips/import request may proceed under the
+// per-user daily cap (specs/import-trip-from-ai-chat). Import is always
+// authenticated, so the key is the user id — unlike the per-IP strict tier,
+// this bounds one account's upstream spend no matter how many IPs it uses.
+func importAllowed(userID string, now time.Time) bool {
+	return importCounter.incr(userID, now) <= importsPerDay()
 }
 
 // =============================================================================

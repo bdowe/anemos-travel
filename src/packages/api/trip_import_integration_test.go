@@ -18,13 +18,19 @@ import (
 // behind a canned RoundTripper on a swapped placesService singleton.
 
 // cannedPlacesTransport answers every text search with one hit echoing the
-// query, except queries the miss predicate rejects (ZERO_RESULTS).
+// query, except queries the miss predicate rejects (genuine ZERO_RESULTS) and
+// queries the fail predicate breaks (transport-level outage — the case that
+// must NOT read as "the place doesn't exist").
 type cannedPlacesTransport struct {
 	miss func(query string) bool
+	fail func(query string) bool
 }
 
 func (c cannedPlacesTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	q := req.URL.Query().Get("query")
+	if c.fail != nil && c.fail(q) {
+		return nil, fmt.Errorf("dial tcp: connection refused")
+	}
 	body := fmt.Sprintf(
 		`{"results":[{"place_id":"pl_test","name":%q,"formatted_address":"1 Test St","geometry":{"location":{"lat":38.7223,"lng":-9.1393}}}],"status":"OK"}`, q)
 	if c.miss != nil && c.miss(q) {
@@ -39,9 +45,14 @@ func (c cannedPlacesTransport) RoundTrip(req *http.Request) (*http.Response, err
 
 func swapCannedPlaces(t *testing.T, miss func(string) bool) {
 	t.Helper()
+	swapCannedPlacesFailing(t, miss, nil)
+}
+
+func swapCannedPlacesFailing(t *testing.T, miss, fail func(string) bool) {
+	t.Helper()
 	svc := NewGooglePlacesService()
 	svc.APIKey = "places-test-key"
-	svc.Client = &http.Client{Transport: cannedPlacesTransport{miss: miss}}
+	svc.Client = &http.Client{Transport: cannedPlacesTransport{miss: miss, fail: fail}}
 	swapPlacesService(t, svc)
 }
 
@@ -254,8 +265,133 @@ func TestImportTripCapReached(t *testing.T) {
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422; body %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "trip limit reached") {
+	if !strings.Contains(rec.Body.String(), "trip limit") {
 		t.Errorf("cap message missing: %s", rec.Body.String())
+	}
+	// The cap is pre-checked: a capped user must cost zero model spend.
+	if n := len(fake.requestBodies()); n != 0 {
+		t.Errorf("model calls = %d, want 0 (cap must precede extraction)", n)
+	}
+}
+
+func TestImportTripDailyCapReached(t *testing.T) {
+	resetDB(t)
+	t.Setenv("FREE_IMPORTS_PER_DAY", "1")
+	importCounter.resetAll()
+	fake := newFakeAnthropic(t)
+	fake.scriptNonStreamingTool(importToolName, importHappyPayload)
+	swapCannedPlaces(t, nil)
+	_, token := createTestUser(t, "daily@example.com")
+
+	if rec := doJSON(t, http.MethodPost, "/api/v1/trips/import", token, map[string]any{"text": "plan one"}); rec.Code != http.StatusCreated {
+		t.Fatalf("first import: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	rec := doJSON(t, http.MethodPost, "/api/v1/trips/import", token, map[string]any{"text": "plan two"})
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second import: status = %d, want 429; body %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "import limit") {
+		t.Errorf("daily-cap message missing: %s", rec.Body.String())
+	}
+	// The capped request must not reach the model.
+	if n := len(fake.requestBodies()); n != 1 {
+		t.Errorf("model calls = %d, want 1", n)
+	}
+}
+
+// A Places outage (key configured, lookups erroring) with no model fallback
+// coordinates must be a retryable 503 — never the user-blaming "couldn't
+// locate any places" 422 — and no trip may be created.
+func TestImportTripPlacesOutage(t *testing.T) {
+	resetDB(t)
+	fake := newFakeAnthropic(t)
+	fake.scriptNonStreamingTool(importToolName, `{
+		"title": "Outage Trip",
+		"locations": [
+			{"name": "Some Museum", "city": "Rome", "search_hint": "Some Museum, Rome", "day": 1},
+			{"name": "Some Cafe", "city": "Rome", "search_hint": "Some Cafe, Rome", "day": 1}
+		]
+	}`)
+	swapCannedPlacesFailing(t, nil, func(string) bool { return true })
+	_, token := createTestUser(t, "outage@example.com")
+
+	rec := doJSON(t, http.MethodPost, "/api/v1/trips/import", token, map[string]any{"text": "roma plan"})
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503; body %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "temporarily unavailable") {
+		t.Errorf("retryable message missing: %s", rec.Body.String())
+	}
+	if n := countTrips(t); n != 0 {
+		t.Errorf("trips created = %d, want 0", n)
+	}
+}
+
+// Partial outage: failing lookups ride the approximate/dropped tiers under ONE
+// aggregate warning — no per-place "couldn't be located" blame for places that
+// were never actually searched.
+func TestImportTripLookupFailureTiers(t *testing.T) {
+	resetDB(t)
+	fake := newFakeAnthropic(t)
+	fake.scriptNonStreamingTool(importToolName, `{
+		"title": "Partial Outage",
+		"locations": [
+			{"name": "Findable Cafe", "city": "Lisbon", "search_hint": "Findable Cafe, Lisbon", "day": 1},
+			{"name": "Flaky Bar", "city": "Lisbon", "search_hint": "Flaky Bar, Lisbon", "day": 1, "latitude": 38.71, "longitude": -9.14},
+			{"name": "Flaky Gallery", "city": "Lisbon", "search_hint": "Flaky Gallery, Lisbon", "day": 2}
+		]
+	}`)
+	swapCannedPlacesFailing(t, nil, func(q string) bool { return strings.Contains(q, "Flaky") })
+	_, token := createTestUser(t, "flaky@example.com")
+
+	rec := doJSON(t, http.MethodPost, "/api/v1/trips/import", token, map[string]any{"text": "some plan"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	body := decode(t, rec)
+	if int(body["item_count"].(float64)) != 2 {
+		t.Errorf("item_count = %v, want 2 (Flaky Bar kept approximate, Flaky Gallery dropped)", body["item_count"])
+	}
+	joined := fmt.Sprint(body["warnings"].([]any)...)
+	if !strings.Contains(joined, "verification is unavailable") {
+		t.Errorf("aggregate outage warning missing: %v", joined)
+	}
+	if strings.Contains(joined, "Flaky") {
+		t.Errorf("outage-affected places must not get per-place blame: %v", joined)
+	}
+}
+
+// Extractions beyond importMaxLocations are capped with a visible warning —
+// never a silent cut.
+func TestImportTripCapsLocationCount(t *testing.T) {
+	resetDB(t)
+	var sb strings.Builder
+	sb.WriteString(`{"title": "Mega Trip", "locations": [`)
+	for i := 0; i < importMaxLocations+5; i++ {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		// Model coords on every location so the ones past the 50-lookup cap
+		// ride the approximate tier instead of dropping.
+		fmt.Fprintf(&sb, `{"name": "Place %d", "city": "Lisbon", "search_hint": "Place %d, Lisbon", "day": 1, "latitude": 38.7, "longitude": -9.1}`, i, i)
+	}
+	sb.WriteString(`]}`)
+	fake := newFakeAnthropic(t)
+	fake.scriptNonStreamingTool(importToolName, sb.String())
+	swapCannedPlaces(t, nil)
+	_, token := createTestUser(t, "mega@example.com")
+
+	rec := doJSON(t, http.MethodPost, "/api/v1/trips/import", token, map[string]any{"text": "very long plan"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	body := decode(t, rec)
+	if int(body["item_count"].(float64)) != importMaxLocations {
+		t.Errorf("item_count = %v, want %d", body["item_count"], importMaxLocations)
+	}
+	joined := fmt.Sprint(body["warnings"].([]any)...)
+	if !strings.Contains(joined, "5 more were left out") {
+		t.Errorf("capped warning missing: %v", joined)
 	}
 }
 

@@ -34,7 +34,12 @@ class ImportTripNotifier extends StateNotifier<ImportTripState> {
       state = ImportTripState(result: res);
       return res;
     } on ImportTripException catch (e) {
-      state = ImportTripState(error: e.message);
+      // Only 422 (no trip found / trip cap) and 429 (daily import cap) carry
+      // server messages written for end users, localized via the API's tr()
+      // catalog. Everything else (5xx, config errors like a missing provider
+      // key) is operator-facing English — show the generic copy instead.
+      final userFacing = e.statusCode == 422 || e.statusCode == 429;
+      state = ImportTripState(error: userFacing ? e.message : '');
       return null;
     } catch (_) {
       state = const ImportTripState(error: '');
