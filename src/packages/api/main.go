@@ -654,6 +654,13 @@ func buildRouter() *mux.Router {
 	router.HandleFunc("/hello", helloHandler).Methods("GET")
 	router.HandleFunc("/health", healthHandler).Methods("GET", "HEAD")
 
+	// MCP connector discovery documents (specs/mcp-connector) — root-level by
+	// RFC requirement; every handler 404s until MCP_ENABLED=true.
+	router.HandleFunc("/.well-known/oauth-protected-resource", oauthProtectedResourceHandler).Methods("GET")
+	router.HandleFunc("/.well-known/oauth-protected-resource/mcp", oauthProtectedResourceHandler).Methods("GET")
+	router.HandleFunc("/.well-known/oauth-authorization-server", oauthServerMetadataHandler).Methods("GET")
+	router.HandleFunc("/.well-known/openid-configuration", oauthServerMetadataHandler).Methods("GET")
+
 	// API versioning
 	api := router.PathPrefix("/api/v1").Subrouter()
 	api.HandleFunc("/hello", helloHandler).Methods("GET")
@@ -718,6 +725,16 @@ func buildRouter() *mux.Router {
 	api.HandleFunc("/auth/apple/availability", appleAvailabilityHandler).Methods("GET")
 	api.Handle("/auth/apple", strict(http.HandlerFunc(appleStartHandler))).Methods("GET")
 	api.Handle("/auth/apple/callback", strict(http.HandlerFunc(appleCallbackHandler))).Methods("POST")
+
+	// MCP connector OAuth provider (specs/mcp-connector): ChatGPT/claude.ai
+	// register via DCR, the browser consents at the app's /connect/ screen,
+	// tokens redeem here. All handlers gate on MCP_ENABLED. Credential-bearing
+	// endpoints take the strict tier; decision additionally requires auth.
+	api.Handle("/oauth/register", strict(http.HandlerFunc(oauthRegisterHandler))).Methods("POST")
+	api.Handle("/oauth/authorize", strict(http.HandlerFunc(oauthAuthorizeHandler))).Methods("GET")
+	api.Handle("/oauth/authorize/context", strict(http.HandlerFunc(oauthAuthorizeContextHandler))).Methods("POST")
+	api.Handle("/oauth/authorize/decision", strict(authMiddleware(http.HandlerFunc(oauthAuthorizeDecisionHandler)))).Methods("POST")
+	api.Handle("/oauth/token", strict(http.HandlerFunc(oauthTokenHandler))).Methods("POST")
 	// admin composes the auth + admin gate; used for curation and version-history routes.
 	admin := func(h http.HandlerFunc) http.Handler { return authMiddleware(adminMiddleware(h)) }
 	api.Handle("/trips", authMiddleware(http.HandlerFunc(listTripsHandler))).Methods("GET")
