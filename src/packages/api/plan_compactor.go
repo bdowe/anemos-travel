@@ -84,11 +84,12 @@ func summarizePlanConversation(ctx context.Context, client anthropic.Client, pre
 	}
 
 	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:      anthropic.ModelClaudeHaiku4_5,
+		Model:      aiModelLight(),
 		MaxTokens:  1024,
 		System:     []anthropic.TextBlockParam{{Text: system}},
 		Tools:      []anthropic.ToolUnionParam{{OfTool: &tool}},
 		ToolChoice: anthropic.ToolChoiceParamOfTool(compactToolName),
+		Thinking:   forcedToolThinking(),
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("Older conversation to summarize:\n\n" + text)),
 		},

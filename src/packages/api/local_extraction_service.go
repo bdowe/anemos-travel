@@ -101,11 +101,12 @@ func extractLocalContent(ctx context.Context, client anthropic.Client, city, raw
 	}
 
 	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:      anthropic.ModelClaudeSonnet4_6,
+		Model:      aiModel(),
 		MaxTokens:  4096,
 		System:     []anthropic.TextBlockParam{{Text: extractSystemPrompt}},
 		Tools:      []anthropic.ToolUnionParam{{OfTool: &tool}},
 		ToolChoice: anthropic.ToolChoiceParamOfTool(extractToolName),
+		Thinking:   forcedToolThinking(),
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(
 				fmt.Sprintf("City: %s\n\nRaw local material:\n\n%s", city, rawText))),

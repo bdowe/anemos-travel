@@ -76,11 +76,12 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 	}
 
 	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:      anthropic.ModelClaudeSonnet4_6,
+		Model:      aiModel(),
 		MaxTokens:  1024,
 		System:     []anthropic.TextBlockParam{{Text: system}},
 		Tools:      []anthropic.ToolUnionParam{{OfTool: &tool}},
 		ToolChoice: anthropic.ToolChoiceParamOfTool(distillToolName),
+		Thinking:   forcedToolThinking(),
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("Planning conversation transcript:\n\n" + text)),
 		},

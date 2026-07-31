@@ -429,7 +429,7 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		params := anthropic.MessageNewParams{
-			Model:     anthropic.ModelClaudeSonnet4_6,
+			Model:     aiModel(),
 			MaxTokens: 8192,
 			System: []anthropic.TextBlockParam{
 				{
