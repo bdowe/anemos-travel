@@ -853,5 +853,33 @@
   "errorTooManyRequests": "Vas un poco demasiado rápido: espera un momento e inténtalo de nuevo.",
   "errorSession": "Tu sesión ha caducado. Vuelve a iniciar sesión.",
   "errorServer": "Algo salió mal de nuestro lado. Inténtalo de nuevo en un momento.",
-  "errorGeneric": "Algo salió mal. Inténtalo de nuevo."
+  "errorGeneric": "Algo salió mal. Inténtalo de nuevo.",
+  "nearMeChipLabel": "¿Qué hay cerca de mí?",
+  "nearMeSeedLabel": "Cerca de mi ubicación actual",
+  "nearMeSeedMessage": "Mi ubicación actual es latitud {lat}, longitud {lng} (precisión de unos {accuracy} m). ¿Qué hay bueno para ver, hacer o comer cerca de mí ahora mismo?",
+  "@nearMeSeedMessage": {
+    "placeholders": {
+      "lat": {
+        "type": "String"
+      },
+      "lng": {
+        "type": "String"
+      },
+      "accuracy": {
+        "type": "String"
+      }
+    }
+  },
+  "nearMeManualMessage": "Estoy en {place}. ¿Qué hay bueno para ver, hacer o comer por la zona ahora mismo?",
+  "@nearMeManualMessage": {
+    "placeholders": {
+      "place": {
+        "type": "String"
+      }
+    }
+  },
+  "nearMeDialogTitle": "¿Dónde estás?",
+  "nearMeDialogMessage": "No pudimos obtener tu ubicación. Escribe una ciudad o un barrio, o activa el acceso a la ubicación e inténtalo de nuevo.",
+  "nearMeDialogHint": "p. ej. Atenas, Plaka",
+  "nearMeDialogCta": "Preguntar"
 }

@@ -5221,6 +5221,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Something went wrong. Please try again.'**
   String get errorGeneric;
+
+  /// No description provided for @nearMeChipLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s near me?'**
+  String get nearMeChipLabel;
+
+  /// No description provided for @nearMeSeedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Near my current location'**
+  String get nearMeSeedLabel;
+
+  /// No description provided for @nearMeSeedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'My current location is latitude {lat}, longitude {lng} (accuracy about {accuracy} m). What\'s good to see, do, or eat near me right now?'**
+  String nearMeSeedMessage(String lat, String lng, String accuracy);
+
+  /// No description provided for @nearMeManualMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'I\'m in {place}. What\'s good to see, do, or eat nearby right now?'**
+  String nearMeManualMessage(String place);
+
+  /// No description provided for @nearMeDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Where are you?'**
+  String get nearMeDialogTitle;
+
+  /// No description provided for @nearMeDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t get your location. Type a city or neighborhood instead, or enable location access and try again.'**
+  String get nearMeDialogMessage;
+
+  /// No description provided for @nearMeDialogHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Athens, Plaka'**
+  String get nearMeDialogHint;
+
+  /// No description provided for @nearMeDialogCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask'**
+  String get nearMeDialogCta;
 }
 
 class _AppLocalizationsDelegate
