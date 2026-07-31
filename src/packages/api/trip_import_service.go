@@ -34,13 +34,7 @@ const (
 	// bounds worst-case spend per import; places past it fall back to the
 	// model-coordinate tier below rather than being dropped outright.
 	importMaxPlaceLookups = 50
-	// Sonnet, not Haiku: a one-shot user-visible result with no chat loop to
-	// repair it, and the live /plan agent already produces this exact location
-	// shape on Sonnet 4.6 — the schema conventions are battle-tested against
-	// it. Revisit (Haiku) once eval fixtures exist.
-	importModel = anthropic.ModelClaudeSonnet4_6
-
-	importSystemPrompt = "You extract a travel itinerary from a pasted AI-chat conversation or trip summary. " +
+	importSystemPrompt    = "You extract a travel itinerary from a pasted AI-chat conversation or trip summary. " +
 		"Call import_trip exactly once. " +
 		"STRICT RULES: Use ONLY places actually named in the provided text — never invent or pad with your own suggestions. " +
 		"If several itinerary drafts appear, extract the FINAL agreed version. " +
@@ -210,12 +204,17 @@ func extractImportedTrip(ctx context.Context, client anthropic.Client, rawText s
 		},
 	}
 
+	// The heavy model, not the light one: a one-shot user-visible result with
+	// no chat loop to repair it, and the live /plan agent already produces
+	// this exact location shape on the same model — the schema conventions
+	// are battle-tested against it.
 	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:      importModel,
+		Model:      aiModel(),
 		MaxTokens:  importMaxTokens,
 		System:     []anthropic.TextBlockParam{{Text: importSystemPrompt}},
 		Tools:      []anthropic.ToolUnionParam{{OfTool: &tool}},
 		ToolChoice: anthropic.ToolChoiceParamOfTool(importToolName),
+		Thinking:   forcedToolThinking(),
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(
 				"Pasted conversation or trip summary:\n\n" + rawText)),
