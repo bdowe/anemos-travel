@@ -1,5 +1,9 @@
 # Production stack — goldentempotravel.com
 
+> **Box died / provider fired us?** [`REHOME.md`](REHOME.md) is the
+> start-to-finish runbook for standing prod up on a fresh VM in ~90 minutes
+> (proven 2026-08-01, Vultr → DigitalOcean).
+
 Runs the prebuilt GHCR images (amd64) on a cloud VPS (**DigitalOcean**,
 Ubuntu LTS — previously Vultr, originally a home Raspberry Pi) reached exclusively through
 a **Cloudflare Tunnel**: the `cloudflared` service dials out to the
