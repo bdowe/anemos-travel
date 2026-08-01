@@ -33,6 +33,12 @@
 #                          MANUAL CHECKS block for the real inbox round-trip).
 #   SMOKE_DB_CONTAINER    postgres container for sql mode (default development-postgres-1)
 #   SMOKE_TIMEOUT         per-request curl --max-time seconds (default 30; plan uses 180)
+#   SMOKE_MCP_EXPECT      MCP connector expectation for step 2b: auto (default)
+#                          asserts whichever state /mcp/availability reports; on
+#                          FAILS unless the connector is enabled (run this right
+#                          after flipping MCP_ENABLED=true so a botched flip
+#                          cannot read as green); off FAILS unless it is
+#                          disabled (the post-rollback check).
 #
 # Exit status: 0 if every non-skipped step passed, 1 otherwise.
 
@@ -46,6 +52,7 @@ SMOKE_TOKEN="${SMOKE_TOKEN:-}"
 SMOKE_SIGNING_SECRET="${SMOKE_SIGNING_SECRET:-}"
 SMOKE_DB_CONTAINER="${SMOKE_DB_CONTAINER:-development-postgres-1}"
 SMOKE_TIMEOUT="${SMOKE_TIMEOUT:-30}"
+SMOKE_MCP_EXPECT="${SMOKE_MCP_EXPECT:-auto}"
 
 # --- output helpers -----------------------------------------------------------
 
@@ -195,6 +202,79 @@ check "GET /auth/me confirms the user" "$EMAIL" "$me_email" "status=$LAST_STATUS
 # default. existing mode may override it with SMOKE_TOKEN.
 OWNER_TOKEN="$TOKEN"
 OWNER_CAN_MUTATE=1
+
+# ===== 2b. MCP connector surface =============================================
+# The connector (specs/mcp-connector) is gated by MCP_ENABLED: everything 404s
+# when off EXCEPT /api/v1/mcp/availability (unauthenticated probe) and
+# /api/v1/oauth/connections (a grant must always be revocable). Both states are
+# asserted positively — "off" is the kill-switch holding, not a skip.
+step "2b. MCP connector surface (expect: $SMOKE_MCP_EXPECT)"
+req GET /mcp/availability
+if [ "$LAST_STATUS" = "200" ] && printf '%s' "$RESP_BODY" | jq -e 'has("available") and has("url")' >/dev/null 2>&1; then
+  pass "GET /mcp/availability -> 200 with available+url"
+else
+  fail "GET /mcp/availability -> 200 with available+url" "status=$LAST_STATUS"
+fi
+MCP_AVAILABLE="$(printf '%s' "$RESP_BODY" | jq -r '.available // false' 2>/dev/null || echo false)"
+
+case "$SMOKE_MCP_EXPECT" in
+  on)   check "connector is enabled (SMOKE_MCP_EXPECT=on)" "true" "$MCP_AVAILABLE" "MCP_ENABLED flip did not land?" ;;
+  off)  check "connector is disabled (SMOKE_MCP_EXPECT=off)" "false" "$MCP_AVAILABLE" "connector still enabled" ;;
+  auto) note "auto mode — asserting the reported state (available=$MCP_AVAILABLE)" ;;
+  *)    fail "SMOKE_MCP_EXPECT must be on|off|auto" "got [$SMOKE_MCP_EXPECT]" ;;
+esac
+
+if [ "$MCP_AVAILABLE" = "true" ]; then
+  mcp_url="$(printf '%s' "$RESP_BODY" | jq -r '.url // empty')"
+  check "availability advertises this gateway's /mcp" "$BASE_URL/mcp" "$mcp_url" \
+    "PUBLIC_BASE_URL wrong on the server (silent localhost fallback?)"
+
+  # Discovery documents are built entirely from PUBLIC_BASE_URL; wrong values
+  # here break ChatGPT/claude.ai linking even though the server itself is up.
+  pr_json="$(curl -sS --max-time "$SMOKE_TIMEOUT" "$BASE_URL/.well-known/oauth-protected-resource/mcp" 2>/dev/null || true)"
+  check "protected-resource doc .resource" "$BASE_URL/mcp" \
+    "$(printf '%s' "$pr_json" | jq -r '.resource // empty' 2>/dev/null || true)"
+  check "protected-resource doc .authorization_servers[0]" "$BASE_URL" \
+    "$(printf '%s' "$pr_json" | jq -r '.authorization_servers[0] // empty' 2>/dev/null || true)"
+
+  as_json="$(curl -sS --max-time "$SMOKE_TIMEOUT" "$BASE_URL/.well-known/oauth-authorization-server" 2>/dev/null || true)"
+  check "auth-server doc .issuer" "$BASE_URL" \
+    "$(printf '%s' "$as_json" | jq -r '.issuer // empty' 2>/dev/null || true)"
+  check "auth-server doc .authorization_endpoint" "$API/oauth/authorize" \
+    "$(printf '%s' "$as_json" | jq -r '.authorization_endpoint // empty' 2>/dev/null || true)"
+  check "auth-server doc .token_endpoint" "$API/oauth/token" \
+    "$(printf '%s' "$as_json" | jq -r '.token_endpoint // empty' 2>/dev/null || true)"
+  check "auth-server doc .registration_endpoint" "$API/oauth/register" \
+    "$(printf '%s' "$as_json" | jq -r '.registration_endpoint // empty' 2>/dev/null || true)"
+
+  # An unauthenticated POST /mcp must 401 with the exact WWW-Authenticate
+  # challenge clients use to (re)discover us — without it the 401 is a dead end.
+  mh="$(mktemp)"
+  mcp_code="$(curl -sS -o /dev/null -D "$mh" -w '%{http_code}' --max-time "$SMOKE_TIMEOUT" \
+    -X POST "$BASE_URL/mcp" -H 'Content-Type: application/json' -d '{}' 2>/dev/null || echo 000)"
+  check "unauthenticated POST /mcp -> 401" "401" "$mcp_code"
+  challenge="$(grep -i '^www-authenticate:' "$mh" | head -1 | tr -d '\r' | cut -d: -f2- | sed 's/^ *//')"
+  check "401 sends the WWW-Authenticate resource_metadata challenge" \
+    "Bearer resource_metadata=\"$BASE_URL/.well-known/oauth-protected-resource/mcp\"" \
+    "$challenge"
+  rm -f "$mh"
+else
+  # Disabled: assert the kill-switch actually holds (404s, not just "off").
+  as_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time "$SMOKE_TIMEOUT" \
+    "$BASE_URL/.well-known/oauth-authorization-server" 2>/dev/null || echo 000)"
+  check "disabled: discovery doc -> 404" "404" "$as_code"
+  mcp_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time "$SMOKE_TIMEOUT" \
+    -X POST "$BASE_URL/mcp" -H 'Content-Type: application/json' -d '{}' 2>/dev/null || echo 000)"
+  check "disabled: POST /mcp -> 404" "404" "$mcp_code"
+fi
+
+# Reachable in BOTH states: a grant must always be revocable.
+req GET /oauth/connections "" "Authorization: Bearer $TOKEN"
+if [ "$LAST_STATUS" = "200" ] && printf '%s' "$RESP_BODY" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  pass "GET /oauth/connections -> 200 array (revocation surface up regardless of flag)"
+else
+  fail "GET /oauth/connections -> 200 array" "status=$LAST_STATUS"
+fi
 
 # ===== 3. Seed a trip =========================================================
 step "3. Seed a trip (mode: $SMOKE_SEED_MODE)"
@@ -519,6 +599,13 @@ ${C_BOLD}MANUAL CHECKS REMAINING (need real DNS/SMTP/crawler)${C_RESET}
     - Prod-only edge checks (skipped against the dev gateway): the security
       headers (step 12) and /app/version.json (step 11) must be re-run against
       the live https://goldentempotravel.com gateway with curl -I / curl.
+    - MCP connector (when MCP_ENABLED=true): link from ChatGPT (Settings ->
+      Apps & Connectors -> Developer Mode) and from claude.ai (Settings ->
+      Connectors -> add custom connector) against https://<host>/mcp, exercise
+      list_trips / create_trip / search_local_recommendations, then revoke the
+      grant in app Settings -> Connected apps and confirm the client is cut
+      off (step 2b asserts the HTTP surface; the OAuth dance needs real
+      clients).
 EOF
 
 [ "$FAILED" -eq 0 ]

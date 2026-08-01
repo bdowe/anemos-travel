@@ -201,7 +201,9 @@ Green deploy = tunnel SSH proven → finish Phase 5's public-22 removal.
 - [ ] `docker compose ps`: 4 services healthy, restart `unless-stopped`
 - [ ] Public health + `version.json` both report the pinned SHA; `database: ok`
 - [ ] Real-account browser login; trips visible
-- [ ] `make smoke BASE_URL=https://goldentempotravel.com SMOKE_SEED_MODE=plan` → 0 failed
+- [ ] `make smoke BASE_URL=https://goldentempotravel.com SMOKE_SEED_MODE=plan SMOKE_MCP_EXPECT=on` → 0 failed
+      (`on` catches the re-home footgun: a `.env` rebuilt from `.env.sample`
+      comes up `MCP_ENABLED=false` and silently disables the live connector)
 - [ ] Backup timer scheduled + manual run uploaded to R2
 - [ ] CI redeploy green including the release-verify step
 - [ ] Public 22 refused from outside; ufw shows only the 172.28.0.0/16 rule

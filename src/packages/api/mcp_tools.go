@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -117,6 +118,7 @@ func mcpCreateTrip(ctx context.Context, caller mcpCaller, in createTripInput) (*
 		in.Locations = in.Locations[:mcpMaxTripLocations]
 	}
 	if mcpCreateCounter.incr(caller.grantID.String(), time.Now()) > mcpCreateTripsPerDay {
+		log.Printf("mcp create_trip daily cap grant=%s", caller.grantID)
 		return toolError("This connection has reached today's limit for creating trips. Try again tomorrow."), zero, nil
 	}
 

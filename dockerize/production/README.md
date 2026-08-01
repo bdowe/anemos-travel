@@ -196,7 +196,10 @@ against production:
 # sql seed mode is local-only (needs the postgres container); against prod use
 # plan mode (the AI planner builds a real trip — costs a little Anthropic spend)
 # or existing mode with a trip you own (SMOKE_TRIP_ID + SMOKE_TOKEN=<bearer>).
-make smoke BASE_URL=https://goldentempotravel.com SMOKE_SEED_MODE=plan
+# SMOKE_MCP_EXPECT=on hard-fails unless the MCP connector is live — use it
+# whenever MCP_ENABLED=true on the host, so a botched flip can't read as green
+# (auto would happily assert the disabled state); off is the post-rollback run.
+make smoke BASE_URL=https://goldentempotravel.com SMOKE_SEED_MODE=plan SMOKE_MCP_EXPECT=on
 ```
 
 Green means the traveler journey works end to end; the run also prints a
