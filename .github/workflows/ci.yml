@@ -181,7 +181,7 @@ jobs:
         with:
           context: src/packages/api
           file: src/packages/api/Dockerfile
-          # Production is an amd64 VPS (Vultr); re-add linux/arm64 (plus the
+          # Production is an amd64 VPS (DigitalOcean); re-add linux/arm64 (plus the
           # setup-qemu-action step) if an ARM host ever returns.
           platforms: linux/amd64
           push: true
@@ -228,7 +228,7 @@ jobs:
     env:
       IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || github.sha }}
     steps:
-      # The production host is a Raspberry Pi behind a Cloudflare Tunnel, so
+      # The production host is a cloud VPS behind a Cloudflare Tunnel, so
       # there is no publicly routable SSH port: every ssh/rsync below goes
       # through `cloudflared access ssh` against the tunnel's SSH hostname
       # (DEPLOY_HOST, e.g. ssh.goldentempotravel.com), authenticated by a

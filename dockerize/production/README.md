@@ -1,7 +1,7 @@
 # Production stack — goldentempotravel.com
 
-Runs the prebuilt GHCR images (amd64) on a cloud VPS (**Vultr**,
-Ubuntu LTS — previously a home Raspberry Pi) reached exclusively through
+Runs the prebuilt GHCR images (amd64) on a cloud VPS (**DigitalOcean**,
+Ubuntu LTS — previously Vultr, originally a home Raspberry Pi) reached exclusively through
 a **Cloudflare Tunnel**: the `cloudflared` service dials out to the
 Cloudflare edge, so the host publishes no ports and exposes nothing
 directly — even with a public IP, ingress stays tunnel-only. TLS
