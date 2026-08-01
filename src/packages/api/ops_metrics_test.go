@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -217,6 +218,24 @@ func TestOpsProcessStats(t *testing.T) {
 	}
 	if snap.Upstream == nil {
 		t.Errorf("upstream map is nil, want present (possibly empty)")
+	}
+}
+
+// The AI-health counters (ai_health.go) surface in the flattened upstream map.
+func TestUpstreamCountsIncludeAIHealth(t *testing.T) {
+	resetAIHealth(t)
+	recordAIResult(nil)                      // success
+	recordAIResult(context.DeadlineExceeded) // transient
+	m := upstreamCountsSnapshot()
+	if m["ai_success_total"] != 1 || m["ai_transient_total"] != 1 {
+		t.Fatalf("ai counters = success %d transient %d, want 1/1",
+			m["ai_success_total"], m["ai_transient_total"])
+	}
+	if _, ok := m["ai_fatal_total"]; !ok {
+		t.Fatalf("ai_fatal_total missing from upstream map: %v", m)
+	}
+	if _, ok := m["ai_consecutive_fatal"]; !ok {
+		t.Fatalf("ai_consecutive_fatal missing from upstream map: %v", m)
 	}
 }
 

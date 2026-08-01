@@ -44,11 +44,13 @@ import (
 
 // fakeTurn is one scripted assistant turn for a streaming call.
 type fakeTurn struct {
-	kind      string // "text" | "tool" | "error"
-	text      string
-	toolName  string
-	toolInput string // raw JSON object
-	errMsg    string
+	kind       string // "text" | "tool" | "textThenTool" | "error" | "httpError"
+	httpStatus int    // httpError only
+	errType    string // httpError only, e.g. "invalid_request_error"
+	text       string
+	toolName   string
+	toolInput  string // raw JSON object
+	errMsg     string
 }
 
 // textTurn streams the given text (split across multiple text_delta frames)
@@ -73,6 +75,15 @@ func textThenToolTurn(text, name, inputJSON string) fakeTurn {
 // so stream.Err() fires client-side.
 func errorTurn(message string) fakeTurn { return fakeTurn{kind: "error", errMsg: message} }
 
+// httpErrorTurn answers the streaming call with a non-2xx status and an
+// Anthropic error JSON body before any SSE frames — the shape the real
+// credit-balance 400 took. Surfaces as a typed *anthropic.Error from
+// stream.Err() on the first Next(). Use non-retryable statuses (400/401/403):
+// the SDK auto-retries 408/409/429/5xx (max 2), replaying the same turn.
+func httpErrorTurn(status int, errType, message string) fakeTurn {
+	return fakeTurn{kind: "httpError", httpStatus: status, errType: errType, errMsg: message}
+}
+
 type fakeAnthropic struct {
 	t   *testing.T
 	srv *httptest.Server
@@ -82,6 +93,8 @@ type fakeAnthropic struct {
 	requests         [][]byte
 	nonStreamContent json.RawMessage
 	nonStreamStop    string
+	nonStreamStatus  int    // non-zero => non-streaming calls fail with this status
+	nonStreamErrBody string // Anthropic error envelope for nonStreamStatus
 }
 
 // newFakeAnthropic starts the fake and points the whole process at it for the
@@ -112,6 +125,17 @@ func (f *fakeAnthropic) scriptNonStreamingTool(name, inputJSON string) {
 	f.nonStreamStop = "tool_use"
 }
 
+// scriptNonStreamingHTTPError makes every non-streaming call fail with the
+// given status + Anthropic error envelope — the Messages.New analogue of
+// httpErrorTurn. Same non-retryable-status caveat applies.
+func (f *fakeAnthropic) scriptNonStreamingHTTPError(status int, errType, message string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nonStreamStatus = status
+	f.nonStreamErrBody = fmt.Sprintf(
+		`{"type":"error","error":{"type":%q,"message":%q},"request_id":"req_fake_err"}`, errType, message)
+}
+
 // requestBodies returns a copy of every /v1/messages request body received,
 // in arrival order — for asserting what round-tripped back to the "model".
 func (f *fakeAnthropic) requestBodies() [][]byte {
@@ -140,6 +164,8 @@ func (f *fakeAnthropic) handle(w http.ResponseWriter, r *http.Request) {
 	turns := f.turns
 	nonStreamContent := f.nonStreamContent
 	nonStreamStop := f.nonStreamStop
+	nonStreamStatus := f.nonStreamStatus
+	nonStreamErrBody := f.nonStreamErrBody
 	f.mu.Unlock()
 
 	var req struct {
@@ -157,6 +183,12 @@ func (f *fakeAnthropic) handle(w http.ResponseWriter, r *http.Request) {
 
 	if !req.Stream {
 		w.Header().Set("Content-Type", "application/json")
+		if nonStreamStatus != 0 {
+			w.Header().Set("request-id", "req_fake_err")
+			w.WriteHeader(nonStreamStatus)
+			io.WriteString(w, nonStreamErrBody)
+			return
+		}
 		fmt.Fprintf(w, `{"id":"msg_fake_ns","type":"message","role":"assistant","model":"claude-sonnet-4-6","content":%s,"stop_reason":%q,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}`,
 			nonStreamContent, nonStreamStop)
 		return
@@ -205,6 +237,17 @@ func (f *fakeAnthropic) sseFrame(w http.ResponseWriter, event string, data any) 
 }
 
 func (f *fakeAnthropic) streamTurn(w http.ResponseWriter, idx int, turn fakeTurn) {
+	// A pre-stream HTTP failure never opens the SSE stream: status + error
+	// body only, exactly like the real credit-balance 400.
+	if turn.kind == "httpError" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("request-id", "req_fake_err")
+		w.WriteHeader(turn.httpStatus)
+		fmt.Fprintf(w, `{"type":"error","error":{"type":%q,"message":%q},"request_id":"req_fake_err"}`,
+			turn.errType, turn.errMsg)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.WriteHeader(http.StatusOK)
 

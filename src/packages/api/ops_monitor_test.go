@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -31,9 +32,10 @@ func (m *fakeMailbox) count() int {
 	return len(m.sent)
 }
 
-// newTestMonitor wires a monitor to the real store (test DB) with a controllable
-// DB-ping and a fake mailbox.
-func newTestMonitor(mailbox *fakeMailbox, emailOn bool, ping *bool) *healthMonitor {
+// newTestMonitor wires a monitor to the real store (test DB) with a
+// controllable DB-ping, a controllable AI-health state (pointer-flip, like
+// the ping), and a fake mailbox.
+func newTestMonitor(mailbox *fakeMailbox, emailOn bool, ping *bool, ai *aiHealthState) *healthMonitor {
 	return &healthMonitor{
 		interval: time.Minute,
 		listAdmins: func(ctx context.Context) ([]store.ListAdminUsersRow, error) {
@@ -46,6 +48,7 @@ func newTestMonitor(mailbox *fakeMailbox, emailOn bool, ping *bool) *healthMonit
 		sendEmail:    mailbox.send,
 		emailEnabled: func() bool { return emailOn },
 		pingDBFn:     func(context.Context) bool { return *ping },
+		aiStateFn:    func() aiHealthState { return *ai },
 	}
 }
 
@@ -81,7 +84,7 @@ func TestHealthMonitorTransitions(t *testing.T) {
 
 	mailbox := &fakeMailbox{}
 	dbUp := true
-	m := newTestMonitor(mailbox, true, &dbUp)
+	m := newTestMonitor(mailbox, true, &dbUp, &aiHealthState{})
 	ctx := context.Background()
 	now := time.Now()
 
@@ -139,6 +142,133 @@ func TestHealthMonitorTransitions(t *testing.T) {
 	}
 }
 
+// An AI-provider fatal failure (billing/auth, ai_health.go) drives the same
+// transition machinery as a DB outage: one alert per admin with the AI reason
+// in the payload and email, dedup on repeat ticks, and a recovery alert once
+// the tracker reports healthy again.
+func TestHealthMonitorAITransitions(t *testing.T) {
+	requireDB(t)
+	resetDB(t)
+	writeFreshHeartbeat(t, time.Now()) // isolate the AI signal from backups
+
+	admin, _ := createTestUser(t, "opsadmin-ai@example.com")
+	makeAdmin(t, admin.ID)
+
+	mailbox := &fakeMailbox{}
+	dbUp := true
+	ai := aiHealthState{}
+	m := newTestMonitor(mailbox, true, &dbUp, &ai)
+	ctx := context.Background()
+	now := time.Now()
+
+	// Tick 1: healthy — nothing.
+	m.runOnce(ctx, now)
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsAlert); c != 0 {
+		t.Fatalf("healthy tick alerted: %d", c)
+	}
+
+	// Tick 2: the AI provider goes fatal — one alert carrying the reason.
+	ai = aiHealthState{Failing: true, Reason: "credit balance"}
+	m.runOnce(ctx, now)
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsAlert); c != 1 {
+		t.Fatalf("ops_alert count = %d, want 1", c)
+	}
+	rows, _ := store.New(dbPool).ListNotificationsByUser(ctx,
+		store.ListNotificationsByUserParams{UserID: admin.ID, Limit: 50})
+	var payload map[string]any
+	_ = json.Unmarshal(rows[0].Payload, &payload)
+	reasons, _ := json.Marshal(payload["reasons"])
+	if !strings.Contains(string(reasons), "AI provider failing: credit balance") {
+		t.Fatalf("alert payload reasons = %s, want the AI reason", reasons)
+	}
+	if mailbox.count() != 1 || !strings.Contains(mailbox.sent[0].body, "AI provider failing: credit balance") {
+		t.Fatalf("email = %d sent, want 1 carrying the AI reason", mailbox.count())
+	}
+
+	// Tick 3: still failing — dedup, nothing new.
+	m.runOnce(ctx, now)
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsAlert); c != 1 {
+		t.Fatalf("repeat fatal tick re-alerted: %d", c)
+	}
+
+	// Tick 4: a successful AI call cleared the tracker — recovery alert.
+	ai = aiHealthState{}
+	m.runOnce(ctx, now)
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsRecovered); c != 1 {
+		t.Fatalf("ops_recovered count = %d, want 1", c)
+	}
+	if mailbox.count() != 2 {
+		t.Fatalf("emails = %d, want 2", mailbox.count())
+	}
+}
+
+// A second outage arriving while the system is ALREADY degraded must still
+// alert: the dedup keys on the reason SET, not the degraded boolean —
+// otherwise a fatal AI failure during a stale-backups window would repeat the
+// silent multi-day /plan outage this feature exists to prevent.
+func TestHealthMonitorAlertsOnOverlappingOutages(t *testing.T) {
+	requireDB(t)
+	resetDB(t)
+	writeFreshHeartbeat(t, time.Now())
+
+	admin, _ := createTestUser(t, "opsadmin-overlap@example.com")
+	makeAdmin(t, admin.ID)
+
+	mailbox := &fakeMailbox{}
+	dbUp := false // outage #1: DB down from the first tick
+	ai := aiHealthState{}
+	m := newTestMonitor(mailbox, true, &dbUp, &ai)
+	ctx := context.Background()
+	now := time.Now()
+
+	// Tick 1: DB down — first degraded alert.
+	m.runOnce(ctx, now)
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsAlert); c != 1 {
+		t.Fatalf("tick1 ops_alert = %d, want 1", c)
+	}
+
+	// Tick 2: the AI provider goes fatal WHILE still degraded — the reason set
+	// changed, so a fresh alert fires carrying both reasons.
+	ai = aiHealthState{Failing: true, Reason: "credit balance"}
+	m.runOnce(ctx, now)
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsAlert); c != 2 {
+		t.Fatalf("tick2 ops_alert = %d, want 2 (overlapping outage must alert)", c)
+	}
+	rows, _ := store.New(dbPool).ListNotificationsByUser(ctx,
+		store.ListNotificationsByUserParams{UserID: admin.ID, Limit: 50})
+	var payload map[string]any
+	_ = json.Unmarshal(rows[0].Payload, &payload)
+	reasons, _ := json.Marshal(payload["reasons"])
+	if !strings.Contains(string(reasons), "AI provider failing: credit balance") ||
+		!strings.Contains(string(reasons), "database unreachable") {
+		t.Fatalf("overlap alert reasons = %s, want both outages", reasons)
+	}
+
+	// Tick 3: unchanged set — dedup holds.
+	m.runOnce(ctx, now)
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsAlert); c != 2 {
+		t.Fatalf("tick3 re-alerted: %d", c)
+	}
+
+	// Tick 4: AI recovers, DB still down — set changed, still degraded: a
+	// fresh degraded alert with the remaining reason (an update, not recovery).
+	ai = aiHealthState{}
+	m.runOnce(ctx, now)
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsAlert); c != 3 {
+		t.Fatalf("tick4 ops_alert = %d, want 3", c)
+	}
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsRecovered); c != 0 {
+		t.Fatalf("tick4 fired recovery while still degraded: %d", c)
+	}
+
+	// Tick 5: everything healthy — one recovery.
+	dbUp = true
+	m.runOnce(ctx, now)
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsRecovered); c != 1 {
+		t.Fatalf("tick5 ops_recovered = %d, want 1", c)
+	}
+}
+
 // With SMTP unconfigured, a transition still writes in-app notifications but
 // sends no email (email is the only gated channel).
 func TestHealthMonitorNoEmailWhenUnconfigured(t *testing.T) {
@@ -151,7 +281,7 @@ func TestHealthMonitorNoEmailWhenUnconfigured(t *testing.T) {
 
 	mailbox := &fakeMailbox{}
 	dbUp := false // start degraded on first tick
-	m := newTestMonitor(mailbox, false /* email off */, &dbUp)
+	m := newTestMonitor(mailbox, false /* email off */, &dbUp, &aiHealthState{})
 
 	m.runOnce(context.Background(), time.Now())
 

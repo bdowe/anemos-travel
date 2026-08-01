@@ -83,7 +83,7 @@ func opsHealthHandler(w http.ResponseWriter, r *http.Request) {
 func buildDependencyHealth(ctx context.Context, now time.Time) DependencyHealth {
 	db := probeDB(ctx)
 	backups := readBackupHealth(now)
-	state := computeHealthState(db.Status == "ok", backups.Stale)
+	state := computeHealthState(db.Status == "ok", backups.Stale, aiHealth.state())
 	return DependencyHealth{
 		DB:        db,
 		Providers: providerStatuses(),
@@ -186,18 +186,29 @@ type healthState struct {
 	reasons  []string
 }
 
-// computeHealthState derives the top-level degraded verdict from the two
-// deterministic, unpriced signals: DB reachability and backup freshness. It
+// computeHealthState derives the top-level degraded verdict from three
+// deterministic, unpriced signals: DB reachability, backup freshness, and the
+// AI provider's passively-tracked health (ai_health.go — fatal billing/auth
+// failures recorded by the real AI call sites; no probe is ever sent). It
 // deliberately does NOT consider provider configuration (a missing optional
 // provider key is not "the service is unhealthy") and never pings paid
-// providers. reasons is always non-nil.
-func computeHealthState(dbOK, backupsStale bool) healthState {
+// providers. Once fatal, the AI signal clears only on the next successful AI
+// call — with zero AI traffic the state stays degraded, which is correct for
+// billing/auth outages (they don't fix themselves). reasons is always non-nil.
+func computeHealthState(dbOK, backupsStale bool, ai aiHealthState) healthState {
 	reasons := []string{}
 	if !dbOK {
 		reasons = append(reasons, "database unreachable")
 	}
 	if backupsStale {
 		reasons = append(reasons, "backups stale")
+	}
+	if ai.Failing {
+		reason := ai.Reason
+		if reason == "" {
+			reason = "unknown"
+		}
+		reasons = append(reasons, "AI provider failing: "+reason)
 	}
 	return healthState{degraded: len(reasons) > 0, reasons: reasons}
 }

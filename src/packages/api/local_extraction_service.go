@@ -112,6 +112,8 @@ func extractLocalContent(ctx context.Context, client anthropic.Client, city, raw
 				fmt.Sprintf("City: %s\n\nRaw local material:\n\n%s", city, rawText))),
 		},
 	})
+	// Health record at the SDK call only (ai_health.go).
+	recordAIResult(err)
 	if err != nil {
 		return ExtractedContent{}, fmt.Errorf("extraction model call: %w", err)
 	}
