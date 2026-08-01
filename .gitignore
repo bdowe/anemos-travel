@@ -53,6 +53,7 @@ logs/
 # Per-worktree dev-stack config (scripts/worktree.sh writes it) and the
 # lane worktrees themselves (also in .git/info/exclude on harness machines)
 .wt.env
+LANE-BRIEF.md
 .claude/worktrees/
 
 # Docker volumes and data

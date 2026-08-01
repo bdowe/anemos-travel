@@ -28,7 +28,8 @@ agents STOP at PR-open (`ship pr` — never merge); one integrator session
 hand-merged — regen LAST), merges serially, and watches each deploy. Wave
 planning reserves goose migration numbers; at most one in-flight lane may touch
 `trip_detail_screen.dart` or append to `plan_tool_registry.go`. Full rules and
-runbooks: [`docs/parallel-dev.md`](docs/parallel-dev.md).
+runbooks: [`docs/parallel-dev.md`](docs/parallel-dev.md). Triggers: `/wave`
+(orchestrate a wave; also `status`/`abort`) and `/lane` (bootstrap one lane).
 
 ## Common Commands
 
