@@ -125,8 +125,10 @@ docker compose exec gateway nginx -t && docker compose exec gateway nginx -s rel
 both images to GHCR (`:latest` and `:<sha>`) and the CI `deploy` job
 rsyncs this directory to `/opt/goldentempo/` and restarts the stack with
 `IMAGE_TAG=<sha>`. It also writes the live tag to
-`/opt/goldentempo/.image_tag` so manual restarts don't fall back to
-`:latest`. CI reaches the host through the tunnel's SSH hostname via
+`/opt/goldentempo/.image_tag` AND refreshes the `IMAGE_TAG=` pin inside
+`/opt/goldentempo/.env`, so a bare `docker compose up -d` on the host
+always runs the currently-deployed image — a stale `.env` pin once made a
+manual recreate silently roll the stack back to an old image. CI reaches the host through the tunnel's SSH hostname via
 `cloudflared access ssh` + an Access service token. (Until the
 `DEPLOY_HOST` / `DEPLOY_SSH_KEY` / `DEPLOY_KNOWN_HOSTS` /
 `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` secrets exist, the
@@ -142,8 +144,9 @@ green main build. Manual fallback on the server:
 ```bash
 cd /opt/goldentempo
 
-# Restart whatever is currently deployed (reads .image_tag written by CI)
-set -a; . ./.image_tag; set +a
+# Restart whatever is currently deployed. CI refreshes the IMAGE_TAG pin in
+# .env on every deploy, so bare compose commands are safe; sourcing
+# .image_tag first is equivalent belt-and-braces.
 docker compose pull && docker compose up -d
 
 # Deploy/rollback a specific build by hand

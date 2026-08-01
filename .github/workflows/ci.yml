@@ -322,9 +322,14 @@ jobs:
           TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: rsync -rtvz dockerize/production/ "deploy-target:/opt/goldentempo/"
 
-      # .image_tag records what's live so manual server-side restarts can
-      # reuse it (see dockerize/production/README.md) instead of silently
-      # falling back to :latest.
+      # Record what's live in BOTH places manual operations read: .image_tag
+      # (the runbook's explicit source) and the IMAGE_TAG pin in .env, which
+      # compose interpolation reads automatically. Refreshing the .env pin is
+      # what makes a bare `docker compose up -d` on the host safe — before
+      # this, the pin went stale on every deploy and a manual recreate
+      # silently rolled the stack back to the old image (2026-08-01 incident).
+      # The gate step's IMAGE_TAG charset check ([A-Za-z0-9._-]) keeps the
+      # sed replacement injection-free.
       - name: Pull images and restart stack
         if: steps.gate.outputs.configured == 'true'
         env:
@@ -334,6 +339,11 @@ jobs:
           ssh deploy-target "set -eu
             cd /opt/goldentempo
             printf 'IMAGE_TAG=%s\n' '${IMAGE_TAG}' > .image_tag
+            if grep -q '^IMAGE_TAG=' .env; then
+              sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/' .env
+            else
+              printf 'IMAGE_TAG=%s\n' '${IMAGE_TAG}' >> .env
+            fi
             export IMAGE_TAG='${IMAGE_TAG}'
             docker compose pull
             docker compose up -d --remove-orphans
