@@ -142,6 +142,11 @@ failure reproduces on the lane branch *before* the rebase, it's the lane's.
 
 ## 7. Wave runbook
 
+> Shortcuts: `/wave <plans…>` automates Mode A end to end (steps 1–6 with one
+> approval pause at the lane table, then auto-`/integrate`); `/lane NAME`
+> bootstraps a Mode B worktree with a `LANE-BRIEF.md`. The steps below remain
+> the underlying reference.
+
 1. **Plan** — planning agents (read-only, parallel — this part already works)
    draft the Lanes section of `specs/<feature>/tasks.md`: per-lane branch,
    tasks, conflict manifest, reserved migration numbers, dependency edges.
