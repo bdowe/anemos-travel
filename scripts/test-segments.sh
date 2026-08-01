@@ -20,9 +20,17 @@
 
 set -u
 
-BASE_URL="${BASE_URL:-http://localhost:3000}"
+# Lane-aware defaults: a parallel worktree's .wt.env (scripts/worktree.sh)
+# points this checkout at its own gateway/postgres; env vars still override.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -f "$ROOT/.wt.env" ]; then
+  : "${GTT_GATEWAY_PORT:=$(sed -n 's/^GTT_GATEWAY_PORT=//p' "$ROOT/.wt.env")}"
+  : "${GTT_PROJECT:=$(sed -n 's/^GTT_PROJECT=//p' "$ROOT/.wt.env")}"
+fi
+
+BASE_URL="${BASE_URL:-http://localhost:${GTT_GATEWAY_PORT:-3000}}"
 API="$BASE_URL/api/v1"
-PG_CONTAINER="${PG_CONTAINER:-development-postgres-1}"
+PG_CONTAINER="${PG_CONTAINER:-${GTT_PROJECT:-development}-postgres-1}"
 PG_USER="${PG_USER:-travel}"
 PG_DB="${PG_DB:-travel_planner}"
 

@@ -1,12 +1,25 @@
 # Travel Route Planner - Development Makefile
-.PHONY: help build run test clean docker-build docker-run docker-dev docker-deploy docker-stop docker-logs api-build api-run api-test seed-local
+.PHONY: help build run test clean docker-build docker-run docker-dev docker-deploy docker-stop docker-stop-deploy docker-prune docker-logs api-build api-run api-test api-test-go flutter-gen-l10n seed-local wt-new wt-init wt-rm wt-list wt-prune test-db
 
 # Variables
 API_DIR = src/packages/api
 FLUTTER_DIR = src/packages/flutter-app
+
+# Per-worktree parallel-lane config: `make wt-new` (scripts/worktree.sh) writes
+# .wt.env at the worktree root with GTT_SLOT / GTT_PROJECT / GTT_GATEWAY_PORT /
+# GTT_PG_PORT / TEST_DATABASE_URL so each worktree runs its own dev stack on
+# its own ports. Absent — the main checkout — the defaults below reproduce the
+# single-stack behavior exactly. Exported so compose interpolation, scripts,
+# and `go test` all see them.
+-include .wt.env
+GTT_PROJECT ?= development
+GTT_GATEWAY_PORT ?= 3000
+GTT_PG_PORT ?= 5432
+export GTT_PROJECT GTT_GATEWAY_PORT GTT_PG_PORT TEST_DATABASE_URL
+
 DOCKER_DEV_COMPOSE = docker compose -f dockerize/development/docker-compose.yml
 DOCKER_DEPLOY_COMPOSE = docker compose -f dockerize/deployment/docker-compose.yml
-GATEWAY_URL = http://localhost:3000
+GATEWAY_URL = http://localhost:$(GTT_GATEWAY_PORT)
 
 # Default target
 help: ## Show this help message
@@ -39,8 +52,10 @@ docker-run: docker-deploy ## Run deployment stack (alias for docker-deploy)
 
 docker-run-bg: docker-deploy-bg ## Run deployment stack in background
 
-docker-stop: ## Stop all Docker Compose stacks
+docker-stop: ## Stop this checkout's dev stack (deploy stack: docker-stop-deploy)
 	-$(DOCKER_DEV_COMPOSE) down
+
+docker-stop-deploy: ## Stop the deployment stack
 	-$(DOCKER_DEPLOY_COMPOSE) down
 
 docker-logs: ## Show deployment stack logs
@@ -62,8 +77,11 @@ api-build: ## Build the API binary
 api-run: ## Run the API locally on :8080
 	cd $(API_DIR) && go run .
 
-api-test: ## Run API tests
-	cd $(API_DIR) && ./test_examples.sh
+api-test: ## Run API tests against this checkout's gateway (BASE_URL overrides)
+	cd $(API_DIR) && BASE_URL="$(if $(BASE_URL),$(BASE_URL),$(GATEWAY_URL))" ./test_examples.sh
+
+api-test-go: ## Run Go tests (integration suite uses TEST_DATABASE_URL from .wt.env if present)
+	cd $(API_DIR) && go test ./...
 
 api-fmt: ## Format Go code
 	cd $(API_DIR) && go fmt ./...
@@ -87,6 +105,9 @@ flutter-build-web: ## Build Flutter web app
 flutter-build-models: ## Generate Flutter model code
 	cd $(FLUTTER_DIR) && dart run build_runner build
 
+flutter-gen-l10n: ## Regenerate localizations from the ARB files
+	cd $(FLUTTER_DIR) && flutter gen-l10n
+
 flutter-run: ## Run Flutter app locally (use --dart-define for API URL if not using docker-dev)
 	cd $(FLUTTER_DIR) && flutter run --dart-define=API_BASE_URL=http://localhost:8080/api/v1
 
@@ -103,9 +124,11 @@ dev-api: api-run ## Start API development server locally
 
 test: api-test ## Run all tests
 
-clean: ## Clean up build artifacts
+clean: ## Clean build artifacts + stop this checkout's dev stack
 	cd $(API_DIR) && rm -f travel-route-planner
 	$(MAKE) docker-stop
+
+docker-prune: ## MACHINE-WIDE docker prune — affects every project and worktree
 	docker system prune -f
 
 # Setup commands
@@ -119,6 +142,28 @@ setup: ## Initial project setup
 	@echo "  make docker-dev      # Hot reload at $(GATEWAY_URL)"
 	@echo "  make docker-deploy   # Static build at $(GATEWAY_URL)/app/"
 	@echo "  make api-run         # API only on http://localhost:8080"
+
+# Parallel worktrees ("lanes") — one branch + port slot + dev stack each.
+# scripts/worktree.sh assigns slot N => gateway 3000+N, postgres 5432+N.
+wt-new: ## Create a parallel worktree + port slot (NAME=<branch> [SLOT=n])
+	./scripts/worktree.sh new "$(NAME)" $(if $(SLOT),--slot $(SLOT))
+
+wt-init: ## Provision the CURRENT worktree with a port slot ([SLOT=n])
+	./scripts/worktree.sh init $(if $(SLOT),--slot $(SLOT))
+
+wt-rm: ## Tear down a worktree: stack down -v, worktree + branch removed (NAME=... [FORCE=1])
+	./scripts/worktree.sh rm "$(NAME)" $(if $(FORCE),--force)
+
+wt-list: ## List worktrees, slots, ports, and running stacks
+	./scripts/worktree.sh list
+
+wt-prune: ## Remove orphaned .claude/worktrees dirs (list only; YES=1 deletes)
+	./scripts/worktree.sh prune $(if $(YES),--yes)
+
+test-db: ## Create travel_planner_test on this checkout's postgres (idempotent)
+	@docker exec $(GTT_PROJECT)-postgres-1 psql -U travel -d travel_planner -tAc \
+		"SELECT 1 FROM pg_database WHERE datname='travel_planner_test'" | grep -q 1 || \
+		docker exec $(GTT_PROJECT)-postgres-1 createdb -U travel travel_planner_test
 
 # Health check
 health: ## Check API health via gateway
@@ -166,7 +211,7 @@ smoke: ## Run the end-to-end smoke test (BASE_URL, SMOKE_SEED_MODE, ...)
 	@BASE_URL="$(if $(BASE_URL),$(BASE_URL),$(GATEWAY_URL))" \
 		SMOKE_SEED_MODE="$(SMOKE_SEED_MODE)" SMOKE_TRIP_ID="$(SMOKE_TRIP_ID)" \
 		SMOKE_TOKEN="$(SMOKE_TOKEN)" SMOKE_SIGNING_SECRET="$(SMOKE_SIGNING_SECRET)" \
-		SMOKE_DB_CONTAINER="$(SMOKE_DB_CONTAINER)" \
+		SMOKE_DB_CONTAINER="$(if $(SMOKE_DB_CONTAINER),$(SMOKE_DB_CONTAINER),$(GTT_PROJECT)-postgres-1)" \
 		./scripts/smoke.sh
 
 # Postgres backup — dumps the DB (gzip), prunes old dumps, writes the freshness

@@ -13,7 +13,14 @@
 
 set -u
 
-BASE_URL="${BASE_URL:-http://localhost:3000}"
+# Lane-aware default: a parallel worktree's .wt.env (scripts/worktree.sh)
+# points this checkout at its own gateway; BASE_URL still overrides.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -z "${GTT_GATEWAY_PORT:-}" ] && [ -f "$ROOT/.wt.env" ]; then
+  GTT_GATEWAY_PORT=$(sed -n 's/^GTT_GATEWAY_PORT=//p' "$ROOT/.wt.env")
+fi
+
+BASE_URL="${BASE_URL:-http://localhost:${GTT_GATEWAY_PORT:-3000}}"
 INTERVAL="${1:-2}"
 
 while true; do

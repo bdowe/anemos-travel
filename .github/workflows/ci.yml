@@ -148,6 +148,25 @@ jobs:
           go-version-file: src/packages/api/go.mod
           cache-dependency-path: src/packages/api/go.sum
 
+      # Two parallel branches can each add e.g. 00052_*.sql and merge cleanly
+      # (different filenames), leaving a duplicate goose version that only
+      # explodes at deploy time. The PR checkout is the merge ref, so a
+      # branch-vs-main duplicate fails here before it can land.
+      - name: Guard against duplicate migration numbers
+        run: |
+          dups=$(ls migrations/ | grep -oE '^[0-9]{5}' | sort | uniq -d)
+          if [ -n "$dups" ]; then
+            echo "::error::duplicate migration number(s): $(echo "$dups" | tr '\n' ' ') — two branches took the same number; renumber this branch's migration past main's highest."
+            ls migrations/ | grep -E "^($(echo "$dups" | paste -sd'|' -))_"
+            exit 1
+          fi
+          bad=$(ls migrations/ | grep -vE '^[0-9]{5}_[a-z0-9_]+\.sql$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::migration filenames must match NNNNN_name.sql:"
+            echo "$bad"
+            exit 1
+          fi
+
       - name: Apply migrations
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/travel?sslmode=disable
