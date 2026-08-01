@@ -134,10 +134,22 @@ func providerStatuses() []ProviderStat {
 	emailConfigured := emailService != nil && emailService.Configured()
 	transcriptionConfigured := transcriptionService != nil && transcriptionService.Configured()
 
+	// The duffel row stays truthful while the temporary offers swap is active
+	// (airports/IATA resolution still ride Duffel); the serpapi_flights row
+	// carries the swap state so the ops view can't miss it.
+	serpapiStat := stat("serpapi_flights", serpapiFlights.Configured())
+	switch {
+	case serpapiFlights.Active() && serpapiFlights.Configured():
+		serpapiStat.Note = "temporary flight-offers provider ACTIVE; price alerts paused"
+	case serpapiFlights.Active():
+		serpapiStat.Note = "ACTIVE but key missing; flight search degrades to Google Flights links"
+	}
+
 	return []ProviderStat{
 		stat("google_places", os.Getenv("GOOGLE_PLACES_API_KEY") != ""),
 		stat("anthropic", os.Getenv("ANTHROPIC_API_KEY") != ""),
 		stat("duffel", duffelConfigured),
+		serpapiStat,
 		stat("ticketmaster", os.Getenv("TICKETMASTER_API_KEY") != ""),
 		stat("email", emailConfigured),
 		stat("google_oauth", googleOAuthConfigured()),

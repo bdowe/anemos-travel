@@ -109,6 +109,15 @@ func runCheckFlightConnectivityTool(s *planSession, input json.RawMessage) (stri
 	}
 	json.Unmarshal(input, &in)
 
+	// While the temporary offers provider is active, connectivity numbers
+	// would come from Duffel's synthetic test data — worse than none — and
+	// routing the fan-out (up to 10 searches per call) to SerpApi would burn
+	// its quota. Friendly non-error, like the session-cap path below, so the
+	// model settles instead of retrying.
+	if serpapiFlights.Active() {
+		return "Connectivity data is unavailable right now. Recommend based on geography and typical routing, then run search_flights on the chosen destination for real options.", false
+	}
+
 	s.connectivityCalls++
 	if s.connectivityCalls > maxConnectivityCallsPerSession {
 		// Friendly non-error text so the model settles instead of retrying.

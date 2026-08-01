@@ -302,6 +302,10 @@ func upstreamCountsSnapshot() map[string]int64 {
 		m["events_upstream"] = eventsService.calls.upstream.Load()
 		m["events_cache_hits"] = eventsService.calls.cacheHits.Load()
 	}
+	if serpapiFlights != nil {
+		m["serpapi_flights_upstream"] = serpapiFlights.calls.upstream.Load()
+		m["serpapi_flights_cache_hits"] = serpapiFlights.calls.cacheHits.Load()
+	}
 	ai := aiHealth.state()
 	m["ai_success_total"] = ai.SuccessTotal
 	m["ai_transient_total"] = ai.TransientTotal

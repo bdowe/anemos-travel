@@ -57,6 +57,14 @@ func startAlertChecker(ctx context.Context) {
 		log.Printf("price alerts: checker disabled (DUFFEL_ACCESS_TOKEN not set)")
 		return
 	}
+	if serpapiFlights.Active() {
+		// Temporary-provider mode: alert checks would burn SerpApi quota and
+		// record USD/no-bag-fee prices against Duffel-era baselines. Alerts
+		// stay stored and CRUD keeps working; checking resumes on the
+		// flip-back restart.
+		log.Printf("price alerts: checker paused (FLIGHT_OFFERS_PROVIDER=serpapi; flips back with the env)")
+		return
+	}
 	c := &alertChecker{
 		duffel:     duffelService,
 		interval:   time.Duration(envInt("ALERT_TICK_MINUTES", defaultAlertTickMinutes)) * time.Minute,
@@ -99,6 +107,13 @@ func (c *alertChecker) run(ctx context.Context) {
 
 // runOnce performs one checking cycle. Exported-in-spirit: the testable unit.
 func (c *alertChecker) runOnce(ctx context.Context) {
+	// Belt-and-braces twin of the startAlertChecker pause gate: env can only
+	// change across a restart, but a per-tick check means no code path can
+	// ever run alert searches against the temporary provider.
+	if serpapiFlights.Active() {
+		return
+	}
+
 	q := store.New(dbPool)
 
 	if n, err := q.ExpirePastPriceAlerts(ctx); err != nil {

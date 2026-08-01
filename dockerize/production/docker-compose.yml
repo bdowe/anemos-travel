@@ -48,7 +48,8 @@ services:
       - "8080"
     # All runtime config reaches the api via env_file passthrough from .env:
     # provider keys (GOOGLE_PLACES_API_KEY, ANTHROPIC_API_KEY,
-    # DUFFEL_ACCESS_TOKEN, TICKETMASTER_API_KEY, FERRYHOPPER_AFFILIATE_ID,
+    # DUFFEL_ACCESS_TOKEN, FLIGHT_OFFERS_PROVIDER / SERPAPI_API_KEY,
+    # TICKETMASTER_API_KEY, FERRYHOPPER_AFFILIATE_ID,
     # BOOKING_AFFILIATE_ID), SMTP_*, PUBLIC_BASE_URL / PUBLIC_APP_PATH,
     # SENTRY_DSN / SENTRY_RELEASE, ALLOWED_ORIGINS, ALERT_* / FREE_* tuning.
     # See .env.sample in this directory for the full annotated inventory.

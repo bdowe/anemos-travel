@@ -4,7 +4,7 @@ import '../models/flight_search_request.dart';
 import '../models/flight_search_response.dart';
 import 'api_client.dart';
 
-/// Wraps the /flights/* endpoints (Amadeus-backed flight search + airport
+/// Wraps the /flights/* endpoints (Duffel-backed flight search + airport
 /// autocomplete). These endpoints are public, but we still send the bearer
 /// token when present, matching the other services.
 class FlightsApiService {
