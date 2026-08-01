@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -151,6 +152,7 @@ func mcpAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		if !mcpCallLimiter.allow(row.GrantID.String(), time.Now(), mcpToolCallsPerMinute) {
+			log.Printf("mcp rate limited grant=%s", row.GrantID)
 			w.Header().Set("Retry-After", "60")
 			writeJSONError(w, http.StatusTooManyRequests, "too many tool calls — slow down")
 			return
