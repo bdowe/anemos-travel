@@ -1,3 +1,9 @@
+# Interpolation vars (all optional) come from the calling environment: the
+# Makefile exports them from the worktree's .wt.env (scripts/worktree.sh), so
+# parallel worktrees get distinct projects/ports/volumes. Defaults reproduce
+# the single main-checkout stack exactly.
+name: ${GTT_PROJECT:-development}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,7 +12,7 @@ services:
       POSTGRES_PASSWORD: travel
       POSTGRES_DB: travel_planner
     ports:
-      - "5432:5432"   # exposed for local `make api-run` against the dev DB
+      - "${GTT_PG_PORT:-5432}:5432"   # exposed for local `make api-run` against the dev DB
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -61,7 +67,7 @@ services:
   gateway:
     image: nginx:alpine
     ports:
-      - "3000:80"
+      - "${GTT_GATEWAY_PORT:-3000}:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ../static:/usr/share/nginx/html/static:ro
