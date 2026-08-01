@@ -27,8 +27,19 @@ If a sentence in the spec names a file or a package, it belongs in the plan.
 cp -r specs/_template specs/<feature-name>   # kebab-case, e.g. trip-budget-tracker
 ```
 
-Then fill in `spec.md` first. No numeric prefixes, no branch coupling — features
-are named directories that live alongside the code on `main`.
+Then fill in `spec.md` first. No numeric prefixes — features are named
+directories that live alongside the code on `main`. The spec directory itself
+is not branch-coupled, but when a feature is implemented as a parallel wave its
+`tasks.md` declares **lanes**, and each lane maps to one branch/worktree/PR
+(see [`docs/parallel-dev.md`](../docs/parallel-dev.md)).
+
+## Lanes (parallel implementation)
+
+`tasks.md` may end with a Lanes section splitting the work across parallel
+coding agents — per-lane branch, tasks, conflict manifest, reserved migration
+numbers, and merge order. `[P]` still marks intra-lane parallel tasks; lanes
+are the inter-agent unit. Prior art: `i18n-spanish` (the mechanical extraction
+PRs ran as parallel agents) and `mcp-connector` (a 6-PR sequential chain).
 
 ## How Claude uses these
 

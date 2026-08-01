@@ -1,11 +1,22 @@
 ---
 name: ship
-description: Commit the current changes, push a branch, open a PR, and merge it. Use when the user asks to "ship" the current work or to commit/push/PR/merge in one go.
+description: Commit the current changes, push a branch, open a PR, and merge it. Use when the user asks to "ship" the current work or to commit/push/PR/merge in one go. `ship pr` stops at PR-open — required for parallel-wave lane agents (the integrator merges).
 ---
 
 # Ship the current changes
 
 Take the working-tree changes through commit → push → PR → merge.
+
+## Modes
+
+- `ship` (default) — the full pipeline through merge. Solo, single-lane work.
+- `ship pr` — stop after step 5 (`gh pr create`). Report the PR URL and STOP:
+  do not merge, do not switch back to `main` (the integrator will rebase this
+  branch). Required for lane agents in a parallel wave (`docs/parallel-dev.md`).
+- **Auto-detection**: if running inside a linked worktree
+  (`git rev-parse --git-dir` differs from `git rev-parse --git-common-dir`),
+  behave as `ship pr` even if no argument was given — worktree agents are wave
+  lanes and never merge.
 
 ## Steps
 
@@ -27,11 +38,11 @@ Take the working-tree changes through commit → push → PR → merge.
    🤖 Generated with [Claude Code](https://claude.com/claude-code)
    ```
 
-6. **Merge**: `gh pr merge <number> --merge --delete-branch`. This also switches local back to `main` and fast-forwards it.
+6. **Merge** *(default mode only — skipped in `pr` mode)*: `gh pr merge <number> --merge --delete-branch`. This also switches local back to `main` and fast-forwards it.
 
-7. **Report**: give the user the PR URL and confirm the merge landed on `main`.
+7. **Report**: give the user the PR URL; in default mode confirm the merge landed on `main`, in `pr` mode state that the PR awaits the integrator.
 
 ## Notes
 
-- Never force-push or amend commits that are already pushed.
+- Never force-push or amend commits that are already pushed. (Exception owned elsewhere: the integrator may `--force-with-lease` a lane branch after its agent has stopped — see `.claude/skills/integrate`.)
 - If the merge is blocked (required checks, review requirements), report the blocker and stop — don't bypass with admin flags.
