@@ -129,6 +129,10 @@ var planToolRegistry = []planTool{
 	// tail-appended: the tools array is part of the prompt-cache prefix (see
 	// header comment) — never insert mid-list.
 	{def: searchNearbyTool, run: runSearchNearbyTool},
+	// Free/cheap parking near beaches (specs/find-parking-near-beach). No gate
+	// (pure append across session shapes), and tail-appended per the
+	// prompt-cache rule above.
+	{def: findParkingTool, run: runFindParkingTool},
 }
 
 // planToolByName dispatches tool_use blocks; derived from the registry so the
@@ -189,6 +193,28 @@ var searchNearbyTool = anthropic.ToolParam{
 			},
 		},
 		Required: []string{"query", "latitude", "longitude"},
+	},
+}
+
+var findParkingTool = anthropic.ToolParam{
+	Name:        "find_parking",
+	Description: anthropic.String("Find parking near a beach for travelers who will have a car, surfacing options that appear free or cheap. The free_listed flag is a heuristic read of the place listing, NOT verified pricing — always present flagged spots as 'listed as free — verify locally', never as guaranteed. Pass the beach's coordinates if you already know them from an earlier search; omit them and the tool looks the beach up by name."),
+	InputSchema: anthropic.ToolInputSchemaParam{
+		Properties: map[string]any{
+			"beach_name": map[string]any{
+				"type":        "string",
+				"description": "Beach name with city/island for disambiguation, e.g. 'Barceloneta Beach Barcelona'",
+			},
+			"latitude": map[string]any{
+				"type":        "number",
+				"description": "Beach latitude in decimal degrees, if already known",
+			},
+			"longitude": map[string]any{
+				"type":        "number",
+				"description": "Beach longitude in decimal degrees, if already known",
+			},
+		},
+		Required: []string{"beach_name"},
 	},
 }
 
@@ -419,6 +445,9 @@ type placeCard struct {
 	Category         string   `json:"category,omitempty"`
 	PhotoRef         string   `json:"photo_ref,omitempty"`
 	PhotoAttribution string   `json:"photo_attribution,omitempty"`
+	// FreeListed rides only the `parking` event's cards; omitempty keeps the
+	// `places`/`local_recs` payloads byte-identical to before it existed.
+	FreeListed bool `json:"free_listed,omitempty"`
 }
 
 // placeCards converts up to max results into cards and registers each emitted
@@ -500,6 +529,73 @@ func runSearchNearbyTool(s *planSession, input json.RawMessage) (string, bool) {
 	}
 	b, _ := json.Marshal(results)
 	return string(b), false
+}
+
+// parkingCards is placeCards for ranked parking results: same photo-ref gate
+// registration, plus the free_listed flag and a hardcoded "parking" category
+// (MapGoogleTypeToCategory has no parking entry and feeds other surfaces).
+func parkingCards(results []parkingResult, max int) []placeCard {
+	if len(results) > max {
+		results = results[:max]
+	}
+	cards := make([]placeCard, len(results))
+	for i, r := range results {
+		cards[i] = placeCard{
+			Name:             r.Name,
+			PlaceID:          r.PlaceID,
+			Address:          r.Address,
+			Latitude:         r.Latitude,
+			Longitude:        r.Longitude,
+			Rating:           r.Rating,
+			PriceLevel:       r.PriceLevel,
+			Category:         "parking",
+			PhotoRef:         r.PhotoRef,
+			PhotoAttribution: r.PhotoAttribution,
+			FreeListed:       r.FreeListed,
+		}
+		placesService.allowPhotoRef(r.PhotoRef)
+	}
+	return cards
+}
+
+func runFindParkingTool(s *planSession, input json.RawMessage) (string, bool) {
+	var in struct {
+		BeachName string  `json:"beach_name"`
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	}
+	json.Unmarshal(input, &in)
+
+	beach := strings.TrimSpace(in.BeachName)
+	if beach == "" {
+		return "Missing beach_name; ask the traveler which beach they mean.", true
+	}
+
+	// Same predicate as runSearchNearbyTool: (0,0)/out-of-range means "not
+	// provided" — but here it degrades to a geocode instead of erroring, so
+	// the model never has to invent coordinates.
+	lat, lng := in.Latitude, in.Longitude
+	if lat < -90 || lat > 90 || lng < -180 || lng > 180 || (lat == 0 && lng == 0) {
+		geo, err := placesService.SearchPlaces(s.ctx, beach)
+		if err != nil || len(geo) == 0 {
+			return "Couldn't locate that beach; ask the traveler to confirm the beach name and city.", true
+		}
+		lat, lng = geo[0].Latitude, geo[0].Longitude
+	}
+
+	results, err := findParkingNearBeach(s.ctx, beach, lat, lng)
+	if err != nil {
+		return fmt.Sprintf("Error searching for parking: %v", err), true
+	}
+	if len(results) == 0 {
+		return "No parking found within about 2 km of " + beach + "; suggest the traveler check side streets or arrive early.", false
+	}
+	sendSSE(s.w, "parking", map[string]any{
+		"beach": beach,
+		"spots": parkingCards(results, planPlacesCardCap),
+	})
+	b, _ := json.Marshal(results)
+	return "Parking near " + beach + " (free_listed is a heuristic from the listing — present it as 'listed as free, verify locally'): " + string(b), false
 }
 
 func runCreateItineraryTool(s *planSession, input json.RawMessage) (string, bool) {

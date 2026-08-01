@@ -2468,6 +2468,23 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String chatStripParking(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count opciones de aparcamiento',
+      one: '$count opción de aparcamiento',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatToolFindParking => 'Buscando aparcamiento...';
+
+  @override
+  String get chatCardFreeListed => 'Gratis (según el listado)';
+
+  @override
   String chatChipEvents(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

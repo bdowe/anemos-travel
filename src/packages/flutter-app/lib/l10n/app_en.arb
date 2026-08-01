@@ -1602,6 +1602,16 @@
       }
     }
   },
+  "chatStripParking": "{count, plural, =1{{count} parking option} other{{count} parking options}}",
+  "@chatStripParking": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatToolFindParking": "Finding parking...",
+  "chatCardFreeListed": "Free (listed)",
   "chatChipEvents": "{count, plural, =1{{count} event} other{{count} events}}",
   "@chatChipEvents": {
     "placeholders": {

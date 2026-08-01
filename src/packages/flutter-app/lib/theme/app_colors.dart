@@ -67,4 +67,7 @@ abstract final class AppColors {
   static Color get toolEvents => Colors.purple.shade600;
   static Color get toolFerries => Colors.cyan.shade700;
   static Color get toolLocal => Colors.amber.shade800;
+  // Blue-grey reads as the universal "P" signage family; distinct from
+  // toolFlights blue and toolFerries cyan.
+  static Color get toolParking => Colors.blueGrey.shade700;
 }

@@ -17,6 +17,7 @@ AgentPlace _$AgentPlaceFromJson(Map<String, dynamic> json) => AgentPlace(
       category: json['category'] as String? ?? '',
       photoRef: json['photo_ref'] as String? ?? '',
       photoAttribution: json['photo_attribution'] as String? ?? '',
+      freeListed: json['free_listed'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$AgentPlaceToJson(AgentPlace instance) =>
@@ -31,4 +32,5 @@ Map<String, dynamic> _$AgentPlaceToJson(AgentPlace instance) =>
       'category': instance.category,
       'photo_ref': instance.photoRef,
       'photo_attribution': instance.photoAttribution,
+      'free_listed': instance.freeListed,
     };
