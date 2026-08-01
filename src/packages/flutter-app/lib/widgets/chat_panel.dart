@@ -753,6 +753,8 @@ class _ActiveToolChips extends ConsumerWidget {
         return l10n.chatToolSearchEvents;
       case 'suggest_ferries':
         return l10n.chatToolSuggestFerries;
+      case 'find_parking':
+        return l10n.chatToolFindParking;
       default:
         return '$tool...';
     }
@@ -904,6 +906,8 @@ class _ResultStrips extends ConsumerWidget {
           localRecsCity: s.localRecsCity,
           events: s.eventResults,
           eventsCity: s.eventsCityLabel,
+          parkingSpots: s.parkingSpots,
+          parkingBeach: s.parkingBeach,
           savedTripId: s.savedTripId,
         )));
     final signedIn = ref.watch(authProvider.select((s) => s.isSignedIn));
@@ -986,6 +990,26 @@ class _ResultStrips extends ConsumerWidget {
                         surface: 'chat_event_card'),
                 onAddToTrip: signedIn
                     ? () => addToTrip(AddToTripPayload.fromEvent(event))
+                    : null,
+              ),
+          ],
+        ),
+      if (r.parkingSpots != null && r.parkingSpots!.isNotEmpty)
+        PlacePhotoStrip(
+          icon: Icons.local_parking,
+          accent: AppColors.toolParking,
+          label: label(l10n.chatStripParking(r.parkingSpots!.length),
+              r.parkingBeach),
+          onViewTrip: onHeaderTap,
+          cards: [
+            for (final spot in r.parkingSpots!.take(_maxCards))
+              PlacePhotoCard(
+                data: PlaceCardData.parking(spot,
+                    photoUrl: photoUrl(spot.photoRef),
+                    freeLabel: l10n.chatCardFreeListed),
+                onTap: () => openMaps(spot.name, spot.placeId),
+                onAddToTrip: signedIn
+                    ? () => addToTrip(AddToTripPayload.fromPlace(spot))
                     : null,
               ),
           ],

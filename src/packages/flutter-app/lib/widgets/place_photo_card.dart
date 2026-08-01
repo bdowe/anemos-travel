@@ -88,6 +88,33 @@ class PlaceCardData {
     );
   }
 
+  /// Parking spots near a beach (SSE `parking`). [freeLabel] is the localized
+  /// "Free (listed)" marker, shown as the accent meta line when the listing
+  /// name suggests free parking — it must never claim more than "listed".
+  /// Icon and accent are hardcoded: the wire category is always "parking",
+  /// which the shared category mappers don't know.
+  factory PlaceCardData.parking(
+    AgentPlace place, {
+    required String? photoUrl,
+    required String freeLabel,
+  }) {
+    return PlaceCardData(
+      title: place.name,
+      photoUrl: photoUrl,
+      attribution: place.photoAttribution,
+      metaLine: place.freeListed
+          ? freeLabel
+          : place.category.replaceAll('_', ' '),
+      // The rating row would hide the free marker; keep it only on unflagged
+      // cards.
+      rating: place.freeListed ? null : place.rating,
+      priceLevel: place.freeListed ? null : place.priceLevel,
+      fallbackIcon: Icons.local_parking,
+      accent: AppColors.toolParking,
+      metaIsAccent: place.freeListed,
+    );
+  }
+
   factory PlaceCardData.event(Event event) {
     return PlaceCardData(
       title: event.name,

@@ -57,6 +57,16 @@ class PlanState {
   /// The search query behind [places], for the strip's header label.
   final String? placesQuery;
 
+  /// Parking spots the agent surfaced near a beach this turn (SSE `parking`,
+  /// specs/find-parking-near-beach). Replaced whole, never mutated. Unlike
+  /// [places] there is no itinerary-turn guard: find_parking never runs as
+  /// geocoding, so the rail is real advice even under a trip banner (matches
+  /// ferries/events).
+  final List<AgentPlace>? parkingSpots;
+
+  /// The beach behind [parkingSpots], for the rail's header label.
+  final String? parkingBeach;
+
   // Either a friendly String the /plan SSE stream sent, or a raw caught error
   // (ApiException) from a failed connect. friendlyError() renders both: it
   // passes a String through unchanged and classifies an ApiException.
@@ -119,6 +129,8 @@ class PlanState {
     this.localRecsCity,
     this.places,
     this.placesQuery,
+    this.parkingSpots,
+    this.parkingBeach,
     this.error,
     this.queuedMessages = const [],
     this.suggestedReplies = const [],
@@ -150,6 +162,8 @@ class PlanState {
     Object? localRecsCity = _sentinel,
     Object? places = _sentinel,
     Object? placesQuery = _sentinel,
+    Object? parkingSpots = _sentinel,
+    Object? parkingBeach = _sentinel,
     Object? error = _sentinel,
     List<QueuedMessage>? queuedMessages,
     List<String>? suggestedReplies,
@@ -182,6 +196,8 @@ class PlanState {
       localRecsCity: localRecsCity == _sentinel ? this.localRecsCity : localRecsCity as String?,
       places: places == _sentinel ? this.places : places as List<AgentPlace>?,
       placesQuery: placesQuery == _sentinel ? this.placesQuery : placesQuery as String?,
+      parkingSpots: parkingSpots == _sentinel ? this.parkingSpots : parkingSpots as List<AgentPlace>?,
+      parkingBeach: parkingBeach == _sentinel ? this.parkingBeach : parkingBeach as String?,
       error: error == _sentinel ? this.error : error,
       queuedMessages: queuedMessages ?? this.queuedMessages,
       suggestedReplies: suggestedReplies ?? this.suggestedReplies,
@@ -335,6 +351,8 @@ class PlanNotifier extends StateNotifier<PlanState> {
       localRecsCity: null,
       places: null,
       placesQuery: null,
+      parkingSpots: null,
+      parkingBeach: null,
       error: null,
       suggestedReplies: [],
       profileUpdateNote: null,
@@ -553,6 +571,18 @@ class PlanNotifier extends StateNotifier<PlanState> {
             state = state.copyWith(
               places: places,
               placesQuery: event.data['query'] as String?,
+            );
+
+          case 'parking':
+            final raw = event.data['spots'] as List<dynamic>? ?? [];
+            final spots = raw
+                .map((e) => AgentPlace.fromJson(e as Map<String, dynamic>))
+                .toList();
+            // Replaced whole (record-select invariant). No itineraryThisTurn
+            // guard — see the field doc on PlanState.parkingSpots.
+            state = state.copyWith(
+              parkingSpots: spots,
+              parkingBeach: event.data['beach'] as String?,
             );
 
           case 'error':

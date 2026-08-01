@@ -242,6 +242,27 @@ func (gps *GooglePlacesService) SearchPlacesNearby(ctx context.Context, query st
 	})
 }
 
+// parkingSearchRadiusMeters is the location-bias radius for
+// SearchParkingNearby — tighter than nearbySearchRadiusMeters because parking
+// is only useful within a short walk of the target. Like all Text Search
+// biases it is not a hard filter; callers post-filter by distance.
+const parkingSearchRadiusMeters = 2000
+
+// SearchParkingNearby is SearchPlacesNearby tuned for parking lookups
+// (specs/find-parking-near-beach): same coordinate rounding, a tighter
+// radius, and Google's type=parking bias. The "parking|" cache-key prefix
+// keeps entries disjoint from the other Text Search variants in the shared
+// cache.
+func (gps *GooglePlacesService) SearchParkingNearby(ctx context.Context, query string, lat, lng float64) ([]PlaceSearchResult, error) {
+	loc := fmt.Sprintf("%.4f,%.4f", lat, lng)
+	cacheKey := fmt.Sprintf("parking|%s|%s|%d", strings.ToLower(strings.TrimSpace(query)), loc, parkingSearchRadiusMeters)
+	return gps.textSearch(ctx, cacheKey, query, func(params url.Values) {
+		params.Add("location", loc)
+		params.Add("radius", strconv.Itoa(parkingSearchRadiusMeters))
+		params.Add("type", "parking")
+	})
+}
+
 // textSearch is the shared Text Search body behind SearchPlaces and
 // SearchPlacesNearby: cache check, request, decode. extraParams (optional)
 // appends variant-specific query parameters.

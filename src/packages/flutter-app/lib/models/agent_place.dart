@@ -33,6 +33,12 @@ class AgentPlace {
   @JsonKey(name: 'photo_attribution', defaultValue: '')
   final String photoAttribution;
 
+  /// Parking cards only (SSE `parking`): the listing name suggests free
+  /// parking. A heuristic, not verified pricing — the UI says "Free (listed)",
+  /// never plain "Free". Absent on the wire when false (Go omitempty).
+  @JsonKey(name: 'free_listed', defaultValue: false)
+  final bool freeListed;
+
   const AgentPlace({
     required this.name,
     this.placeId = '',
@@ -44,6 +50,7 @@ class AgentPlace {
     this.category = '',
     this.photoRef = '',
     this.photoAttribution = '',
+    this.freeListed = false,
   });
 
   factory AgentPlace.fromJson(Map<String, dynamic> json) =>

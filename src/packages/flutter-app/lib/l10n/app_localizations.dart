@@ -4292,6 +4292,24 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{{count} place} other{{count} places}}'**
   String chatStripPlaces(int count);
 
+  /// No description provided for @chatStripParking.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} parking option} other{{count} parking options}}'**
+  String chatStripParking(int count);
+
+  /// No description provided for @chatToolFindParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding parking...'**
+  String get chatToolFindParking;
+
+  /// No description provided for @chatCardFreeListed.
+  ///
+  /// In en, this message translates to:
+  /// **'Free (listed)'**
+  String get chatCardFreeListed;
+
   /// No description provided for @chatChipEvents.
   ///
   /// In en, this message translates to:
