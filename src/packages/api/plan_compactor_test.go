@@ -138,3 +138,21 @@ func TestSummarizePlanConversationRejectsEmptySummary(t *testing.T) {
 		t.Fatal("expected error for blank summary")
 	}
 }
+
+// A fatal provider failure on the non-streaming Messages.New path must reach
+// the AI-health tracker (proves the recordAIResult wiring for the compactor —
+// the distiller/extractor/importer sites share the identical pattern).
+func TestSummarizePlanConversationRecordsFatalHealth(t *testing.T) {
+	resetAIHealth(t)
+	fa := newFakeAnthropic(t)
+	fa.scriptNonStreamingHTTPError(401, "authentication_error", "invalid x-api-key")
+	client := newAnthropicClient("test-key")
+
+	if _, err := summarizePlanConversation(context.Background(), client, "", compactorTestMessages(4)); err == nil {
+		t.Fatal("expected the provider error to surface")
+	}
+	s := aiHealth.state()
+	if !s.Failing || s.Reason != "authentication" || s.FatalTotal != 1 {
+		t.Fatalf("tracker after fatal Messages.New = %+v", s)
+	}
+}

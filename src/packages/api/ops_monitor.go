@@ -17,10 +17,13 @@ import (
 
 // Health self-check monitor (Observability PR2): a background ticker that
 // re-evaluates the same deterministic health signals the /admin/ops/health
-// endpoint reports (DB reachability + backup freshness) and alerts on
-// TRANSITIONS only — healthy->degraded and degraded->healthy. It mirrors the
-// price-alert / re-engagement checker shape exactly (own goroutine, env-cadence
-// ticker, jittered first tick, dbPool-nil guard, injectable clock in runOnce).
+// endpoint reports (DB reachability, backup freshness, AI-provider health) and
+// alerts on TRANSITIONS only — any change to the REASON SET, not just the
+// healthy<->degraded boolean, so a second outage arriving while already
+// degraded (backups stale, then the AI account runs dry) still alerts instead
+// of hiding behind the first. It mirrors the price-alert / re-engagement
+// checker shape exactly (own goroutine, env-cadence ticker, jittered first
+// tick, dbPool-nil guard, injectable clock in runOnce).
 //
 // Alerting on transitions (not on every degraded tick) is the dedup: a five-
 // minute tick over a multi-hour outage fires ONE alert, and one recovery. State
@@ -33,8 +36,9 @@ import (
 //   - an in-app notification per admin user (ops_alert / ops_recovered).
 //   - an email per admin, but ONLY when SMTP is configured.
 //
-// This monitor never pings paid providers — computeHealthState is DB + backups
-// only, so the loop costs one cheap DB ping and one file stat per tick.
+// This monitor never pings paid providers — the AI-provider signal is read
+// from process memory (ai_health.go, recorded passively by the real AI call
+// sites), so the loop costs one cheap DB ping and one file stat per tick.
 
 const (
 	defaultHealthTickMinutes = 5
@@ -44,8 +48,12 @@ const (
 )
 
 type healthMonitor struct {
-	interval     time.Duration
-	lastDegraded bool // in-memory transition state; starts healthy (false)
+	interval time.Duration
+	// lastReasons is the in-memory transition state: the previous tick's
+	// reason set, joined. Starts "" (healthy). Keying the dedup on the SET
+	// rather than a degraded boolean means an outage that begins while
+	// another is ongoing still fires its own alert.
+	lastReasons string
 
 	// Injectable seams for tests. Defaulted in startHealthMonitor to the real
 	// store/email singletons.
@@ -54,6 +62,7 @@ type healthMonitor struct {
 	sendEmail    func(to, subject, body string) error
 	emailEnabled func() bool
 	pingDBFn     func(context.Context) bool
+	aiStateFn    func() aiHealthState
 }
 
 // startHealthMonitor launches the background loop. No-ops (with a log line)
@@ -77,6 +86,9 @@ func startHealthMonitor(ctx context.Context) {
 		sendEmail:    func(to, subject, body string) error { return emailService.Send(to, subject, body) },
 		emailEnabled: func() bool { return emailService.Configured() },
 		pingDBFn:     pingDB,
+		// Same source the /admin/ops/health endpoint reads, so the endpoint
+		// and the alert loop can never disagree about the AI signal.
+		aiStateFn: aiHealth.state,
 	}
 	go m.run(ctx)
 	log.Printf("ops health: monitor started (tick %s)", m.interval)
@@ -104,17 +116,20 @@ func (m *healthMonitor) run(ctx context.Context) {
 }
 
 // runOnce evaluates health once and alerts on a transition. now is the testable
-// clock (drives backup-freshness). On no transition it does nothing — that is
-// the dedup that keeps a long outage to a single alert.
+// clock (drives backup-freshness). On no change to the reason set it does
+// nothing — that is the dedup that keeps a long outage to a single alert. A
+// reason-set change while still degraded (a second outage joining, or one of
+// two clearing) fires a fresh degraded alert carrying the CURRENT reasons.
 func (m *healthMonitor) runOnce(ctx context.Context, now time.Time) {
 	dbOK := m.pingDBFn(ctx)
 	backups := readBackupHealth(now)
-	state := computeHealthState(dbOK, backups.Stale)
+	state := computeHealthState(dbOK, backups.Stale, m.aiStateFn())
 
-	if state.degraded == m.lastDegraded {
+	reasonsKey := strings.Join(state.reasons, "|")
+	if reasonsKey == m.lastReasons {
 		return // no transition — the dedup
 	}
-	m.lastDegraded = state.degraded
+	m.lastReasons = reasonsKey
 	m.alertTransition(ctx, state)
 }
 

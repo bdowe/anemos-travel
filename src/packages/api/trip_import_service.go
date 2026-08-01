@@ -220,6 +220,8 @@ func extractImportedTrip(ctx context.Context, client anthropic.Client, rawText s
 				"Pasted conversation or trip summary:\n\n" + rawText)),
 		},
 	})
+	// Health record at the SDK call only (ai_health.go).
+	recordAIResult(err)
 	if err != nil {
 		return ImportedTrip{}, fmt.Errorf("import model call: %w", err)
 	}

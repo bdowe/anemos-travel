@@ -280,9 +280,10 @@ func (o *opsRegistry) snapshot() OpsMetricsResponse {
 }
 
 // upstreamCountsSnapshot flattens the existing process-lifetime provider
-// counters (places_service.go / events_service.go) into a flat map for the ops
-// view. Read-only: it never mutates the counters, which stay owned by their
-// services and are also surfaced (priced) by adminMetricsHandler.
+// counters (places_service.go / events_service.go) and the AI-health tracker
+// (ai_health.go) into a flat map for the ops view. Read-only: it never mutates
+// the counters, which stay owned by their services and are also surfaced
+// (priced) by adminMetricsHandler.
 func upstreamCountsSnapshot() map[string]int64 {
 	m := map[string]int64{}
 	if placesService != nil {
@@ -301,6 +302,11 @@ func upstreamCountsSnapshot() map[string]int64 {
 		m["events_upstream"] = eventsService.calls.upstream.Load()
 		m["events_cache_hits"] = eventsService.calls.cacheHits.Load()
 	}
+	ai := aiHealth.state()
+	m["ai_success_total"] = ai.SuccessTotal
+	m["ai_transient_total"] = ai.TransientTotal
+	m["ai_fatal_total"] = ai.FatalTotal
+	m["ai_consecutive_fatal"] = ai.ConsecutiveFatal
 	return m
 }
 

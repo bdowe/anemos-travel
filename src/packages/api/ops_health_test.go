@@ -113,26 +113,34 @@ func TestEvalBackupHealth(t *testing.T) {
 // --- computeHealthState transition matrix ---
 
 func TestComputeHealthState(t *testing.T) {
+	failing := aiHealthState{Failing: true, Reason: "credit balance"}
 	cases := []struct {
 		dbOK, backupsStale bool
+		ai                 aiHealthState
 		wantDegraded       bool
 		wantReasons        []string
 	}{
-		{true, false, false, []string{}},
-		{false, false, true, []string{"database unreachable"}},
-		{true, true, true, []string{"backups stale"}},
-		{false, true, true, []string{"database unreachable", "backups stale"}},
+		{true, false, aiHealthState{}, false, []string{}},
+		{false, false, aiHealthState{}, true, []string{"database unreachable"}},
+		{true, true, aiHealthState{}, true, []string{"backups stale"}},
+		{false, true, aiHealthState{}, true, []string{"database unreachable", "backups stale"}},
+		{true, false, failing, true, []string{"AI provider failing: credit balance"}},
+		{false, true, failing, true, []string{"database unreachable", "backups stale", "AI provider failing: credit balance"}},
+		// Defensive: Failing with no reason still yields a readable line.
+		{true, false, aiHealthState{Failing: true}, true, []string{"AI provider failing: unknown"}},
+		// A non-failing tracker with history is not degraded.
+		{true, false, aiHealthState{Reason: "credit balance", FatalTotal: 3}, false, []string{}},
 	}
 	for _, c := range cases {
-		got := computeHealthState(c.dbOK, c.backupsStale)
+		got := computeHealthState(c.dbOK, c.backupsStale, c.ai)
 		if got.degraded != c.wantDegraded {
-			t.Errorf("dbOK=%v stale=%v: degraded=%v want %v", c.dbOK, c.backupsStale, got.degraded, c.wantDegraded)
+			t.Errorf("dbOK=%v stale=%v ai=%+v: degraded=%v want %v", c.dbOK, c.backupsStale, c.ai, got.degraded, c.wantDegraded)
 		}
 		if got.reasons == nil {
 			t.Errorf("reasons must be non-nil")
 		}
 		if strings.Join(got.reasons, "|") != strings.Join(c.wantReasons, "|") {
-			t.Errorf("dbOK=%v stale=%v: reasons=%v want %v", c.dbOK, c.backupsStale, got.reasons, c.wantReasons)
+			t.Errorf("dbOK=%v stale=%v ai=%+v: reasons=%v want %v", c.dbOK, c.backupsStale, c.ai, got.reasons, c.wantReasons)
 		}
 	}
 }
@@ -210,6 +218,10 @@ func TestOpsHealthHandlerNoDB(t *testing.T) {
 func TestOpsHealthHandlerDBUp(t *testing.T) {
 	requireDB(t)
 	writeFreshHeartbeat(t, time.Now())
+	// Defensive: this test asserts not-degraded through the global aiHealth
+	// tracker — don't let a fatal-writing test that forgot its cleanup poison
+	// the ordering.
+	resetAIHealth(t)
 
 	req := httptest.NewRequest("GET", "/api/v1/admin/ops/health", nil)
 	rec := httptest.NewRecorder()

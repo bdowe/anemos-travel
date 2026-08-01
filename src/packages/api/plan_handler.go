@@ -468,12 +468,22 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		streamErr := stream.Err()
 		cancelCall() // the deadline only needs to cover the streaming call above
+		// Exactly one health record per model call (ai_health.go); nil records
+		// a success, so the first good call after an outage flips recovery.
+		aiClass, aiReason := recordAIResult(streamErr)
 		if streamErr != nil {
 			// Redact: the raw Anthropic/transport error can carry internal
 			// detail and is unhelpful to the user. Log it server-side (tees to
-			// Sentry via slog) and send a generic, friendly message.
-			ctxLog(ctx).Error("plan: anthropic stream error", "error", streamErr)
-			sendSSE(w, "error", map[string]string{"message": "The planner hit a problem reaching the AI service. Please try again in a moment."})
+			// Sentry via slog) and send a generic, friendly message — honest
+			// about fatal (billing/auth) failures, which "try again in a
+			// moment" would misrepresent.
+			ctxLog(ctx).Error("plan: anthropic stream error",
+				"error", streamErr, "class", string(aiClass), "reason", aiReason)
+			msg := "The planner hit a problem reaching the AI service. Please try again in a moment."
+			if aiClass == aiClassFatal {
+				msg = "The AI planning service is temporarily unavailable. Please try again later."
+			}
+			sendSSE(w, "error", map[string]string{"message": msg})
 			return
 		}
 		planTokensIn += resp.Usage.InputTokens

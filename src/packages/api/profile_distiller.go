@@ -86,6 +86,9 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 			anthropic.NewUserMessage(anthropic.NewTextBlock("Planning conversation transcript:\n\n" + text)),
 		},
 	})
+	// Health record (ai_health.go): this fire-and-forget path swallows errors
+	// by design, so without it a billing/auth outage here would be invisible.
+	recordAIResult(err)
 	if err != nil {
 		log.Printf("profile distill: model call: %v", err)
 		return

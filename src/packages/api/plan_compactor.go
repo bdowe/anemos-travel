@@ -94,6 +94,9 @@ func summarizePlanConversation(ctx context.Context, client anthropic.Client, pre
 			anthropic.NewUserMessage(anthropic.NewTextBlock("Older conversation to summarize:\n\n" + text)),
 		},
 	})
+	// Health record at the SDK call only — later shape/parse problems are our
+	// bugs, not provider health (ai_health.go).
+	recordAIResult(err)
 	if err != nil {
 		return "", err
 	}
