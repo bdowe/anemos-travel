@@ -31,6 +31,12 @@ planning reserves goose migration numbers; at most one in-flight lane may touch
 runbooks: [`docs/parallel-dev.md`](docs/parallel-dev.md). Triggers: `/wave`
 (orchestrate a wave; also `status`/`abort`) and `/lane` (bootstrap one lane).
 
+**Auto-lane on execute**: when executing an approved plan (or starting any
+multi-file feature work) from the **main checkout**, first create a lane —
+`make wt-new NAME=<feature-slug>` — and do all the work inside that worktree;
+`ship` then stops at PR-open automatically and the integrator merges.
+Single-file fixes and doc touch-ups may stay on a main-checkout branch.
+
 ## Common Commands
 
 ```bash
