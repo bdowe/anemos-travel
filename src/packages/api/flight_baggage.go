@@ -33,7 +33,7 @@ var bagFeeTimeout = 15 * time.Second
 // always allows a personal item) it is exactly search + rank — zero extra
 // calls, no baggage fields emitted.
 func searchFlightsWithBaggage(ctx context.Context, d *DuffelService, req FlightSearchRequest) ([]FlightOffer, error) {
-	offers, err := d.SearchFlightOffers(ctx, req)
+	offers, err := flightOffersSearch(ctx, d, req)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,10 @@ func searchFlightsWithBaggage(ctx context.Context, d *DuffelService, req FlightS
 		}
 	}
 
-	if len(lookup) > 0 {
+	// Bag fees are a Duffel capability: temporary-provider offers carry
+	// synthetic IDs that Duffel's /air/offers/{id} would 404 on, so they stay
+	// "unknown" (summarizeOffers already warns the model about unknowns).
+	if len(lookup) > 0 && !serpapiFlights.Active() {
 		fetchBagFees(ctx, d, offers, lookup, tier)
 	}
 	return RankFlightOffers(offers, req.OptimizeFor), nil

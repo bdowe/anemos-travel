@@ -207,8 +207,8 @@ func TestOpsHealthHandlerNoDB(t *testing.T) {
 	if got.Reasons == nil {
 		t.Errorf("reasons must be non-nil (empty slice, not null)")
 	}
-	if len(got.Providers) != 8 {
-		t.Errorf("providers len = %d, want 8", len(got.Providers))
+	if len(got.Providers) != 9 {
+		t.Errorf("providers len = %d, want 9", len(got.Providers))
 	}
 	if got.Build.GoVersion == "" || got.Build.StartedAt == "" {
 		t.Errorf("build info incomplete: %+v", got.Build)

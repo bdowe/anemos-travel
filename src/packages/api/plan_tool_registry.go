@@ -868,6 +868,19 @@ func runSearchFlightsTool(s *planSession, input json.RawMessage) (string, bool) 
 		CabinClass: in.CabinClass, OptimizeFor: in.OptimizeFor, Baggage: in.Baggage,
 	})
 	if err != nil {
+		// Temporary-provider degrade: a working Google Flights deep link beats
+		// a dead end (success-with-links idiom, like the Greek event_links
+		// fallback below). Tool text only — the event_links chip is labeled
+		// "Event sources" client-side, so reusing that SSE event would
+		// mislabel a flights link. isError=false and an explicit no-retry
+		// instruction: there is no per-tool retry guard, only
+		// planMaxIterations, and a dead provider would burn the whole turn.
+		// The raw err is deliberately not echoed (upstream bodies and
+		// transport errors must never reach the model).
+		if serpapiFlights.Active() {
+			link := flightBookingURL("", "", originIata, destIata, in.DepartDate, in.ReturnDate)
+			return fmt.Sprintf("Flight search is temporarily unavailable. Share this Google Flights link for %s→%s with the traveler and continue planning — do not call search_flights again this turn: %s", originIata, destIata, link), false
+		}
 		return fmt.Sprintf("Error searching flights: %v", err), true
 	}
 	if len(bestN) > 4 {
