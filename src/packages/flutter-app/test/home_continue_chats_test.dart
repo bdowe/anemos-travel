@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,8 +16,9 @@ import 'package:travel_route_planner/widgets/continue_chats_section.dart';
 import 'support/l10n_test_app.dart';
 
 /// Home-screen slotting of the "Continue where you left off" section
-/// (specs/continue-where-you-left-off): in-progress plan chats surface on
-/// Home too, and the section collapses to nothing when there are none.
+/// (specs/continue-where-you-left-off): one merged surface holding the
+/// recently viewed trip card and in-progress plan chats under a single
+/// header; the section collapses to nothing when there is nothing to resume.
 class _FakeAuthNotifier extends StateNotifier<AuthState>
     implements AuthNotifier {
   _FakeAuthNotifier(UserModel? user)
@@ -64,6 +67,18 @@ ChatSessionSummary _chat(String id, String title) => ChatSessionSummary(
       updatedAt: '2026-07-02T10:00:00Z',
     );
 
+/// Seeds the persisted recent-trip snapshot the way the detail screen would
+/// have recorded it (recent_trip_provider storage format, keyed by user).
+void _seedRecentTrip(String tripId, String title) {
+  SharedPreferences.setMockInitialValues({
+    'recent_trip.user-1': jsonEncode({
+      'id': tripId,
+      'title': title,
+      'status': 'planned',
+    }),
+  });
+}
+
 Future<void> _pumpHome(
   WidgetTester tester, {
   List<ChatSessionSummary> chats = const [],
@@ -102,5 +117,28 @@ void main() {
 
     expect(find.text('Continue where you left off'), findsNothing);
     expect(find.byType(ContinueChatCard), findsNothing);
+  });
+
+  testWidgets('recent trip alone still renders the section',
+      (WidgetTester tester) async {
+    _seedRecentTrip('t1', 'Lisbon Trip');
+    await _pumpHome(tester);
+
+    expect(find.text('Continue where you left off'), findsOneWidget);
+    expect(find.text('Lisbon Trip'), findsOneWidget);
+    expect(find.byType(ContinueChatCard), findsNothing);
+  });
+
+  testWidgets('recent trip and chats share one header, trip card first',
+      (WidgetTester tester) async {
+    _seedRecentTrip('t1', 'Lisbon Trip');
+    await _pumpHome(tester, chats: [_chat('c1', 'Greek islands in September')]);
+
+    expect(find.text('Continue where you left off'), findsOneWidget);
+    expect(find.byType(ContinueChatCard), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Lisbon Trip')).dy,
+      lessThan(tester.getTopLeft(find.byType(ContinueChatCard)).dy),
+    );
   });
 }

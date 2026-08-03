@@ -1797,9 +1797,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get homeStatusPlanned => 'Planeado';
 
   @override
-  String get homeRecentTripEyebrow => 'CONTINÚA DONDE LO DEJASTE';
-
-  @override
   String get homeLocalGuidesTitle => 'Guías locales';
 
   @override

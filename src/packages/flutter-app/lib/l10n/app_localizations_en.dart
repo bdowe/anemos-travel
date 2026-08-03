@@ -1782,9 +1782,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeStatusPlanned => 'Planned';
 
   @override
-  String get homeRecentTripEyebrow => 'PICK UP WHERE YOU LEFT OFF';
-
-  @override
   String get homeLocalGuidesTitle => 'Local guides';
 
   @override
