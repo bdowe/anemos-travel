@@ -117,6 +117,34 @@ String _ymdhms(DateTime d) => '${_ymd(d)}T'
       _ => null,
     };
 
+/// Calendar event title for a transport segment.
+///
+/// This MUST stay byte-identical to the Go `.ics` export
+/// (calendar_handler.go `segmentEventFieldsIn`): the traveler picks between
+/// a Google Calendar link built here and an `.ics` file built there for the
+/// SAME event, so any divergence shows up as two differently-named entries.
+/// That is why the empty-route case falls back to the mode label rather than
+/// returning the mode alone, matching Go's `segmentRouteIn`.
+String segmentCalendarTitle(AppLocalizations l10n, TripSegment s) {
+  final mode = calendarModeLabel(l10n, s.mode);
+  final route = [s.origin, s.destination].whereType<String>().join(' → ');
+  return l10n.calendarSegmentTitle(mode, route.isEmpty ? mode : route);
+}
+
+/// Mirrors Go's `localizedMode`: known modes translate, anything else keeps
+/// its raw value capitalized.
+String calendarModeLabel(AppLocalizations l10n, String mode) =>
+    switch (mode.trim().toLowerCase()) {
+      'flight' => l10n.calendarModeFlight,
+      'train' => l10n.calendarModeTrain,
+      'bus' => l10n.calendarModeBus,
+      'car' => l10n.calendarModeCar,
+      'ferry' => l10n.calendarModeFerry,
+      'other' => l10n.calendarModeOther,
+      '' => '',
+      _ => mode[0].toUpperCase() + mode.substring(1),
+    };
+
 /// Calendar details for a stay, mirroring icsStayDescription: provider, price
 /// note, booked flag, and the readable booking link.
 String stayCalendarDetails(AppLocalizations l10n, Accommodation a) =>

@@ -1142,12 +1142,6 @@ abstract class AppLocalizations {
   /// **'Could not export the event: {error}'**
   String calendarExportFailed(String error);
 
-  /// No description provided for @bookingsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Bookings'**
-  String get bookingsTitle;
-
   /// No description provided for @bookingsAddStay.
   ///
   /// In en, this message translates to:
@@ -1166,29 +1160,11 @@ abstract class AppLocalizations {
   /// **'Add booking'**
   String get bookingsAddBooking;
 
-  /// No description provided for @bookingsEmptyMessage.
+  /// No description provided for @tripOtherBookings.
   ///
   /// In en, this message translates to:
-  /// **'Nothing saved yet — add the stays, transport, and other bookings for your trip so it all lives in one place.'**
-  String get bookingsEmptyMessage;
-
-  /// No description provided for @bookingsStays.
-  ///
-  /// In en, this message translates to:
-  /// **'Stays'**
-  String get bookingsStays;
-
-  /// No description provided for @bookingsTransport.
-  ///
-  /// In en, this message translates to:
-  /// **'Transport'**
-  String get bookingsTransport;
-
-  /// No description provided for @bookingsOther.
-  ///
-  /// In en, this message translates to:
-  /// **'Other'**
-  String get bookingsOther;
+  /// **'Other bookings'**
+  String get tripOtherBookings;
 
   /// No description provided for @bookingRowAddDetails.
   ///
@@ -1207,12 +1183,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{booked} of {total} booked'**
   String bookingsSummaryProgress(int booked, int total);
-
-  /// No description provided for @bookingsSummarySaved.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 saved} other{{count} saved}}'**
-  String bookingsSummarySaved(int count);
 
   /// No description provided for @bookingsOpenListing.
   ///

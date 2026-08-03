@@ -20,7 +20,7 @@ import 'package:travel_route_planner/providers/accommodations_provider.dart';
 import 'package:travel_route_planner/providers/transport_provider.dart';
 import 'package:travel_route_planner/providers/checklist_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
-import 'package:travel_route_planner/widgets/bookings_section.dart';
+import 'package:travel_route_planner/widgets/booking_sheets.dart';
 
 import 'support/l10n_test_app.dart';
 

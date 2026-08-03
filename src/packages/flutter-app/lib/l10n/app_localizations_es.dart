@@ -574,9 +574,6 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get bookingsTitle => 'Reservas';
-
-  @override
   String get bookingsAddStay => 'Añadir alojamiento';
 
   @override
@@ -586,17 +583,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get bookingsAddBooking => 'Añadir reserva';
 
   @override
-  String get bookingsEmptyMessage =>
-      'Aún no has guardado nada — añade los alojamientos, el transporte y las demás reservas de tu viaje para tenerlo todo en un mismo sitio.';
-
-  @override
-  String get bookingsStays => 'Alojamientos';
-
-  @override
-  String get bookingsTransport => 'Transporte';
-
-  @override
-  String get bookingsOther => 'Otros';
+  String get tripOtherBookings => 'Otras reservas';
 
   @override
   String get bookingRowAddDetails => 'Añadir detalles…';
@@ -607,17 +594,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String bookingsSummaryProgress(int booked, int total) {
     return '$booked de $total reservadas';
-  }
-
-  @override
-  String bookingsSummarySaved(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count guardadas',
-      one: '1 guardada',
-    );
-    return '$_temp0';
   }
 
   @override

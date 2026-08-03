@@ -256,14 +256,10 @@
       }
     }
   },
-  "bookingsTitle": "Bookings",
   "bookingsAddStay": "Add stay",
   "bookingsAddTransport": "Add transport",
   "bookingsAddBooking": "Add booking",
-  "bookingsEmptyMessage": "Nothing saved yet — add the stays, transport, and other bookings for your trip so it all lives in one place.",
-  "bookingsStays": "Stays",
-  "bookingsTransport": "Transport",
-  "bookingsOther": "Other",
+  "tripOtherBookings": "Other bookings",
   "bookingRowAddDetails": "Add details…",
   "bookingRowOptions": "Booking options",
   "bookingsSummaryProgress": "{booked} of {total} booked",
@@ -273,14 +269,6 @@
         "type": "int"
       },
       "total": {
-        "type": "int"
-      }
-    }
-  },
-  "bookingsSummarySaved": "{count, plural, =1{1 saved} other{{count} saved}}",
-  "@bookingsSummarySaved": {
-    "placeholders": {
-      "count": {
         "type": "int"
       }
     }
