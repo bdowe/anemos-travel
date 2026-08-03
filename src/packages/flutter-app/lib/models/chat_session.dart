@@ -53,10 +53,17 @@ class ChatSessionMessage {
   @JsonKey(defaultValue: <ChatSessionImage>[])
   final List<ChatSessionImage> images;
 
+  /// Compact chip label for machine-built seed messages (near-me coordinates).
+  /// Round-tripped through the persisted transcript so a resumed chat renders
+  /// the seed chip instead of the raw message bubble.
+  @JsonKey(name: 'display_label')
+  final String? displayLabel;
+
   const ChatSessionMessage({
     required this.role,
     required this.content,
     this.images = const [],
+    this.displayLabel,
   });
 
   factory ChatSessionMessage.fromJson(Map<String, dynamic> json) =>

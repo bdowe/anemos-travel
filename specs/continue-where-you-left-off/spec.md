@@ -33,8 +33,9 @@ agent actually saved.
       reply, so a resume shows everything both sides said.
 - [ ] The trips page shows a "Continue where you left off" section above saved
       trips, listing in-progress conversations (most recent first), each with a
-      title drawn from the opening message, a preview of the latest reply, and
-      when it was last active.
+      title drawn from the opening message (its display label when one is
+      present — seeded chips like "What's near me?" — otherwise its text), a
+      preview of the latest reply, and when it was last active.
 - [ ] Tapping an entry opens the AI planning tab with the full conversation
       restored; sending the next message continues the same conversation with
       full context.
@@ -75,9 +76,11 @@ agent actually saved.
 ## Data Model
 
 - **Plan chat session** — one per planning conversation per user: the owner,
-  the conversation's opaque id, a short title (from the opening message), a
-  preview (latest assistant reply), the transcript (ordered role/content
-  messages), the running compaction summary if any, message count, and
+  the conversation's opaque id, a short title (from the opening message's
+  display label when present, otherwise its text), a preview (latest assistant
+  reply), the transcript (ordered role/content messages, each with an optional
+  display label for seeded chips), the running compaction summary if any,
+  message count, and
   created/updated timestamps. Updated wholesale each turn. Deleted on dismiss;
   stale sessions (no activity for ~60 days) are pruned opportunistically.
 

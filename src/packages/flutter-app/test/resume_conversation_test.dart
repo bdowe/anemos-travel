@@ -87,6 +87,31 @@ void main() {
       expect(service.summaries, ['- travelers: 3']);
     });
 
+    test('resumed display label survives into the next wire history', () async {
+      final service = _RecordingPlanService();
+      final notifier = PlanNotifier(service, ApiClient());
+
+      notifier.resumeConversation(
+        chatId: 'chat-near-me',
+        messages: const [
+          PlanMessage(
+            role: MessageRole.user,
+            content: 'My current location is latitude 40.7234, longitude '
+                '-73.9938 (accuracy about 12 m). What is good near me?',
+            displayLabel: 'Near my current location',
+          ),
+          PlanMessage(role: MessageRole.assistant, content: 'You are in NoLita.'),
+        ],
+      );
+      await notifier.sendMessage('anything with live music?');
+
+      // The transcript is upserted wholesale server-side each turn, so the
+      // label must ride every resend or the persisted copy loses it.
+      final history = service.histories.single;
+      expect(history.first['display_label'], 'Near my current location');
+      expect(history.last.containsKey('display_label'), isFalse);
+    });
+
     test('empty summary is not restored as compaction state', () {
       final notifier = PlanNotifier(_RecordingPlanService(), ApiClient());
       notifier.resumeConversation(
@@ -131,6 +156,21 @@ void main() {
       expect(detail.messages.map((m) => m.role).toList(),
           ['user', 'assistant']);
       expect(detail.messages.last.content, 'a1');
+    });
+
+    test('message display_label parses when present and defaults to null', () {
+      final labeled = ChatSessionMessage.fromJson({
+        'role': 'user',
+        'content': 'My current location is latitude 40.7, longitude -73.9',
+        'display_label': 'Near my current location',
+      });
+      expect(labeled.displayLabel, 'Near my current location');
+
+      final plain = ChatSessionMessage.fromJson({
+        'role': 'user',
+        'content': 'plain question',
+      });
+      expect(plain.displayLabel, isNull);
     });
   });
 }

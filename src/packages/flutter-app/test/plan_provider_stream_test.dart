@@ -155,5 +155,16 @@ void main() {
     expect(notifier.state.messages.first.displayLabel, 'Refining Day 1 — Athens');
     expect(notifier.state.messages.first.content, seed);
     expect(service.lastHistory!.first['content'], seed);
+    // The label rides along as metadata (titles the persisted session and
+    // survives the wholesale transcript upsert on later turns).
+    expect(service.lastHistory!.first['display_label'], 'Refining Day 1 — Athens');
+
+    // A plain message carries no display_label key at all.
+    service.events
+      ..clear()
+      ..add(const PlanEvent(type: 'text_delta', data: {'text': 'Sure.'}));
+    await notifier.sendMessage('make day 2 chiller');
+    expect(service.lastHistory!.last['role'], 'user');
+    expect(service.lastHistory!.last.containsKey('display_label'), isFalse);
   });
 }
