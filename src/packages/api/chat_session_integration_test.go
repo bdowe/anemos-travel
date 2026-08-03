@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -220,6 +221,58 @@ func TestChatSessionsListGetDeleteAndGraduation(t *testing.T) {
 
 	// Settle async trip_created analytics before the next test truncates.
 	waitForEventCount(t, user.ID, "trip_created", 1)
+}
+
+// (d2) Seed display labels: a machine-built opening message (near-me chip)
+// carries a display_label that titles the session and round-trips through the
+// transcript for chip re-rendering on resume — but never reaches the model.
+func TestChatSessionTitleUsesDisplayLabel(t *testing.T) {
+	resetDB(t)
+	fa := newFakeAnthropic(t, textTurn("You're in Lower East Side, NYC."))
+	user, token := createTestUser(t, "nearme@example.com")
+
+	const seedText = "My current location is latitude 40.7234, longitude -73.9938 (accuracy about 12 m). What's good to see, do, or eat near me right now?"
+	const seedLabel = "Near my current location"
+	rec := doJSON(t, "POST", "/api/v1/plan", token, PlanRequest{
+		ChatID: "chat-near-me",
+		Messages: []PlanChatMessage{{
+			Role: "user", Content: seedText, DisplayLabel: seedLabel,
+		}},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/plan = %d, want 200", rec.Code)
+	}
+
+	msgs, title, _, found := chatSessionRow(t, user.ID, "chat-near-me")
+	if !found {
+		t.Fatal("no chat session persisted")
+	}
+	if title != seedLabel {
+		t.Fatalf("title = %q, want the display label %q", title, seedLabel)
+	}
+	if len(msgs) == 0 || msgs[0].DisplayLabel != seedLabel || msgs[0].Content != seedText {
+		t.Fatalf("stored first message = %+v, want label and content round-tripped", msgs[0])
+	}
+
+	// The resume surface returns the label so the client re-renders the chip.
+	rec = doJSON(t, "GET", "/api/v1/chats/chat-near-me", token, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /chats/{id} = %d: %s", rec.Code, rec.Body.String())
+	}
+	var detail ChatSessionDetailResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+	if len(detail.Messages) == 0 || detail.Messages[0].DisplayLabel != seedLabel {
+		t.Fatalf("detail first message = %+v, want display_label present", detail.Messages[0])
+	}
+
+	// Metadata only: the label must never appear in any model-bound request.
+	for i, body := range fa.requestBodies() {
+		if bytes.Contains(body, []byte("display_label")) || bytes.Contains(body, []byte(seedLabel)) {
+			t.Fatalf("model request %d leaked the display label: %s", i, body)
+		}
+	}
 }
 
 // (e) Compaction-aware persistence: when compaction runs, the stored session

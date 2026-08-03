@@ -52,6 +52,11 @@ const planMaxDuration = 10 * time.Minute
 const (
 	planMaxMessages     = 60
 	planMaxMessageChars = 20000
+	// planMaxDisplayLabelRunes bounds the display-label metadata persisted in
+	// transcripts. Labels are chip-sized UI strings; anything longer is
+	// truncated (not rejected — best-effort metadata) to keep a hostile client
+	// from bloating the JSONB column.
+	planMaxDisplayLabelRunes = 200
 )
 
 // Image attachment caps. Per-image tracks Anthropic's 5 MB decoded limit
@@ -91,6 +96,11 @@ type PlanChatMessage struct {
 	Role    string      `json:"role"`
 	Content string      `json:"content"`
 	Images  []PlanImage `json:"images,omitempty"`
+	// DisplayLabel is the client's compact stand-in for machine-built seed
+	// messages (e.g. the near-me chip's coordinate text). Metadata only: it
+	// titles the persisted chat session and round-trips through transcripts so
+	// resumed chats re-render the chip, but it is never sent to the model.
+	DisplayLabel string `json:"display_label,omitempty"`
 }
 
 // PlanImage is one image attached to a user message. Persisted transcripts
@@ -138,10 +148,13 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	totalImages := 0
-	for _, m := range req.Messages {
+	for i, m := range req.Messages {
 		if utf8.RuneCountInString(m.Content) > planMaxMessageChars {
 			sendSSE(w, "error", map[string]string{"message": "One of the messages is too long for the planner. Please shorten it and try again."})
 			return
+		}
+		if utf8.RuneCountInString(m.DisplayLabel) > planMaxDisplayLabelRunes {
+			req.Messages[i].DisplayLabel = truncateRunes(m.DisplayLabel, planMaxDisplayLabelRunes)
 		}
 		if len(m.Images) > 0 && m.Role != "user" {
 			sendSSE(w, "error", map[string]string{"message": "Images can only be attached to your own messages."})

@@ -368,6 +368,10 @@ class PlanNotifier extends StateNotifier<PlanState> {
         .map((m) => <String, dynamic>{
               'role': m.role == MessageRole.user ? 'user' : 'assistant',
               'content': m.content,
+              // Seed-chip metadata: titles the persisted session server-side
+              // and must be resent every turn — the transcript is upserted
+              // wholesale, so omitting it would erase the label.
+              if (m.displayLabel != null) 'display_label': m.displayLabel,
               if (m.attachments.any((a) => a.bytes != null))
                 'images': [
                   for (final a in m.attachments)

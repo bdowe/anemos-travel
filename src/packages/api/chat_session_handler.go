@@ -83,7 +83,13 @@ func savePlanChatSession(ctx context.Context, uid uuid.UUID, chatID, summary str
 	var title, preview string
 	for _, m := range msgs {
 		if m.Role == "user" {
-			title = truncateRunes(m.Content, chatTitleMaxRunes)
+			// Machine-built seed messages (near-me coordinates) carry a
+			// human-friendly display label — title from that, never the raw text.
+			src := m.Content
+			if strings.TrimSpace(m.DisplayLabel) != "" {
+				src = m.DisplayLabel
+			}
+			title = truncateRunes(src, chatTitleMaxRunes)
 			break
 		}
 	}

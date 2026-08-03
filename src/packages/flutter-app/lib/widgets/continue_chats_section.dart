@@ -64,6 +64,9 @@ class ContinueChatCard extends ConsumerWidget {
                       ? MessageRole.user
                       : MessageRole.assistant,
                   content: m.content,
+                  // Restores the seed context chip (e.g. "Near my current
+                  // location") instead of the raw coordinate bubble.
+                  displayLabel: m.displayLabel,
                   // Pixels are stripped server-side; null bytes renders the
                   // "Image" placeholder chip and stays out of resent history.
                   attachments: [

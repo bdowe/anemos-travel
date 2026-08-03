@@ -44,6 +44,7 @@ ChatSessionMessage _$ChatSessionMessageFromJson(Map<String, dynamic> json) =>
               ?.map((e) => ChatSessionImage.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      displayLabel: json['display_label'] as String?,
     );
 
 Map<String, dynamic> _$ChatSessionMessageToJson(ChatSessionMessage instance) =>
@@ -51,6 +52,7 @@ Map<String, dynamic> _$ChatSessionMessageToJson(ChatSessionMessage instance) =>
       'role': instance.role,
       'content': instance.content,
       'images': instance.images.map((e) => e.toJson()).toList(),
+      'display_label': instance.displayLabel,
     };
 
 ChatSessionDetail _$ChatSessionDetailFromJson(Map<String, dynamic> json) =>
