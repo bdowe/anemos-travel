@@ -83,6 +83,7 @@ class BrandBadge extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final BorderRadius borderRadius;
   final bool circle;
+  final VoidCallback? onTap;
 
   const BrandBadge({
     super.key,
@@ -91,11 +92,12 @@ class BrandBadge extends StatelessWidget {
         horizontal: AppSpacing.md, vertical: AppSpacing.sm),
     this.borderRadius = AppRadius.mdAll,
     this.circle = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final badge = Container(
       padding: padding,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.92),
@@ -103,6 +105,22 @@ class BrandBadge extends StatelessWidget {
         borderRadius: circle ? null : borderRadius,
       ),
       child: child,
+    );
+    if (onTap == null) return badge;
+    // The badge surface is opaque, so the ripple mostly hides behind it —
+    // the InkWell is here for the tap target, web pointer cursor, and focus
+    // handling rather than the splash.
+    return Semantics(
+      button: true,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: circle ? const CircleBorder() : null,
+          borderRadius: circle ? null : borderRadius,
+          child: badge,
+        ),
+      ),
     );
   }
 }

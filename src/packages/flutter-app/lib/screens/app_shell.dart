@@ -118,17 +118,19 @@ const List<Widget> _tabRoots = [
 
 /// The Golden Tempo Travel brand mark for the top of the rail — the persistent
 /// Site ID (Krug). The horseshoe mark on a light badge so it fits the narrow
-/// rail and the black/gold artwork reads on the surface.
-class _RailBrand extends StatelessWidget {
+/// rail and the black/gold artwork reads on the surface. Tapping it goes Home,
+/// per the universal logo-links-home convention.
+class _RailBrand extends ConsumerWidget {
   const _RailBrand();
 
   @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.sm),
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.sm),
       child: BrandBadge(
-        padding: EdgeInsets.all(AppSpacing.sm),
-        child: BrandLogo.mark(size: 36),
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        onTap: () => goHome(ref),
+        child: const BrandLogo.mark(size: 36),
       ),
     );
   }
