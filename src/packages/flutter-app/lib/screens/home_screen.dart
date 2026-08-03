@@ -87,39 +87,50 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: GradientAppBar(
         centerTitle: false,
-        // Brand mark on a light badge (so the black/gold logo reads on the teal
-        // app bar) next to the wordmark in white. LayoutBuilder inside the
-        // title's own constraints: with the globe + avatar actions a phone
-        // can't fit the full wordmark ("Golden Tempo Tra…"), so narrow widths
-        // show the mark alone rather than an ellipsized brand.
+        // Three states, keyed off window width (same measurement as the
+        // shell's rail check, NOT the title slot's constraints):
+        //  - rail visible (>= kRailBreakpoint): wordmark only — the rail brand
+        //    already shows the mark one corner over, so the badge here would
+        //    be a duplicate. Static: the rail brand is the logo-home tap.
+        //  - no rail: brand mark on a light badge (so the black/gold logo
+        //    reads on the teal app bar) next to the wordmark in white.
+        //  - compact title slot (< _wordmarkMinWidth): with the globe + avatar
+        //    actions a phone can't fit the full wordmark ("Golden Tempo
+        //    Tra…"), so the badge shows alone rather than an ellipsized brand.
         title: LayoutBuilder(
           builder: (context, constraints) {
+            final hasRail =
+                MediaQuery.sizeOf(context).width >= kRailBreakpoint;
             final compact = constraints.maxWidth < _wordmarkMinWidth;
+            const wordmark = Flexible(
+              child: Text(
+                AppInfo.name,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Playfair Display',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
+                  letterSpacing: 0.5,
+                  color: Colors.white,
+                ),
+              ),
+            );
             return Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                BrandBadge(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-                  // Logo-links-home: pops anything pushed on the Home stack.
-                  onTap: () => goHome(ref),
-                  child: const BrandLogo.mark(size: 28),
-                ),
-                if (!compact) ...const [
-                  SizedBox(width: AppSpacing.sm),
-                  Flexible(
-                    child: Text(
-                      AppInfo.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'Playfair Display',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 20,
-                        letterSpacing: 0.5,
-                        color: Colors.white,
-                      ),
-                    ),
+                if (!hasRail)
+                  BrandBadge(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                    // Logo-links-home: pops anything pushed on the Home stack.
+                    onTap: () => goHome(ref),
+                    child: const BrandLogo.mark(size: 28),
                   ),
+                if (hasRail)
+                  wordmark
+                else if (!compact) ...const [
+                  SizedBox(width: AppSpacing.sm),
+                  wordmark,
                 ],
               ],
             );

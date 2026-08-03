@@ -115,9 +115,18 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('wide app bar keeps the full wordmark',
-      (WidgetTester tester) async {
+  testWidgets(
+      'wide app bar shows the wordmark only — the rail carries the '
+      'mark', (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(1200, 800));
+
+    expect(find.text(AppInfo.name), findsOneWidget);
+    expect(find.byType(BrandLogo), findsNothing);
+  });
+
+  testWidgets('mid width (no rail) keeps badge and wordmark together',
+      (WidgetTester tester) async {
+    await _pumpHome(tester, surface: const Size(700, 800));
 
     expect(find.text(AppInfo.name), findsOneWidget);
     expect(find.byType(BrandLogo), findsOneWidget);
