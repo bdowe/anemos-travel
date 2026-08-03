@@ -8,10 +8,6 @@
   "@languageSectionTitle": {
     "description": "Header of the language group in account settings."
   },
-  "languageSystemDefault": "System default",
-  "@languageSystemDefault": {
-    "description": "Language option that follows the device/browser language."
-  },
   "languageEnglish": "English",
   "@languageEnglish": {
     "description": "Name of the English language, shown in its own language."

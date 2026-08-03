@@ -110,12 +110,6 @@ abstract class AppLocalizations {
   /// **'Language'**
   String get languageSectionTitle;
 
-  /// Language option that follows the device/browser language.
-  ///
-  /// In en, this message translates to:
-  /// **'System default'**
-  String get languageSystemDefault;
-
   /// Name of the English language, shown in its own language.
   ///
   /// In en, this message translates to:

@@ -64,7 +64,7 @@ void main() {
 
     expect(find.text('Language'), findsOneWidget);
 
-    await ref.read(localeProvider.notifier).setOverride('es');
+    await ref.read(localeProvider.notifier).setLanguage('es');
     await tester.pumpAndSettle();
 
     expect(find.text('Idioma'), findsOneWidget);
@@ -73,32 +73,33 @@ void main() {
 
   test('an explicit choice is persisted and restored on next launch', () async {
     final container = _container();
-    await container.read(localeProvider.notifier).setOverride('es');
-    expect(container.read(localeProvider).effective, 'es');
+    await container.read(localeProvider.notifier).setLanguage('es');
+    expect(container.read(localeProvider).language, 'es');
 
-    // A fresh container stands in for a relaunch: the override must come back
+    // A fresh container stands in for a relaunch: the choice must come back
     // from device storage rather than resetting to the device language.
     final relaunched = _container();
     await relaunched.read(localeProvider.notifier).load();
-    expect(relaunched.read(localeProvider).override, 'es');
-    expect(relaunched.read(localeProvider).effective, 'es');
+    expect(relaunched.read(localeProvider).language, 'es');
   });
 
-  test('returning to System default clears the stored override', () async {
+  test('first launch resolves the device language and stores it', () async {
+    // A device that has never chosen ("system default" users from before the
+    // option was removed, and fresh installs) gets its resolved language
+    // persisted, so the picker always shows a concrete selection.
     final container = _container();
-    await container.read(localeProvider.notifier).setOverride('es');
-    await container.read(localeProvider.notifier).setOverride(kLocaleSystem);
+    await container.read(localeProvider.notifier).load();
+    expect(container.read(localeProvider).language, 'en');
 
-    final relaunched = _container();
-    await relaunched.read(localeProvider.notifier).load();
-    expect(relaunched.read(localeProvider).override, kLocaleSystem);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('locale_override'), 'en');
   });
 
   test('the API client language header follows the choice', () async {
     final container = _container();
-    await container.read(localeProvider.notifier).setOverride('es');
+    await container.read(localeProvider.notifier).setLanguage('es');
     // The server renders emails, trip-health findings and exports from this
     // header, so it must track the picker and not just the widget tree.
-    expect(container.read(localeProvider).effective, 'es');
+    expect(container.read(localeProvider).language, 'es');
   });
 }

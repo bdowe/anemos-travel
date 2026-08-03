@@ -117,15 +117,14 @@ class TravelRoutePlannerApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watching only the locale the widget layer needs: a change to the stored
-    // override alone (same effective language) must not rebuild the app.
+    // Watching only the locale the widget layer needs, not the whole state.
     final locale = ref.watch(localeProvider.select((s) => s.materialLocale));
     return MaterialApp(
       title: AppInfo.name,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      // specs/i18n-spanish. `locale` is null while following the device, which
-      // lets Flutter resolve against supportedLocales itself.
+      // specs/i18n-spanish. Always concrete: the locale provider resolves the
+      // device language itself and stores it at first launch.
       locale: locale,
       supportedLocales: kSupportedLocales,
       localizationsDelegates: const [
