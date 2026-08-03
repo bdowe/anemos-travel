@@ -24,36 +24,33 @@ void main() {
   });
 
   group('resolveEffectiveLocale', () {
-    test('system follows the device, falling back to English', () {
-      expect(resolveEffectiveLocale(kLocaleSystem), 'en');
+    test('nothing stored follows the device, falling back to English', () {
+      expect(resolveEffectiveLocale(null), 'en');
     });
 
-    test('an override for a language this build cannot render is ignored', () {
-      // A stale override left by a build that shipped more languages must not
-      // pin the app to a language it has no translations for.
+    test('a stored choice this build cannot render is ignored', () {
+      // A stale choice left by a build that shipped more languages — or the
+      // retired "system" sentinel — must not pin the app to a language it has
+      // no translations for.
       expect(resolveEffectiveLocale('klingon'), 'en');
       expect(resolveEffectiveLocale('fr'), 'en');
+      expect(resolveEffectiveLocale('system'), 'en');
     });
 
-    test('an override for a supported language wins', () {
+    test('a stored supported language wins', () {
       expect(resolveEffectiveLocale('en'), 'en');
       expect(resolveEffectiveLocale('es'), 'es');
     });
   });
 
   group('LocaleState', () {
-    test('following the system hands MaterialApp a null locale', () {
-      // Null lets Flutter resolve against supportedLocales itself, which is
-      // what keeps the app tracking a device language change.
-      const state = LocaleState(override: kLocaleSystem, effective: 'en');
-      expect(state.materialLocale, isNull);
-    });
-
-    test('an explicit choice pins MaterialApp to that locale', () {
-      const state = LocaleState(override: 'en', effective: 'en');
-      expect(state.materialLocale?.languageCode, 'en');
-      const spanish = LocaleState(override: 'es', effective: 'es');
-      expect(spanish.materialLocale?.languageCode, 'es');
+    test('the chosen language pins MaterialApp to that locale', () {
+      // Always concrete: there is no "follow the system" mode, so MaterialApp
+      // never gets a null locale to resolve itself.
+      const state = LocaleState(language: 'en');
+      expect(state.materialLocale.languageCode, 'en');
+      const spanish = LocaleState(language: 'es');
+      expect(spanish.materialLocale.languageCode, 'es');
     });
   });
 

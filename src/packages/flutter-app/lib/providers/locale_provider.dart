@@ -12,49 +12,37 @@ import 'auth_provider.dart';
 
 /// The app's language, and the single place it is decided (specs/i18n-spanish).
 ///
-/// The client owns locale resolution: it picks the effective language once and
-/// states it on every request via `Accept-Language`. The server never
-/// re-derives it, which is what keeps an explicit override from disagreeing
-/// with what the backend thinks the user reads.
+/// The client owns locale resolution: it picks the language once and states it
+/// on every request via `Accept-Language`. The server never re-derives it,
+/// which is what keeps the picker from disagreeing with what the backend
+/// thinks the user reads.
 ///
-/// Resolution order: explicit override, else the device language (when the app
-/// ships translations for it), else English.
+/// There is no "follow the system" mode: a device that has never chosen
+/// resolves its language once at startup — the device language when this build
+/// ships translations for it, else English — and stores that as the choice, so
+/// the picker always shows a concrete language.
 
-/// Storage key for the explicit choice. Device-wide rather than per-user: the
-/// sign-in screen needs a language before anyone is signed in.
+/// Storage key for the choice. Device-wide rather than per-user: the sign-in
+/// screen needs a language before anyone is signed in. (The historic name
+/// predates the removal of the "system default" picker option.)
 const String _overrideKey = 'locale_override';
-
-/// Sentinel stored (and shown in the picker) for "follow the device".
-const String kLocaleSystem = 'system';
 
 @immutable
 class LocaleState {
-  /// The user's explicit choice: [kLocaleSystem], or a language code.
-  final String override;
+  /// The language in use. Always a supported language code.
+  final String language;
 
-  /// The language actually in use, after resolving [override] against the
-  /// device language and what this build supports. Never empty.
-  final String effective;
-
-  /// False until the stored override has been read; the app renders with the
+  /// False until the stored choice has been read; the app renders with the
   /// device-derived default in the meantime.
   final bool loaded;
 
-  const LocaleState({
-    this.override = kLocaleSystem,
-    this.effective = 'en',
-    this.loaded = false,
-  });
+  const LocaleState({this.language = 'en', this.loaded = false});
 
-  /// What to hand [MaterialApp.locale]: null when following the system, so
-  /// Flutter does its own resolution against `supportedLocales`.
-  Locale? get materialLocale =>
-      override == kLocaleSystem ? null : Locale(effective);
+  /// What to hand [MaterialApp.locale].
+  Locale get materialLocale => Locale(language);
 
-  LocaleState copyWith({String? override, String? effective, bool? loaded}) =>
-      LocaleState(
-        override: override ?? this.override,
-        effective: effective ?? this.effective,
+  LocaleState copyWith({String? language, bool? loaded}) => LocaleState(
+        language: language ?? this.language,
         loaded: loaded ?? this.loaded,
       );
 }
@@ -68,86 +56,72 @@ String? deviceLanguage() {
   return null;
 }
 
-/// Resolves an override against the device language and this build's
-/// translations. Unsupported values (a stale override from a build that
-/// shipped a language this one doesn't) fall back rather than sticking.
-String resolveEffectiveLocale(String override) {
-  if (override != kLocaleSystem && isSupportedLanguage(override)) {
-    return override;
-  }
+/// Folds a stored choice (null when nothing is stored) to a language this
+/// build can render. Unsupported values — a stale choice from a build that
+/// shipped a language this one doesn't, or the retired "system" sentinel —
+/// fall back to the device language rather than sticking.
+String resolveEffectiveLocale(String? stored) {
+  if (stored != null && isSupportedLanguage(stored)) return stored;
   return deviceLanguage() ?? 'en';
 }
 
 class LocaleNotifier extends StateNotifier<LocaleState> {
   final Ref _ref;
 
-  LocaleNotifier(this._ref) : super(const LocaleState()) {
-    // Render immediately with the device-derived language; the stored override
-    // arrives a frame or two later and only redraws if it differs.
-    _apply(resolveEffectiveLocale(kLocaleSystem));
+  // Render immediately with the device-derived language; the stored choice
+  // arrives a frame or two later and only redraws if it differs.
+  LocaleNotifier(this._ref)
+      : super(LocaleState(language: resolveEffectiveLocale(null))) {
+    _apply(state.language);
   }
 
-  /// Reads the stored override. Called once at startup.
+  /// Reads the stored choice. Called once at startup. A device that has never
+  /// chosen resolves the device language and stores it, so the picker always
+  /// has a concrete selection from then on.
   Future<void> load() async {
-    String override = kLocaleSystem;
+    SharedPreferences? prefs;
+    String? stored;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      override = prefs.getString(_overrideKey) ?? kLocaleSystem;
+      prefs = await SharedPreferences.getInstance();
+      stored = prefs.getString(_overrideKey);
     } catch (_) {
-      // Storage unavailable (private browsing, first run) — follow the device.
+      // Storage unavailable (private browsing, first run) — the resolved
+      // language still applies for this session.
     }
-    final effective = resolveEffectiveLocale(override);
-    state = state.copyWith(
-      override: override,
-      effective: effective,
-      loaded: true,
-    );
-    _apply(effective);
+    final language = resolveEffectiveLocale(stored);
+    state = state.copyWith(language: language, loaded: true);
+    _apply(language);
+    if (stored != language) {
+      try {
+        await prefs?.setString(_overrideKey, language);
+      } catch (_) {
+        // Same session-only fallback as above.
+      }
+    }
   }
 
-  /// Records an explicit choice ([kLocaleSystem] to go back to following the
-  /// device) and syncs it to the account.
-  Future<void> setOverride(String override) async {
-    final effective = resolveEffectiveLocale(override);
-    state = state.copyWith(override: override, effective: effective);
-    _apply(effective);
+  /// Records an explicit choice and syncs it to the account.
+  Future<void> setLanguage(String language) async {
+    final resolved = resolveEffectiveLocale(language);
+    state = state.copyWith(language: resolved);
+    _apply(resolved);
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (override == kLocaleSystem) {
-        await prefs.remove(_overrideKey);
-      } else {
-        await prefs.setString(_overrideKey, override);
-      }
+      await prefs.setString(_overrideKey, resolved);
     } catch (_) {
       // The choice still applies for this session.
     }
     await syncToAccount();
   }
 
-  /// Adopts the account's stored language on a device that has never made its
-  /// own choice, so a second device follows the first. A local override always
-  /// wins on the device where it was set — and if there is no local choice, the
-  /// device's resolved language is pushed up instead, so the background email
-  /// jobs (which have no request to negotiate from) always have a value.
-  Future<void> reconcileWithAccount(String? accountLocale) async {
-    if (state.override == kLocaleSystem &&
-        accountLocale != null &&
-        isSupportedLanguage(accountLocale) &&
-        accountLocale != state.effective) {
-      await setOverride(accountLocale);
-      return;
-    }
-    if (accountLocale != state.effective) await syncToAccount();
-  }
-
-  /// Best-effort push of the effective language to the account. Never throws
+  /// Best-effort push of the chosen language to the account. Never throws
   /// and never blocks the UI: a failed sync only costs a wrong-language email
   /// until the next successful one.
   Future<void> syncToAccount() async {
     if (!_ref.read(authProvider).isSignedIn) return;
     try {
       final api = _ref.read(apiClientProvider);
-      final user = await AccountApiService(api).updateLocale(state.effective);
+      final user = await AccountApiService(api).updateLocale(state.language);
       _ref.read(authProvider.notifier).setUser(user);
     } catch (_) {
       // Offline or transient — retried on the next locale change or sign-in.

@@ -418,10 +418,10 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
 
 /// Language selection (specs/i18n-spanish).
 ///
-/// "System default" is the initial state and keeps following the device, so a
-/// traveler who changes their phone's language is followed rather than pinned.
-/// An explicit choice wins on this device and syncs to the account, which is
-/// what makes it carry to a second device and to the emails the server sends.
+/// The device language (or English) is resolved and stored at first launch,
+/// so a concrete language is always selected here. A choice made on this
+/// device syncs to the account, which is what makes it carry to a second
+/// device and to the emails the server sends.
 ///
 /// Options are built from [kSupportedLocales] rather than hardcoded, so
 /// enabling a language stays a one-line change.
@@ -438,18 +438,13 @@ class _LanguagePicker extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         RadioGroup<String>(
-          groupValue: state.override,
+          groupValue: state.language,
           onChanged: (v) {
-            if (v != null) ref.read(localeProvider.notifier).setOverride(v);
+            if (v != null) ref.read(localeProvider.notifier).setLanguage(v);
           },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              RadioListTile<String>(
-                contentPadding: EdgeInsets.zero,
-                title: Text(l10n.languageSystemDefault),
-                value: kLocaleSystem,
-              ),
               for (final locale in kSupportedLocales)
                 RadioListTile<String>(
                   contentPadding: EdgeInsets.zero,

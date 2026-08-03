@@ -22,7 +22,7 @@ import 'package:travel_route_planner/widgets/language_menu_button.dart';
 import 'support/l10n_test_app.dart';
 
 /// The app-bar globe menu (specs/i18n-spanish, visible language switcher):
-/// same three choices as the settings picker, checked on the override, and
+/// same choices as the settings picker, checked on the active language, and
 /// present on the surfaces a signed-out visitor actually sees — including at
 /// rail width, where AccountMenu hides itself and the globe must not.
 ///
@@ -117,8 +117,8 @@ bool _checkedOf(WidgetTester tester, String label) => tester
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('menu lists System default, English and Español with the '
-      'override checked', (tester) async {
+  testWidgets('menu lists only English and Español with the active language '
+      'checked', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [authStorageProvider.overrideWithValue(_FakeAuthStorage())],
       child: localizedTestApp(
@@ -135,11 +135,12 @@ void main() {
     await tester.tap(find.byIcon(Icons.language));
     await tester.pumpAndSettle();
 
-    expect(find.text('System default'), findsOneWidget);
+    // No "System default" entry: a device that never chose shows its resolved
+    // language (English under `flutter test`) checked instead.
+    expect(find.text('System default'), findsNothing);
     expect(find.text('English'), findsOneWidget);
     expect(find.text('Español'), findsOneWidget);
-    expect(_checkedOf(tester, 'System default'), isTrue);
-    expect(_checkedOf(tester, 'English'), isFalse);
+    expect(_checkedOf(tester, 'English'), isTrue);
     expect(_checkedOf(tester, 'Español'), isFalse);
   });
 
@@ -173,7 +174,7 @@ void main() {
         .tap(find.widgetWithText(CheckedPopupMenuItem<String>, 'Español'));
     await tester.pumpAndSettle();
 
-    expect(ref.read(localeProvider).override, 'es');
+    expect(ref.read(localeProvider).language, 'es');
     expect(find.text('Idioma'), findsOneWidget);
     expect(find.text('Language'), findsNothing);
 
@@ -181,7 +182,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.language));
     await tester.pumpAndSettle();
     expect(_checkedOf(tester, 'Español'), isTrue);
-    expect(_checkedOf(tester, 'Predeterminado del sistema'), isFalse);
+    expect(_checkedOf(tester, 'English'), isFalse);
   });
 
   testWidgets('landing screen shows the globe signed out, even at rail width',
