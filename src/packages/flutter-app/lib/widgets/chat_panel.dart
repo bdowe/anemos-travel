@@ -16,6 +16,7 @@ import '../providers/plan_provider.dart';
 import '../services/dictation_controller.dart';
 import '../services/image_attachment_pipeline.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
 import '../theme/spacing.dart';
 import '../utils/errors.dart';
 import '../utils/clipboard_images_stub.dart'
@@ -63,6 +64,11 @@ class ChatPanel extends ConsumerStatefulWidget {
   /// Defaults to the platform file picker; injectable for tests.
   final Future<List<(Uint8List, String)>> Function()? pickImages;
 
+  /// Renders the composer as a rounded floating card instead of a full-bleed
+  /// bottom bar. Set by hosts that width-cap the panel mid-screen (the 760px
+  /// Agent column); the refine dock and mobile sheet keep the default.
+  final bool floatingComposer;
+
   const ChatPanel({
     super.key,
     required this.state,
@@ -73,6 +79,7 @@ class ChatPanel extends ConsumerStatefulWidget {
     this.onViewTrip,
     this.attachmentPipeline = const ImageAttachmentPipeline(),
     this.pickImages,
+    this.floatingComposer = false,
   });
 
   @override
@@ -353,6 +360,7 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
             onSend: _send,
             onAttach: _pickImages,
             dictation: _dictation,
+            floating: widget.floatingComposer,
           ),
         ],
       );
@@ -1515,6 +1523,7 @@ class _InputBar extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final DictationController dictation;
+  final bool floating;
 
   const _InputBar({
     required this.controller,
@@ -1524,24 +1533,42 @@ class _InputBar extends StatelessWidget {
     required this.onSend,
     required this.onAttach,
     required this.dictation,
+    this.floating = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.sm, AppSpacing.sm, AppSpacing.sm, AppSpacing.lg),
+      // Floating mode: a rounded card inside a width-capped column (the 760px
+      // agent screen), where the full-bleed bar's square corners and side
+      // shadow would otherwise show mid-screen. Radius 32 keeps the card
+      // concentric with the radius-24 field pill through the sm padding.
+      margin: floating
+          ? const EdgeInsets.fromLTRB(
+              AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg)
+          : null,
+      decoration: floating
+          ? BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+              boxShadow: AppShadows.soft,
+            )
+          : BoxDecoration(
+              color: theme.colorScheme.surface,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+      padding: floating
+          ? const EdgeInsets.all(AppSpacing.sm)
+          : const EdgeInsets.fromLTRB(
+              AppSpacing.sm, AppSpacing.sm, AppSpacing.sm, AppSpacing.lg),
       child: Row(
         children: [
           IconButton(
