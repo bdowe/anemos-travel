@@ -6,6 +6,7 @@ import '../models/trip_segment.dart';
 import '../theme/spacing.dart';
 import '../utils/calendar_links.dart';
 import '../utils/tracked_launch.dart';
+import '../utils/trip_format.dart';
 import 'add_to_calendar_button.dart';
 import 'section_header.dart';
 
@@ -282,8 +283,9 @@ class BookingsSection extends StatelessWidget {
                     [
                       if (a.provider != null && a.provider!.isNotEmpty)
                         a.provider,
-                      if (a.checkIn != null && a.checkOut != null)
-                        '${a.checkIn} → ${a.checkOut}',
+                      if (tripDateRange(a.checkIn, a.checkOut)
+                          case final dates?)
+                        dates,
                       if (a.address != null && a.address!.isNotEmpty) a.address,
                     ].whereType<String>().join(' · '),
                   ),
@@ -365,7 +367,7 @@ class BookingsSection extends StatelessWidget {
                   subtitle: Text(
                     [
                       _modeLabel(l10n, s.mode),
-                      if (s.departDate != null) s.departDate,
+                      if (shortDateLabel(s.departDate) case final date?) date,
                       if (s.provider != null && s.provider!.isNotEmpty)
                         s.provider,
                       if (s.notes != null && s.notes!.isNotEmpty) s.notes,

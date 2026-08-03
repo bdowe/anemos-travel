@@ -21,6 +21,12 @@ String? tripDateRange(String? startIso, String? endIso) {
   return sameDay ? _fmt(a) : '${_fmt(a)} – ${_fmt(b)}';
 }
 
+/// "Mon d" from a single ISO date; null when missing or unparseable.
+String? shortDateLabel(String? iso) {
+  final d = DateTime.tryParse(iso ?? '');
+  return d == null ? null : _fmt(d);
+}
+
 /// A short destination summary from a trip's hub cities: "Paris",
 /// "Mexico City & Puerto Vallarta", or "Tokyo & Kyoto +2 more". Null when
 /// there is no city data (legacy trips), so callers fall back to the title.
