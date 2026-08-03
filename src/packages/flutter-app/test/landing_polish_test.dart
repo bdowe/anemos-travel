@@ -59,9 +59,9 @@ void main() {
     await _pump(tester, surface: const Size(320, 568));
     expect(tester.takeException(), isNull);
 
-    // Hero CTA (the first 'Get started' in tree order) is fully visible
-    // without scrolling — the acquisition-surface guarantee.
-    final primary = find.widgetWithText(FilledButton, 'Get started').first;
+    // Hero CTA is fully visible without scrolling — the acquisition-surface
+    // guarantee.
+    final primary = find.widgetWithText(FilledButton, 'Get started');
     expect(tester.getBottomLeft(primary).dy, lessThanOrEqualTo(568));
     final secondary =
         find.widgetWithText(TextButton, 'I already have an account');
@@ -74,8 +74,8 @@ void main() {
         surface: const Size(360, 690), locale: const Locale('es'));
     expect(tester.takeException(), isNull);
 
-    expect(find.text('Empezar'), findsWidgets);
-    final primary = find.widgetWithText(FilledButton, 'Empezar').first;
+    expect(find.text('Empezar'), findsOneWidget);
+    final primary = find.widgetWithText(FilledButton, 'Empezar');
     expect(tester.getBottomLeft(primary).dy, lessThanOrEqualTo(690));
   });
 
@@ -84,7 +84,7 @@ void main() {
     await _pump(tester, surface: const Size(1200, 900));
     expect(tester.takeException(), isNull);
 
-    // Every CTA (hero + trailing) stays within the 700px content column.
+    // The hero CTA stays within the 700px content column.
     for (final button in find.byType(FilledButton).evaluate()) {
       expect(tester.getSize(find.byWidget(button.widget)).width,
           lessThanOrEqualTo(700));

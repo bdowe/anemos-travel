@@ -103,22 +103,6 @@ class _LandingScreenState extends State<LandingScreen> {
                   title: l10n.landingFeatureAgentTitle,
                   description: l10n.landingFeatureAgentDescription,
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => _openAuth(context, isLogin: false),
-                    style: FilledButton.styleFrom(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                    ),
-                    child: Text(
-                      l10n.landingGetStarted,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                  ),
-                ),
                 const SizedBox(height: AppSpacing.lg),
                 const _LandingFooter(),
                 const SizedBox(height: AppSpacing.lg),
