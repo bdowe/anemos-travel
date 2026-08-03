@@ -98,10 +98,12 @@ class HomeScreen extends ConsumerWidget {
             return Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const BrandBadge(
-                  padding: EdgeInsets.symmetric(
+                BrandBadge(
+                  padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-                  child: BrandLogo.mark(size: 28),
+                  // Logo-links-home: pops anything pushed on the Home stack.
+                  onTap: () => goHome(ref),
+                  child: const BrandLogo.mark(size: 28),
                 ),
                 if (!compact) ...const [
                   SizedBox(width: AppSpacing.sm),

@@ -28,6 +28,18 @@ void pushOnActiveTab(WidgetRef ref, Widget page) {
   state?.push(MaterialPageRoute(builder: (_) => page));
 }
 
+/// Return to the Home tab — the logo-tap action. Mirrors the shell's
+/// tab-select behavior: already on Home pops its stack to the root, otherwise
+/// the tab switches (keeping the other tab's stack intact for its next visit).
+void goHome(WidgetRef ref) {
+  if (ref.read(navIndexProvider) == AppTab.home.index) {
+    final keys = ref.read(tabNavKeysProvider);
+    keys[AppTab.home.index].currentState?.popUntil((r) => r.isFirst);
+  } else {
+    ref.read(navIndexProvider.notifier).state = AppTab.home.index;
+  }
+}
+
 /// One nav destination's icons. Shared so the shell's rail and bar render the
 /// exact same set, in lockstep. Labels are NOT here: they are localized and
 /// resolved from [AppTab] in the shell (specs/i18n-spanish), so there is one

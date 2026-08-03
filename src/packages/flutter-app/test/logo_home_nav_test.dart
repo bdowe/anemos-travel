@@ -1,0 +1,106 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:travel_route_planner/navigation/app_nav.dart';
+import 'package:travel_route_planner/widgets/brand_logo.dart';
+
+/// Logo-links-home: the brand badge is tappable when given onTap (rail brand
+/// and Home app bar), and goHome mirrors the shell's tab-select behavior —
+/// switch to Home from another tab, pop Home's stack to root when already
+/// there.
+void main() {
+  testWidgets('BrandBadge with onTap fires the callback',
+      (WidgetTester tester) async {
+    var taps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BrandBadge(
+            onTap: () => taps++,
+            child: const SizedBox(width: 24, height: 24),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(BrandBadge));
+    expect(taps, 1);
+  });
+
+  testWidgets('BrandBadge without onTap stays a plain surface',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: BrandBadge(child: SizedBox(width: 24, height: 24)),
+        ),
+      ),
+    );
+
+    expect(
+      find.descendant(
+          of: find.byType(BrandBadge), matching: find.byType(InkWell)),
+      findsNothing,
+    );
+  });
+
+  testWidgets('goHome switches back to the Home tab from another tab',
+      (WidgetTester tester) async {
+    late WidgetRef capturedRef;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Consumer(builder: (context, ref, _) {
+            capturedRef = ref;
+            return const SizedBox();
+          }),
+        ),
+      ),
+    );
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(Consumer)));
+    container.read(navIndexProvider.notifier).state = AppTab.trips.index;
+
+    goHome(capturedRef);
+
+    expect(container.read(navIndexProvider), AppTab.home.index);
+  });
+
+  testWidgets('goHome pops the Home stack to its root when already on Home',
+      (WidgetTester tester) async {
+    late WidgetRef capturedRef;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: Consumer(builder: (context, ref, _) {
+          capturedRef = ref;
+          final keys = ref.watch(tabNavKeysProvider);
+          return MaterialApp(
+            home: Navigator(
+              key: keys[AppTab.home.index],
+              onGenerateRoute: (settings) => MaterialPageRoute(
+                builder: (_) => const Text('home root'),
+                settings: settings,
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(Consumer)));
+    container
+        .read(tabNavKeysProvider)[AppTab.home.index]
+        .currentState!
+        .push(MaterialPageRoute(builder: (_) => const Text('pushed page')));
+    await tester.pumpAndSettle();
+    expect(find.text('pushed page'), findsOneWidget);
+
+    goHome(capturedRef);
+    await tester.pumpAndSettle();
+
+    expect(find.text('pushed page'), findsNothing);
+    expect(find.text('home root'), findsOneWidget);
+    expect(container.read(navIndexProvider), AppTab.home.index);
+  });
+}
