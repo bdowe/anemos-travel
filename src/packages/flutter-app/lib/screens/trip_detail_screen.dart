@@ -787,11 +787,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       final r = ranges[i];
       final key = 'stay:${r.label.toLowerCase()}';
       if (!stayCovered(key, r.label)) {
+        final start = _stayStartFor(ranges, i);
         stays.add({
           'auto_key': key,
           'name': 'Stay in ${r.label}',
           'address': r.label,
-          if (r.start != null) 'check_in': _fmt(r.start!),
+          if (start != null) 'check_in': _fmt(start),
           if (r.end != null) 'check_out': _fmt(r.end!),
         });
       }
@@ -966,14 +967,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     for (var i = 0; i < ranges.length; i++) {
       final r = ranges[i];
       final label = r.label;
-      final checkIn = r.start == null ? null : _fmt(r.start!);
+      final start = _stayStartFor(ranges, i);
+      final checkIn = start == null ? null : _fmt(start);
       final checkOut = r.end == null ? null : _fmt(r.end!);
       todos.add({
         'kind': 'stay',
         'todo_key': 'stay:${label.toLowerCase()}',
         'title': 'Stay in $label',
-        if (r.start != null && r.end != null)
-          'subtitle': _formatRange(r.start!, r.end!),
+        if (start != null && r.end != null)
+          'subtitle': _formatRange(start, r.end!),
         'provider': 'airbnb',
         'position': pos++,
         'destination': label,
@@ -3718,6 +3720,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       ));
     }
     return result;
+  }
+
+  /// Effective check-in for the stay in city group [i]: the arrival date into
+  /// the city. The inbound leg is dated with the previous group's end, so when
+  /// that precedes the group's own start (e.g. a city whose items all sit on
+  /// one late day collapses its range to that single day), the stay would
+  /// otherwise show a start after the traveler has already arrived.
+  DateTime? _stayStartFor(
+      List<({String label, DateTime? start, DateTime? end, _Coord? coord})>
+          ranges,
+      int i) {
+    final own = ranges[i].start;
+    final arrival = i > 0 ? ranges[i - 1].end : null;
+    if (arrival == null) return own;
+    if (own == null || arrival.isBefore(own)) return arrival;
+    return own;
   }
 
   /// A representative coordinate for a location group: the first item with real
