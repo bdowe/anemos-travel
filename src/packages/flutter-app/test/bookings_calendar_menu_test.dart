@@ -5,14 +5,13 @@ import 'package:url_launcher_platform_interface/link.dart' show LinkDelegate;
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 import 'package:travel_route_planner/models/accommodation.dart';
-import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/models/trip_segment.dart';
 import 'package:travel_route_planner/providers/analytics_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/services/analytics_api_service.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
-import 'package:travel_route_planner/widgets/bookings_section.dart';
+import 'package:travel_route_planner/widgets/booking_detail_row.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -60,14 +59,6 @@ class _NoopAnalytics extends AnalyticsApiService {
       Future.value();
 }
 
-Trip _trip() => Trip(
-      id: 't1',
-      title: 'Portugal',
-      status: 'planned',
-      createdAt: '2026-06-01',
-      updatedAt: '2026-06-01',
-    );
-
 const _datedStay = Accommodation(
   id: 'a1',
   name: 'Casa do Brian',
@@ -78,15 +69,6 @@ const _datedStay = Accommodation(
 );
 
 const _undatedStay = Accommodation(id: 'a2', name: 'Somewhere in Porto');
-
-const _draftStay = Accommodation(
-  id: 'a3',
-  name: 'Stay in Faro',
-  checkIn: '2026-09-06',
-  checkOut: '2026-09-08',
-  auto: true,
-  autoKey: 'stay:faro',
-);
 
 const _datedLeg = TripSegment(
   id: 's1',
@@ -99,9 +81,7 @@ const _datedLeg = TripSegment(
 
 Future<(_FakeTripsApiService, _FakeUrlLauncher)> _pump(
   WidgetTester tester, {
-  required List<Accommodation> stays,
-  List<TripSegment> segments = const [],
-  bool appleCalendarEnabled = true,
+  required List<BookingDetailRow> rows,
 }) async {
   final service = _FakeTripsApiService();
   final launcher = _FakeUrlLauncher();
@@ -113,22 +93,9 @@ Future<(_FakeTripsApiService, _FakeUrlLauncher)> _pump(
         analyticsApiServiceProvider.overrideWithValue(_NoopAnalytics()),
       ],
       child: MaterialApp(
-      localizationsDelegates: testLocalizationsDelegates,
+        localizationsDelegates: testLocalizationsDelegates,
         home: Scaffold(
-          body: SingleChildScrollView(
-            child: BookingsSection(
-              trip: _trip(),
-              stays: stays,
-              segments: segments,
-              onAddStay: () {},
-              onDeleteStay: (_) {},
-              onEditStay: (_) {},
-              onAddSegment: () {},
-              onDeleteSegment: (_) {},
-              onEditSegment: (_) {},
-              appleCalendarEnabled: appleCalendarEnabled,
-            ),
-          ),
+          body: SingleChildScrollView(child: Column(children: rows)),
         ),
       ),
     ),
@@ -140,18 +107,21 @@ Future<(_FakeTripsApiService, _FakeUrlLauncher)> _pump(
 Finder _calendarButton() => find.byTooltip('Add to calendar');
 
 void main() {
-  testWidgets(
-      'dated stay shows the menu; undated stays do not, drafts never render',
+  testWidgets('dated stay shows the menu; undated stays do not',
       (tester) async {
-    await _pump(tester, stays: [_datedStay, _undatedStay, _draftStay]);
+    await _pump(tester, rows: const [
+      BookingDetailRow.stay(tripId: 't1', stay: _datedStay),
+      BookingDetailRow.stay(tripId: 't1', stay: _undatedStay),
+    ]);
     expect(_calendarButton(), findsOneWidget);
-    // The auto draft is filtered out entirely, calendar button and all.
-    expect(find.text(_draftStay.name), findsNothing);
   });
 
   testWidgets('Google entry launches a prefilled calendar.google.com link',
       (tester) async {
-    final (service, launcher) = await _pump(tester, stays: [_datedStay]);
+    final (service, launcher) = await _pump(tester, rows: const [
+      BookingDetailRow.stay(
+          tripId: 't1', stay: _datedStay, appleCalendarEnabled: true),
+    ]);
 
     await tester.tap(_calendarButton());
     await tester.pumpAndSettle();
@@ -169,7 +139,10 @@ void main() {
 
   testWidgets('Apple entry mints once and launches the per-event .ics',
       (tester) async {
-    final (service, launcher) = await _pump(tester, stays: [_datedStay]);
+    final (service, launcher) = await _pump(tester, rows: const [
+      BookingDetailRow.stay(
+          tripId: 't1', stay: _datedStay, appleCalendarEnabled: true),
+    ]);
 
     await tester.tap(_calendarButton());
     await tester.pumpAndSettle();
@@ -182,8 +155,10 @@ void main() {
   });
 
   testWidgets('segment row builds the mode-and-route title', (tester) async {
-    final (_, launcher) =
-        await _pump(tester, stays: const [], segments: [_datedLeg]);
+    final (_, launcher) = await _pump(tester, rows: const [
+      BookingDetailRow.segment(
+          tripId: 't1', segment: _datedLeg, appleCalendarEnabled: true),
+    ]);
 
     await tester.tap(_calendarButton());
     await tester.pumpAndSettle();
@@ -197,8 +172,9 @@ void main() {
 
   testWidgets('appleCalendarEnabled: false renders the Apple entry disabled',
       (tester) async {
-    final (service, launcher) =
-        await _pump(tester, stays: [_datedStay], appleCalendarEnabled: false);
+    final (service, launcher) = await _pump(tester, rows: const [
+      BookingDetailRow.stay(tripId: 't1', stay: _datedStay),
+    ]);
 
     await tester.tap(_calendarButton());
     await tester.pumpAndSettle();

@@ -21,7 +21,6 @@ import '../providers/accommodations_provider.dart';
 import '../providers/transport_provider.dart';
 import '../providers/trips_provider.dart';
 import '../providers/recent_trip_provider.dart';
-import '../providers/booking_drafts_provider.dart';
 import '../utils/errors.dart';
 import '../providers/booking_todos_provider.dart';
 import '../providers/preferences_provider.dart';
@@ -52,8 +51,9 @@ import '../utils/trip_format.dart';
 import '../widgets/add_itinerary_item_dialog.dart';
 import '../widgets/add_to_trip_sheet.dart';
 import '../widgets/app_map.dart';
+import '../widgets/booking_detail_row.dart';
+import '../widgets/booking_sheets.dart';
 import '../widgets/booking_todo_card.dart';
-import '../widgets/bookings_section.dart';
 import '../widgets/budget_section.dart';
 import '../widgets/checklist_section.dart';
 import '../widgets/collapsible_section.dart';
@@ -160,9 +160,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   int?
       _selectedPosition; // position of the place focused via a map pin / list tap
   List<BookingTodo> _bookingTodos = [];
-  // Sync-owned copies of the trip's stays/segments (drafts + confirmed), like
-  // _bookingTodos: the booking-drafts sync replaces them after each trip load
-  // without rebuilding the immutable Trip.
+  // Mutable copies of the trip's stays/segments, like _bookingTodos, so the
+  // booked checkboxes can flip optimistically without rebuilding the
+  // immutable Trip. Legacy draft (auto=true) rows still arrive in payloads;
+  // every consumer filters on !auto.
   List<Accommodation> _stays = [];
   List<TripSegment> _segments = [];
   bool _overviewExpanded = false;
@@ -170,12 +171,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // keyed by "<city>#<day>" since day numbers repeat across cities.
   final Set<String> _collapsedCities = {};
   final Set<String> _collapsedDays = {};
-  // Trailing sections (Bookings/Packing/Budget/Trip health) render as
-  // collapsed one-line summaries; this holds the ones the user opened.
-  // Session-only, like the city/day sets, and held HERE (not in the section
-  // widgets) so expansion survives silent refreshes and the offline-banner
-  // reparent. Bookings is seeded open once for viewers (their only bookings
-  // surface — see _load).
+  // Trailing sections (Packing/Budget/Trip health) render as collapsed
+  // one-line summaries; this holds the ones the user opened. Session-only,
+  // like the city/day sets, and held HERE (not in the section widgets) so
+  // expansion survives silent refreshes and the offline-banner reparent.
   final Set<String> _expandedSections = {};
   String?
       _homeAirport; // traveler's saved home airport (IATA), for outbound/return flights
@@ -357,15 +356,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           _stays = trip.accommodations ?? [];
           _segments = trip.segments ?? [];
           _offlineSince = null; // live data — leave offline mode if we were in it
-          // Viewers get no inline booking rows (the server withholds todos),
-          // so the collapsed Bookings row is their only bookings surface —
-          // seed it open on the first loud load when it has content (still
-          // collapsible by hand; silent refreshes never re-seed).
-          if (!silent &&
-              !trip.canEdit &&
-              (_stays.any((a) => !a.auto) || _segments.any((s) => !s.auto))) {
-            _expandedSections.add('bookings');
-          }
           // Today mode fires only from loud loads — never from a silent
           // refresh, which shares this success path (PR #51/#53 invariants).
           if (!silent) _maybeAutoScrollToday(trip);
@@ -384,7 +374,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       _homeAirport = ref.read(preferencesProvider).prefs?.homeAirport;
       if (mounted && (trip.items ?? const []).isNotEmpty) {
         await _syncBookingTodos(trip);
-        await _syncBookingDrafts(trip);
         await _computeTravelTimes(trip);
       }
     } catch (e) {
@@ -650,32 +639,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
   }
 
-  /// Pushes the itinerary-derived draft stays/transports for the bookings hub.
-  /// The server upserts them as Suggested (auto) rows — never touching
-  /// confirmed rows or dismissed drafts — prunes drafts whose legs no longer
-  /// exist, and returns the fresh lists.
-  Future<void> _syncBookingDrafts(Trip trip) async {
-    try {
-      final result = await ref
-          .read(bookingDraftsApiServiceProvider)
-          .syncDrafts(trip.id, _deriveBookingDrafts(trip));
-      if (mounted) {
-        setState(() {
-          _stays = result.stays;
-          _segments = result.segments;
-        });
-      }
-    } catch (_) {
-      // Non-fatal: keep whatever stays/segments came with the trip.
-    }
-  }
-
-  /// Builds the booking-drafts payload from the same location-group ranges the
-  /// checklist derives from (same key grammar too, so the two stay in
-  /// lockstep): a stay per city and a transport leg between consecutive
-  /// cities, plus home-airport outbound/return. Legs already covered by a
-  /// confirmed (user-entered) row are skipped so drafts never duplicate real
-  /// bookings.
   /// The trip's stated non-flight travel mode ('car'|'train'|'bus'|'ferry')
   /// when set, else null. Such trips derive their legs in that mode with
   /// Rome2Rio route links instead of flight defaults; flight/mixed and unset
@@ -723,84 +686,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       default:
         return l10n.tripTravelModeUnset;
     }
-  }
-
-  Map<String, dynamic> _deriveBookingDrafts(Trip trip) {
-    final ranges = _locationGroupRanges(trip);
-    final ground = _groundModeOf(trip);
-    final confirmedStays = _confirmedStays(trip);
-    final confirmedSegments = (trip.segments ?? const <TripSegment>[])
-        .where((s) => !s.auto)
-        .toList();
-
-    // A confirmed stay covers a city when it carries the draft's key (it was
-    // confirmed from that draft) or its name/address mentions the city label
-    // (same contains-matching as _accDateRangeFor).
-    bool stayCovered(String key, String label) {
-      final l = label.toLowerCase();
-      for (final a in confirmedStays) {
-        if (a.autoKey == key) return true;
-        for (final field in [a.name, a.address]) {
-          final f = field?.toLowerCase();
-          if (f != null && f.isNotEmpty && (f.contains(l) || l.contains(f))) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-
-    bool transportCovered(String key, String origin, String destination) {
-      final o = origin.toLowerCase();
-      final d = destination.toLowerCase();
-      for (final s in confirmedSegments) {
-        if (s.autoKey == key) return true;
-        if (s.origin?.toLowerCase() == o && s.destination?.toLowerCase() == d) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    final stays = <Map<String, dynamic>>[];
-    final transports = <Map<String, dynamic>>[];
-
-    void addLeg(String origin, String destination, DateTime? when) {
-      final key =
-          'transport:${origin.toLowerCase()}>>${destination.toLowerCase()}';
-      if (transportCovered(key, origin, destination)) return;
-      transports.add({
-        'auto_key': key,
-        'mode': _isGreekIsland(origin) && _isGreekIsland(destination)
-            ? 'ferry'
-            : (ground ?? 'flight'),
-        'origin': origin,
-        'destination': destination,
-        if (when != null) 'depart_date': _fmt(when),
-      });
-    }
-
-    final home = _homeAirport;
-    final hasHome = home != null && home.isNotEmpty && ranges.isNotEmpty;
-    if (hasHome) addLeg(home, ranges.first.label, ranges.first.start);
-    for (var i = 0; i < ranges.length; i++) {
-      final r = ranges[i];
-      final key = 'stay:${r.label.toLowerCase()}';
-      if (!stayCovered(key, r.label)) {
-        final start = _stayStartFor(ranges, i);
-        stays.add({
-          'auto_key': key,
-          'name': 'Stay in ${r.label}',
-          'address': r.label,
-          if (start != null) 'check_in': _fmt(start),
-          if (r.end != null) 'check_out': _fmt(r.end!),
-        });
-      }
-      if (i < ranges.length - 1) addLeg(r.label, ranges[i + 1].label, r.end);
-    }
-    if (hasHome) addLeg(ranges.last.label, home, ranges.last.end);
-
-    return {'stays': stays, 'transports': transports};
   }
 
   /// Computes per-leg travel times for the itinerary in its existing display
@@ -1004,19 +889,33 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return todos;
   }
 
-  /// Partitions [_bookingTodos] into per-city embedded slots — the flight that
-  /// arrives at the city, its stay, and (for the last city) the return flight
-  /// home — plus the residual list of everything that matched no city
-  /// (user-added `custom:*` todos, stale auto todos). Each todo is claimed at
-  /// most once, so repeated city labels still render each booking exactly once.
+  /// Partitions [_bookingTodos] AND the confirmed stays/segments into
+  /// per-city embedded slots — the flight that arrives at the city, its stay,
+  /// and (for the last city) the return flight home — plus the residual lists
+  /// of everything that matched no city (user-added `custom:*` todos, stale
+  /// auto todos, confirmed records for legs no longer in the trip). Each todo
+  /// and record is claimed at most once, so repeated city labels still render
+  /// each booking exactly once.
+  ///
+  /// Confirmed records match their slot by the shared key grammar first
+  /// (`stay:<city>` / `transport:<a>>><b>` on auto_key, stamped when a draft
+  /// was confirmed) and fall back to the same fuzzy rules the old drafts
+  /// derivation used: stays by bidirectional name/address contains of the
+  /// city label, segments by destination (arrivals) or origin (departure)
+  /// equality — mirroring how the todo keys themselves are claimed.
   ({
     List<
         ({
           BookingTodo? arrival,
+          TripSegment? arrivalMatch,
           BookingTodo? stay,
-          BookingTodo? departure
+          Accommodation? stayMatch,
+          BookingTodo? departure,
+          TripSegment? departureMatch,
         })> slots,
     List<BookingTodo> residual,
+    List<Accommodation> residualStays,
+    List<TripSegment> residualSegments,
   }) _groupedBookings(List<String> groupLabels) {
     final claimed = <String>{};
     BookingTodo? claim(bool Function(BookingTodo) test) {
@@ -1029,21 +928,64 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       return null;
     }
 
+    final confirmedStays = _stays.where((a) => !a.auto).toList();
+    final confirmedSegments = _segments.where((s) => !s.auto).toList();
+    final claimedStayIds = <String>{};
+    final claimedSegmentIds = <String>{};
+    Accommodation? claimStay(bool Function(Accommodation) test) {
+      for (final a in confirmedStays) {
+        if (!claimedStayIds.contains(a.id) && test(a)) {
+          claimedStayIds.add(a.id);
+          return a;
+        }
+      }
+      return null;
+    }
+
+    TripSegment? claimSegment(bool Function(TripSegment) test) {
+      for (final s in confirmedSegments) {
+        if (!claimedSegmentIds.contains(s.id) && test(s)) {
+          claimedSegmentIds.add(s.id);
+          return s;
+        }
+      }
+      return null;
+    }
+
     final arrivals = <BookingTodo?>[];
+    final arrivalMatches = <TripSegment?>[];
     final stays = <BookingTodo?>[];
+    final stayMatches = <Accommodation?>[];
     for (final label in groupLabels) {
       final l = label.toLowerCase();
       arrivals.add(
           claim((t) => t.kind == 'transport' && t.todoKey.endsWith('>>$l')));
+      arrivalMatches.add(claimSegment((s) =>
+          (s.autoKey?.endsWith('>>$l') ?? false) ||
+          s.destination?.toLowerCase() == l));
       stays.add(claim((t) => t.todoKey == 'stay:$l'));
+      stayMatches.add(claimStay((a) {
+        if (a.autoKey == 'stay:$l') return true;
+        for (final field in [a.name, a.address]) {
+          final f = field?.toLowerCase();
+          if (f != null && f.isNotEmpty && (f.contains(l) || l.contains(f))) {
+            return true;
+          }
+        }
+        return false;
+      }));
     }
     // Claimed after all arrivals so an inter-city leg can't be taken as its
     // origin's departure — only the final leg home remains unclaimed by then.
     BookingTodo? departure;
+    TripSegment? departureMatch;
     if (groupLabels.isNotEmpty) {
       final last = groupLabels.last.toLowerCase();
       departure = claim((t) =>
           t.kind == 'transport' && t.todoKey.startsWith('transport:$last>>'));
+      departureMatch = claimSegment((s) =>
+          (s.autoKey?.startsWith('transport:$last>>') ?? false) ||
+          s.origin?.toLowerCase() == last);
     }
 
     return (
@@ -1051,30 +993,80 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         for (var i = 0; i < groupLabels.length; i++)
           (
             arrival: arrivals[i],
+            arrivalMatch: arrivalMatches[i],
             stay: stays[i],
+            stayMatch: stayMatches[i],
             departure: i == groupLabels.length - 1 ? departure : null,
+            departureMatch:
+                i == groupLabels.length - 1 ? departureMatch : null,
           ),
       ],
       residual: _bookingTodos.where((t) => !claimed.contains(t.id)).toList(),
+      residualStays: confirmedStays
+          .where((a) => !claimedStayIds.contains(a.id))
+          .toList(),
+      residualSegments: confirmedSegments
+          .where((s) => !claimedSegmentIds.contains(s.id))
+          .toList(),
     );
   }
 
-  Future<void> _setBooked(BookingTodo todo, bool booked) async {
+  /// The one "Booked" writer: flips the todo and (when the slot has one) the
+  /// matched confirmed record in lockstep, so every reader of either flag —
+  /// checklist rows, calendar/.ics export, print packet — agrees with the
+  /// single visible checkbox. Optimistic on all touched lists; any failure
+  /// rolls every list back (a partial server success self-heals on the next
+  /// toggle or sync).
+  Future<void> _setRowBooked(bool booked,
+      {BookingTodo? todo, Accommodation? stay, TripSegment? segment}) async {
     if (_guardOffline()) return;
     final l10n = context.l10n;
-    final prev = _bookingTodos;
+    final prevTodos = _bookingTodos;
+    final prevStays = _stays;
+    final prevSegments = _segments;
     setState(() {
-      _bookingTodos = [
-        for (final t in _bookingTodos)
-          if (t.id == todo.id) t.copyWith(booked: booked) else t,
-      ];
+      if (todo != null) {
+        _bookingTodos = [
+          for (final t in _bookingTodos)
+            if (t.id == todo.id) t.copyWith(booked: booked) else t,
+        ];
+      }
+      if (stay != null) {
+        _stays = [
+          for (final a in _stays)
+            if (a.id == stay.id) a.copyWith(booked: booked) else a,
+        ];
+      }
+      if (segment != null) {
+        _segments = [
+          for (final s in _segments)
+            if (s.id == segment.id) s.copyWith(booked: booked) else s,
+        ];
+      }
     });
     try {
-      await ref
-          .read(bookingTodosApiServiceProvider)
-          .setBooked(widget.tripId, todo.id, booked);
+      await Future.wait<void>([
+        if (todo != null)
+          ref
+              .read(bookingTodosApiServiceProvider)
+              .setBooked(widget.tripId, todo.id, booked),
+        if (stay != null)
+          ref
+              .read(accommodationsApiServiceProvider)
+              .update(widget.tripId, stay.id, {'booked': booked}),
+        if (segment != null)
+          ref
+              .read(transportApiServiceProvider)
+              .updateSegment(widget.tripId, segment.id, {'booked': booked}),
+      ]);
     } catch (e) {
-      if (mounted) setState(() => _bookingTodos = prev);
+      if (mounted) {
+        setState(() {
+          _bookingTodos = prevTodos;
+          _stays = prevStays;
+          _segments = prevSegments;
+        });
+      }
       _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
     }
   }
@@ -1134,7 +1126,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: BookingTodoCard(
             todo: todo,
-            onBookedChanged: (v) => _setBooked(todo, v),
+            onBookedChanged: (v) => _setRowBooked(v, todo: todo),
             onOpen: _openCallbackFor(todo),
             openLabelOverride: _flightLegs.containsKey(todo.todoKey)
                 ? l10n.tripFindFlights
@@ -1154,57 +1146,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         );
       },
     );
-  }
-
-  /// Persists a drag-reorder of the saved-stays list in the bookings hub.
-  /// Optimistic: display order is _stays list order; the drafts sync never
-  /// rewrites positions, so the order set here sticks across reloads.
-  ///
-  /// The hub renders CONFIRMED rows only, so the incoming indices are
-  /// confirmed-list indices — reorder within the confirmed subset and
-  /// reassemble with any legacy hidden drafts kept at the tail, or a drag
-  /// over interleaved drafts would move the wrong stay.
-  Future<void> _reorderStays(int oldIndex, int newIndex) async {
-    if (_guardOffline()) return;
-    final l10n = context.l10n;
-    if (newIndex > oldIndex) newIndex--;
-    if (newIndex == oldIndex) return;
-    final prev = _stays;
-    final confirmed = [for (final a in _stays) if (!a.auto) a];
-    final autos = [for (final a in _stays) if (a.auto) a];
-    confirmed.insert(newIndex, confirmed.removeAt(oldIndex));
-    final newOrder = [...confirmed, ...autos];
-    setState(() => _stays = newOrder);
-    try {
-      await ref.read(bookingDraftsApiServiceProvider).reorderBookings(
-          widget.tripId,
-          stayIds: [for (final a in newOrder) a.id]);
-    } catch (e) {
-      if (mounted) setState(() => _stays = prev);
-      _showSnack(l10n.tripReorderFailed(friendlyError(l10n, e)));
-    }
-  }
-
-  /// Mirror of [_reorderStays] for the transport-segments list.
-  Future<void> _reorderSegments(int oldIndex, int newIndex) async {
-    if (_guardOffline()) return;
-    final l10n = context.l10n;
-    if (newIndex > oldIndex) newIndex--;
-    if (newIndex == oldIndex) return;
-    final prev = _segments;
-    final confirmed = [for (final s in _segments) if (!s.auto) s];
-    final autos = [for (final s in _segments) if (s.auto) s];
-    confirmed.insert(newIndex, confirmed.removeAt(oldIndex));
-    final newOrder = [...confirmed, ...autos];
-    setState(() => _segments = newOrder);
-    try {
-      await ref.read(bookingDraftsApiServiceProvider).reorderBookings(
-          widget.tripId,
-          segmentIds: [for (final s in newOrder) s.id]);
-    } catch (e) {
-      if (mounted) setState(() => _segments = prev);
-      _showSnack(l10n.tripReorderFailed(friendlyError(l10n, e)));
-    }
   }
 
   /// "Add details…" on an inline booking row: promotes the todo to a
@@ -1340,10 +1281,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       if (mounted) setState(() => _trip = updated);
       ref.read(tripsProvider.notifier).loadTrips(); // keep list in sync
       // A mode change re-derives the auto-seeded transport rows immediately,
-      // so e.g. Suggested flight legs heal to car without a reload.
+      // so e.g. suggested flight legs heal to car without a reload.
       if (travelMode != null) {
         await _syncBookingTodos(updated);
-        await _syncBookingDrafts(updated);
       }
     } catch (e) {
       _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
@@ -1638,28 +1578,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
   }
 
-  /// "Booked" checkbox on a confirmed stay. Optimistic like the checklist's
-  /// _setBooked: swap the row in _stays, PATCH {booked}, roll back on error.
-  Future<void> _setStayBooked(Accommodation a, bool booked) async {
-    if (_guardOffline()) return;
-    final l10n = context.l10n;
-    final prev = _stays;
-    setState(() {
-      _stays = [
-        for (final s in _stays)
-          if (s.id == a.id) s.copyWith(booked: booked) else s,
-      ];
-    });
-    try {
-      await ref
-          .read(accommodationsApiServiceProvider)
-          .update(widget.tripId, a.id, {'booked': booked});
-    } catch (e) {
-      if (mounted) setState(() => _stays = prev);
-      _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
-    }
-  }
-
   Future<void> _addSegment() async {
     if (_guardOffline()) return;
     final l10n = context.l10n;
@@ -1712,27 +1630,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       await _load();
     } catch (e) {
       _showSnack(l10n.tripUpdateTransportFailed(friendlyError(l10n, e)));
-    }
-  }
-
-  /// Mirror of [_setStayBooked] for the transport-segments list.
-  Future<void> _setSegmentBooked(TripSegment seg, bool booked) async {
-    if (_guardOffline()) return;
-    final l10n = context.l10n;
-    final prev = _segments;
-    setState(() {
-      _segments = [
-        for (final s in _segments)
-          if (s.id == seg.id) s.copyWith(booked: booked) else s,
-      ];
-    });
-    try {
-      await ref
-          .read(transportApiServiceProvider)
-          .updateSegment(widget.tripId, seg.id, {'booked': booked});
-    } catch (e) {
-      if (mounted) setState(() => _segments = prev);
-      _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -2491,21 +2388,68 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   }
 
 
+  /// The saved-details line under a slot's todo row (or standalone when the
+  /// slot has no todo — viewers get none from the server). Carries the
+  /// confirmed record's edit/delete/calendar affordances; the checkbox shows
+  /// only in detail-only mode, where there's no todo row above to drive it.
+  Widget _detailRowFor({Accommodation? stay, TripSegment? segment,
+      required bool detailOnly}) {
+    final editable = !_readOnly && !_isOffline;
+    if (stay != null) {
+      return BookingDetailRow.stay(
+        tripId: widget.tripId,
+        stay: stay,
+        onEdit: editable ? () => _editStay(stay) : null,
+        onDelete: editable ? () => _deleteStay(stay) : null,
+        showCheckbox: detailOnly,
+        onBookedChanged:
+            detailOnly && !_readOnly ? (v) => _setRowBooked(v, stay: stay) : null,
+        appleCalendarEnabled: !_readOnly && !_isOffline,
+      );
+    }
+    final s = segment!;
+    return BookingDetailRow.segment(
+      tripId: widget.tripId,
+      segment: s,
+      onEdit: editable ? () => _editSegment(s) : null,
+      onDelete: editable ? () => _deleteSegment(s) : null,
+      showCheckbox: detailOnly,
+      onBookedChanged:
+          detailOnly && !_readOnly ? (v) => _setRowBooked(v, segment: s) : null,
+      appleCalendarEnabled: !_readOnly && !_isOffline,
+    );
+  }
+
   /// Compact booking rows for a city group's slot: arrival flight + stay when
-  /// [departureOnly] is false, the return-home flight when true.
+  /// [departureOnly] is false, the return-home flight when true. Each todo
+  /// row is followed by its matched confirmed record's details; a match
+  /// without a todo (viewers) renders as a standalone detail row.
   List<Widget> _bookingRowWidgets(
-    ({BookingTodo? arrival, BookingTodo? stay, BookingTodo? departure}) slot, {
+    ({
+      BookingTodo? arrival,
+      TripSegment? arrivalMatch,
+      BookingTodo? stay,
+      Accommodation? stayMatch,
+      BookingTodo? departure,
+      TripSegment? departureMatch,
+    }) slot, {
     required bool departureOnly,
   }) {
     final l10n = context.l10n;
-    final todos = departureOnly ? [slot.departure] : [slot.arrival, slot.stay];
+    final entries = departureOnly
+        ? [(todo: slot.departure, stay: null as Accommodation?, segment: slot.departureMatch)]
+        : [
+            (todo: slot.arrival, stay: null as Accommodation?, segment: slot.arrivalMatch),
+            (todo: slot.stay, stay: slot.stayMatch, segment: null as TripSegment?),
+          ];
     return [
-      for (final todo in todos)
-        if (todo != null)
+      for (final e in entries) ...[
+        if (e.todo case final todo?)
           BookingTodoRow(
             todo: todo,
             compact: _narrow,
-            onBookedChanged: (v) => _setBooked(todo, v),
+            onBookedChanged: (v) => _setRowBooked(v,
+                todo: todo, stay: e.stay, segment: e.segment),
             onOpen: _openCallbackFor(todo),
             openLabelOverride: _ferryLegs.containsKey(todo.todoKey)
                 ? (_narrow ? l10n.tripFindFerriesShort : l10n.tripFindFerries)
@@ -2519,6 +2463,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                     ? null
                     : () => _addDetailsFromTodo(todo),
           ),
+        if (e.stay != null || e.segment != null)
+          _detailRowFor(
+              stay: e.stay, segment: e.segment, detailOnly: e.todo == null),
+      ],
     ];
   }
 
@@ -3880,32 +3828,66 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  Widget? _bookingsSectionRow(Trip trip, ThemeData theme,
-      {required List<BookingTodo> residual, required Widget child}) {
+  /// The itinerary's trailing "Other bookings" area — the new home for
+  /// everything the retired Bookings section held that has no city slot:
+  /// residual todos (custom bookings, stale autos), confirmed records that
+  /// matched no city, and the add actions. Editors always get the add
+  /// buttons; the sub-header renders only over actual content.
+  Widget? _otherBookingsArea(
+      ThemeData theme,
+      ({
+        List<BookingTodo> residual,
+        List<Accommodation> residualStays,
+        List<TripSegment> residualSegments,
+      }) other) {
     final l10n = context.l10n;
-    final bookedTodos = _bookingTodos.where((t) => t.booked).length;
-    final totalTodos = _bookingTodos.length;
-    final savedCount = _stays.where((a) => !a.auto).length +
-        _segments.where((s) => !s.auto).length;
-    // Viewers get no booking todos from the server; with no confirmed rows
-    // either, there is nothing to show or do — no row at all.
-    if (_readOnly && totalTodos == 0 && savedCount == 0 && residual.isEmpty) {
-      return null;
-    }
-    // "X of Y booked" counts todos; "N saved" counts confirmed records. The
-    // same stay can exist as both a todo and a confirmed accommodation, so
-    // the two numbers are labeled apart and never summed.
-    final parts = <String>[
-      if (totalTodos > 0) l10n.bookingsSummaryProgress(bookedTodos, totalTodos),
-      if (savedCount > 0) l10n.bookingsSummarySaved(savedCount),
-    ];
-    return CollapsibleSection(
-      title: l10n.bookingsTitle,
-      icon: Icons.confirmation_number_outlined,
-      summary: parts.isEmpty ? null : parts.join(' · '),
-      expanded: _sectionExpanded('bookings'),
-      onToggle: () => _toggleSection('bookings'),
-      child: child,
+    final hasContent = other.residual.isNotEmpty ||
+        other.residualStays.isNotEmpty ||
+        other.residualSegments.isNotEmpty;
+    if (_readOnly && !hasContent) return null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (hasContent)
+          Padding(
+            padding:
+                const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
+            child: Text(
+              l10n.tripOtherBookings,
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        if (other.residual.isNotEmpty)
+          _residualBookingsList(other.residual, theme),
+        for (final a in other.residualStays)
+          _detailRowFor(stay: a, segment: null, detailOnly: true),
+        for (final s in other.residualSegments)
+          _detailRowFor(stay: null, segment: s, detailOnly: true),
+        if (!_readOnly)
+          // The button trio can outgrow a small phone's width, so it must be
+          // able to break into two lines itself (Wrap, not Row).
+          Wrap(
+            alignment: WrapAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: _isOffline ? null : _addStay,
+                icon: const Icon(Icons.hotel_outlined, size: 18),
+                label: Text(l10n.bookingsAddStay),
+              ),
+              TextButton.icon(
+                onPressed: _isOffline ? null : _addSegment,
+                icon: const Icon(Icons.route_outlined, size: 18),
+                label: Text(l10n.bookingsAddTransport),
+              ),
+              TextButton.icon(
+                onPressed: _isOffline ? null : _addBooking,
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(l10n.bookingsAddBooking),
+              ),
+            ],
+          ),
+      ],
     );
   }
 
@@ -4622,11 +4604,45 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                   child: Row(
                                     children: [
                                       Expanded(
-                                        child: Text(l10n.tripItinerary,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style:
-                                                theme.textTheme.titleMedium),
+                                        child: Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(l10n.tripItinerary,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: theme
+                                                      .textTheme.titleMedium),
+                                            ),
+                                            // Booking progress, relocated from
+                                            // the retired Bookings section's
+                                            // header. Flexible so it gives way
+                                            // (ellipsis) before the row can
+                                            // overflow on narrow widths.
+                                            if (_bookingTodos.isNotEmpty) ...[
+                                              const SizedBox(width: 8),
+                                              Flexible(
+                                                child: Text(
+                                                  l10n.bookingsSummaryProgress(
+                                                      _bookingTodos
+                                                          .where(
+                                                              (t) => t.booked)
+                                                          .length,
+                                                      _bookingTodos.length),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: theme
+                                                      .textTheme.bodySmall
+                                                      ?.copyWith(
+                                                          color: theme
+                                                              .colorScheme
+                                                              .onSurfaceVariant),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
                                       ),
                                       if (hasTodayTarget) ...[
                                         ActionChip(
@@ -4794,9 +4810,24 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                   ),
                               ]),
                             ),
+                          // Residual bookings + add actions, at the tail of
+                          // the itinerary. Only in the unfiltered view, like
+                          // the embedded booking rows above — a category
+                          // filter is a places lens, not a bookings one.
+                          if (_itemFilter == 'all')
+                            if (_otherBookingsArea(theme, (
+                              residual: grouped.residual,
+                              residualStays: grouped.residualStays,
+                              residualSegments: grouped.residualSegments,
+                            )) case final other?)
+                              SliverPadding(
+                                padding: EdgeInsets.fromLTRB(
+                                    gutter, AppSpacing.sm, gutter, 0),
+                                sliver: SliverToBoxAdapter(child: other),
+                              ),
                           // Trailing sections, collapsed to one-line summary
                           // rows (settings-list rhythm: hairline dividers).
-                          // One sliver for all four; the 96px bottom padding
+                          // One sliver for all three; the 96px bottom padding
                           // keeps the chat FAB off the last row. Each _xxx
                           // SectionRow hides itself exactly when its expanded
                           // section would (see the builders).
@@ -4805,52 +4836,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                 gutter, AppSpacing.sm, gutter, 96),
                             sliver: SliverToBoxAdapter(
                               child: _sectionCluster([
-                                _bookingsSectionRow(
-                                    trip,
-                                    theme,
-                                    residual: grouped.residual,
-                                    // Saved stays & transport plus custom
-                                    // bookings; only mounted while expanded.
-                                    child: BookingsSection(
-                                      trip: trip,
-                                      stays: _stays,
-                                      segments: _segments,
-                                      readOnly: _readOnly,
-                                      onAddStay: _addStay,
-                                      onDeleteStay: _deleteStay,
-                                      onEditStay: _editStay,
-                                      onAddSegment: _addSegment,
-                                      onDeleteSegment: _deleteSegment,
-                                      onEditSegment: _editSegment,
-                                      onStayBookedChanged: _setStayBooked,
-                                      onSegmentBookedChanged:
-                                          _setSegmentBooked,
-                                      onReorderStays: (_readOnly || _isOffline)
-                                          ? null
-                                          : _reorderStays,
-                                      onReorderSegments:
-                                          (_readOnly || _isOffline)
-                                              ? null
-                                              : _reorderSegments,
-                                      // Residual booking-todos only:
-                                      // city-matched todos render embedded in
-                                      // their city groups above, so the Other
-                                      // sub-group appears only when something
-                                      // didn't match a city (custom or stale
-                                      // todos). Viewers get no checklist at
-                                      // all (the server withholds todos from
-                                      // them).
-                                      otherBookings: grouped.residual.isEmpty
-                                          ? null
-                                          : _residualBookingsList(
-                                              grouped.residual, theme),
-                                      onAddBooking:
-                                          _isOffline ? null : _addBooking,
-                                      appleCalendarEnabled:
-                                          !_readOnly && !_isOffline,
-                                      showHeader: false,
-                                    ),
-                                  ),
                                   _packingSectionRow(trip, theme),
                                   _budgetSectionRow(trip, theme),
                                   _healthSectionRow(trip, theme),

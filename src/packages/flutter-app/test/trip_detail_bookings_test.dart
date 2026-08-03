@@ -133,15 +133,14 @@ void main() {
     expect(tester.getTopLeft(find.text('Rome → JFK')).dy,
         greaterThan(tester.getTopLeft(find.text('Trastevere')).dy));
 
-    // Only the unmatched custom todo remains in the Bookings section's
-    // "Other" sub-group, as a card — behind the collapsed Bookings row,
-    // which expands on tap.
-    expect(find.text('Bookings'), findsOneWidget);
-    expect(find.text('Other'), findsNothing);
-    await tester.ensureVisible(find.text('Bookings'));
-    await tester.tap(find.text('Bookings'));
-    await tester.pumpAndSettle();
-    expect(find.text('Other'), findsOneWidget);
+    // The separate Bookings section is retired; the itinerary header carries
+    // the booking progress instead.
+    expect(find.text('Bookings'), findsNothing);
+    expect(find.text('0 of 6 booked'), findsOneWidget);
+
+    // Only the unmatched custom todo lands in the "Other bookings" area at
+    // the itinerary's tail, as a card — directly visible, no expand step.
+    await tester.ensureVisible(find.text('Other bookings'));
     expect(find.byType(BookingTodoCard), findsOneWidget);
     expect(
         find.widgetWithText(BookingTodoCard, 'Museum tickets'), findsOneWidget);
@@ -181,12 +180,9 @@ void main() {
 
     expect(find.byType(BookingTodoRow), findsNWidgets(2));
 
-    // No unmatched bookings -> no "Other" sub-group, just the section's
-    // "Add booking" footer (behind the collapsed Bookings row).
-    await tester.ensureVisible(find.text('Bookings'));
-    await tester.tap(find.text('Bookings'));
-    await tester.pumpAndSettle();
-    expect(find.text('Other'), findsNothing);
+    // No unmatched bookings -> no "Other bookings" sub-header, just the
+    // always-available add actions at the itinerary's tail.
+    expect(find.text('Other bookings'), findsNothing);
     expect(find.text('Add booking'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Paris'));
