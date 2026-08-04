@@ -501,7 +501,7 @@ class _TripMapState extends State<TripMap> {
                     ),
                     const SizedBox(height: 8),
                     MapControlButton(
-                      icon: Icons.center_focus_strong,
+                      icon: Icons.zoom_in_map,
                       tooltip: l10n.mapResetMap,
                       onTap: () => _fitToTrip(fitPoints),
                     ),
