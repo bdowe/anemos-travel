@@ -1295,6 +1295,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripFilterRestaurants => 'Restaurants';
 
   @override
+  String get tripFilterLocalPicks => 'Locals\' picks';
+
+  @override
+  String get tripFilterUnbooked => 'Not booked yet';
+
+  @override
+  String get tripFilterAllBooked => 'Everything\'s booked';
+
+  @override
+  String get tripFilterAllBookedMessage =>
+      'Nothing left to book on this trip — you\'re all set.';
+
+  @override
   String get tripFilterNoMatch => 'No places match this filter.';
 
   @override

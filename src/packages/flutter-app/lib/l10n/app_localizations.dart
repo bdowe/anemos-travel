@@ -2402,6 +2402,30 @@ abstract class AppLocalizations {
   /// **'Restaurants'**
   String get tripFilterRestaurants;
 
+  /// No description provided for @tripFilterLocalPicks.
+  ///
+  /// In en, this message translates to:
+  /// **'Locals\' picks'**
+  String get tripFilterLocalPicks;
+
+  /// No description provided for @tripFilterUnbooked.
+  ///
+  /// In en, this message translates to:
+  /// **'Not booked yet'**
+  String get tripFilterUnbooked;
+
+  /// No description provided for @tripFilterAllBooked.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything\'s booked'**
+  String get tripFilterAllBooked;
+
+  /// No description provided for @tripFilterAllBookedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing left to book on this trip — you\'re all set.'**
+  String get tripFilterAllBookedMessage;
+
   /// No description provided for @tripFilterNoMatch.
   ///
   /// In en, this message translates to:
