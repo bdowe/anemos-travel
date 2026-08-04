@@ -276,22 +276,122 @@ func TestSerpapiFallbackDeepLink(t *testing.T) {
 	}
 }
 
-// Connectivity numbers would come from Duffel's synthetic test data while the
-// swap is active, so the tool short-circuits without any provider call.
-func TestSerpapiConnectivityShortCircuit(t *testing.T) {
+// With the swap active and a key configured, connectivity rides the seam to
+// SerpApi: real per-leg numbers come back and Duffel's offers endpoint is
+// never touched (IATA-code inputs short-circuit airport resolution).
+func TestSerpapiConnectivityRidesTheSwap(t *testing.T) {
 	cs := &connStub{}
-	swapConnStub(t, cs)
-	t.Setenv("FLIGHT_OFFERS_PROVIDER", "serpapi")
+	swapConnStub(t, cs) // fresh leg cache + proof Duffel sees zero offer requests
+
+	bodies := map[string]string{
+		"JFK-ATH": serpapiBody([]string{serpapiItem(612, 635,
+			[6]string{"JFK", "ATH", "Aegean", "A3 995", "2026-09-15 17:30", "2026-09-16 09:10"})}, nil),
+		"JFK-VIE": serpapiBody(nil, nil), // no service on this date
+	}
+	upstream := 0
+	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
+		upstream++
+		w.Write([]byte(bodies[r.URL.Query().Get("departure_id")+"-"+r.URL.Query().Get("arrival_id")]))
+	})
 
 	text, isErr := runCheckFlightConnectivityTool(connSession(), connInput(t, "JFK", []string{"ATH", "VIE"}, "2026-09-15", ""))
 	if isErr {
-		t.Fatalf("short-circuit must be a non-error result, got error: %s", text)
+		t.Fatalf("tool errored: %s", text)
 	}
-	if !strings.Contains(text, "search_flights") {
-		t.Errorf("short-circuit text should steer the model to search_flights: %s", text)
+	if !strings.Contains(text, "JFK→ATH — from USD 612, fastest 10h35m, nonstop available") {
+		t.Errorf("SerpApi-backed leg missing real numbers:\n%s", text)
+	}
+	if !strings.Contains(text, "JFK→VIE — no flights found for this date") {
+		t.Errorf("empty SerpApi route should read as no-service:\n%s", text)
+	}
+	if strings.Contains(text, "unavailable") {
+		t.Errorf("swap-active connectivity must no longer report unavailable:\n%s", text)
+	}
+	if upstream != 2 {
+		t.Errorf("SerpApi upstream calls = %d, want 2", upstream)
 	}
 	if n := cs.requestCount(); n != 0 {
-		t.Errorf("connectivity made %d provider calls while swap active, want 0", n)
+		t.Errorf("connectivity made %d Duffel offer calls while swap active, want 0", n)
+	}
+}
+
+// Swap active without a key: nothing to call, so the friendly unavailable
+// message comes back without touching either provider.
+func TestSerpapiConnectivityUnavailableWithoutKey(t *testing.T) {
+	cs := &connStub{}
+	swapConnStub(t, cs)
+	t.Setenv("FLIGHT_OFFERS_PROVIDER", "serpapi")
+	t.Setenv("SERPAPI_API_KEY", "")
+
+	text, isErr := runCheckFlightConnectivityTool(connSession(), connInput(t, "JFK", []string{"ATH", "VIE"}, "2026-09-15", ""))
+	if isErr {
+		t.Fatalf("unavailable must be a non-error result, got error: %s", text)
+	}
+	if !strings.Contains(text, "search_flights") {
+		t.Errorf("unavailable text should steer the model to search_flights: %s", text)
+	}
+	if n := cs.requestCount(); n != 0 {
+		t.Errorf("keyless connectivity made %d provider calls, want 0", n)
+	}
+}
+
+// The headroom guard: when today's remaining SerpApi quota can't cover the
+// uncached legs plus the reserve, the tool bails before spending anything —
+// search_flights keeps its slice of the cap.
+func TestSerpapiConnectivityQuotaHeadroom(t *testing.T) {
+	cs := &connStub{}
+	swapConnStub(t, cs)
+	upstream := 0
+	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
+		upstream++
+		w.Write([]byte(serpapiBody(nil, nil)))
+	})
+	// 2 uncached legs need remaining >= 2 + connectivitySerpapiReserve = 12.
+	t.Setenv("SERPAPI_SEARCHES_PER_DAY", "11")
+
+	text, isErr := runCheckFlightConnectivityTool(connSession(), connInput(t, "JFK", []string{"ATH", "VIE"}, "2026-09-15", ""))
+	if isErr {
+		t.Fatalf("headroom bail must be a non-error result, got error: %s", text)
+	}
+	if !strings.Contains(text, "unavailable") {
+		t.Errorf("expected the unavailable message, got: %s", text)
+	}
+	if upstream != 0 {
+		t.Errorf("headroom bail still made %d SerpApi calls, want 0", upstream)
+	}
+
+	// One search over the boundary and the comparison runs.
+	t.Setenv("SERPAPI_SEARCHES_PER_DAY", "12")
+	text, isErr = runCheckFlightConnectivityTool(connSession(), connInput(t, "JFK", []string{"ATH", "VIE"}, "2026-09-15", ""))
+	if isErr || strings.Contains(text, "unavailable") {
+		t.Fatalf("with exact headroom the comparison must run: err=%v %s", isErr, text)
+	}
+	if upstream != 2 {
+		t.Errorf("SerpApi upstream calls = %d, want 2", upstream)
+	}
+}
+
+// While the swap is active the candidate clamp tightens to 3 so one call can
+// never fan out more than 6 uncached searches.
+func TestSerpapiConnectivityCandidateClamp(t *testing.T) {
+	cs := &connStub{}
+	swapConnStub(t, cs)
+	upstream := 0
+	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
+		upstream++
+		w.Write([]byte(serpapiBody(nil, nil)))
+	})
+
+	text, _ := runCheckFlightConnectivityTool(connSession(),
+		connInput(t, "JFK", []string{"AAA", "BBB", "CCC", "DDD", "EEE"}, "2026-09-15", ""))
+	if upstream != maxConnectivityCandidatesSerpapi {
+		t.Errorf("SerpApi upstream calls = %d, want %d (clamped)", upstream, maxConnectivityCandidatesSerpapi)
+	}
+	if !strings.Contains(text, "Only the first 3 candidates were checked") {
+		t.Errorf("tightened truncation note missing:\n%s", text)
+	}
+	if strings.Contains(text, "DDD") || strings.Contains(text, "EEE") {
+		t.Errorf("clamped candidates leaked into the summary:\n%s", text)
 	}
 }
 
