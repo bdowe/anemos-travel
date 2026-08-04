@@ -3883,8 +3883,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   String _fmtDayHeader(DateTime d) => DateFormat.MMMEd().format(d);
 
   // ── Trailing collapsed sections ─────────────────────────────────────────
-  // Bookings / Packing / Budget / Trip health end the page as one-line
-  // summary rows, closed by default. Summary data comes from watches HERE in
+  // Trip health / Packing / Budget end the page as one-line summary rows,
+  // closed by default — health first so its actionable review pill is met
+  // before the empty-state rows. Summary data comes from watches HERE in
   // the parent — the section widgets are only mounted while expanded, so a
   // child-side watch could never feed a collapsed row's counts.
 
@@ -4961,9 +4962,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                 gutter, AppSpacing.sm, gutter, 96),
                             sliver: SliverToBoxAdapter(
                               child: _sectionCluster([
+                                  // Health first: it carries actionable state
+                                  // (the review pill), so it's met right after
+                                  // the itinerary; empty Packing/Budget rows
+                                  // trail at the true page bottom.
+                                  _healthSectionRow(trip, theme),
                                   _packingSectionRow(trip, theme),
                                   _budgetSectionRow(trip, theme),
-                                  _healthSectionRow(trip, theme),
                                 ]),
                             ),
                           ),

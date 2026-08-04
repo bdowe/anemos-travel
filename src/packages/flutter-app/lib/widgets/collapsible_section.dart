@@ -4,8 +4,8 @@ import '../theme/spacing.dart';
 
 /// A one-line section row (icon · title · summary · pill · chevron) that
 /// expands in place. The trip detail page renders its trailing sections
-/// (Bookings, Packing, Budget, Trip health) behind these rows, closed by
-/// default, so the page ends in a quiet index instead of four full sections.
+/// (Trip health, Packing, Budget) behind these rows, closed by default, so
+/// the page ends in a quiet index instead of three full sections.
 ///
 /// The parent owns [expanded]: trip detail keeps the set of open sections in
 /// screen state (like its city/day collapse sets), so expansion survives
