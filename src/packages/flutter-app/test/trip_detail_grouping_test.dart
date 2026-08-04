@@ -115,8 +115,9 @@ void main() {
       items: [
         _item(0, 'Louvre', 'Paris, France', 'attraction', day: 1, city: 'Paris'),
         _item(1, 'Café de Flore', 'Paris, France', 'restaurant', day: 1, city: 'Paris'),
-        // Day 2 in Paris is a day trip to Versailles.
-        _item(2, 'Versailles', 'Versailles, France', 'attraction',
+        // Day 2 in Paris is a day trip to Versailles. (A specific place name —
+        // an item named just 'Versailles' would be hidden as a city filler.)
+        _item(2, 'Palace of Versailles', 'Versailles, France', 'attraction',
             day: 2, city: 'Versailles', dayTripFrom: 'Paris'),
         // Day 4 jumps to Rome — day numbers stay continuous across the trip.
         _item(3, 'Colosseum', 'Rome, Italy', 'attraction', day: 4, city: 'Rome'),

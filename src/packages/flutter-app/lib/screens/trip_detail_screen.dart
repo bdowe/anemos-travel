@@ -1877,6 +1877,17 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return _cityFromAddress(item.address);
   }
 
+  /// True for the AI's "city filler" placeholder — an item whose name is just
+  /// the city it renders under (e.g. name 'Prague', city 'Prague'), emitted for
+  /// days with no specific activities. Its text duplicates the city/day-trip
+  /// header it sits below, so hiding the tile is lossless.
+  bool _isCityFiller(ItineraryItem item) {
+    final name = item.name.trim().toLowerCase();
+    if (name.isEmpty) return false;
+    bool eq(String? s) => s != null && s.trim().toLowerCase() == name;
+    return eq(_cityOf(item)) || eq(item.dayTripFrom);
+  }
+
   /// Fallback city from a formatted address. Drops the country (last segment)
   /// and strips postal-code tokens from the segment before it, e.g.
   /// "Av. ..., 1400-206 Lisboa, Portugal" -> "Lisboa"; a bare "Paris" stays as is.
@@ -1962,6 +1973,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   List<Widget> _buildGroupItemSlivers(String cityKey, String groupKey,
       List<ItineraryItem> items, ThemeData theme, DateTime? tripStart,
       {required bool showTonight, ({DateTime? start, DateTime? end})? range}) {
+    // City-filler suppression happens here — NOT in _filtered — so an
+    // all-filler city keeps its group (city header + embedded booking rows;
+    // the slot<->group mapping indexes over the full itinerary).
+    items = items.where((it) => !_isCityFiller(it)).toList();
     if (!items.any((it) => it.day != null)) {
       return _dayTripSectionSlivers(items, theme);
     }
