@@ -171,9 +171,7 @@ class HomeScreen extends ConsumerWidget {
 
                 SizedBox(height: returning ? AppSpacing.lg : AppSpacing.xl),
 
-                // The trip happening today (specs/happening-now), then the
-                // most recently viewed trip — the latter hidden when it *is*
-                // the live trip, so the same trip never stacks twice.
+                // The trip happening today (specs/happening-now).
                 if (liveTrip != null) ...[
                   LiveTripCard(
                     trip: liveTrip,
@@ -185,27 +183,28 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
-                // In-progress AI conversations that haven't produced a trip
-                // yet (specs/continue-where-you-left-off) — same section as
-                // My Trips, slotted below the live trip like there. Collapses
-                // to nothing when empty, on error, or signed out.
-                const ContinueChatsSection(),
-
-                if (recentTrip != null &&
-                    recentTrip.tripId != liveTrip?.id) ...[
-                  _RecentTripCard(
-                    title: recentTrip.title,
-                    dateRange: recentTrip.dateRange,
-                    status: recentTrip.status,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            TripDetailScreen(tripId: recentTrip.tripId),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
+                // One "Continue where you left off" section: the most
+                // recently viewed trip (hidden when it *is* the live trip,
+                // so the same trip never stacks twice), then in-progress AI
+                // conversations that haven't produced a trip yet
+                // (specs/continue-where-you-left-off). Collapses to nothing
+                // when there is nothing to resume.
+                ContinueChatsSection(
+                  leading: recentTrip != null &&
+                          recentTrip.tripId != liveTrip?.id
+                      ? _RecentTripCard(
+                          title: recentTrip.title,
+                          dateRange: recentTrip.dateRange,
+                          status: recentTrip.status,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  TripDetailScreen(tripId: recentTrip.tripId),
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
 
                 // Local guides discover row — published narrative guides
                 // across all cities. Renders nothing while loading, on
@@ -474,6 +473,8 @@ String _statusLabel(AppLocalizations l10n, String status) => switch (status) {
 
 /// One-tap way back into the most recently viewed trip, styled as a lighter
 /// sibling of the hero card (same teal family as the app bar gradient).
+/// Rendered inside the "Continue where you left off" section, which supplies
+/// the header — the card itself carries no eyebrow.
 class _RecentTripCard extends StatelessWidget {
   final String title;
   final String? dateRange;
@@ -527,16 +528,6 @@ class _RecentTripCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        l10n.homeRecentTripEyebrow,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.white70,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
                       Text(
                         title,
                         maxLines: 1,

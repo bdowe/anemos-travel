@@ -3212,12 +3212,6 @@ abstract class AppLocalizations {
   /// **'Planned'**
   String get homeStatusPlanned;
 
-  /// No description provided for @homeRecentTripEyebrow.
-  ///
-  /// In en, this message translates to:
-  /// **'PICK UP WHERE YOU LEFT OFF'**
-  String get homeRecentTripEyebrow;
-
   /// No description provided for @homeLocalGuidesTitle.
   ///
   /// In en, this message translates to:

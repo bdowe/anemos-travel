@@ -14,8 +14,14 @@ import 'section_header.dart';
 /// (specs/continue-where-you-left-off), as a self-contained home-screen
 /// section. Collapses to nothing while loading, on error, when signed out,
 /// or when there is nothing to resume.
+///
+/// [leading] hosts the recently-viewed-trip card on Home under the same
+/// header — one "Continue where you left off" surface instead of two
+/// adjacent sections saying the same thing.
 class ContinueChatsSection extends ConsumerWidget {
-  const ContinueChatsSection({super.key});
+  final Widget? leading;
+
+  const ContinueChatsSection({super.key, this.leading});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -27,13 +33,17 @@ class ContinueChatsSection extends ConsumerWidget {
 
     final resumable = ref.watch(resumableChatsProvider).valueOrNull ??
         const <ChatSessionSummary>[];
-    if (resumable.isEmpty) return const SizedBox.shrink();
+    if (resumable.isEmpty && leading == null) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionHeader(title: context.l10n.continueChatsTitle),
         const SizedBox(height: AppSpacing.sm),
+        if (leading != null) ...[
+          leading!,
+          const SizedBox(height: AppSpacing.sm),
+        ],
         for (final c in resumable) ContinueChatCard(chat: c),
         const SizedBox(height: AppSpacing.lg),
       ],

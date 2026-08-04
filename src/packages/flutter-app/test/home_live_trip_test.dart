@@ -17,7 +17,8 @@ import 'support/l10n_test_app.dart';
 
 /// Home-screen slotting of the "Happening now" card (specs/happening-now):
 /// the live card takes the recent-trip slot, and the recent-trip tile only
-/// renders below it when it points at a *different* trip.
+/// renders below it — inside the "Continue where you left off" section —
+/// when it points at a *different* trip.
 class _FakeAuthNotifier extends StateNotifier<AuthState>
     implements AuthNotifier {
   _FakeAuthNotifier(UserModel? user)
@@ -120,7 +121,9 @@ void main() {
     await _pumpHome(tester, _liveTrip('t1'));
 
     expect(find.byType(LiveTripCard), findsOneWidget);
-    expect(find.text('PICK UP WHERE YOU LEFT OFF'), findsNothing);
+    // No chats and the recent trip is the live trip, so the whole
+    // "Continue where you left off" section collapses.
+    expect(find.text('Continue where you left off'), findsNothing);
   });
 
   testWidgets('both cards show when the recent trip is a different trip',
@@ -129,14 +132,14 @@ void main() {
     await _pumpHome(tester, _liveTrip('t1'));
 
     expect(find.byType(LiveTripCard), findsOneWidget);
-    expect(find.text('PICK UP WHERE YOU LEFT OFF'), findsOneWidget);
+    expect(find.text('Continue where you left off'), findsOneWidget);
     expect(find.text('Lisbon Trip'), findsOneWidget);
 
-    // The live card leads the slot; the recent tile sits below it.
+    // The live card leads the slot; the recent tile sits below it under the
+    // continue header.
     expect(
       tester.getTopLeft(find.byType(LiveTripCard)).dy,
-      lessThan(
-          tester.getTopLeft(find.text('PICK UP WHERE YOU LEFT OFF')).dy),
+      lessThan(tester.getTopLeft(find.text('Lisbon Trip')).dy),
     );
   });
 
@@ -146,6 +149,7 @@ void main() {
     await _pumpHome(tester, null);
 
     expect(find.byType(LiveTripCard), findsNothing);
-    expect(find.text('PICK UP WHERE YOU LEFT OFF'), findsOneWidget);
+    expect(find.text('Continue where you left off'), findsOneWidget);
+    expect(find.text('Lisbon Trip'), findsOneWidget);
   });
 }
