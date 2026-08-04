@@ -34,6 +34,12 @@ abstract final class AppTheme {
 
     return base.copyWith(
       textTheme: textTheme,
+      // Chat transcripts sit inside a SelectionArea; gpt_markdown's
+      // SelectableAdapter force-unwraps DefaultSelectionStyle.selectionColor,
+      // so keep this explicitly set rather than relying on Material's default.
+      textSelectionTheme: TextSelectionThemeData(
+        selectionColor: colorScheme.primary.withValues(alpha: 0.3),
+      ),
       appBarTheme: const AppBarTheme(
         centerTitle: true,
         elevation: 2,

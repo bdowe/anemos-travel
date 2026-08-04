@@ -308,41 +308,46 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
           Expanded(
             child: isEmpty
                 ? (widget.emptyState ?? const SizedBox.shrink())
-                : NotificationListener<ScrollNotification>(
-                    onNotification: _onScrollNotification,
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-                      itemCount: messages.length + 1,
-                      itemBuilder: (context, i) {
-                        if (i < messages.length) {
-                          final msg = messages[i];
-                          // Labeled messages (e.g. the machine-built refine
-                          // seed) collapse to a context chip; the full content
-                          // still went to the server history.
-                          if (msg.displayLabel != null) {
-                            return _SeedContextChip(
+                // SelectionArea wraps only the message list: the composer's
+                // TextField below has native selection and must keep its own
+                // gesture handling.
+                : SelectionArea(
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: _onScrollNotification,
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                        itemCount: messages.length + 1,
+                        itemBuilder: (context, i) {
+                          if (i < messages.length) {
+                            final msg = messages[i];
+                            // Labeled messages (e.g. the machine-built refine
+                            // seed) collapse to a context chip; the full content
+                            // still went to the server history.
+                            if (msg.displayLabel != null) {
+                              return _SeedContextChip(
+                                key: ValueKey('msg-$i'),
+                                label: msg.displayLabel!,
+                              );
+                            }
+                            // Append-only list, so index keys are stable.
+                            return ChatMessageBubble(
                               key: ValueKey('msg-$i'),
-                              label: msg.displayLabel!,
+                              message: msg,
+                              maxWidth: bubbleMaxWidth,
                             );
                           }
-                          // Append-only list, so index keys are stable.
-                          return ChatMessageBubble(
-                            key: ValueKey('msg-$i'),
-                            message: msg,
-                            maxWidth: bubbleMaxWidth,
+                          return _ChatTail(
+                            key: const ValueKey('chat-tail'),
+                            state: widget.state,
+                            notifier: widget.notifier,
+                            footerBuilder: widget.footerBuilder,
+                            onViewTrip: widget.onViewTrip,
+                            bubbleMaxWidth: bubbleMaxWidth,
                           );
-                        }
-                        return _ChatTail(
-                          key: const ValueKey('chat-tail'),
-                          state: widget.state,
-                          notifier: widget.notifier,
-                          footerBuilder: widget.footerBuilder,
-                          onViewTrip: widget.onViewTrip,
-                          bubbleMaxWidth: bubbleMaxWidth,
-                        );
-                      },
+                        },
+                      ),
                     ),
                   ),
           ),
