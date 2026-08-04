@@ -26,8 +26,14 @@ class PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
-    final request = http.Request('POST', Uri.parse('$baseUrl/plan'));
+    // AbortableRequest tears down the transport the moment [abortTrigger]
+    // completes — even while the socket is idle mid-tool-call. Cancelling the
+    // consumer's subscription alone would only take effect at the next SSE
+    // frame, leaving the server generating for a dead client.
+    final request = http.AbortableRequest('POST', Uri.parse('$baseUrl/plan'),
+        abortTrigger: abortTrigger);
     request.headers['Content-Type'] = 'application/json';
     if (bearerToken != null) {
       request.headers['Authorization'] = 'Bearer $bearerToken';
@@ -87,6 +93,11 @@ class PlanService {
           }
         }
       }
+    } on http.RequestAbortedException {
+      // Deliberate teardown (stop button, reset, dispose) — end the stream
+      // with no synthetic error event; the provider superseded this turn
+      // before firing the trigger, so nothing downstream is listening.
+      return;
     } finally {
       client.close();
     }

@@ -246,6 +246,19 @@ class PlanNotifier extends StateNotifier<PlanState> {
   Timer? _streamFlushTimer;
   StringBuffer? _streamBuffer;
 
+  // Completes when the in-flight turn is deliberately torn down (stop button,
+  // Start over, dispose). PlanService feeds it to AbortableRequest, which
+  // aborts the transport immediately — even while the socket is idle during a
+  // server-side tool call — so the server's request context cancels and
+  // generation stops instead of streaming to a dead client.
+  Completer<void>? _abortCurrent;
+
+  void _abortInFlight() {
+    final abort = _abortCurrent;
+    _abortCurrent = null;
+    if (abort != null && !abort.isCompleted) abort.complete();
+  }
+
   void _scheduleStreamFlush() {
     _streamFlushTimer ??= Timer(_streamFlushInterval, _flushStreamText);
   }
@@ -269,6 +282,7 @@ class PlanNotifier extends StateNotifier<PlanState> {
   @override
   void dispose() {
     // Refine-panel family instances can be disposed mid-stream.
+    _abortInFlight();
     _endStreamBuffer();
     super.dispose();
   }
@@ -325,6 +339,8 @@ class PlanNotifier extends StateNotifier<PlanState> {
   Future<void> _sendNow(String text,
       {String? displayLabel, List<PlanAttachment> attachments = const []}) async {
     final turn = ++_turn;
+    final abort = Completer<void>();
+    _abortCurrent = abort;
     _chatId ??= _newChatId();
 
     final userMessage = PlanMessage(
@@ -399,7 +415,8 @@ class PlanNotifier extends StateNotifier<PlanState> {
           bearerToken: _apiClient.authToken,
           chatId: _chatId,
           tripId: tripId,
-          summary: state.compactedSummary)) {
+          summary: state.compactedSummary,
+          abortTrigger: abort.future)) {
         // Superseded by reset()/Start over: stop consuming and touch nothing
         // — the successor turn owns the state and the stream buffer now.
         if (turn != _turn) return;
@@ -683,9 +700,42 @@ class PlanNotifier extends StateNotifier<PlanState> {
         displayLabel: failed.displayLabel, attachments: failed.attachments);
   }
 
+  /// Stops the in-flight turn: commits whatever the model already streamed as
+  /// a normal assistant message (matching what the server persists — its
+  /// deferred transcript upsert survives the abort) and aborts the transport.
+  void stopStreaming() {
+    if (!state.isStreaming) return; // idle / double-tap: no-op
+    // Supersede FIRST: the abort surfaces in _sendNow as a stream teardown,
+    // and the turn guards must make it a no-op — never a second commit or an
+    // error banner.
+    _turn++;
+    // Read before _endStreamBuffer nulls the buffer; using the buffer (not
+    // state.streamingText) captures the un-flushed 48ms coalescing tail,
+    // exactly like the error-path commit.
+    final partial = _streamBuffer?.toString() ?? '';
+    _endStreamBuffer();
+    state = state.copyWith(
+      isStreaming: false,
+      streamingText: null,
+      activeTools: [],
+      isCompacting: false,
+      suggestedReplies: [],
+      messages: partial.isEmpty
+          ? state.messages
+          : [
+              ...state.messages,
+              PlanMessage(role: MessageRole.assistant, content: partial),
+            ],
+    );
+    // Queue stays put (same as post-error): stopping is not "success", and
+    // auto-draining would immediately start a turn the user just killed.
+    _abortInFlight();
+  }
+
   void reset() {
     _turn++; // any in-flight stream loop self-terminates without touching state
     _chatId = null;
+    _abortInFlight(); // kill the socket too, or the server keeps generating
     _endStreamBuffer();
     state = const PlanState();
   }

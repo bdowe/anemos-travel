@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -481,6 +482,14 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		streamErr := stream.Err()
 		cancelCall() // the deadline only needs to cover the streaming call above
+		// Client went away (stop button / closed tab): the model call was torn
+		// down on purpose — not an AI failure. No health record, no ERROR log
+		// (Sentry tee), no SSE to a dead socket. Canceled-only, on the request
+		// ctx: planModelCallTimeout and planMaxDuration expiries surface as
+		// DeadlineExceeded (here or on callCtx) and keep recording as before.
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return
+		}
 		// Exactly one health record per model call (ai_health.go); nil records
 		// a success, so the first good call after an outage flips recovery.
 		aiClass, aiReason := recordAIResult(streamErr)

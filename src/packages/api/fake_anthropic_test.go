@@ -44,13 +44,14 @@ import (
 
 // fakeTurn is one scripted assistant turn for a streaming call.
 type fakeTurn struct {
-	kind       string // "text" | "tool" | "textThenTool" | "error" | "httpError"
+	kind       string // "text" | "tool" | "textThenTool" | "error" | "httpError" | "stall"
 	httpStatus int    // httpError only
 	errType    string // httpError only, e.g. "invalid_request_error"
 	text       string
 	toolName   string
 	toolInput  string // raw JSON object
 	errMsg     string
+	stalled    chan struct{} // stall only: closed once the deltas are on the wire
 }
 
 // textTurn streams the given text (split across multiple text_delta frames)
@@ -74,6 +75,14 @@ func textThenToolTurn(text, name, inputJSON string) fakeTurn {
 // an SSE `error` event (the shape a real overloaded_error takes on the wire),
 // so stream.Err() fires client-side.
 func errorTurn(message string) fakeTurn { return fakeTurn{kind: "error", errMsg: message} }
+
+// stallTurn streams the leading text, closes [stalled], then parks until the
+// caller's request context dies — the wire shape of a user abort (stop
+// button / closed tab) landing mid-generation. The SDK surfaces the teardown
+// as context.Canceled from stream.Err().
+func stallTurn(text string, stalled chan struct{}) fakeTurn {
+	return fakeTurn{kind: "stall", text: text, stalled: stalled}
+}
 
 // httpErrorTurn answers the streaming call with a non-2xx status and an
 // Anthropic error JSON body before any SSE frames — the shape the real
@@ -206,7 +215,7 @@ func (f *fakeAnthropic) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unscripted turn", http.StatusInternalServerError)
 		return
 	}
-	f.streamTurn(w, idx, turns[idx])
+	f.streamTurn(w, r, idx, turns[idx])
 }
 
 // contentHasToolResult reports whether a message's content array carries a
@@ -236,7 +245,7 @@ func (f *fakeAnthropic) sseFrame(w http.ResponseWriter, event string, data any) 
 	io.WriteString(w, "event: "+event+"\ndata: "+string(b)+"\n\n")
 }
 
-func (f *fakeAnthropic) streamTurn(w http.ResponseWriter, idx int, turn fakeTurn) {
+func (f *fakeAnthropic) streamTurn(w http.ResponseWriter, r *http.Request, idx int, turn fakeTurn) {
 	// A pre-stream HTTP failure never opens the SSE stream: status + error
 	// body only, exactly like the real credit-balance 400.
 	if turn.kind == "httpError" {
@@ -313,6 +322,23 @@ func (f *fakeAnthropic) streamTurn(w http.ResponseWriter, idx int, turn fakeTurn
 			blockDelta(1, map[string]any{"type": "input_json_delta", "partial_json": chunk})
 		}
 		lastBlock = 1
+
+	case "stall":
+		f.sseFrame(w, "content_block_start", map[string]any{
+			"type": "content_block_start", "index": 0,
+			"content_block": map[string]any{"type": "text", "text": ""},
+		})
+		for _, chunk := range splitForStreaming(turn.text) {
+			blockDelta(0, map[string]any{"type": "text_delta", "text": chunk})
+		}
+		if fl, ok := w.(http.Flusher); ok {
+			fl.Flush()
+		}
+		if turn.stalled != nil {
+			close(turn.stalled)
+		}
+		<-r.Context().Done()
+		return
 
 	case "error":
 		// Start a real answer, then die mid-turn: the client sees the leading

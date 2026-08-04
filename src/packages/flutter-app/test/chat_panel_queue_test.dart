@@ -28,6 +28,7 @@ class _GatedPlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     final call = calls++;
     yield PlanEvent(type: 'text_delta', data: {'text': 'reply $call'});
@@ -75,6 +76,9 @@ void main() {
     expect(field.decoration?.hintText, 'Ask a follow-up…');
 
     await tester.enterText(find.byType(TextField), 'also add delphi');
+    // Mid-stream the empty-composer button is Stop; typing flips it back to
+    // send on the next frame (contextual send/stop swap).
+    await tester.pump();
     await tester.tap(find.byIcon(Icons.send));
     await tester.pump();
 
@@ -105,6 +109,8 @@ void main() {
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), 'also add delphi');
+    // Contextual swap: a frame must render for Stop to flip back to send.
+    await tester.pump();
     await tester.tap(find.byIcon(Icons.send));
     await tester.pump();
     expect(find.text('Queued'), findsOneWidget);

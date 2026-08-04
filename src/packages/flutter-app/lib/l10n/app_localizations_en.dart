@@ -2335,6 +2335,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatSend => 'Send';
 
   @override
+  String get chatStopGenerating => 'Stop generating';
+
+  @override
   String get chatAttachImages => 'Attach images';
 
   @override

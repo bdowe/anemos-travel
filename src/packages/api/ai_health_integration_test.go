@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -102,5 +105,47 @@ func TestPlanTransientFailureDoesNotDegrade(t *testing.T) {
 	s := aiHealth.state()
 	if s.Failing || s.FatalTotal != 0 || s.TransientTotal == 0 {
 		t.Fatalf("tracker after transient = %+v", s)
+	}
+}
+
+// A client abort mid-stream (the stop button, a closed tab) is a deliberate
+// teardown, not an AI failure: no health record, no error SSE. Without the
+// canceled-guard in the stream-error path every user stop would bump
+// ai_transient_total and tee an ERROR to Sentry.
+func TestPlanClientAbortRecordsNoAIFailure(t *testing.T) {
+	resetAIHealth(t)
+	stalled := make(chan struct{})
+	newFakeAnthropic(t, stallTurn("Half an answer that gets cut", stalled))
+
+	body, err := json.Marshal(PlanRequest{Messages: []PlanChatMessage{
+		{Role: "user", Content: "plan me a weekend in Athens"},
+	}})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/v1/plan", bytes.NewReader(body)).WithContext(ctx)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		planHandler(rec, req)
+	}()
+
+	// The fake is mid-stream with deltas on the wire — abort like a client.
+	<-stalled
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("planHandler did not return after client abort")
+	}
+
+	if out := rec.Body.String(); strings.Contains(out, `"type":"error"`) {
+		t.Fatalf("stream = %q, want no error event on client abort", out)
+	}
+	if s := aiHealth.state(); s.Failing || s.FatalTotal != 0 || s.TransientTotal != 0 {
+		t.Fatalf("tracker after client abort = %+v, want untouched", s)
 	}
 }

@@ -18,6 +18,7 @@ class _ScriptedPlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     for (final e in events) {
       yield e;

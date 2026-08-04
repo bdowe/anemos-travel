@@ -363,6 +363,8 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
             isStreaming: isStreaming,
             hint: widget.inputHint ?? context.l10n.chatInputHint,
             onSend: _send,
+            onStop: () => ref.read(widget.notifier).stopStreaming(),
+            hasDraftAttachments: _pending.isNotEmpty || _processingCount > 0,
             onAttach: _pickImages,
             dictation: _dictation,
             floating: widget.floatingComposer,
@@ -1526,6 +1528,8 @@ class _InputBar extends StatelessWidget {
   final bool isStreaming;
   final String hint;
   final VoidCallback onSend;
+  final VoidCallback onStop;
+  final bool hasDraftAttachments;
   final VoidCallback onAttach;
   final DictationController dictation;
   final bool floating;
@@ -1536,6 +1540,8 @@ class _InputBar extends StatelessWidget {
     required this.isStreaming,
     required this.hint,
     required this.onSend,
+    required this.onStop,
+    required this.hasDraftAttachments,
     required this.onAttach,
     required this.dictation,
     this.floating = false,
@@ -1603,10 +1609,28 @@ class _InputBar extends StatelessWidget {
           ),
           _MicButton(dictation: dictation),
           const SizedBox(width: AppSpacing.sm),
-          IconButton.filled(
-            tooltip: context.l10n.chatSend,
-            onPressed: onSend,
-            icon: const Icon(Icons.send),
+          // Contextual swap: while streaming with nothing drafted the send
+          // button becomes a stop button; any draft (text or attachment)
+          // flips it back to send so queue-ahead keeps working.
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              final showStop = isStreaming &&
+                  value.text.trim().isEmpty &&
+                  !hasDraftAttachments;
+              if (showStop) {
+                return IconButton.filled(
+                  tooltip: context.l10n.chatStopGenerating,
+                  onPressed: onStop,
+                  icon: const Icon(Icons.stop),
+                );
+              }
+              return IconButton.filled(
+                tooltip: context.l10n.chatSend,
+                onPressed: onSend,
+                icon: const Icon(Icons.send),
+              );
+            },
           ),
         ],
       ),

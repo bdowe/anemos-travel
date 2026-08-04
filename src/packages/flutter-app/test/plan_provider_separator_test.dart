@@ -25,6 +25,7 @@ class _ScriptedPlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     for (final e in events) {
       if (delay != null) await Future<void>.delayed(delay!);

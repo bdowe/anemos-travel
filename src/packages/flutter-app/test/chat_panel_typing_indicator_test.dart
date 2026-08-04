@@ -33,6 +33,7 @@ class _StagedPlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     for (final step in script) {
       if (step is Completer<void>) {

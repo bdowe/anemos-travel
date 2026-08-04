@@ -34,6 +34,7 @@ class _ScriptedPlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     lastHistory = messages;
     for (final e in events) {
@@ -57,6 +58,7 @@ class _ParkablePlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     for (final step in script) {
       if (step is Completer<void>) {
