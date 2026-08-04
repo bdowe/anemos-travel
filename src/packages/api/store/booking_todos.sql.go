@@ -205,6 +205,28 @@ func (q *Queries) SetBookingTodoPosition(ctx context.Context, arg SetBookingTodo
 	return err
 }
 
+const shiftBookingTodoDates = `-- name: ShiftBookingTodoDates :execrows
+UPDATE booking_todos
+SET depart_date = depart_date + $1::int,
+    return_date = return_date + $1::int
+WHERE trip_id = $2
+  AND (depart_date IS NOT NULL OR return_date IS NOT NULL)
+`
+
+type ShiftBookingTodoDatesParams struct {
+	Days   int32     `json:"days"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+// Whole-trip date shift (agent set_trip_dates); see ShiftAccommodationDates.
+func (q *Queries) ShiftBookingTodoDates(ctx context.Context, arg ShiftBookingTodoDatesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, shiftBookingTodoDates, arg.Days, arg.TripID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateBookingTodo = `-- name: UpdateBookingTodo :one
 UPDATE booking_todos
 SET kind        = COALESCE($1, kind),

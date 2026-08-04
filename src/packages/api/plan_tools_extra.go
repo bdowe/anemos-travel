@@ -341,7 +341,8 @@ func formatReviewFindings(findings []Finding) string {
 	b.WriteString("The [fix: ...] hints tell you exactly how to act on each issue: " +
 		"add_accommodation for a lodging gap (use its check_in/check_out), " +
 		"add_transport_segment for a transit gap (use its origin/destination/mode), " +
-		"move_itinerary_item for an over-packed or closed-venue day (use item_id + target_day). " +
+		"move_itinerary_item for an over-packed or closed-venue day (use item_id + target_day), " +
+		"set_trip_dates when the trip has no dates (fix=set_dates — ask the traveler for their travel dates first). " +
 		"You can also update_itinerary_section, add booking to-dos, or add packing items. " +
 		"Summarize the findings for the traveler in plain language and offer to fix them.")
 	return b.String()

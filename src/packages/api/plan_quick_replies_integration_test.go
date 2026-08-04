@@ -81,6 +81,8 @@ func TestPlanSuggestRepliesEmitsEvent(t *testing.T) {
 	if err := json.Unmarshal(reqs[0], &body); err != nil {
 		t.Fatalf("unmarshal request body: %v", err)
 	}
+	// Anonymous session: set_trip_dates is authed-gated, so this tail
+	// intentionally stays find_parking (anonymous tools array unchanged).
 	if n := len(body.Tools); n == 0 || body.Tools[n-1].Name != "find_parking" {
 		t.Fatalf("tools tail = %+v, want find_parking last", body.Tools)
 	}

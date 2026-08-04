@@ -55,3 +55,11 @@ UPDATE trip_segments SET position = $3 WHERE id = $1 AND trip_id = $2;
 
 -- name: DeleteSegment :execrows
 DELETE FROM trip_segments WHERE id = $1 AND trip_id = $2;
+
+-- name: ShiftSegmentDates :execrows
+-- Whole-trip date shift (agent set_trip_dates); see ShiftAccommodationDates.
+UPDATE trip_segments
+SET depart_date = depart_date + sqlc.arg(days)::int,
+    arrive_date = arrive_date + sqlc.arg(days)::int
+WHERE trip_id = sqlc.arg(trip_id)
+  AND (depart_date IS NOT NULL OR arrive_date IS NOT NULL);

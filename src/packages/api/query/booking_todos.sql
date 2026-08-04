@@ -52,3 +52,11 @@ DELETE FROM booking_todos WHERE id = $1 AND trip_id = $2 AND auto = false;
 
 -- name: DeleteBookingTodo :execrows
 DELETE FROM booking_todos WHERE id = $1 AND trip_id = $2;
+
+-- name: ShiftBookingTodoDates :execrows
+-- Whole-trip date shift (agent set_trip_dates); see ShiftAccommodationDates.
+UPDATE booking_todos
+SET depart_date = depart_date + sqlc.arg(days)::int,
+    return_date = return_date + sqlc.arg(days)::int
+WHERE trip_id = sqlc.arg(trip_id)
+  AND (depart_date IS NOT NULL OR return_date IS NOT NULL);
