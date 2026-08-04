@@ -21,10 +21,16 @@ ItineraryItem _item(int pos, String name, double lat, double lng) =>
     );
 
 /// Hosts the map at a fixed size (FlutterMap needs bounded constraints).
-Widget _host(Widget child) => MaterialApp(
+Widget _host(Widget child) => _hostSized(child, const Size(400, 300));
+
+/// [_host] at an arbitrary size, for tests that need the wide map bands
+/// where the single world is narrower than the box at low zooms.
+Widget _hostSized(Widget child, Size size) => MaterialApp(
       localizationsDelegates: testLocalizationsDelegates,
       home: Scaffold(
-        body: Center(child: SizedBox(width: 400, height: 300, child: child)),
+        body: Center(
+          child: SizedBox(width: size.width, height: size.height, child: child),
+        ),
       ),
     );
 
@@ -483,5 +489,84 @@ void main() {
 
     expect(find.text('No mapped places'), findsNothing);
     expect(find.byIcon(Icons.hotel), findsOneWidget);
+  });
+
+  group('single world fills a wide map band (no background side bars)', () {
+    // Tokyo + Auckland: the auto-fit for this pair in a 900×240 band is
+    // height-limited to a zoom *below* the width floor, and its bounds center
+    // (~157°E) sits close enough to the antimeridian that even a
+    // floor-clamped camera would show background on the right without the
+    // longitude-containing constraint. Exercises both halves of the fix.
+    final wideItems = [
+      _item(0, 'Tokyo Tower', 35.6586, 139.7454),
+      _item(1, 'Sky Tower', -36.8485, 174.7622),
+    ];
+    const band = Size(900, 240);
+
+    /// No pixel of background may show beside the world: the west edge must
+    /// project at/left of x=0 and the east edge at/right of x=band.width.
+    void expectNoSideBars(WidgetTester tester) {
+      final camera = _camera(tester);
+      expect(
+        camera.latLngToScreenOffset(const LatLng(0, -180)).dx,
+        lessThanOrEqualTo(0.5),
+      );
+      expect(
+        camera.latLngToScreenOffset(const LatLng(0, 180)).dx,
+        greaterThanOrEqualTo(band.width - 0.5),
+      );
+    }
+
+    Future<void> pumpWideTrip(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1000, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        _hostSized(TripMap(items: wideItems), band),
+      );
+      await tester.pump();
+    }
+
+    testWidgets('auto-fit clamps to the width-aware zoom floor', (
+      WidgetTester tester,
+    ) async {
+      await pumpWideTrip(tester);
+
+      final camera = _camera(tester);
+      expect(camera.minZoom, appMapMinZoomFor(band.width));
+      expect(camera.zoom, greaterThanOrEqualTo(camera.minZoom!));
+      expectNoSideBars(tester);
+    });
+
+    testWidgets('zooming out cannot shrink the world below the box width', (
+      WidgetTester tester,
+    ) async {
+      await pumpWideTrip(tester);
+
+      await tester.tap(find.byIcon(Icons.remove));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.remove));
+      await tester.pump();
+
+      expect(
+        _camera(tester).zoom,
+        greaterThanOrEqualTo(appMapMinZoomFor(band.width)),
+      );
+      expectNoSideBars(tester);
+    });
+
+    testWidgets('reset re-fits without reintroducing bars', (
+      WidgetTester tester,
+    ) async {
+      await pumpWideTrip(tester);
+
+      await tester.tap(find.byIcon(Icons.center_focus_strong));
+      await tester.pump();
+
+      final camera = _camera(tester);
+      expect(camera.zoom, greaterThanOrEqualTo(appMapMinZoomFor(band.width)));
+      expectNoSideBars(tester);
+    });
   });
 }

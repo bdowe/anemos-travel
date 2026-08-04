@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,8 +42,10 @@ class LocalGuideDetailScreen extends ConsumerWidget {
             const Icon(Icons.menu_book, size: 20),
             const SizedBox(width: AppSpacing.sm),
             Flexible(
-              child:
-                  Text(l10n.guideDetailTitle, overflow: TextOverflow.ellipsis),
+              child: Text(
+                l10n.guideDetailTitle,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
@@ -72,8 +76,10 @@ class LocalGuideDetailScreen extends ConsumerWidget {
               ref.invalidate(localGuideDetailProvider(guide.id)),
           // Add-to-trip needs an account (guides browse stays public).
           onAddPin: ref.watch(authProvider).isSignedIn
-              ? (pin) => showAddToTripSheet(context,
-                  AddToTripPayload.fromLocalRec(pin, source: 'guide_pin'))
+              ? (pin) => showAddToTripSheet(
+                  context,
+                  AddToTripPayload.fromLocalRec(pin, source: 'guide_pin'),
+                )
               : null,
         ),
       ),
@@ -114,8 +120,9 @@ class _GuideBody extends StatelessWidget {
       _pick(guide.neighborhood, fallback.neighborhood),
       _pick(guide.city, fallback.city),
     ].where((s) => s.isNotEmpty).join(' · ');
-    final mapped =
-        pins.where((p) => p.latitude != null && p.longitude != null).toList();
+    final mapped = pins
+        .where((p) => p.latitude != null && p.longitude != null)
+        .toList();
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -136,15 +143,17 @@ class _GuideBody extends StatelessWidget {
                 ],
                 Text(
                   title,
-                  style: theme.textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 if (placeLine.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     placeLine,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
                 // The local behind the guide — same face + name treatment as the
@@ -162,7 +171,9 @@ class _GuideBody extends StatelessWidget {
                         child: Text(
                           sourceName.characters.first.toUpperCase(),
                           style: theme.textTheme.labelSmall?.copyWith(
-                              color: accent, fontWeight: FontWeight.w700),
+                            color: accent,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.sm),
@@ -170,7 +181,9 @@ class _GuideBody extends StatelessWidget {
                         child: Text(
                           l10n.guideDetailByline(sourceName),
                           style: theme.textTheme.labelLarge?.copyWith(
-                              color: accent, fontWeight: FontWeight.w600),
+                            color: accent,
+                            fontWeight: FontWeight.w600,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -198,13 +211,16 @@ class _GuideBody extends StatelessWidget {
                       Text(
                         l10n.guideDetailPlacesTitle,
                         style: theme.textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w600, color: accent),
+                          fontWeight: FontWeight.w600,
+                          color: accent,
+                        ),
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       Text(
                         '${pins.length}',
                         style: theme.textTheme.labelMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -216,8 +232,9 @@ class _GuideBody extends StatelessWidget {
                   for (final pin in pins)
                     LocalRecCard(
                       rec: pin,
-                      onAddToTrip:
-                          onAddPin == null ? null : () => onAddPin!(pin),
+                      onAddToTrip: onAddPin == null
+                          ? null
+                          : () => onAddPin!(pin),
                     ),
                 ] else ...[
                   const SizedBox(height: AppSpacing.xl),
@@ -258,8 +275,11 @@ class _HeroImage extends StatelessWidget {
           errorBuilder: (context, _, __) => Container(
             decoration: BoxDecoration(gradient: AppColors.brandGradient),
             alignment: Alignment.center,
-            child: const Icon(Icons.photo_outlined,
-                size: 40, color: Colors.white70),
+            child: const Icon(
+              Icons.photo_outlined,
+              size: 40,
+              color: Colors.white70,
+            ),
           ),
         ),
       ),
@@ -283,6 +303,10 @@ class _GuideMap extends StatefulWidget {
 class _GuideMapState extends State<_GuideMap> {
   final MapController _controller = MapController();
 
+  /// Width from the previous layout, to catch resizes (see the
+  /// LayoutBuilder in [build]).
+  double? _lastMapWidth;
+
   void _zoomBy(double delta) {
     try {
       _controller.move(
@@ -301,66 +325,95 @@ class _GuideMapState extends State<_GuideMap> {
     const interaction = InteractionOptions(
       flags: InteractiveFlag.all & ~InteractiveFlag.scrollWheelZoom,
     );
-    final options = points.length == 1
-        ? appMapOptions(
-            initialCenter: points.first,
-            initialZoom: 13,
-            interactionOptions: interaction,
-          )
-        : appMapOptions(
-            initialCameraFit: CameraFit.bounds(
-              bounds: LatLngBounds.fromPoints(points),
-              padding: const EdgeInsets.all(32),
-            ),
-            interactionOptions: interaction,
-          );
 
     return ClipRRect(
       borderRadius: AppRadius.lgAll,
       child: SizedBox(
         height: 240,
-        child: Stack(
-          children: [
-            FlutterMap(
-              mapController: _controller,
-              options: options,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Zoom floor so the zoom-out button can't shrink the single world
+            // narrower than the map box (background bars); see appMapMinZoomFor.
+            final minZoom = appMapMinZoomFor(constraints.maxWidth);
+
+            // flutter_map adopts a changed minZoom but never re-clamps the live
+            // zoom, so after a resize nudge the camera back over the floor
+            // (moveRaw re-applies the camera constraint too; no-op otherwise).
+            if (_lastMapWidth != null &&
+                _lastMapWidth != constraints.maxWidth) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                try {
+                  final camera = _controller.camera;
+                  _controller.move(
+                    camera.center,
+                    math.max(camera.zoom, minZoom),
+                  );
+                } catch (_) {}
+              });
+            }
+            _lastMapWidth = constraints.maxWidth;
+
+            final options = points.length == 1
+                ? appMapOptions(
+                    initialCenter: points.first,
+                    initialZoom: 13,
+                    minZoom: minZoom,
+                    interactionOptions: interaction,
+                  )
+                : appMapOptions(
+                    initialCameraFit: CameraFit.bounds(
+                      bounds: LatLngBounds.fromPoints(points),
+                      padding: const EdgeInsets.all(32),
+                    ),
+                    minZoom: minZoom,
+                    interactionOptions: interaction,
+                  );
+
+            return Stack(
               children: [
-                ...appMapTileLayers(context),
-                MarkerLayer(
-                  markers: [
-                    for (var i = 0; i < points.length; i++)
-                      Marker(
-                        point: points[i],
-                        width: 24,
-                        height: 24,
-                        child: _GuidePin(label: '${i + 1}'),
-                      ),
+                FlutterMap(
+                  mapController: _controller,
+                  options: options,
+                  children: [
+                    ...appMapTileLayers(context),
+                    MarkerLayer(
+                      markers: [
+                        for (var i = 0; i < points.length; i++)
+                          Marker(
+                            point: points[i],
+                            width: 24,
+                            height: 24,
+                            child: _GuidePin(label: '${i + 1}'),
+                          ),
+                      ],
+                    ),
+                    appMapAttribution(),
                   ],
                 ),
-                appMapAttribution(),
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      MapControlButton(
+                        icon: Icons.add,
+                        tooltip: context.l10n.mapZoomIn,
+                        onTap: () => _zoomBy(1),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      MapControlButton(
+                        icon: Icons.remove,
+                        tooltip: context.l10n.mapZoomOut,
+                        onTap: () => _zoomBy(-1),
+                      ),
+                    ],
+                  ),
+                ),
               ],
-            ),
-            Positioned(
-              right: 8,
-              bottom: 8,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  MapControlButton(
-                    icon: Icons.add,
-                    tooltip: context.l10n.mapZoomIn,
-                    onTap: () => _zoomBy(1),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  MapControlButton(
-                    icon: Icons.remove,
-                    tooltip: context.l10n.mapZoomOut,
-                    onTap: () => _zoomBy(-1),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );

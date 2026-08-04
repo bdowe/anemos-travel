@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -9,6 +11,24 @@ import '../theme/app_colors.dart';
 /// "not lit yet" instead of a broken grey hole. Pass as
 /// `MapOptions.backgroundColor` wherever [appMapTileLayers] is used.
 const Color appMapBackground = Color(0xFF0A0F1A);
+
+/// Nudges the computed zoom floor up so floating-point rounding can never
+/// leave a sub-pixel sliver of background at the world's edges (the world
+/// ends up ~0.7% wider than the viewport).
+const double _minZoomEpsilon = 0.01;
+
+/// Lowest zoom at which the single world (256·2^z px wide) still fills a
+/// viewport of [viewportWidth] px horizontally; never below the legacy floor
+/// of 1. Pass as `minZoom` to [appMapOptions] so neither an auto-fit nor a
+/// user zoom-out can shrink the world narrower than the map box, which would
+/// expose [appMapBackground] as bars down both sides.
+double appMapMinZoomFor(double viewportWidth) {
+  // At or below 512px (all phone bands) z1's 512px world already fills the
+  // box — power-of-two exact, no epsilon needed — keeping the floor
+  // identical to the pre-dynamic behavior there.
+  if (!viewportWidth.isFinite || viewportWidth <= 512) return 1;
+  return math.log(viewportWidth / 256) / math.ln2 + _minZoomEpsilon;
+}
 
 /// Web Mercator that draws exactly **one** world.
 ///
@@ -69,29 +89,98 @@ MapOptions appMapOptions({
   LatLng? initialCenter,
   double? initialZoom,
   CameraFit? initialCameraFit,
+  double minZoom = 1,
   required InteractionOptions interactionOptions,
 }) {
   return MapOptions(
     crs: const AppMapCrs(),
     backgroundColor: appMapBackground,
-    // Keeps the camera *center* on the world, so a pan can't drift off into
-    // empty background. Deliberately not CameraConstraint.contain: that one
+    // Keeps the world edges outside the viewport horizontally (no background
+    // bars from a pan or an off-meridian fit) and the camera center on the
+    // planet vertically. Deliberately not CameraConstraint.contain: that one
     // rejects any camera it cannot fit inside the bounds (returning null),
     // which would freeze a map taller than the world is wide.
-    cameraConstraint: CameraConstraint.containCenter(
-      bounds: LatLngBounds(const LatLng(-85, -180), const LatLng(85, 180)),
-    ),
+    cameraConstraint: const AppMapCameraConstraint(),
     // Without a floor, zooming out shrinks the single world to a postage
     // stamp and then past the smallest tile level into empty background.
-    // z1 = a 512px world, which still fills our 240px map bands vertically
-    // and is far below any real trip's auto-fit zoom (that would need ~130°
-    // of latitude in one trip), so the fit is never clamped by this.
-    minZoom: 1,
+    // Callers with a known width pass [appMapMinZoomFor] so the world always
+    // fills the viewport horizontally — the camera fit clamps up to it, which
+    // trades vertical fit in our short map bands (an extreme-latitude trip
+    // may need a pan to reach its outermost pins) for never showing bars.
+    minZoom: minZoom,
     initialCenter: initialCenter ?? const LatLng(0, 0),
     initialZoom: initialZoom ?? 13,
     initialCameraFit: initialCameraFit,
     interactionOptions: interactionOptions,
   );
+}
+
+/// Camera constraint for the single-world [AppMapCrs]: contains the world
+/// *edges* horizontally (a pan or off-center fit can never drag ±180° inside
+/// the viewport and expose [appMapBackground] as side bars) while only
+/// containing the camera *center* vertically at ±85° (edge-containing
+/// latitude would freeze any map taller than the world, per the note on
+/// [appMapOptions]).
+///
+/// Horizontal containment is only possible when the world is at least as
+/// wide as the viewport — [appMapMinZoomFor] guarantees that; below the
+/// floor (transient states only) the camera is returned unchanged rather
+/// than `null`, which would freeze the map.
+@immutable
+class AppMapCameraConstraint extends CameraConstraint {
+  /// Create the app's single-world camera constraint.
+  const AppMapCameraConstraint();
+
+  static const double _maxLatitude = 85;
+
+  @override
+  MapCamera constrain(MapCamera camera) {
+    // The controller applies its options (and debug-asserts constraint
+    // compliance) once before the first layout, while the camera still has
+    // the sentinel "impossible" size — nothing sensible to contain yet.
+    final size = camera.nonRotatedSize;
+    if (size == MapCamera.kImpossibleSize ||
+        !size.width.isFinite ||
+        size.width <= 0) {
+      return camera;
+    }
+
+    final zoom = camera.zoom;
+    final center = LatLng(
+      camera.center.latitude.clamp(-_maxLatitude, _maxLatitude),
+      camera.center.longitude,
+    );
+
+    // Mirror ContainCamera's x-axis math against the whole world.
+    final westPix = camera.projectAtZoom(const LatLng(0, -180), zoom);
+    final eastPix = camera.projectAtZoom(const LatLng(0, 180), zoom);
+    final halfWidth = camera.size.width / 2;
+    final leftOkCenter = math.min(westPix.dx, eastPix.dx) + halfWidth;
+    final rightOkCenter = math.max(westPix.dx, eastPix.dx) - halfWidth;
+
+    // World narrower than the viewport: no horizontal containment exists
+    // (transiently possible below the [appMapMinZoomFor] floor).
+    if (leftOkCenter > rightOkCenter) {
+      if (center == camera.center) return camera;
+      return camera.withPosition(center: center);
+    }
+
+    final centerPix = camera.projectAtZoom(center, zoom);
+    final newX = centerPix.dx.clamp(leftOkCenter, rightOkCenter);
+    if (newX == centerPix.dx) {
+      if (center == camera.center) return camera;
+      return camera.withPosition(center: center);
+    }
+    return camera.withPosition(
+      center: camera.unprojectAtZoom(Offset(newX, centerPix.dy), zoom),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) => other is AppMapCameraConstraint;
+
+  @override
+  int get hashCode => (AppMapCameraConstraint).hashCode;
 }
 
 /// Shared basemap for every map in the app: Esri World Imagery satellite

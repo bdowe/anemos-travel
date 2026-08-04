@@ -106,6 +106,10 @@ class TripMap extends StatefulWidget {
 class _TripMapState extends State<TripMap> {
   final MapController _controller = MapController();
 
+  /// Width from the previous layout, to catch resizes in [build]'s
+  /// LayoutBuilder (they never reach [didUpdateWidget]).
+  double? _lastMapWidth;
+
   /// Fit padding shared by the initial fit and every re-fit; asymmetric so a
   /// top overlay (day chips) never covers the topmost fitted marker.
   EdgeInsets get _fitPadding =>
@@ -303,7 +307,8 @@ class _TripMapState extends State<TripMap> {
       final a = mapped[k];
       final b = mapped[k + 1];
       if (a.point == b.point) continue;
-      final hasLabel = b.item.position == a.item.position + 1 &&
+      final hasLabel =
+          b.item.position == a.item.position + 1 &&
           widget.segmentLabels[a.item.position] != null;
       final t = hasLabel ? 0.7 : 0.5;
       arrowMarkers.add(
@@ -327,19 +332,44 @@ class _TripMapState extends State<TripMap> {
           )
         : const InteractionOptions(flags: InteractiveFlag.none);
 
-    // Center on the selected place when one is set (e.g. the map was just
-    // (re)built after a list tap); otherwise fit the whole trip.
-    final MapOptions options = selected != null
-        ? appMapOptions(
-            initialCenter: selected,
-            initialZoom: 15,
-            interactionOptions: interaction,
-          )
-        : fitPoints.length == 1
+    // The zoom floor that keeps the single world filling the box depends on
+    // the width the map is given, so the options are assembled in a
+    // LayoutBuilder.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final minZoom = appMapMinZoomFor(constraints.maxWidth);
+
+        // flutter_map adopts a changed minZoom into the camera's options but
+        // never re-clamps the live zoom, so after a resize nudge the camera
+        // back over the (possibly risen) floor. One move covers both resize
+        // failure modes: moveRaw re-applies clampZoom *and* the camera
+        // constraint, and no-ops when nothing is out of bounds.
+        if (_lastMapWidth != null && _lastMapWidth != constraints.maxWidth) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            try {
+              final camera = _controller.camera;
+              _controller.move(camera.center, math.max(camera.zoom, minZoom));
+            } catch (_) {}
+          });
+        }
+        _lastMapWidth = constraints.maxWidth;
+
+        // Center on the selected place when one is set (e.g. the map was just
+        // (re)built after a list tap); otherwise fit the whole trip.
+        final MapOptions options = selected != null
+            ? appMapOptions(
+                initialCenter: selected,
+                initialZoom: 15,
+                minZoom: minZoom,
+                interactionOptions: interaction,
+              )
+            : fitPoints.length == 1
             // Single point: bounds collapse, so center with a sensible zoom.
             ? appMapOptions(
                 initialCenter: fitPoints.first,
                 initialZoom: 13,
+                minZoom: minZoom,
                 interactionOptions: interaction,
               )
             : appMapOptions(
@@ -347,133 +377,140 @@ class _TripMapState extends State<TripMap> {
                   bounds: LatLngBounds.fromPoints(fitPoints),
                   padding: _fitPadding,
                 ),
+                minZoom: minZoom,
                 interactionOptions: interaction,
               );
 
-    return Stack(
-      children: [
-        FlutterMap(
-          mapController: _controller,
-          options: options,
+        return Stack(
           children: [
-            ...appMapTileLayers(context),
-            if (points.length >= 2)
-              PolylineLayer(
-                polylines: [
-                  // Two passes make a thin line with a soft glow that stays
-                  // legible over satellite imagery.
-                  Polyline(
-                    points: points,
-                    strokeWidth: 6,
-                    color: Colors.white.withValues(alpha: 0.25),
-                  ),
-                  Polyline(
-                    points: points,
-                    strokeWidth: 2,
-                    color: Colors.white.withValues(alpha: 0.95),
-                  ),
-                ],
-              ),
-            if (arrowMarkers.isNotEmpty) MarkerLayer(markers: arrowMarkers),
-            if (labelSegments.isNotEmpty)
-              _SegmentLabelLayer(segments: labelSegments),
-            // Stays live in their own layer, outside the clusterer: a trip has
-            // few of them and "where am I sleeping" should never collapse into
-            // an anonymous count bubble with sightseeing pins. Drawn beneath
-            // the numbered pins so the primary interaction stays on top.
-            if (stays.isNotEmpty)
-              MarkerLayer(
-                markers: [
-                  for (final s in stays)
-                    Marker(
-                      point: s.point,
-                      // Transparent 44px halo around the 26px square; the
-                      // box stays centered on the coordinate (see
-                      // _pinHitBox).
-                      width: _pinHitBox,
-                      height: _pinHitBox,
-                      child: _StayPin(
-                        name: s.stay.name,
-                        dates: tripDateRange(s.stay.checkIn, s.stay.checkOut),
+            FlutterMap(
+              mapController: _controller,
+              options: options,
+              children: [
+                ...appMapTileLayers(context),
+                if (points.length >= 2)
+                  PolylineLayer(
+                    polylines: [
+                      // Two passes make a thin line with a soft glow that stays
+                      // legible over satellite imagery.
+                      Polyline(
+                        points: points,
+                        strokeWidth: 6,
+                        color: Colors.white.withValues(alpha: 0.25),
                       ),
-                    ),
-                ],
-              ),
-            MarkerClusterLayerWidget(
-              options: MarkerClusterLayerOptions(
-                maxClusterRadius: 45,
-                size: const Size(32, 32),
-                padding: const EdgeInsets.all(40),
-                markers: [
-                  // Labels count 1..N over what this map view shows (the whole
-                  // trip on All, one day on Day N) — not the item's trip-wide
-                  // position, which reads as arbitrary once the view filters
-                  // or skips ungeocoded items.
-                  for (final (k, m) in mapped.indexed)
-                    Marker(
-                      point: m.point,
-                      // Transparent 44px halo around the 24/28px dot, tap
-                      // handling on the whole box; centered so the dot stays
-                      // anchored on its coordinate (see _pinHitBox).
-                      width: _pinHitBox,
-                      height: _pinHitBox,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: widget.onPinTap == null
-                            ? null
-                            : () => widget.onPinTap!(m.item.position),
-                        child: Center(
-                          child: SizedBox.square(
-                            dimension:
-                                widget.selectedPosition == m.item.position
-                                    ? 28
-                                    : 24,
-                            child: _Pin(
-                              label: '${k + 1}',
-                              category: m.item.category,
-                              selected:
-                                  widget.selectedPosition == m.item.position,
+                      Polyline(
+                        points: points,
+                        strokeWidth: 2,
+                        color: Colors.white.withValues(alpha: 0.95),
+                      ),
+                    ],
+                  ),
+                if (arrowMarkers.isNotEmpty) MarkerLayer(markers: arrowMarkers),
+                if (labelSegments.isNotEmpty)
+                  _SegmentLabelLayer(segments: labelSegments),
+                // Stays live in their own layer, outside the clusterer: a trip has
+                // few of them and "where am I sleeping" should never collapse into
+                // an anonymous count bubble with sightseeing pins. Drawn beneath
+                // the numbered pins so the primary interaction stays on top.
+                if (stays.isNotEmpty)
+                  MarkerLayer(
+                    markers: [
+                      for (final s in stays)
+                        Marker(
+                          point: s.point,
+                          // Transparent 44px halo around the 26px square; the
+                          // box stays centered on the coordinate (see
+                          // _pinHitBox).
+                          width: _pinHitBox,
+                          height: _pinHitBox,
+                          child: _StayPin(
+                            name: s.stay.name,
+                            dates: tripDateRange(
+                              s.stay.checkIn,
+                              s.stay.checkOut,
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                ],
-                builder: (context, clusterMarkers) =>
-                    _ClusterBubble(count: clusterMarkers.length),
-              ),
-            ),
-            appMapAttribution(),
-          ],
-        ),
-        if (widget.interactive)
-          Positioned(
-            right: 8,
-            bottom: 8,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                MapControlButton(
-                  icon: Icons.add,
-                  tooltip: l10n.mapZoomIn,
-                  onTap: () => _zoomBy(1),
+                    ],
+                  ),
+                MarkerClusterLayerWidget(
+                  options: MarkerClusterLayerOptions(
+                    maxClusterRadius: 45,
+                    size: const Size(32, 32),
+                    padding: const EdgeInsets.all(40),
+                    markers: [
+                      // Labels count 1..N over what this map view shows (the whole
+                      // trip on All, one day on Day N) — not the item's trip-wide
+                      // position, which reads as arbitrary once the view filters
+                      // or skips ungeocoded items.
+                      for (final (k, m) in mapped.indexed)
+                        Marker(
+                          point: m.point,
+                          // Transparent 44px halo around the 24/28px dot, tap
+                          // handling on the whole box; centered so the dot stays
+                          // anchored on its coordinate (see _pinHitBox).
+                          width: _pinHitBox,
+                          height: _pinHitBox,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: widget.onPinTap == null
+                                ? null
+                                : () => widget.onPinTap!(m.item.position),
+                            child: Center(
+                              child: SizedBox.square(
+                                dimension:
+                                    widget.selectedPosition == m.item.position
+                                    ? 28
+                                    : 24,
+                                child: _Pin(
+                                  label: '${k + 1}',
+                                  category: m.item.category,
+                                  selected:
+                                      widget.selectedPosition ==
+                                      m.item.position,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                    builder: (context, clusterMarkers) =>
+                        _ClusterBubble(count: clusterMarkers.length),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                MapControlButton(
-                  icon: Icons.remove,
-                  tooltip: l10n.mapZoomOut,
-                  onTap: () => _zoomBy(-1),
-                ),
-                const SizedBox(height: 8),
-                MapControlButton(
-                  icon: Icons.center_focus_strong,
-                  tooltip: l10n.mapResetMap,
-                  onTap: () => _fitToTrip(fitPoints),
-                ),
+                appMapAttribution(),
               ],
             ),
-          ),
-      ],
+            if (widget.interactive)
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    MapControlButton(
+                      icon: Icons.add,
+                      tooltip: l10n.mapZoomIn,
+                      onTap: () => _zoomBy(1),
+                    ),
+                    const SizedBox(height: 8),
+                    MapControlButton(
+                      icon: Icons.remove,
+                      tooltip: l10n.mapZoomOut,
+                      onTap: () => _zoomBy(-1),
+                    ),
+                    const SizedBox(height: 8),
+                    MapControlButton(
+                      icon: Icons.center_focus_strong,
+                      tooltip: l10n.mapResetMap,
+                      onTap: () => _fitToTrip(fitPoints),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
