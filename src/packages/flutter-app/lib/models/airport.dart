@@ -12,12 +12,19 @@ class Airport {
   @JsonKey(name: 'sub_type')
   final String subType;
 
+  /// Null when Duffel returned no coordinates for this place (some city-type
+  /// entries) or for placeholder instances built from a bare IATA code.
+  final double? latitude;
+  final double? longitude;
+
   const Airport({
     required this.iataCode,
     required this.name,
     this.city = '',
     this.country = '',
     this.subType = '',
+    this.latitude,
+    this.longitude,
   });
 
   /// "Paris (CDG)" style label for autocomplete rows and field display. Falls

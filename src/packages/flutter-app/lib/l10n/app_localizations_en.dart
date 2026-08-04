@@ -1991,6 +1991,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mapResetMap => 'Reset map';
 
   @override
+  String mapHomeAirport(String code) {
+    return 'Home airport ($code)';
+  }
+
+  @override
   String get accountMenuTooltip => 'Account';
 
   @override

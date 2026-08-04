@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'package:travel_route_planner/models/accommodation.dart';
 import 'package:travel_route_planner/models/itinerary_item.dart';
+import 'package:travel_route_planner/providers/flights_provider.dart';
 import 'package:travel_route_planner/screens/trip_map_screen.dart';
 import 'package:travel_route_planner/widgets/map_day_chips.dart';
 
@@ -29,23 +32,33 @@ Widget _app({
   EdgeInsets viewPadding = EdgeInsets.zero,
   void Function(int? day)? onAddPlace,
   String title = 'Paris getaway',
+  String? homeAirport,
+  LatLng? firstCityPoint,
+  LatLng? lastCityPoint,
+  List<Override> overrides = const [],
 }) {
-  return MaterialApp(
-    localizationsDelegates: testLocalizationsDelegates,
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(
-        context,
-      ).copyWith(padding: viewPadding, viewPadding: viewPadding),
-      child: child!,
-    ),
-    home: TripMapScreen(
-      title: title,
-      itemsForDay: (_) => _items,
-      staysForDay: (_) => const <Accommodation>[],
-      segmentLabels: const {},
-      dayCount: 3,
-      onDaySelected: (_) {},
-      onAddPlace: onAddPlace,
+  return ProviderScope(
+    overrides: overrides,
+    child: MaterialApp(
+      localizationsDelegates: testLocalizationsDelegates,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(padding: viewPadding, viewPadding: viewPadding),
+        child: child!,
+      ),
+      home: TripMapScreen(
+        title: title,
+        itemsForDay: (_) => _items,
+        staysForDay: (_) => const <Accommodation>[],
+        segmentLabels: const {},
+        dayCount: 3,
+        onDaySelected: (_) {},
+        onAddPlace: onAddPlace,
+        homeAirport: homeAirport,
+        firstCityPoint: firstCityPoint,
+        lastCityPoint: lastCityPoint,
+      ),
     ),
   );
 }
@@ -113,6 +126,87 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.add_location_alt_outlined), findsNothing);
+  });
+
+  group('home-airport legs', () {
+    // Newark, far enough from the Paris fixtures that the fit visibly widens.
+    const homePoint = (lat: 40.6895, lng: -74.1745);
+    final firstCity = LatLng(_items.first.latitude, _items.first.longitude);
+    final lastCity = LatLng(_items.last.latitude, _items.last.longitude);
+
+    Widget appWithHome() => _app(
+          homeAirport: 'EWR',
+          firstCityPoint: firstCity,
+          lastCityPoint: lastCity,
+          overrides: [
+            homeAirportPointProvider('EWR')
+                .overrideWith((ref) async => homePoint),
+          ],
+        );
+
+    Future<void> tapDay(WidgetTester tester, String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MapDayChips),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+      'home pin shows on All and the endpoint days, hides mid-trip',
+      (tester) async {
+        await tester.pumpWidget(appWithHome());
+        await tester.pumpAndSettle();
+
+        // "All": both legs → home pin present.
+        expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+
+        // Mid-trip day: neither leg belongs to it → no orphan pin.
+        await tapDay(tester, 'Day 2');
+        expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+
+        // Day 1 carries the outbound leg, the last day the return leg.
+        await tapDay(tester, 'Day 1');
+        expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+        await tapDay(tester, 'Day 3');
+        expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('unresolved home airport renders the map as before', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _app(
+          homeAirport: 'EWR',
+          firstCityPoint: firstCity,
+          lastCityPoint: lastCity,
+          overrides: [
+            // Lookup failed / no coordinates → provider contract yields null.
+            homeAirportPointProvider('EWR').overrideWith((ref) async => null),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('no saved home airport never touches the provider', (
+      tester,
+    ) async {
+      // No override registered: a provider read would throw in this scope if
+      // the network path were exercised.
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   testWidgets('long titles ellipsize instead of overflowing at 360px', (

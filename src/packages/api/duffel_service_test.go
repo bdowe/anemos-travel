@@ -229,3 +229,53 @@ func TestSearchFlightOffersDefaultsToEconomy(t *testing.T) {
 		t.Fatalf("passengers = %d, want 1", got)
 	}
 }
+
+func TestPlaceSuggestionsCarriesCoordinates(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":[
+			{"type":"airport","name":"Boston Logan International Airport","iata_code":"BOS","city_name":"Boston","iata_country_code":"US","latitude":42.365613,"longitude":-71.009537},
+			{"type":"city","name":"Boston","iata_code":"BOS","iata_country_code":"US"}
+		]}`))
+	}))
+	t.Cleanup(srv.Close)
+	d := &DuffelService{
+		Token:   "test-token",
+		BaseURL: srv.URL,
+		Version: "v2",
+		Client:  &http.Client{Timeout: 5 * time.Second},
+		// placeSuggestions dereferences the cache unconditionally; the
+		// direct-literal stub skips NewDuffelService.
+		placesCache: newTTLCache[[]Airport](time.Minute, 10),
+	}
+
+	got, err := d.SearchAirports(context.Background(), "BOS")
+	if err != nil {
+		t.Fatalf("SearchAirports: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("results = %d, want 2", len(got))
+	}
+
+	airport := got[0]
+	if airport.Latitude == nil || airport.Longitude == nil {
+		t.Fatal("airport entry must carry Duffel's coordinates")
+	}
+	if *airport.Latitude != 42.365613 || *airport.Longitude != -71.009537 {
+		t.Fatalf("airport coords = %v,%v, want 42.365613,-71.009537", *airport.Latitude, *airport.Longitude)
+	}
+
+	city := got[1]
+	if city.Latitude != nil || city.Longitude != nil {
+		t.Fatal("entry without coords must keep nil pointers, not 0,0")
+	}
+	// Coordless entries must marshal byte-identically to the pre-coordinate
+	// shape (omitempty on the pointers).
+	out, err := json.Marshal(city)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(out), "latitude") || strings.Contains(string(out), "longitude") {
+		t.Fatalf("coordless Airport JSON must omit coordinate keys, got %s", out)
+	}
+}

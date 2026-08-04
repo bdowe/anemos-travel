@@ -36,6 +36,10 @@ type Airport struct {
 	City     string `json:"city,omitempty"`
 	Country  string `json:"country,omitempty"`
 	SubType  string `json:"sub_type,omitempty"` // airport | city
+	// Pointers + omitempty: entries Duffel returns without coordinates (some
+	// city-type places) keep their JSON shape byte-identical to before.
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
 }
 
 // FlightLeg is a single flown segment within an offer.
@@ -255,11 +259,13 @@ func (d *DuffelService) placeSuggestions(ctx context.Context, params url.Values)
 
 	var result struct {
 		Data []struct {
-			Type            string `json:"type"`
-			Name            string `json:"name"`
-			IataCode        string `json:"iata_code"`
-			CityName        string `json:"city_name"`
-			IataCountryCode string `json:"iata_country_code"`
+			Type            string   `json:"type"`
+			Name            string   `json:"name"`
+			IataCode        string   `json:"iata_code"`
+			CityName        string   `json:"city_name"`
+			IataCountryCode string   `json:"iata_country_code"`
+			Latitude        *float64 `json:"latitude"`
+			Longitude       *float64 `json:"longitude"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -272,11 +278,13 @@ func (d *DuffelService) placeSuggestions(ctx context.Context, params url.Values)
 			continue
 		}
 		airports = append(airports, Airport{
-			IataCode: p.IataCode,
-			Name:     p.Name,
-			City:     p.CityName,
-			Country:  p.IataCountryCode,
-			SubType:  p.Type,
+			IataCode:  p.IataCode,
+			Name:      p.Name,
+			City:      p.CityName,
+			Country:   p.IataCountryCode,
+			SubType:   p.Type,
+			Latitude:  p.Latitude,
+			Longitude: p.Longitude,
 		})
 	}
 	d.placesCache.set(cacheKey, airports)

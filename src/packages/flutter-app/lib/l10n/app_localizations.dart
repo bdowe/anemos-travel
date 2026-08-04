@@ -3590,6 +3590,12 @@ abstract class AppLocalizations {
   /// **'Reset map'**
   String get mapResetMap;
 
+  /// No description provided for @mapHomeAirport.
+  ///
+  /// In en, this message translates to:
+  /// **'Home airport ({code})'**
+  String mapHomeAirport(String code);
+
   /// No description provided for @accountMenuTooltip.
   ///
   /// In en, this message translates to:

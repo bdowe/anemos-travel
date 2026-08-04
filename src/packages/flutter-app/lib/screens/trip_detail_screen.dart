@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:sliver_tools/sliver_tools.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/gradient_app_bar.dart';
@@ -4359,11 +4360,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// covers the bottom navigation bar; the closures read the live [_trip] so
   /// a silent refresh propagates on the next chip tap.
   void _openFullMap(Trip trip, int mapDayCount, Set<int> mappedDays) {
+    // Home-leg endpoints are the trip's first/last location groups — the same
+    // derivation the outbound/return booking todos trust — never the first/
+    // last mapped pin, which shifts under day/category filters.
+    final ranges = _locationGroupRanges(trip);
+    final firstCoord = ranges.isEmpty ? null : ranges.first.coord;
+    final lastCoord = ranges.isEmpty ? null : ranges.last.coord;
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => TripMapScreen(
           title: _displayTitle(trip),
+          homeAirport: _homeAirport,
+          firstCityPoint:
+              firstCoord == null ? null : LatLng(firstCoord.lat, firstCoord.lng),
+          lastCityPoint:
+              lastCoord == null ? null : LatLng(lastCoord.lat, lastCoord.lng),
           itemsForDay: (d) {
             final t = _trip;
             return t == null ? const <ItineraryItem>[] : _dayFiltered(t, d);

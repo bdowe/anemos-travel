@@ -17,6 +17,35 @@ final airportSearchProvider =
   return service.searchAirports(query.trim());
 });
 
+/// Resolves a saved home-airport IATA code to map coordinates (a record, not
+/// LatLng, so the providers layer stays free of map imports). Errors resolve
+/// to null rather than surfacing: the one contract callers rely on is
+/// "no coordinates → no home legs on the map", and a session-cached errored
+/// family provider would otherwise pin the failure until restart.
+final homeAirportPointProvider =
+    FutureProvider.family<({double lat, double lng})?, String>(
+        (ref, iata) async {
+  final code = iata.trim().toUpperCase();
+  if (code.isEmpty) return null;
+  final List<Airport> results;
+  try {
+    results = await ref.watch(flightsApiServiceProvider).searchAirports(code);
+  } catch (_) {
+    return null;
+  }
+  Airport? match;
+  for (final a in results) {
+    if (a.iataCode.toUpperCase() != code) continue;
+    if (a.latitude == null || a.longitude == null) continue;
+    if (a.subType == 'airport') {
+      match = a;
+      break;
+    }
+    match ??= a; // city-type fallback when it happens to carry coords
+  }
+  return match == null ? null : (lat: match.latitude!, lng: match.longitude!);
+});
+
 class FlightsState {
   final List<FlightOffer> offers;
   final String? bestOfferId;

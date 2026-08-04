@@ -582,6 +582,7 @@
   "mapZoomIn": "Acercar",
   "mapZoomOut": "Alejar",
   "mapResetMap": "Restablecer mapa",
+  "mapHomeAirport": "Aeropuerto de origen ({code})",
   "accountMenuTooltip": "Cuenta",
   "accountMenuTravelProfile": "Perfil de viaje",
   "accountMenuPriceAlerts": "Alertas de precio",
