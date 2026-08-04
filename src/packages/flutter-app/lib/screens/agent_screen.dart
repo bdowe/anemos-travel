@@ -89,6 +89,9 @@ class _AgentScreenState extends ConsumerState<AgentScreen> {
         child: ChatPanel(
           state: planProvider,
           notifier: planProvider.notifier,
+          // The width-capped column exposes the full-bleed bar's square
+          // corners mid-screen; float the composer as a rounded card here.
+          floatingComposer: true,
           emptyState: _EmptyState(),
           onViewTrip: _openTrip,
           footerBuilder: (context, state) => state.completedLocations == null
