@@ -266,6 +266,7 @@ var messages = map[string]map[string]string{
 
 	"review.confirmBooking":       {"en": "Confirm your booking for %s.", "es": "Confirma tu reserva de %s."},
 	"review.emptyDay":             {"en": "Day %d has nothing planned.", "es": "El día %d no tiene nada planificado."},
+	"review.emptyDayRange":        {"en": "Days %d–%d have nothing planned.", "es": "Los días %d–%d no tienen nada planificado."},
 	"review.fix.addBus":           {"en": "Add bus", "es": "Añadir autobús"},
 	"review.fix.addDrive":         {"en": "Add drive", "es": "Añadir trayecto en coche"},
 	"review.fix.addFerry":         {"en": "Add ferry", "es": "Añadir ferri"},
@@ -284,6 +285,7 @@ var messages = map[string]map[string]string{
 	"review.mayBeClosed":          {"en": "%s may be closed on %s (Day %d).", "es": "%s puede estar cerrado el %s (día %d)."},
 	"review.noDates":              {"en": "Add trip dates to unlock day-by-day checks.", "es": "Añade las fechas del viaje para desbloquear las comprobaciones día a día."},
 	"review.noLodging":            {"en": "No lodging booked for the night of %s.", "es": "No hay alojamiento reservado para la noche del %s."},
+	"review.noLodgingRange":       {"en": "No lodging booked for the nights of %s – %s (%d nights).", "es": "No hay alojamiento reservado para las noches del %s al %s (%d noches)."},
 	"review.noTransport":          {"en": "No transport booked from %s to %s.", "es": "No hay transporte reservado de %s a %s."},
 	"review.overBudget":           {"en": "Over budget by %.2f %s.", "es": "Te has pasado del presupuesto por %.2f %s."},
 	"review.packedDay":            {"en": "Day %d has %d items planned — that may be too packed.", "es": "El día %d tiene %d actividades planificadas — puede que sea demasiado."},

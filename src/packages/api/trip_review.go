@@ -220,13 +220,24 @@ func checkDensity(locale string, d exportData) []Finding {
 	}
 	var out []Finding
 	for day := minDay; day <= maxDay; day++ {
-		if len(buckets[day]) == 0 {
-			dd := day
-			out = append(out, Finding{
-				Severity: "info", Category: "packing", TripID: tripID, Day: &dd,
-				Message: tr(locale, "review.emptyDay", day),
-			})
+		if len(buckets[day]) != 0 {
+			continue
 		}
+		// Collapse a run of consecutive empty days into one finding anchored
+		// on the run's first day (that's where tap-to-scroll lands).
+		first := day
+		for day < maxDay && len(buckets[day+1]) == 0 {
+			day++
+		}
+		msg := tr(locale, "review.emptyDay", first)
+		if day > first {
+			msg = tr(locale, "review.emptyDayRange", first, day)
+		}
+		dd := first
+		out = append(out, Finding{
+			Severity: "info", Category: "packing", TripID: tripID, Day: &dd,
+			Message: msg,
+		})
 	}
 	for day := minDay; day <= maxDay; day++ {
 		items := buckets[day]
@@ -328,9 +339,12 @@ func lastItemInSlot(items []store.ItineraryItem, tod string) (string, bool) {
 }
 
 // checkLodging walks each night of a dated trip (start .. end-1, checkout-
-// exclusive) and flags any night no accommodation covers. Gated so an empty
-// draft isn't nagged: only runs when the trip is `planned` OR already has at
-// least one accommodation.
+// exclusive) and flags each run of consecutive uncovered nights as ONE
+// finding whose fix prefills the whole range. Runs split when the hub city
+// changes so every "add a stay" spans a single place; a night with no known
+// city never forces a split (the run adopts the first known city it sees).
+// Gated so an empty draft isn't nagged: only runs when the trip is `planned`
+// OR already has at least one accommodation.
 func checkLodging(locale string, d exportData) []Finding {
 	if !d.Trip.StartDate.Valid || !d.Trip.EndDate.Valid {
 		return nil
@@ -341,7 +355,12 @@ func checkLodging(locale string, d exportData) []Finding {
 	tripID := d.Trip.ID.String()
 	start := d.Trip.StartDate.Time
 	nights := nightsBetween(start, d.Trip.EndDate.Time)
-	var out []Finding
+	type nightRun struct {
+		firstN, lastN int // 0-based night indexes
+		city          *string
+	}
+	var runs []nightRun
+	var cur *nightRun
 	for n := 0; n < nights; n++ {
 		night := start.AddDate(0, 0, n)
 		covered := false
@@ -351,21 +370,49 @@ func checkLodging(locale string, d exportData) []Finding {
 				break
 			}
 		}
-		if !covered {
-			day := n + 1
-			checkIn := night.Format(dateLayout)
-			checkOut := night.AddDate(0, 0, 1).Format(dateLayout)
-			out = append(out, Finding{
-				Severity: "warn", Category: "lodging", TripID: tripID, Day: &day,
-				Message: tr(locale, "review.noLodging", localizedDate(locale, night, dateStyleWeekdayMonthDay)),
-				Fix: &FindingFix{
-					Action: "add_lodging", Label: tr(locale, "review.fix.addStay"),
-					City:     cityForDay(d.Items, day),
-					CheckIn:  &checkIn,
-					CheckOut: &checkOut,
-				},
-			})
+		if covered {
+			cur = nil
+			continue
 		}
+		city := cityForDay(d.Items, n+1)
+		switch {
+		case cur == nil:
+			runs = append(runs, nightRun{n, n, city})
+			cur = &runs[len(runs)-1]
+		case city == nil || cur.city == nil || strings.EqualFold(*city, *cur.city):
+			cur.lastN = n
+			if cur.city == nil {
+				cur.city = city
+			}
+		default: // a different known city starts a new per-place run
+			runs = append(runs, nightRun{n, n, city})
+			cur = &runs[len(runs)-1]
+		}
+	}
+	var out []Finding
+	for _, r := range runs {
+		day := r.firstN + 1
+		firstNight := start.AddDate(0, 0, r.firstN)
+		lastNight := start.AddDate(0, 0, r.lastN)
+		checkIn := firstNight.Format(dateLayout)
+		checkOut := lastNight.AddDate(0, 0, 1).Format(dateLayout)
+		msg := tr(locale, "review.noLodging", localizedDate(locale, firstNight, dateStyleWeekdayMonthDay))
+		if r.lastN > r.firstN {
+			msg = tr(locale, "review.noLodgingRange",
+				localizedDate(locale, firstNight, dateStyleWeekdayMonthDay),
+				localizedDate(locale, lastNight, dateStyleWeekdayMonthDay),
+				r.lastN-r.firstN+1)
+		}
+		out = append(out, Finding{
+			Severity: "warn", Category: "lodging", TripID: tripID, Day: &day,
+			Message: msg,
+			Fix: &FindingFix{
+				Action: "add_lodging", Label: tr(locale, "review.fix.addStay"),
+				City:     r.city,
+				CheckIn:  &checkIn,
+				CheckOut: &checkOut,
+			},
+		})
 	}
 	return out
 }

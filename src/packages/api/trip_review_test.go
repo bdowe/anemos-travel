@@ -79,8 +79,31 @@ func TestCheckDensity_EmptyAndPacked(t *testing.T) {
 	if len(cats["info"]) != 1 { // day 2 empty
 		t.Fatalf("expected one empty-day info, got %+v", fs)
 	}
+	if got := cats["info"][0].Message; got != "Day 2 has nothing planned." {
+		t.Fatalf("single empty day should keep the singular message, got %q", got)
+	}
 	if len(cats["warn"]) != 1 { // two mornings day 1
 		t.Fatalf("expected one over-packed warn, got %+v", fs)
+	}
+}
+
+func TestCheckDensity_EmptyDayRuns(t *testing.T) {
+	items := []store.ItineraryItem{
+		{ID: uuid.New(), Name: "A", Day: i32p(1)},
+		// days 2-4 empty
+		{ID: uuid.New(), Name: "B", Day: i32p(5)},
+		// day 6 empty
+		{ID: uuid.New(), Name: "C", Day: i32p(7)},
+	}
+	fs := checkDensity("en", exportData{Trip: store.Trip{ID: uuid.New()}, Items: items})
+	if len(fs) != 2 {
+		t.Fatalf("expected two empty-day findings (one per run), got %+v", fs)
+	}
+	if fs[0].Day == nil || *fs[0].Day != 2 || fs[0].Message != "Days 2–4 have nothing planned." {
+		t.Fatalf("multi-day run = %+v", fs[0])
+	}
+	if fs[1].Day == nil || *fs[1].Day != 6 || fs[1].Message != "Day 6 has nothing planned." {
+		t.Fatalf("single-day run = %+v", fs[1])
 	}
 }
 
@@ -88,10 +111,19 @@ func TestCheckLodging_GateAndCoverage(t *testing.T) {
 	trip := store.Trip{ID: uuid.New(), Status: "planned",
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-04")} // 3 nights: 1,2,3
 
-	// No accommodations, planned → all 3 nights flagged.
+	// No accommodations, planned → one finding covering the whole 3-night run.
 	fs := checkLodging("en", exportData{Trip: trip})
-	if len(fs) != 3 {
-		t.Fatalf("planned no-lodging = %d findings, want 3: %+v", len(fs), fs)
+	if len(fs) != 1 {
+		t.Fatalf("planned no-lodging = %d findings, want 1 grouped run: %+v", len(fs), fs)
+	}
+	if fs[0].Day == nil || *fs[0].Day != 1 {
+		t.Fatalf("grouped run should anchor on Day 1, got %+v", fs[0])
+	}
+	if !strings.Contains(fs[0].Message, "Sat, Aug 1 – Mon, Aug 3 (3 nights)") {
+		t.Fatalf("grouped message = %q", fs[0].Message)
+	}
+	if fix := fs[0].Fix; fix == nil || *fix.CheckIn != "2026-08-01" || *fix.CheckOut != "2026-08-04" {
+		t.Fatalf("grouped fix should span the run, got %+v", fs[0].Fix)
 	}
 
 	// One stay covering nights 1-2 (checkout 08-03, exclusive) → only night 3 flagged.
@@ -101,12 +133,75 @@ func TestCheckLodging_GateAndCoverage(t *testing.T) {
 	if len(fs) != 1 || fs[0].Day == nil || *fs[0].Day != 3 {
 		t.Fatalf("partial lodging = %+v", fs)
 	}
+	if !strings.Contains(fs[0].Message, "the night of") {
+		t.Fatalf("single-night run should keep the singular message, got %q", fs[0].Message)
+	}
 
 	// Empty draft (draft status, no accommodations) is not nagged.
 	draft := trip
 	draft.Status = "draft"
 	if fs := checkLodging("en", exportData{Trip: draft}); len(fs) != 0 {
 		t.Fatalf("empty draft should be silent, got %+v", fs)
+	}
+}
+
+func TestCheckLodging_GroupsRuns(t *testing.T) {
+	// gap–covered–gap: 5 nights, a stay covers only night 3 → two range runs.
+	trip := store.Trip{ID: uuid.New(), Status: "planned",
+		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-06")} // nights 1-5
+	acc := []store.Accommodation{{ID: uuid.New(), Name: "Hotel",
+		CheckIn: dateVal(t, "2026-08-03"), CheckOut: dateVal(t, "2026-08-04")}} // covers night 3
+	fs := checkLodging("en", exportData{Trip: trip, Accommodations: acc})
+	if len(fs) != 2 {
+		t.Fatalf("gap-covered-gap = %d findings, want 2: %+v", len(fs), fs)
+	}
+	if *fs[0].Day != 1 || *fs[0].Fix.CheckIn != "2026-08-01" || *fs[0].Fix.CheckOut != "2026-08-03" {
+		t.Fatalf("first run = day %d fix %+v", *fs[0].Day, fs[0].Fix)
+	}
+	if *fs[1].Day != 4 || *fs[1].Fix.CheckIn != "2026-08-04" || *fs[1].Fix.CheckOut != "2026-08-06" {
+		t.Fatalf("second run = day %d fix %+v", *fs[1].Day, fs[1].Fix)
+	}
+
+	// A city change splits the run so each fix prefills a single place.
+	twoCity := store.Trip{ID: uuid.New(), Status: "planned",
+		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-05")} // nights 1-4
+	items := []store.ItineraryItem{
+		{ID: uuid.New(), Name: "Colosseum", City: strp("Rome"), Day: i32p(1)},
+		{ID: uuid.New(), Name: "Forum", City: strp("Rome"), Day: i32p(2)},
+		{ID: uuid.New(), Name: "Duomo", City: strp("Florence"), Day: i32p(3)},
+		{ID: uuid.New(), Name: "Uffizi", City: strp("Florence"), Day: i32p(4)},
+	}
+	fs = checkLodging("en", exportData{Trip: twoCity, Items: items})
+	if len(fs) != 2 {
+		t.Fatalf("city split = %d findings, want 2: %+v", len(fs), fs)
+	}
+	if *fs[0].Fix.City != "Rome" || *fs[0].Fix.CheckIn != "2026-08-01" || *fs[0].Fix.CheckOut != "2026-08-03" {
+		t.Fatalf("Rome run fix = %+v", fs[0].Fix)
+	}
+	if *fs[1].Fix.City != "Florence" || *fs[1].Fix.CheckIn != "2026-08-03" || *fs[1].Fix.CheckOut != "2026-08-05" {
+		t.Fatalf("Florence run fix = %+v", fs[1].Fix)
+	}
+
+	// Unknown-city nights never split a run; the run adopts the first known city.
+	adopt := store.Trip{ID: uuid.New(), Status: "planned",
+		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-04")} // nights 1-3
+	fs = checkLodging("en", exportData{Trip: adopt, Items: []store.ItineraryItem{
+		{ID: uuid.New(), Name: "Vatican", City: strp("Rome"), Day: i32p(2)}, // days 1 and 3 have no items
+	}})
+	if len(fs) != 1 || fs[0].Fix.City == nil || *fs[0].Fix.City != "Rome" {
+		t.Fatalf("nil-city adoption = %+v", fs)
+	}
+}
+
+func TestCheckLodging_RangeSpanish(t *testing.T) {
+	trip := store.Trip{ID: uuid.New(), Status: "planned",
+		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-04")} // 3 nights
+	fs := checkLodging("es", exportData{Trip: trip})
+	if len(fs) != 1 {
+		t.Fatalf("es grouped run = %+v", fs)
+	}
+	if !strings.Contains(fs[0].Message, " al ") || !strings.Contains(fs[0].Message, "(3 noches)") {
+		t.Fatalf("es range message = %q", fs[0].Message)
 	}
 }
 
@@ -392,6 +487,22 @@ func TestFix_Lodging(t *testing.T) {
 	}
 	if fix.City == nil || *fix.City != "Nice" {
 		t.Fatalf("expected city Nice from the night's items, got %v", fix.City)
+	}
+}
+
+func TestFix_LodgingRange(t *testing.T) {
+	trip := store.Trip{ID: uuid.New(), Status: "planned",
+		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-05")} // nights 1-4
+	fs := checkLodging("en", exportData{Trip: trip})
+	if len(fs) != 1 || fs[0].Fix == nil {
+		t.Fatalf("expected one grouped lodging finding with a fix, got %+v", fs)
+	}
+	fix := fs[0].Fix
+	// The fix spans the whole run: check_out = check_in + (nights × 24h).
+	ci, _ := time.Parse(dateLayout, *fix.CheckIn)
+	co, _ := time.Parse(dateLayout, *fix.CheckOut)
+	if co.Sub(ci) != 4*24*time.Hour {
+		t.Fatalf("fix span = %v, want 4 nights", co.Sub(ci))
 	}
 }
 
