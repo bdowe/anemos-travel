@@ -140,6 +140,12 @@ var planToolRegistry = []planTool{
 	// trip, this request's persisted trip, or the chat lineage's newest
 	// version). Tail-appended per the prompt-cache rule above.
 	{def: setTripDatesTool, enabled: authedOnly, run: runSetTripDatesTool},
+	// Change ONE city leg's dates without moving the rest of the trip
+	// (specs/set-leg-dates) — endpoint-anchored, unlike set_trip_dates'
+	// whole-trip delta. Signed-in only for the same stability reason as
+	// set_trip_dates; target-trip resolution shares resolveDateShiftTrip.
+	// Tail-appended per the prompt-cache rule above.
+	{def: setLegDatesTool, enabled: authedOnly, run: runSetLegDatesTool},
 }
 
 // planToolByName dispatches tool_use blocks; derived from the registry so the

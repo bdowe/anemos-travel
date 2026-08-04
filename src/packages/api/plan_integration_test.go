@@ -255,8 +255,8 @@ func TestPlanSetTravelModePersistsWithItinerary(t *testing.T) {
 	if err := json.Unmarshal(reqs[0], &body); err != nil {
 		t.Fatalf("unmarshal request body: %v", err)
 	}
-	if n := len(body.Tools); n == 0 || body.Tools[n-1].Name != "set_trip_dates" {
-		t.Fatalf("tools tail = %+v, want set_trip_dates last", body.Tools)
+	if n := len(body.Tools); n == 0 || body.Tools[n-1].Name != "set_leg_dates" {
+		t.Fatalf("tools tail = %+v, want set_leg_dates last", body.Tools)
 	}
 
 	waitForEventCount(t, user.ID, "trip_created", 1)
