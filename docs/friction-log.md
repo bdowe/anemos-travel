@@ -5,6 +5,21 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-04 — trip-detail dogfooding (cluster order)
+
+- **[app] Friction recurred → fixed (reorder, not relocation):** the 08-03
+  "keep Packing & prep / Budget inline" resolution flagged reachability as
+  the residual risk, and it recurred the very next day — on a long trip,
+  two empty rows ("No items yet" / "Not tracked yet") sat ABOVE an amber
+  11-to-review Trip health row. Fixed per that entry's own remedy: the
+  trailing cluster now leads with Trip health, so actionable review state
+  is met right after the itinerary and the empty rows trail at the true
+  page bottom (one-line reorder + an order-contract widget test). Menus
+  were re-considered and re-rejected for the same reasons as 08-03:
+  glanceable state, the screen deliberately has no overflow menu, the
+  share menu's gating (owner-only, hidden offline) can't host
+  viewer-visible sections, and there is still zero usage telemetry.
+
 ## 2026-08-04 — trip-detail dogfooding (late night)
 
 - **[app] BREAKAGE → fixed (specs/set-leg-dates):** asked the refine chat to

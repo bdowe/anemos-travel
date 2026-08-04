@@ -14,11 +14,15 @@ import 'package:travel_route_planner/services/accommodations_api_service.dart';
 import 'package:travel_route_planner/services/transport_api_service.dart';
 import 'package:travel_route_planner/services/checklist_api_service.dart';
 import 'package:travel_route_planner/models/checklist_item.dart';
+import 'package:travel_route_planner/services/budget_api_service.dart';
+import 'package:travel_route_planner/models/budget.dart';
+import 'package:travel_route_planner/models/expense.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/providers/trip_review_provider.dart';
 import 'package:travel_route_planner/providers/accommodations_provider.dart';
 import 'package:travel_route_planner/providers/transport_provider.dart';
 import 'package:travel_route_planner/providers/checklist_provider.dart';
+import 'package:travel_route_planner/providers/budget_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/booking_sheets.dart';
 
@@ -111,6 +115,18 @@ class _FakeChecklistApiService extends ChecklistApiService {
   }
 }
 
+/// Loaded-but-empty budget: enough for the collapsed Budget row to render
+/// ("Not tracked yet") without a target or expenses.
+class _FakeBudgetApiService extends BudgetApiService {
+  _FakeBudgetApiService() : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<Budget> getBudget(String tripId) async => const Budget();
+
+  @override
+  Future<List<Expense>> listExpenses(String tripId) async => const [];
+}
+
 ItineraryItem _item(int pos, String name, String address, String category,
         {int? day}) =>
     ItineraryItem(
@@ -150,6 +166,7 @@ Future<void> _pumpScreen(
   _FakeAccommodationsApiService? accommodations,
   _FakeTransportApiService? transport,
   _FakeChecklistApiService? checklist,
+  _FakeBudgetApiService? budget,
 }) async {
   _useTallViewport(tester);
   await tester.pumpWidget(
@@ -164,6 +181,8 @@ Future<void> _pumpScreen(
           transportApiServiceProvider.overrideWithValue(transport),
         if (checklist != null)
           checklistApiServiceProvider.overrideWithValue(checklist),
+        if (budget != null)
+          budgetApiServiceProvider.overrideWithValue(budget),
       ],
       child: MaterialApp(
       localizationsDelegates: testLocalizationsDelegates,home: TripDetailScreen(tripId: 't1')),
@@ -331,5 +350,32 @@ void main() {
     expect(inSheet('Naxos'), findsOneWidget);
     // Prefilled departure date shows on the date button.
     expect(inSheet('2026-08-03'), findsOneWidget);
+  });
+
+  testWidgets('trailing cluster leads with Trip health, empty rows trail',
+      (tester) async {
+    // Layout contract (friction-log 2026-08-04): the cluster is ordered
+    // Trip health → Packing & prep → Budget, so actionable review state is
+    // met before the empty-state rows.
+    final review = _FakeReviewApiService([
+      _finding('packing', 'No umbrella for rainy Athens',
+          const FindingFix(
+              action: 'add_packing',
+              label: 'Add to list',
+              packingItem: 'Umbrella',
+              packingCategory: 'general')),
+    ]);
+    await _pumpScreen(tester,
+        trip: _trip(),
+        review: review,
+        checklist: _FakeChecklistApiService(),
+        budget: _FakeBudgetApiService());
+
+    // The tall test viewport lays out the whole cluster in one frame.
+    final healthY = tester.getTopLeft(find.text('Trip health')).dy;
+    final packingY = tester.getTopLeft(find.text('Packing & prep')).dy;
+    final budgetY = tester.getTopLeft(find.text('Budget')).dy;
+    expect(healthY, lessThan(packingY));
+    expect(packingY, lessThan(budgetY));
   });
 }
