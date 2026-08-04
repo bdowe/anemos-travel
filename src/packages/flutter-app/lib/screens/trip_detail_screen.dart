@@ -89,12 +89,16 @@ String _groupLabelText(AppLocalizations l10n, String label) =>
 
 // Canonical API values. These are sent to the server (or matched against
 // server data), so they are NEVER translated — only their display labels are.
-const _itemFilters = ['all', 'attraction', 'restaurant'];
+// 'local' and 'unbooked' are client-only lenses: locals' picks (items with a
+// local_source_name credit) and left-to-book booking rows.
+const _itemFilters = ['all', 'attraction', 'restaurant', 'local', 'unbooked'];
 
 String _filterLabel(AppLocalizations l10n, String value) => switch (value) {
       'all' => l10n.tripFilterAll,
       'attraction' => l10n.tripFilterAttractions,
       'restaurant' => l10n.tripFilterRestaurants,
+      'local' => l10n.tripFilterLocalPicks,
+      'unbooked' => l10n.tripFilterUnbooked,
       _ => value,
     };
 
@@ -132,7 +136,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // narrow ones); null target while closed.
   bool _panelOpen = false;
   RefineTarget? _refineTarget;
-  String _itemFilter = 'all'; // 'all' | 'attraction' | 'restaurant'
+  String _itemFilter = 'all'; // one of _itemFilters
   int? _selectedDay; // map day-chip selection; null = All (specs/today-mode)
   // Whether the map renders as the wide layout's pinned header (true) or the
   // phone layout's scroll-away tap-to-expand card (false). Assigned each
@@ -199,13 +203,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // any failure — travel times are an enhancement and never block the itinerary.
   Map<int, LocationTiming> _travelByPos = {};
 
-  /// Itinerary items matching the active category filter, used by both the map
-  /// and the list so they stay in sync.
+  /// Itinerary items matching the active places lens, used by both the map
+  /// and the list so they stay in sync. 'unbooked' is a bookings lens, not a
+  /// places one — the list swaps to left-to-book rows while the places set
+  /// (and thus the maps) stays whole.
   List<ItineraryItem> _filtered(Trip trip) {
     final items = trip.items ?? const <ItineraryItem>[];
-    return _itemFilter == 'all'
-        ? items.toList()
-        : items.where((i) => i.category == _itemFilter).toList();
+    return switch (_itemFilter) {
+      'all' || 'unbooked' => items.toList(),
+      'local' => items
+          .where((i) => (i.localSourceName ?? '').trim().isNotEmpty)
+          .toList(),
+      _ => items.where((i) => i.category == _itemFilter).toList(),
+    };
   }
 
   /// [_filtered] further narrowed to a map day chip selection (null = All).
@@ -2439,6 +2449,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// [departureOnly] is false, the return-home flight when true. Each todo
   /// row is followed by its matched confirmed record's details; a match
   /// without a todo (viewers) renders as a standalone detail row.
+  /// [unbookedOnly] keeps only rows whose visible checkbox is unchecked (the
+  /// todo's flag when a todo row drives the entry, the record's otherwise) —
+  /// the "Not booked yet" lens.
   List<Widget> _bookingRowWidgets(
     ({
       BookingTodo? arrival,
@@ -2449,14 +2462,21 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       TripSegment? departureMatch,
     }) slot, {
     required bool departureOnly,
+    bool unbookedOnly = false,
   }) {
     final l10n = context.l10n;
-    final entries = departureOnly
+    var entries = departureOnly
         ? [(todo: slot.departure, stay: null as Accommodation?, segment: slot.departureMatch)]
         : [
             (todo: slot.arrival, stay: null as Accommodation?, segment: slot.arrivalMatch),
             (todo: slot.stay, stay: slot.stayMatch, segment: null as TripSegment?),
           ];
+    if (unbookedOnly) {
+      entries = entries
+          .where((e) =>
+              !(e.todo?.booked ?? e.stay?.booked ?? e.segment?.booked ?? true))
+          .toList();
+    }
     return [
       for (final e in entries) ...[
         if (e.todo case final todo?)
@@ -2482,6 +2502,55 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           _detailRowFor(
               stay: e.stay, segment: e.segment, detailOnly: e.todo == null),
       ],
+    ];
+  }
+
+  /// Flat "left to book" rows for the 'unbooked' lens: every city slot's
+  /// unbooked rows in trip order, then the residual todos and detail-only
+  /// records that matched no city. Reuses the same row widgets (and the
+  /// _setRowBooked writer) as the inline city view, so checking a box here
+  /// behaves identically and the row leaves the lens on the rebuild.
+  List<Widget> _unbookedRows(
+    ({
+      List<
+          ({
+            BookingTodo? arrival,
+            TripSegment? arrivalMatch,
+            BookingTodo? stay,
+            Accommodation? stayMatch,
+            BookingTodo? departure,
+            TripSegment? departureMatch,
+          })> slots,
+      List<BookingTodo> residual,
+      List<Accommodation> residualStays,
+      List<TripSegment> residualSegments,
+    }) grouped,
+  ) {
+    final l10n = context.l10n;
+    return [
+      for (final (i, slot) in grouped.slots.indexed) ...[
+        ..._bookingRowWidgets(slot, departureOnly: false, unbookedOnly: true),
+        if (i == grouped.slots.length - 1)
+          ..._bookingRowWidgets(slot, departureOnly: true, unbookedOnly: true),
+      ],
+      for (final todo in grouped.residual.where((t) => !t.booked))
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: BookingTodoCard(
+            todo: todo,
+            onBookedChanged: (v) => _setRowBooked(v, todo: todo),
+            onOpen: _openCallbackFor(todo),
+            openLabelOverride: _flightLegs.containsKey(todo.todoKey)
+                ? l10n.tripFindFlights
+                : null,
+            onEdit: todo.auto ? null : () => _editTodo(todo),
+            onDelete: todo.auto ? null : () => _deleteTodo(todo),
+          ),
+        ),
+      for (final a in grouped.residualStays.where((a) => !a.booked))
+        _detailRowFor(stay: a, segment: null, detailOnly: true),
+      for (final s in grouped.residualSegments.where((s) => !s.booked))
+        _detailRowFor(stay: null, segment: s, detailOnly: true),
     ];
   }
 
@@ -4705,13 +4774,20 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                             onSelected: (f) => setState(
                                                 () => _itemFilter = f),
                                             itemBuilder: (_) => [
-                                              for (final f in _itemFilters)
+                                              for (final f
+                                                  in _itemFilters) ...[
+                                                // The bookings lens sits
+                                                // apart from the places
+                                                // lenses above it.
+                                                if (f == 'unbooked')
+                                                  const PopupMenuDivider(),
                                                 CheckedPopupMenuItem(
                                                   value: f,
                                                   checked: _itemFilter == f,
                                                   child: Text(
                                                       _filterLabel(l10n, f)),
                                                 ),
+                                              ],
                                             ],
                                           ),
                                         ),
@@ -4748,6 +4824,28 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                   ),
                                 ),
                               ),
+                            )
+                          else if (_itemFilter == 'unbooked')
+                            // Bookings lens: a flat left-to-book list in
+                            // place of the city groups (whose == 'all'
+                            // guards would hide the booking rows).
+                            SliverPadding(
+                              padding:
+                                  EdgeInsets.fromLTRB(gutter, 4, gutter, 0),
+                              sliver: switch (_unbookedRows(grouped)) {
+                                [] => SliverToBoxAdapter(
+                                    child: SizedBox(
+                                      height: 260,
+                                      child: EmptyState(
+                                        icon: Icons.celebration_outlined,
+                                        title: l10n.tripFilterAllBooked,
+                                        message:
+                                            l10n.tripFilterAllBookedMessage,
+                                      ),
+                                    ),
+                                  ),
+                                final rows => _boxSliver(rows),
+                              },
                             )
                           else if (filtered.isEmpty)
                             SliverPadding(
