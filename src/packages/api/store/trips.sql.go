@@ -522,6 +522,24 @@ func (q *Queries) SetItineraryItemPosition(ctx context.Context, arg SetItinerary
 	return err
 }
 
+const setTripDates = `-- name: SetTripDates :exec
+UPDATE trips SET start_date = $2, end_date = $3 WHERE id = $1
+`
+
+type SetTripDatesParams struct {
+	ID        uuid.UUID   `json:"id"`
+	StartDate pgtype.Date `json:"start_date"`
+	EndDate   pgtype.Date `json:"end_date"`
+}
+
+// Authorization happens in the caller (runSetTripDatesTool's resolution
+// ladder), same as SetTripTravelMode — no user_id scope here, so editor
+// collaborators can shift a shared trip.
+func (q *Queries) SetTripDates(ctx context.Context, arg SetTripDatesParams) error {
+	_, err := q.db.Exec(ctx, setTripDates, arg.ID, arg.StartDate, arg.EndDate)
+	return err
+}
+
 const setTripTravelMode = `-- name: SetTripTravelMode :exec
 UPDATE trips SET travel_mode = $2 WHERE id = $1
 `

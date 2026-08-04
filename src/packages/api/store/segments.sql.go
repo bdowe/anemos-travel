@@ -224,6 +224,28 @@ func (q *Queries) SetSegmentPosition(ctx context.Context, arg SetSegmentPosition
 	return err
 }
 
+const shiftSegmentDates = `-- name: ShiftSegmentDates :execrows
+UPDATE trip_segments
+SET depart_date = depart_date + $1::int,
+    arrive_date = arrive_date + $1::int
+WHERE trip_id = $2
+  AND (depart_date IS NOT NULL OR arrive_date IS NOT NULL)
+`
+
+type ShiftSegmentDatesParams struct {
+	Days   int32     `json:"days"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+// Whole-trip date shift (agent set_trip_dates); see ShiftAccommodationDates.
+func (q *Queries) ShiftSegmentDates(ctx context.Context, arg ShiftSegmentDatesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, shiftSegmentDates, arg.Days, arg.TripID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateSegment = `-- name: UpdateSegment :one
 UPDATE trip_segments
 SET mode        = COALESCE($1, mode),

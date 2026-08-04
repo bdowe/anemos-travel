@@ -157,6 +157,12 @@ RETURNING *;
 -- same as CreateSegment — no user_id scope here.
 UPDATE trips SET travel_mode = $2 WHERE id = $1;
 
+-- name: SetTripDates :exec
+-- Authorization happens in the caller (runSetTripDatesTool's resolution
+-- ladder), same as SetTripTravelMode — no user_id scope here, so editor
+-- collaborators can shift a shared trip.
+UPDATE trips SET start_date = $2, end_date = $3 WHERE id = $1;
+
 -- name: DeleteTrip :execrows
 -- Deletes the trip and, when it belongs to a chat group, all its versions.
 -- Legacy trips (chat_id NULL) match only by id, so a single row is removed.

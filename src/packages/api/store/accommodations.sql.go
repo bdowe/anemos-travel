@@ -224,6 +224,30 @@ func (q *Queries) SetAccommodationPosition(ctx context.Context, arg SetAccommoda
 	return err
 }
 
+const shiftAccommodationDates = `-- name: ShiftAccommodationDates :execrows
+UPDATE accommodations
+SET check_in  = check_in  + $1::int,
+    check_out = check_out + $1::int
+WHERE trip_id = $2
+  AND (check_in IS NOT NULL OR check_out IS NOT NULL)
+`
+
+type ShiftAccommodationDatesParams struct {
+	Days   int32     `json:"days"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+// Whole-trip date shift (agent set_trip_dates). date + int is civil-date
+// arithmetic; NULL dates stay NULL. The WHERE keeps execrows an honest
+// count of rows that actually shifted.
+func (q *Queries) ShiftAccommodationDates(ctx context.Context, arg ShiftAccommodationDatesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, shiftAccommodationDates, arg.Days, arg.TripID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateAccommodation = `-- name: UpdateAccommodation :one
 UPDATE accommodations
 SET name       = COALESCE($1, name),

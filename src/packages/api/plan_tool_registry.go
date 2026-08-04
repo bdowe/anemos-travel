@@ -133,6 +133,13 @@ var planToolRegistry = []planTool{
 	// (pure append across session shapes), and tail-appended per the
 	// prompt-cache rule above.
 	{def: findParkingTool, run: runFindParkingTool},
+	// Move/set a saved trip's dates (specs/set-trip-dates). Signed-in only —
+	// anonymous sessions have no saved trip to move; authed never flips
+	// mid-conversation, so each session shape's tools array stays fixed.
+	// Which trip it targets is resolved at call time in the handler (bound
+	// trip, this request's persisted trip, or the chat lineage's newest
+	// version). Tail-appended per the prompt-cache rule above.
+	{def: setTripDatesTool, enabled: authedOnly, run: runSetTripDatesTool},
 }
 
 // planToolByName dispatches tool_use blocks; derived from the registry so the

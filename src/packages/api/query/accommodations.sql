@@ -55,3 +55,13 @@ UPDATE accommodations SET position = $3 WHERE id = $1 AND trip_id = $2;
 
 -- name: DeleteAccommodation :execrows
 DELETE FROM accommodations WHERE id = $1 AND trip_id = $2;
+
+-- name: ShiftAccommodationDates :execrows
+-- Whole-trip date shift (agent set_trip_dates). date + int is civil-date
+-- arithmetic; NULL dates stay NULL. The WHERE keeps execrows an honest
+-- count of rows that actually shifted.
+UPDATE accommodations
+SET check_in  = check_in  + sqlc.arg(days)::int,
+    check_out = check_out + sqlc.arg(days)::int
+WHERE trip_id = sqlc.arg(trip_id)
+  AND (check_in IS NOT NULL OR check_out IS NOT NULL);
