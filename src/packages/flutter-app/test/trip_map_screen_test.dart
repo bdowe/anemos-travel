@@ -65,7 +65,7 @@ void main() {
     // The body honors the bottom inset (SafeArea), so the reset button —
     // the lowest control in the zoom column — can't sit under the 34px
     // home-indicator band.
-    final reset = find.byIcon(Icons.center_focus_strong);
+    final reset = find.byIcon(Icons.zoom_in_map);
     expect(reset, findsOneWidget);
     expect(tester.getBottomLeft(reset).dy, lessThanOrEqualTo(690 - 34));
     expect(tester.takeException(), isNull);

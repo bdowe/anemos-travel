@@ -380,7 +380,7 @@ void main() {
 
     expect(find.byIcon(Icons.add), findsNothing);
     expect(find.byIcon(Icons.remove), findsNothing);
-    expect(find.byIcon(Icons.center_focus_strong), findsNothing);
+    expect(find.byIcon(Icons.zoom_in_map), findsNothing);
   });
 
   testWidgets('default (interactive) keeps the zoom/reset controls', (
@@ -391,7 +391,7 @@ void main() {
 
     expect(find.byIcon(Icons.add), findsOneWidget);
     expect(find.byIcon(Icons.remove), findsOneWidget);
-    expect(find.byIcon(Icons.center_focus_strong), findsOneWidget);
+    expect(find.byIcon(Icons.zoom_in_map), findsOneWidget);
   });
 
   testWidgets('pin dot stays anchored on its coordinate inside the 44px box', (
@@ -561,7 +561,7 @@ void main() {
     ) async {
       await pumpWideTrip(tester);
 
-      await tester.tap(find.byIcon(Icons.center_focus_strong));
+      await tester.tap(find.byIcon(Icons.zoom_in_map));
       await tester.pump();
 
       final camera = _camera(tester);

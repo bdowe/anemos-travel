@@ -24,7 +24,8 @@ import (
 //
 // While active: price alerts are paused (price_alert_checker.go), bag fees
 // are unpriceable so carry_on/checked searches classify "unknown"
-// (flight_baggage.go), check_flight_connectivity short-circuits
+// (flight_baggage.go), check_flight_connectivity rides the swap too but with
+// a tighter candidate clamp and a daily-quota headroom guard
 // (plan_connectivity.go), and a failed search degrades to a Google Flights
 // deep link instead of an error (plan_tool_registry.go).
 
@@ -103,11 +104,23 @@ func (s *SerpapiFlightsService) Configured() bool {
 	return os.Getenv("SERPAPI_API_KEY") != ""
 }
 
+// RemainingToday reports how many upstream searches are left under today's
+// cap (cache hits are free and never count). Feeds the
+// check_flight_connectivity headroom guard.
+func (s *SerpapiFlightsService) RemainingToday() int {
+	remaining := serpapiSearchesPerDay() - s.daily.count(serpapiDailyKey, time.Now())
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
 // flightOffersSearch is the single offers-search seam for the temporary
 // provider swap: SerpApi Google Flights when FLIGHT_OFFERS_PROVIDER=serpapi,
-// Duffel otherwise. Every offers caller that should ride the swap goes
-// through searchFlightsWithBaggage, which calls this; check_flight_connectivity
-// deliberately does not (it short-circuits instead — see plan_connectivity.go).
+// Duffel otherwise. Every offers caller rides it: searchFlightsWithBaggage for
+// bookable searches, and check_flight_connectivity's per-leg fan-out (which
+// adds its own candidate clamp and RemainingToday headroom guard — see
+// plan_connectivity.go).
 func flightOffersSearch(ctx context.Context, d *DuffelService, req FlightSearchRequest) ([]FlightOffer, error) {
 	if serpapiFlights.Active() {
 		return serpapiFlights.SearchFlightOffers(ctx, req)

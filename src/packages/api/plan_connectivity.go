@@ -14,17 +14,32 @@ import (
 // plan_connectivity.go — the check_flight_connectivity agent tool. Before the
 // agent recommends a destination or stopover, it compares real flight
 // connectivity (cheapest price, fastest duration, nonstop availability) for
-// 2-5 candidates in ONE tool call: a bounded concurrent fan-out over Duffel
-// searches, reduced to a compact indicative summary. A dedicated tool instead
-// of N search_flights calls keeps it to one agent iteration, avoids streaming
-// a "flights" card per candidate (the UI has a single flight-offers slot), and
-// lets the indicative per-leg results be cached briefly — unlike bookable
-// offers, which are never cached.
+// 2-5 candidates in ONE tool call: a bounded concurrent fan-out over offer
+// searches (the flightOffersSearch seam — Duffel, or SerpApi while the
+// temporary swap is active), reduced to a compact indicative summary. A
+// dedicated tool instead of N search_flights calls keeps it to one agent
+// iteration, avoids streaming a "flights" card per candidate (the UI has a
+// single flight-offers slot), and lets the indicative per-leg results be
+// cached briefly — unlike bookable offers, which are never cached.
+//
+// While the SerpApi swap is active the fan-out is throttled harder: fewer
+// candidates and a daily-quota headroom guard, because every uncached leg is
+// one search against the 250/month free tier.
 
 const (
 	// maxConnectivityCandidates bounds Duffel spend per call; extra candidates
 	// are dropped with a note so the model knows.
 	maxConnectivityCandidates = 5
+	// maxConnectivityCandidatesSerpapi is the tighter clamp while the
+	// temporary SerpApi swap is active: 3 candidates (× 2 with an onward leg)
+	// = at most 6 uncached searches per call against the small daily cap.
+	maxConnectivityCandidatesSerpapi = 3
+	// connectivitySerpapiReserve is the slice of the SerpApi daily cap that
+	// connectivity must leave untouched: if today's remaining quota can't
+	// cover the uncached legs AND this reserve, the tool reports unavailable
+	// instead of starving search_flights (whose results are bookable and
+	// therefore matter more).
+	connectivitySerpapiReserve = 10
 	// maxConnectivityCallsPerSession bounds spend per /plan request.
 	maxConnectivityCallsPerSession = 3
 	// connectivityConcurrency bounds simultaneous Duffel offer requests.
@@ -38,6 +53,11 @@ const (
 // miss it are reported as unknown rather than failing the comparison. A var so
 // tests can shorten it.
 var connectivityToolTimeout = 30 * time.Second
+
+// connectivityUnavailableMsg is the friendly non-error the model gets when the
+// SerpApi swap is on but connectivity can't run (no key, or no quota headroom)
+// — same settle-don't-retry framing as the session-cap message.
+const connectivityUnavailableMsg = "Connectivity data is unavailable right now. Recommend based on geography and typical routing, then run search_flights on the chosen destination for real options."
 
 // connectivityCache holds per-leg indicative summaries, keyed
 // "ORIG|DEST|YYYY-MM-DD". 45 minutes is fresh enough for "is this route
@@ -109,13 +129,13 @@ func runCheckFlightConnectivityTool(s *planSession, input json.RawMessage) (stri
 	}
 	json.Unmarshal(input, &in)
 
-	// While the temporary offers provider is active, connectivity numbers
-	// would come from Duffel's synthetic test data — worse than none — and
-	// routing the fan-out (up to 10 searches per call) to SerpApi would burn
-	// its quota. Friendly non-error, like the session-cap path below, so the
-	// model settles instead of retrying.
-	if serpapiFlights.Active() {
-		return "Connectivity data is unavailable right now. Recommend based on geography and typical routing, then run search_flights on the chosen destination for real options.", false
+	// While the temporary offers provider is active, per-leg searches ride the
+	// flightOffersSearch seam to SerpApi (Duffel's test token would return
+	// synthetic data — worse than none). Without a key there is nothing to
+	// call; a tighter candidate clamp and a quota headroom check (below, once
+	// the leg set is known) keep the fan-out from draining the daily cap.
+	if serpapiFlights.Active() && !serpapiFlights.Configured() {
+		return connectivityUnavailableMsg, false
 	}
 
 	s.connectivityCalls++
@@ -127,9 +147,13 @@ func runCheckFlightConnectivityTool(s *planSession, input json.RawMessage) (stri
 		return "check_flight_connectivity needs an origin and at least one candidate destination.", true
 	}
 
+	maxCandidates := maxConnectivityCandidates
+	if serpapiFlights.Active() {
+		maxCandidates = maxConnectivityCandidatesSerpapi
+	}
 	truncated := false
-	if len(in.Candidates) > maxConnectivityCandidates {
-		in.Candidates = in.Candidates[:maxConnectivityCandidates]
+	if len(in.Candidates) > maxCandidates {
+		in.Candidates = in.Candidates[:maxCandidates]
 		truncated = true
 	}
 
@@ -166,6 +190,22 @@ func runCheckFlightConnectivityTool(s *planSession, input json.RawMessage) (stri
 		legs = append(legs, l)
 	}
 
+	// Quota headroom guard while the swap is active: cached legs are free, but
+	// every uncached one is an upstream SerpApi search. If today's remaining
+	// quota can't cover them plus the reserve, bail out before spending
+	// anything rather than burning searches search_flights will need.
+	if serpapiFlights.Active() {
+		uncached := 0
+		for _, l := range legs {
+			if _, ok := connectivityCache.get(legCacheKey(l)); !ok {
+				uncached++
+			}
+		}
+		if uncached > 0 && serpapiFlights.RemainingToday() < uncached+connectivitySerpapiReserve {
+			return connectivityUnavailableMsg, false
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(s.ctx, connectivityToolTimeout)
 	defer cancel()
 	results := fetchConnectivity(ctx, legs)
@@ -193,7 +233,7 @@ func runCheckFlightConnectivityTool(s *planSession, input json.RawMessage) (stri
 		anyChecked = true
 	}
 	if truncated {
-		fmt.Fprintf(&b, "(Only the first %d candidates were checked.)\n", maxConnectivityCandidates)
+		fmt.Fprintf(&b, "(Only the first %d candidates were checked.)\n", maxCandidates)
 	}
 	if in.OnwardDestination != "" && onwardIata == "" {
 		fmt.Fprintf(&b, "Could not resolve onward destination %q to an airport, so candidate→onward legs were skipped.\n", in.OnwardDestination)
@@ -215,9 +255,10 @@ func runCheckFlightConnectivityTool(s *planSession, input json.RawMessage) (stri
 	return b.String(), allFailed
 }
 
-// fetchConnectivity runs the deduped legs through Duffel with bounded
-// concurrency, consulting the per-leg cache first. Legs cut off by ctx are
-// marked timedOut. Workers never touch the SSE writer.
+// fetchConnectivity runs the deduped legs through the flightOffersSearch seam
+// (Duffel, or SerpApi while the swap is active) with bounded concurrency,
+// consulting the per-leg cache first. Legs cut off by ctx are marked timedOut.
+// Workers never touch the SSE writer.
 func fetchConnectivity(ctx context.Context, legs []connLeg) map[connLeg]connLegResult {
 	results := make(map[connLeg]connLegResult, len(legs))
 	var mu sync.Mutex
@@ -245,7 +286,7 @@ func fetchConnectivity(ctx context.Context, legs []connLeg) map[connLeg]connLegR
 				mu.Unlock()
 				return
 			}
-			offers, err := duffelService.SearchFlightOffers(ctx, FlightSearchRequest{
+			offers, err := flightOffersSearch(ctx, duffelService, FlightSearchRequest{
 				Origin: leg.origin, Destination: leg.dest, DepartDate: leg.date,
 				Adults: 1, SupplierTimeoutMS: connectivitySupplierTimeoutMS,
 			})
