@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -288,9 +289,9 @@ func TestSerpapiConnectivityRidesTheSwap(t *testing.T) {
 			[6]string{"JFK", "ATH", "Aegean", "A3 995", "2026-09-15 17:30", "2026-09-16 09:10"})}, nil),
 		"JFK-VIE": serpapiBody(nil, nil), // no service on this date
 	}
-	upstream := 0
+	var upstream atomic.Int32 // handlers run on concurrent leg goroutines
 	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
-		upstream++
+		upstream.Add(1)
 		w.Write([]byte(bodies[r.URL.Query().Get("departure_id")+"-"+r.URL.Query().Get("arrival_id")]))
 	})
 
@@ -307,8 +308,8 @@ func TestSerpapiConnectivityRidesTheSwap(t *testing.T) {
 	if strings.Contains(text, "unavailable") {
 		t.Errorf("swap-active connectivity must no longer report unavailable:\n%s", text)
 	}
-	if upstream != 2 {
-		t.Errorf("SerpApi upstream calls = %d, want 2", upstream)
+	if n := upstream.Load(); n != 2 {
+		t.Errorf("SerpApi upstream calls = %d, want 2", n)
 	}
 	if n := cs.requestCount(); n != 0 {
 		t.Errorf("connectivity made %d Duffel offer calls while swap active, want 0", n)
@@ -341,9 +342,9 @@ func TestSerpapiConnectivityUnavailableWithoutKey(t *testing.T) {
 func TestSerpapiConnectivityQuotaHeadroom(t *testing.T) {
 	cs := &connStub{}
 	swapConnStub(t, cs)
-	upstream := 0
+	var upstream atomic.Int32 // handlers run on concurrent leg goroutines
 	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
-		upstream++
+		upstream.Add(1)
 		w.Write([]byte(serpapiBody(nil, nil)))
 	})
 	// 2 uncached legs need remaining >= 2 + connectivitySerpapiReserve = 12.
@@ -356,8 +357,8 @@ func TestSerpapiConnectivityQuotaHeadroom(t *testing.T) {
 	if !strings.Contains(text, "unavailable") {
 		t.Errorf("expected the unavailable message, got: %s", text)
 	}
-	if upstream != 0 {
-		t.Errorf("headroom bail still made %d SerpApi calls, want 0", upstream)
+	if n := upstream.Load(); n != 0 {
+		t.Errorf("headroom bail still made %d SerpApi calls, want 0", n)
 	}
 
 	// One search over the boundary and the comparison runs.
@@ -366,8 +367,8 @@ func TestSerpapiConnectivityQuotaHeadroom(t *testing.T) {
 	if isErr || strings.Contains(text, "unavailable") {
 		t.Fatalf("with exact headroom the comparison must run: err=%v %s", isErr, text)
 	}
-	if upstream != 2 {
-		t.Errorf("SerpApi upstream calls = %d, want 2", upstream)
+	if n := upstream.Load(); n != 2 {
+		t.Errorf("SerpApi upstream calls = %d, want 2", n)
 	}
 }
 
@@ -376,16 +377,16 @@ func TestSerpapiConnectivityQuotaHeadroom(t *testing.T) {
 func TestSerpapiConnectivityCandidateClamp(t *testing.T) {
 	cs := &connStub{}
 	swapConnStub(t, cs)
-	upstream := 0
+	var upstream atomic.Int32 // handlers run on concurrent leg goroutines
 	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
-		upstream++
+		upstream.Add(1)
 		w.Write([]byte(serpapiBody(nil, nil)))
 	})
 
 	text, _ := runCheckFlightConnectivityTool(connSession(),
 		connInput(t, "JFK", []string{"AAA", "BBB", "CCC", "DDD", "EEE"}, "2026-09-15", ""))
-	if upstream != maxConnectivityCandidatesSerpapi {
-		t.Errorf("SerpApi upstream calls = %d, want %d (clamped)", upstream, maxConnectivityCandidatesSerpapi)
+	if n := upstream.Load(); n != int32(maxConnectivityCandidatesSerpapi) {
+		t.Errorf("SerpApi upstream calls = %d, want %d (clamped)", n, maxConnectivityCandidatesSerpapi)
 	}
 	if !strings.Contains(text, "Only the first 3 candidates were checked") {
 		t.Errorf("tightened truncation note missing:\n%s", text)
