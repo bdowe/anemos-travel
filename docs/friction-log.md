@@ -5,6 +5,20 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-03 — trip-detail dogfooding
+
+- **[app] Resolved question (no change):** should "Packing & prep" and
+  "Budget" live under different menus instead of below the itinerary? **No —
+  keep them inline.** The trailing cluster (Packing & prep / Budget / Trip
+  health) is three collapsed one-line `CollapsibleSection` rows (~150px
+  total) whose value is glanceable state — "No items yet", "Not tracked
+  yet", the amber Trip-health review pill — which a menu would hide; the
+  screen also has no overflow menu today (the share menu is owner-only and
+  hidden offline). Residual friction to watch: on a long trip the cluster
+  sits below the entire itinerary and is only met by scrolling past
+  everything. If that recurs, the fix is **reachability, not relocation** —
+  jump-to chips near the header or surfacing the health pill higher.
+
 ## 2026-08-01 — parallel-lanes build session (late night)
 
 - **[dev] BREAKAGE (self-inflicted, fixed same night):** first draft of
