@@ -672,6 +672,7 @@
   "chatInputHint": "Describe tu viaje...",
   "chatFollowUpHint": "Haz una pregunta de seguimiento…",
   "chatSend": "Enviar",
+  "chatStopGenerating": "Detener la generación",
   "chatAttachImages": "Adjuntar imágenes",
   "chatStopDictating": "Dejar de dictar",
   "chatDictate": "Dictar",

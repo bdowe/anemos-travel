@@ -21,6 +21,7 @@ class _RecordingPlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     histories.add(List.of(messages));
     chatIds.add(chatId);

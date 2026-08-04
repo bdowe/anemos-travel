@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -95,8 +96,11 @@ func summarizePlanConversation(ctx context.Context, client anthropic.Client, pre
 		},
 	})
 	// Health record at the SDK call only — later shape/parse problems are our
-	// bugs, not provider health (ai_health.go).
-	recordAIResult(err)
+	// bugs, not provider health (ai_health.go). Skip when the caller canceled
+	// (stop button mid-compaction): a deliberate teardown is not an AI result.
+	if !errors.Is(ctx.Err(), context.Canceled) {
+		recordAIResult(err)
+	}
 	if err != nil {
 		return "", err
 	}

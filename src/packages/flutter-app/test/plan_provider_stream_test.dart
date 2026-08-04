@@ -18,6 +18,7 @@ class _FakePlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     for (var i = 0; i < deltaCount; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 2));
@@ -41,6 +42,7 @@ class _ScriptedPlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     lastHistory = messages;
     for (final e in events) {

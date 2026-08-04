@@ -25,6 +25,7 @@ class _CompactionPlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     final call = histories.length;
     histories.add(List.of(messages));

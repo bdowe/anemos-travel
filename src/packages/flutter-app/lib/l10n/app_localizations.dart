@@ -4130,6 +4130,12 @@ abstract class AppLocalizations {
   /// **'Send'**
   String get chatSend;
 
+  /// No description provided for @chatStopGenerating.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop generating'**
+  String get chatStopGenerating;
+
   /// No description provided for @chatAttachImages.
   ///
   /// In en, this message translates to:

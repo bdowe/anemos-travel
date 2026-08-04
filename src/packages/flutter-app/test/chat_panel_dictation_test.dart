@@ -57,6 +57,7 @@ class _FakePlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     sent.add(messages.last['content'] ?? '');
     yield PlanEvent(type: 'text_delta', data: {'text': 'ok'});

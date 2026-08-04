@@ -66,6 +66,7 @@ class _RecordingPlanService extends PlanService {
     String? chatId,
     String? tripId,
     String? summary,
+    Future<void>? abortTrigger,
   }) async* {
     histories.add(List.of(messages));
     yield PlanEvent(type: 'text_delta', data: {'text': 'ok'});
