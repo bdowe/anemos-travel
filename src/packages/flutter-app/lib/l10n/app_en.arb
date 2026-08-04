@@ -1284,6 +1284,14 @@
   "mapZoomIn": "Zoom in",
   "mapZoomOut": "Zoom out",
   "mapResetMap": "Reset map",
+  "mapHomeAirport": "Home airport ({code})",
+  "@mapHomeAirport": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "accountMenuTooltip": "Account",
   "accountMenuTravelProfile": "Travel profile",
   "accountMenuPriceAlerts": "Price alerts",

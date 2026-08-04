@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../l10n/l10n.dart';
 import '../models/accommodation.dart';
 import '../models/itinerary_item.dart';
+import '../providers/flights_provider.dart';
 import '../utils/snack.dart';
 import '../widgets/app_map.dart';
 import '../widgets/gradient_app_bar.dart';
@@ -19,7 +22,7 @@ import '../widgets/trip_map.dart';
 /// the parent's live trip field, but a silent refresh while this screen is
 /// open only shows up after the next chip tap rebuilds it — acceptable
 /// staleness for a modal map.
-class TripMapScreen extends StatefulWidget {
+class TripMapScreen extends ConsumerStatefulWidget {
   final String title;
 
   /// Items/stays to plot for a day-chip selection (null = All), supplied by
@@ -42,6 +45,13 @@ class TripMapScreen extends StatefulWidget {
   /// read-only) hides the empty state's CTA and hint.
   final void Function(int? day)? onAddPlace;
 
+  /// The viewer's saved home-airport IATA code; with the trip's first/last
+  /// city coordinates it draws the journey's home legs (owner surfaces only —
+  /// shared views pass nothing). Null = no home overlay.
+  final String? homeAirport;
+  final LatLng? firstCityPoint;
+  final LatLng? lastCityPoint;
+
   const TripMapScreen({
     super.key,
     required this.title,
@@ -53,15 +63,41 @@ class TripMapScreen extends StatefulWidget {
     this.mappedDays,
     this.initialDay,
     this.onAddPlace,
+    this.homeAirport,
+    this.firstCityPoint,
+    this.lastCityPoint,
   });
 
   @override
-  State<TripMapScreen> createState() => _TripMapScreenState();
+  ConsumerState<TripMapScreen> createState() => _TripMapScreenState();
 }
 
-class _TripMapScreenState extends State<TripMapScreen> {
+class _TripMapScreenState extends ConsumerState<TripMapScreen> {
   late int? _day = widget.initialDay;
   int? _selectedPosition;
+
+  /// The home overlay for the current day selection, or null while the IATA →
+  /// coordinate lookup is pending / failed (the map simply omits the legs;
+  /// the provider watch rebuilds when it resolves). The outbound leg belongs
+  /// to day 1 and the return leg to the last day, so mid-trip day chips show
+  /// no orphan home pin.
+  TripMapHome? _homeOverlay() {
+    final code = widget.homeAirport;
+    if (code == null || code.isEmpty) return null;
+    final point = ref.watch(homeAirportPointProvider(code)).valueOrNull;
+    if (point == null) return null;
+    final outboundTo =
+        (_day == null || _day == 1) ? widget.firstCityPoint : null;
+    final returnFrom =
+        (_day == null || _day == widget.dayCount) ? widget.lastCityPoint : null;
+    if (outboundTo == null && returnFrom == null) return null;
+    return TripMapHome(
+      point: LatLng(point.lat, point.lng),
+      label: code,
+      outboundTo: outboundTo,
+      returnFrom: returnFrom,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +138,7 @@ class _TripMapScreenState extends State<TripMapScreen> {
                 accommodations: widget.staysForDay(_day),
                 selectedPosition: _selectedPosition,
                 segmentLabels: widget.segmentLabels,
+                home: _homeOverlay(),
                 fitSignature: _day,
                 // Keep fitted markers clear of the chip row overlaid below.
                 topOverlayInset:

@@ -372,6 +372,104 @@ void main() {
     expect(find.text('7'), findsNothing);
   });
 
+  group('home-airport overlay', () {
+    // Newark — a transatlantic hop from the Paris fixtures, so its inclusion
+    // in the camera fit is unambiguous.
+    const homePoint = LatLng(40.6895, -74.1745);
+    final home = TripMapHome(
+      point: homePoint,
+      label: 'EWR',
+      outboundTo: LatLng(items.first.latitude, items.first.longitude),
+      returnFrom: LatLng(items.last.latitude, items.last.longitude),
+    );
+
+    testWidgets('default home: null renders no pin and no extra arrows', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(_host(TripMap(items: items)));
+      await tester.pump();
+
+      expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+      // Exactly the one itinerary-leg arrow between the two fixtures.
+      expect(find.byIcon(Icons.navigation), findsOneWidget);
+    });
+
+    testWidgets('overlay adds the pin and two leg arrows, numbering intact', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(_host(TripMap(items: items, home: home)));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+      // Itinerary arrow + outbound + return.
+      expect(find.byIcon(Icons.navigation), findsNWidgets(3));
+      // At the whole-journey zoom the two Paris pins collapse into a cluster
+      // bubble; its count proves the home point never joined [mapped] (a "3"
+      // here would mean the overlay leaked into the numbered pins).
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('3'), findsNothing);
+
+      // Whole-journey framing: the initial fit includes home and the trip.
+      final bounds = _camera(tester).visibleBounds;
+      expect(bounds.contains(homePoint), isTrue);
+      for (final it in items) {
+        expect(bounds.contains(LatLng(it.latitude, it.longitude)), isTrue);
+      }
+    });
+
+    testWidgets('overlay arriving after mount refits to include home', (
+      WidgetTester tester,
+    ) async {
+      // Mount without home (the IATA lookup is still pending)...
+      await tester.pumpWidget(_host(TripMap(items: items)));
+      await tester.pump();
+      expect(_camera(tester).visibleBounds.contains(homePoint), isFalse);
+
+      // ...then it resolves: didUpdateWidget's fit-set comparison must refit.
+      await tester.pumpWidget(_host(TripMap(items: items, home: home)));
+      await tester.pump(); // frame scheduling the post-frame re-fit
+      await tester.pump(); // camera moved
+
+      expect(_camera(tester).visibleBounds.contains(homePoint), isTrue);
+    });
+
+    testWidgets('legs crossing the antimeridian drop the whole overlay', (
+      WidgetTester tester,
+    ) async {
+      final fijiItems = [
+        _item(0, 'Suva', -18.1416, -178.4419),
+        _item(1, 'Nadi', -17.7765, -177.4356),
+      ];
+      final crossingHome = TripMapHome(
+        point: const LatLng(35.5494, 139.7798), // Tokyo, >180° of lng away
+        label: 'HND',
+        outboundTo: LatLng(fijiItems.first.latitude, fijiItems.first.longitude),
+        returnFrom: LatLng(fijiItems.last.latitude, fijiItems.last.longitude),
+      );
+
+      await tester.pumpWidget(
+        _host(TripMap(items: fijiItems, home: crossingHome)),
+      );
+      await tester.pump();
+
+      // No pin, and only the itinerary arrow — a long-way-around line on the
+      // single-world map would be worse than omitting the legs.
+      expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+      expect(find.byIcon(Icons.navigation), findsOneWidget);
+    });
+
+    testWidgets('home alone must not summon a map (empty-state guard)', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(_host(TripMap(items: const [], home: home)));
+      await tester.pump();
+
+      expect(find.text('No mapped places'), findsOneWidget);
+      expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+    });
+  });
+
   testWidgets('interactive: false hides the zoom/reset controls', (
     WidgetTester tester,
   ) async {

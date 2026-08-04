@@ -27,6 +27,36 @@ const double _pinHitBox = 44;
 /// less than [TripMap.topOverlayInset]'s usual value.
 const double _emptyStateTopInset = 44;
 
+/// Home-airport overlay for the full-screen trip map: the home point plus
+/// which travel legs to draw. A null endpoint hides that leg (e.g. a mid-trip
+/// day-chip selection); with both endpoints null callers should pass
+/// `home: null` instead so no orphan pin renders.
+///
+/// Limitation: a leg spanning more than 180° of longitude is dropped — the
+/// map is a single non-wrapping world ([AppMapCrs]), so such a leg would draw
+/// the long way around. When every leg drops, the whole overlay (pin and
+/// camera-fit inclusion) is suppressed.
+class TripMapHome {
+  /// The home airport's coordinates.
+  final LatLng point;
+
+  /// First-city coordinate; non-null draws the outbound leg home → city.
+  final LatLng? outboundTo;
+
+  /// Last-city coordinate; non-null draws the return leg city → home.
+  final LatLng? returnFrom;
+
+  /// Bare IATA code (e.g. "EWR") for the pin's tooltip.
+  final String label;
+
+  const TripMapHome({
+    required this.point,
+    required this.label,
+    this.outboundTo,
+    this.returnFrom,
+  });
+}
+
 /// Plots a trip's itinerary on a satellite basemap: a numbered, category-tinted
 /// pin per place, a route line connecting them in itinerary order, auto-fit to
 /// the trip's extent. Tapping a pin calls [onPinTap] with that item's position.
@@ -75,6 +105,11 @@ class TripMap extends StatefulWidget {
   /// Callers overlay their own tap handler (e.g. tap-to-expand on phones).
   final bool interactive;
 
+  /// Home-airport overlay: dashed outbound/return legs, a home pin, and the
+  /// home point joining the camera fit. Null — the default, and what the
+  /// inline map card and shared views pass — renders exactly as before.
+  final TripMapHome? home;
+
   const TripMap({
     super.key,
     required this.items,
@@ -88,6 +123,7 @@ class TripMap extends StatefulWidget {
     this.emptyAction,
     this.topOverlayInset = 0,
     this.interactive = true,
+    this.home,
   });
 
   /// Whether [a] would render as a stay pin: geocoded (null means "not
@@ -117,6 +153,30 @@ class _TripMapState extends State<TripMap> {
 
   static bool _hasCoords(ItineraryItem i) =>
       i.latitude != 0 || i.longitude != 0;
+
+  /// [TripMapHome] after the antimeridian guard documented on the class:
+  /// legs spanning more than 180° of longitude (or with equal endpoints) are
+  /// dropped, and when no drawable leg remains the whole overlay is
+  /// suppressed — null here means "render no home pin and fit no home point".
+  static TripMapHome? _effectiveHome(TripMapHome? home) {
+    if (home == null) return null;
+    bool drawable(LatLng? other) =>
+        other != null &&
+        other != home.point &&
+        (other.longitude - home.point.longitude).abs() <= 180;
+    final outboundTo = drawable(home.outboundTo) ? home.outboundTo : null;
+    final returnFrom = drawable(home.returnFrom) ? home.returnFrom : null;
+    if (outboundTo == null && returnFrom == null) return null;
+    if (outboundTo == home.outboundTo && returnFrom == home.returnFrom) {
+      return home;
+    }
+    return TripMapHome(
+      point: home.point,
+      label: home.label,
+      outboundTo: outboundTo,
+      returnFrom: returnFrom,
+    );
+  }
 
   /// Clockwise angle (radians) from screen-up to the segment a->b as rendered
   /// on the Web Mercator map, so a rotated up-arrow lies along the polyline.
@@ -171,11 +231,14 @@ class _TripMapState extends State<TripMap> {
   }
 
   /// Every coordinate the camera should frame: mapped items plus geocoded
-  /// stays. Mirrors the fitPoints assembled in [build]. Static so it can run
-  /// against an oldWidget's lists in [didUpdateWidget].
+  /// stays, plus the home airport when its overlay has a visible leg (the
+  /// camera must never stretch to a point nothing connects to). Mirrors the
+  /// fitPoints assembled in [build]. Static so it can run against an
+  /// oldWidget's lists in [didUpdateWidget].
   static List<LatLng> _fitPointsOf(
     List<ItineraryItem> items,
     List<Accommodation> accommodations,
+    LatLng? homePoint,
   ) {
     final points = <LatLng>[
       for (final it in items)
@@ -186,11 +249,15 @@ class _TripMapState extends State<TripMap> {
         points.add(LatLng(a.latitude!, a.longitude!));
       }
     }
+    if (homePoint != null) points.add(homePoint);
     return points;
   }
 
-  List<LatLng> _fitPoints() =>
-      _fitPointsOf(widget.items, widget.accommodations);
+  List<LatLng> _fitPoints() => _fitPointsOf(
+        widget.items,
+        widget.accommodations,
+        _effectiveHome(widget.home)?.point,
+      );
 
   @override
   void didUpdateWidget(covariant TripMap oldWidget) {
@@ -205,7 +272,14 @@ class _TripMapState extends State<TripMap> {
     // already frames the new content.
     bool contentChanged() {
       if (widget.selectedPosition != null) return false;
-      final oldPoints = _fitPointsOf(oldWidget.items, oldWidget.accommodations);
+      // The home comparison also covers the async case: the home overlay
+      // flipping null → resolved (the IATA lookup completing after mount)
+      // changes the fit-point set, so the camera refits to include home.
+      final oldPoints = _fitPointsOf(
+        oldWidget.items,
+        oldWidget.accommodations,
+        _effectiveHome(oldWidget.home)?.point,
+      );
       if (oldPoints.isEmpty) return false;
       return !setEquals(_fitPoints().toSet(), oldPoints.toSet());
     }
@@ -279,9 +353,26 @@ class _TripMapState extends State<TripMap> {
     }
 
     final points = mapped.map((m) => m.point).toList();
-    // Camera framing covers stays too; the route polyline sticks to [points].
-    final fitPoints = [...points, for (final s in stays) s.point];
+    final home = _effectiveHome(widget.home);
+    // Camera framing covers stays and the home airport too; the route
+    // polyline sticks to [points].
+    final fitPoints = [
+      ...points,
+      for (final s in stays) s.point,
+      if (home != null) home.point,
+    ];
     final selected = _selectedPoint();
+
+    // Home-airport legs (outbound home → first city, return last city →
+    // home). Kept out of [mapped]/[points]: appending there would silently
+    // reindex the numbered pins and break segment-label adjacency, so the
+    // legs get their own dashed polylines and arrow markers below.
+    final homeSegments = <({LatLng a, LatLng b})>[
+      if (home != null && home.outboundTo != null)
+        (a: home.point, b: home.outboundTo!),
+      if (home != null && home.returnFrom != null)
+        (a: home.returnFrom!, b: home.point),
+    ];
 
     // Travel-time labels at the midpoint of each within-city leg (only between
     // truly adjacent itinerary stops that are both mapped). Kept as endpoint
@@ -320,6 +411,21 @@ class _TripMapState extends State<TripMap> {
           width: 18,
           height: 18,
           child: _SegmentArrow(angle: _bearing(a.point, b.point)),
+        ),
+      );
+    }
+    // Home legs carry no travel-time labels, so their arrow always sits at
+    // the midpoint.
+    for (final s in homeSegments) {
+      arrowMarkers.add(
+        Marker(
+          point: LatLng(
+            (s.a.latitude + s.b.latitude) / 2,
+            (s.a.longitude + s.b.longitude) / 2,
+          ),
+          width: 18,
+          height: 18,
+          child: _SegmentArrow(angle: _bearing(s.a, s.b)),
         ),
       );
     }
@@ -405,9 +511,53 @@ class _TripMapState extends State<TripMap> {
                       ),
                     ],
                   ),
+                if (homeSegments.isNotEmpty)
+                  PolylineLayer(
+                    polylines: [
+                      for (final s in homeSegments) ...[
+                        // Same two-pass glow as the route line, but dashed:
+                        // these legs are travel to/from the trip, not part of
+                        // the itinerary walk.
+                        Polyline(
+                          points: [s.a, s.b],
+                          strokeWidth: 6,
+                          color: Colors.white.withValues(alpha: 0.25),
+                          pattern: StrokePattern.dashed(
+                            segments: const [8, 6],
+                          ),
+                        ),
+                        Polyline(
+                          points: [s.a, s.b],
+                          strokeWidth: 2,
+                          color: Colors.white.withValues(alpha: 0.95),
+                          pattern: StrokePattern.dashed(
+                            segments: const [8, 6],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 if (arrowMarkers.isNotEmpty) MarkerLayer(markers: arrowMarkers),
                 if (labelSegments.isNotEmpty)
                   _SegmentLabelLayer(segments: labelSegments),
+                // The home airport, like stays, sits outside the clusterer
+                // and beneath the numbered pins: it is a fixed journey
+                // endpoint, not an itinerary stop.
+                if (home != null)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: home.point,
+                        // Transparent 44px halo around the 26px body; the box
+                        // stays centered on the coordinate (see _pinHitBox).
+                        width: _pinHitBox,
+                        height: _pinHitBox,
+                        child: _HomePin(
+                          message: l10n.mapHomeAirport(home.label),
+                        ),
+                      ),
+                    ],
+                  ),
                 // Stays live in their own layer, outside the clusterer: a trip has
                 // few of them and "where am I sleeping" should never collapse into
                 // an anonymous count bubble with sightseeing pins. Drawn beneath
@@ -681,6 +831,51 @@ class _Pin extends StatelessWidget {
           color: Colors.white,
           fontSize: 11,
           fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+/// The home-airport marker: a rounded square with a takeoff glyph in the
+/// flights accent color — same family treatment as [_StayPin] (white ring,
+/// shadow, square-not-round), distinct from both stays and itinerary dots.
+/// Tap shows a self-contained tooltip ("Home airport (EWR)").
+class _HomePin extends StatelessWidget {
+  /// Pre-localized tooltip text.
+  final String message;
+
+  const _HomePin({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    // The tooltip's tap detector fills the marker's [_pinHitBox] box, so the
+    // whole transparent halo around the 26px square triggers it.
+    return Tooltip(
+      message: message,
+      triggerMode: TooltipTriggerMode.tap,
+      child: Center(
+        child: Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: AppColors.toolFlights,
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.flight_takeoff,
+            size: 14,
+            color: Colors.white,
+          ),
         ),
       ),
     );

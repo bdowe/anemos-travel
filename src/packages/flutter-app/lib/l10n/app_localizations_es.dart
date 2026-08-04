@@ -2006,6 +2006,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get mapResetMap => 'Restablecer mapa';
 
   @override
+  String mapHomeAirport(String code) {
+    return 'Aeropuerto de origen ($code)';
+  }
+
+  @override
   String get accountMenuTooltip => 'Cuenta';
 
   @override
