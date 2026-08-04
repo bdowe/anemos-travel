@@ -23,17 +23,17 @@ func TestPlanSessionToolsOrderStable(t *testing.T) {
 		session *planSession
 		want    []string
 	}{
-		// set_trip_dates is authed-gated, so the anonymous tail intentionally
-		// stays find_parking — the anonymous tools array is byte-identical to
-		// before the tool existed.
+		// set_trip_dates and set_leg_dates are authed-gated, so the anonymous
+		// tail intentionally stays find_parking — the anonymous tools array is
+		// byte-identical to before either tool existed.
 		{"anonymous", &planSession{}, append(append([]string{}, base...), "create_itinerary", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking")},
 		{"authed", &planSession{authed: true},
 			append(append([]string{}, base...), "create_itinerary", "save_preferences", "get_trip",
-				"add_booking_todo", "update_booking_todo", "remove_booking_todo", "add_packing_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates")},
+				"add_booking_todo", "update_booking_todo", "remove_booking_todo", "add_packing_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates")},
 		{"authed trip-bound", &planSession{authed: true, boundTripID: &tid},
 			append(append([]string{}, base...), "update_itinerary_section", "save_preferences", "get_trip",
 				"add_booking_todo", "update_booking_todo", "remove_booking_todo", "add_packing_item", "review_trip",
-				"add_accommodation", "add_transport_segment", "move_itinerary_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates")},
+				"add_accommodation", "add_transport_segment", "move_itinerary_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates")},
 	}
 	for _, tc := range cases {
 		tools := planSessionTools(tc.session)

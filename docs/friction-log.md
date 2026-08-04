@@ -5,6 +5,23 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-04 — trip-detail dogfooding (late night)
+
+- **[app] BREAKAGE → fixed (specs/set-leg-dates):** asked the refine chat to
+  "change the dates for LA to Sep 24–27" on the Panama City → LA trip; the
+  agent kept saying it was doing it, nothing changed. Root cause: no tool
+  could move ONE leg — `set_trip_dates` (shipped that same day) is a rigid
+  whole-trip shift, and calling it with the trip's unchanged start is a
+  delta-0 *success* ("dates already match"), so the anti-fabrication prompt
+  line never fired while nothing moved. A per-leg change needs endpoint-
+  anchored deltas (Sep 20→24 is +4 on check-in, Sep 24→27 is +3 on
+  check-out), item-day renumbering, boundary-segment moves, and a trip-end
+  extension. Fix: new `set_leg_dates` tool (leg only + agent narrates the
+  gap it opens — cascade decision 2026-08-04), plus the delta-0 result now
+  steers the model to it. Lesson for future tools: **a tool that can succeed
+  without doing what the traveler asked defeats the honesty guardrail** —
+  results must say what did NOT move.
+
 ## 2026-08-03 — trip-detail dogfooding
 
 - **[app] Resolved question (no change):** should "Packing & prep" and

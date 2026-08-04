@@ -216,7 +216,7 @@ func runSetTripDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 	case !hadAnchor:
 		return fmt.Sprintf("Trip dates set to %s. The trip had no dates before, so existing stays, transport legs, and booking to-dos were not moved — check whether any of their dates need updating (update_booking_todo etc.). The traveler's trip page has refreshed.", rangeText), false
 	case deltaDays == 0:
-		return fmt.Sprintf("Trip dates are now %s (the start is unchanged, so stays, legs, and to-dos were not moved). The traveler's trip page has refreshed.", rangeText), false
+		return fmt.Sprintf("Trip dates are now %s (the start is unchanged, so stays, legs, and to-dos were not moved). If the traveler meant to change ONE city's dates within the trip, call set_leg_dates for that city instead. The traveler's trip page has refreshed.", rangeText), false
 	default:
 		direction := "later"
 		n := deltaDays
