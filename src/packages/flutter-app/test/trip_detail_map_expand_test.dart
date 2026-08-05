@@ -145,13 +145,42 @@ void main() {
       (WidgetTester tester) async {
     await pumpScreen(tester, surface: const Size(1200, 800));
 
-    // Interactive inline: zoom controls present, no expand affordance.
+    // Interactive inline: zoom controls present, plus the fullscreen control
+    // in the map's own strip (the full-screen map used to be unreachable at
+    // wide widths).
     expect(inMap(find.byIcon(Icons.add)), findsOneWidget);
-    expect(find.byIcon(Icons.fullscreen), findsNothing);
+    expect(inMap(find.byIcon(Icons.fullscreen)), findsOneWidget);
 
     // Pinned: scrolling the page leaves the map in the viewport.
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
     await tester.pump();
     expect(find.byType(TripMap), findsOneWidget);
+  });
+
+  testWidgets(
+      'wide: the fullscreen control opens the full-screen map; a day picked '
+      'there survives closing', (WidgetTester tester) async {
+    await pumpScreen(tester, surface: const Size(1200, 800));
+
+    await tester.tap(inMap(find.byIcon(Icons.fullscreen)));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TripMapScreen), findsOneWidget);
+
+    final chips = find.byType(MapDayChips);
+    await tester.tap(find.descendant(of: chips, matching: find.text('Day 2')));
+    await tester.pump();
+    await tester.pump(); // post-frame camera re-fit
+
+    final fullMap = tester.widget<TripMap>(find.byType(TripMap));
+    expect(fullMap.items.map((i) => i.name), ['Pantheon']);
+
+    await tester.tap(find.byType(CloseButton));
+    await tester.pumpAndSettle();
+
+    // Back on the trip screen, the inline chips kept the selection.
+    expect(find.byType(TripMapScreen), findsNothing);
+    final inlineChips = tester.widget<MapDayChips>(find.byType(MapDayChips));
+    expect(inlineChips.selected, 2);
   });
 }

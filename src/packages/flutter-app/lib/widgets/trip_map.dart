@@ -134,8 +134,8 @@ class TripMap extends StatefulWidget {
   final bool interactive;
 
   /// Home-airport overlay: dashed outbound/return legs, a home pin, and the
-  /// home point joining the camera fit. Null — the default, and what the
-  /// inline map card and shared views pass — renders exactly as before.
+  /// home point joining the camera fit. Null — the default, and what shared
+  /// views pass — renders exactly as before.
   final TripMapHome? home;
 
   /// Trip-overview destination pins (see [TripMapDestination]). With ≥2
@@ -144,6 +144,11 @@ class TripMap extends StatefulWidget {
   /// single-city trips — keeps per-item pins, so existing call sites are
   /// unchanged.
   final List<TripMapDestination>? destinations;
+
+  /// Opens the full-screen map. Non-null renders a fullscreen button beside
+  /// the zoom/reset column when [interactive]; null — the default — keeps
+  /// the control stack exactly as before.
+  final VoidCallback? onExpand;
 
   const TripMap({
     super.key,
@@ -160,6 +165,7 @@ class TripMap extends StatefulWidget {
     this.interactive = true,
     this.home,
     this.destinations,
+    this.onExpand,
   });
 
   /// Whether [a] would render as a stay pin: geocoded (null means "not
@@ -723,25 +729,42 @@ class _TripMapState extends State<TripMap> {
               Positioned(
                 right: 8,
                 bottom: 8,
-                child: Column(
+                // The expand button sits beside the zoom column, not above
+                // it: stacked, the strip would reach into the day-chip band
+                // on the 240px inline card.
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    MapControlButton(
-                      icon: Icons.add,
-                      tooltip: l10n.mapZoomIn,
-                      onTap: () => _zoomBy(1),
-                    ),
-                    const SizedBox(height: 8),
-                    MapControlButton(
-                      icon: Icons.remove,
-                      tooltip: l10n.mapZoomOut,
-                      onTap: () => _zoomBy(-1),
-                    ),
-                    const SizedBox(height: 8),
-                    MapControlButton(
-                      icon: Icons.zoom_in_map,
-                      tooltip: l10n.mapResetMap,
-                      onTap: () => _fitToTrip(fitPoints),
+                    if (widget.onExpand != null) ...[
+                      MapControlButton(
+                        icon: Icons.fullscreen,
+                        tooltip: l10n.tripExpandMap,
+                        onTap: widget.onExpand!,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        MapControlButton(
+                          icon: Icons.add,
+                          tooltip: l10n.mapZoomIn,
+                          onTap: () => _zoomBy(1),
+                        ),
+                        const SizedBox(height: 8),
+                        MapControlButton(
+                          icon: Icons.remove,
+                          tooltip: l10n.mapZoomOut,
+                          onTap: () => _zoomBy(-1),
+                        ),
+                        const SizedBox(height: 8),
+                        MapControlButton(
+                          icon: Icons.zoom_in_map,
+                          tooltip: l10n.mapResetMap,
+                          onTap: () => _fitToTrip(fitPoints),
+                        ),
+                      ],
                     ),
                   ],
                 ),
