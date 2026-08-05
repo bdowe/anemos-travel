@@ -109,6 +109,12 @@ class PlanState {
   /// transient "Summarizing earlier conversation…" chip.
   final bool isCompacting;
 
+  /// The conversation's stable chat id, mirrored from the notifier's private
+  /// one once a conversation exists (first send, or a resume) — the public
+  /// read path URL sync needs to emit /plan/<chatId>
+  /// (specs/url-page-persistence). Null until then and after Start over.
+  final String? chatId;
+
   const PlanState({
     this.messages = const [],
     this.isStreaming = false,
@@ -140,6 +146,7 @@ class PlanState {
     this.compactedSummary,
     this.compactedCount = 0,
     this.isCompacting = false,
+    this.chatId,
   });
 
   PlanState copyWith({
@@ -173,6 +180,7 @@ class PlanState {
     Object? compactedSummary = _sentinel,
     int? compactedCount,
     bool? isCompacting,
+    Object? chatId = _sentinel,
   }) {
     return PlanState(
       messages: messages ?? this.messages,
@@ -209,6 +217,7 @@ class PlanState {
           compactedSummary == _sentinel ? this.compactedSummary : compactedSummary as String?,
       compactedCount: compactedCount ?? this.compactedCount,
       isCompacting: isCompacting ?? this.isCompacting,
+      chatId: chatId == _sentinel ? this.chatId : chatId as String?,
     );
   }
 }
@@ -354,6 +363,7 @@ class PlanNotifier extends StateNotifier<PlanState> {
       messages: updatedMessages,
       isStreaming: true,
       streamingText: '',
+      chatId: _chatId,
       activeTools: [],
       flightOffers: null,
       flightRouteLabel: null,
@@ -753,6 +763,7 @@ class PlanNotifier extends StateNotifier<PlanState> {
     _chatId = chatId;
     state = state.copyWith(
       messages: messages,
+      chatId: chatId,
       compactedSummary:
           (summary == null || summary.isEmpty) ? null : summary,
     );

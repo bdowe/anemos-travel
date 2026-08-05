@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../models/price_alert.dart';
+import '../navigation/app_nav.dart';
+import '../navigation/app_routes.dart';
 import '../providers/alerts_provider.dart';
 import '../providers/notifications_provider.dart';
 import '../providers/auth_provider.dart';
@@ -113,6 +115,8 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
           message: l10n.alertsEmptyMessage,
           actions: [
             FilledButton.icon(
+              // Unnamed on purpose: flight search carries non-URL-encodable
+              // prefill at its other launch site; one consistent behavior.
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const FlightSearchScreen()),
               ),
@@ -162,7 +166,8 @@ class _NotificationBell extends ConsumerWidget {
       tooltip: context.l10n.notifTitle,
       icon: const Icon(Icons.notifications_none),
       onPressed: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const NotificationCenterScreen()),
+        locatedRoute(const NotificationCenterScreen(),
+            utilityLocation(BootUtility.notifications)),
       ),
     );
     if (count == 0) return bell;

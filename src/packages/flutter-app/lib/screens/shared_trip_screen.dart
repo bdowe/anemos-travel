@@ -7,6 +7,7 @@ import '../models/itinerary_item.dart';
 import '../models/shared_trip.dart';
 import '../models/trip.dart';
 import '../navigation/app_nav.dart';
+import '../navigation/app_routes.dart';
 import '../providers/auth_provider.dart';
 import '../providers/shared_trip_provider.dart';
 import '../providers/shared_with_me_provider.dart';
@@ -174,8 +175,8 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
       void openOnTripsTab([int attempts = 10]) {
         final nav = navKeys[AppTab.trips.index].currentState;
         if (nav != null) {
-          nav.push(MaterialPageRoute(
-              builder: (_) => TripDetailScreen(tripId: tripId)));
+          nav.push(locatedRoute(
+              TripDetailScreen(tripId: tripId), tripDetailLocation(tripId)));
         } else if (attempts > 0) {
           WidgetsBinding.instance
               .addPostFrameCallback((_) => openOnTripsTab(attempts - 1));

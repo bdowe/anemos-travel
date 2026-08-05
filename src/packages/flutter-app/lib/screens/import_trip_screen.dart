@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
+import '../navigation/app_nav.dart';
+import '../navigation/app_routes.dart';
 import '../providers/import_trip_provider.dart';
 import '../theme/spacing.dart';
 import '../widgets/gradient_app_bar.dart';
@@ -77,7 +79,8 @@ class _ImportTripScreenState extends ConsumerState<ImportTripScreen> {
       if (!mounted) return;
     }
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => TripDetailScreen(tripId: res.tripId)),
+      locatedRoute(
+          TripDetailScreen(tripId: res.tripId), tripDetailLocation(res.tripId)),
     );
   }
 

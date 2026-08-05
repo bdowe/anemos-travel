@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../navigation/app_nav.dart';
+import '../navigation/app_routes.dart';
 import '../theme/spacing.dart';
 import '../utils/trip_format.dart';
 import '../widgets/account_menu.dart';
@@ -202,13 +203,14 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
 
 void _openTrip(BuildContext context, String tripId) {
   Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => TripDetailScreen(tripId: tripId)),
+    locatedRoute(TripDetailScreen(tripId: tripId), tripDetailLocation(tripId)),
   );
 }
 
 void _openImport(BuildContext context) {
   Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => const ImportTripScreen()),
+    locatedRoute(
+        const ImportTripScreen(), utilityLocation(BootUtility.importTrip)),
   );
 }
 

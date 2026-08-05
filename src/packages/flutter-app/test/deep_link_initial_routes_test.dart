@@ -16,7 +16,24 @@ void main() {
       '/reset/tok123',
       '/verify/tok123',
       '/sso/code123',
+      '/connect/tok123',
+      // URL persistence boot paths (specs/url-page-persistence) ride the same
+      // one-route invariant: each lands on a single AuthGate that restores
+      // the page inside the shell.
+      '/plan',
+      '/plan/chat-abc',
+      '/trips',
+      '/trips/t1',
+      '/trip/t1',
       '/alerts',
+      '/preferences',
+      '/account',
+      '/admin/metrics',
+      '/admin/local',
+      '/import',
+      '/guides',
+      '/notifications',
+      '/no-such-page',
     ]) {
       final routes = generateInitialRoutes(path);
       expect(routes, hasLength(1), reason: 'path $path');

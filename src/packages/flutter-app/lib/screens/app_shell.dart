@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../navigation/app_nav.dart';
+import '../navigation/url_sync.dart';
 import '../theme/spacing.dart';
 import '../widgets/account_menu.dart';
 import '../widgets/brand_logo.dart';
@@ -32,6 +33,7 @@ class AppShell extends ConsumerWidget {
     final l10n = context.l10n;
     final index = ref.watch(navIndexProvider);
     final navKeys = ref.watch(tabNavKeysProvider);
+    final urlSync = ref.watch(urlSyncProvider);
     final isWide = MediaQuery.sizeOf(context).width >= kRailBreakpoint;
 
     void onSelect(int i) {
@@ -56,7 +58,13 @@ class AppShell extends ConsumerWidget {
         index: index,
         children: [
           for (var i = 0; i < navKeys.length; i++)
-            _TabNavigator(navKey: navKeys[i], child: _tabRoots[i]),
+            _TabNavigator(
+              navKey: navKeys[i],
+              // Fresh observer instances every build: an observer may only be
+              // attached to one navigator at a time (url_sync.dart).
+              observers: [TabUrlObserver(urlSync, i)],
+              child: _tabRoots[i],
+            ),
         ],
       ),
     );
@@ -140,14 +148,17 @@ class _RailBrand extends ConsumerWidget {
 /// within the tab stack here so they animate inside the content area only.
 class _TabNavigator extends StatelessWidget {
   final GlobalKey<NavigatorState> navKey;
+  final List<NavigatorObserver> observers;
   final Widget child;
 
-  const _TabNavigator({required this.navKey, required this.child});
+  const _TabNavigator(
+      {required this.navKey, required this.observers, required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Navigator(
       key: navKey,
+      observers: observers,
       onGenerateRoute: (settings) => MaterialPageRoute(
         builder: (_) => child,
         settings: settings,

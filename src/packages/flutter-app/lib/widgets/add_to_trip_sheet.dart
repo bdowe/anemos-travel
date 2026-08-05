@@ -7,6 +7,7 @@ import '../models/itinerary_item.dart';
 import '../models/local_recommendation.dart';
 import '../models/trip.dart';
 import '../navigation/app_nav.dart';
+import '../navigation/app_routes.dart';
 import '../providers/analytics_provider.dart';
 import '../providers/trips_provider.dart';
 import '../screens/trip_detail_screen.dart';
@@ -163,8 +164,9 @@ Future<Trip?> showAddToTripSheet(
           ? null
           : SnackBarAction(
               label: l10n.addToTripViewTrip,
-              onPressed: () => navigator.push(MaterialPageRoute(
-                builder: (_) => TripDetailScreen(tripId: trip.id),
+              onPressed: () => navigator.push(locatedRoute(
+                TripDetailScreen(tripId: trip.id),
+                tripDetailLocation(trip.id),
               )),
             ),
     ));
