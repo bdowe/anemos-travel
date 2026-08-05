@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'constants/app_info.dart';
 import 'l10n/l10n.dart';
+import 'navigation/app_routes.dart';
+import 'navigation/url_sync.dart';
 import 'providers/auth_provider.dart';
 import 'providers/locale_provider.dart';
 import 'theme/app_theme.dart';
-import 'screens/alerts_screen.dart';
 import 'screens/connect_app_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/app_shell.dart';
@@ -15,7 +16,6 @@ import 'screens/onboarding_quiz_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'screens/shared_trip_screen.dart';
 import 'screens/sso_callback_screen.dart';
-import 'screens/trip_detail_screen.dart';
 import 'screens/verify_email_screen.dart';
 import 'screens/splash_screen.dart';
 
@@ -37,13 +37,17 @@ void main() {
 /// catch-all, so a signed-in session mounts two AppShells whose tab
 /// navigators share the same GlobalKeys — the tree corrupts and the body
 /// renders blank.
+///
+/// isBoot marks this the cold-boot route: the only one allowed to carry a
+/// restore target (specs/url-page-persistence) — runtime pushNamed('/')
+/// resets must never replay the boot URL's destination.
 List<Route<dynamic>> generateInitialRoutes(String initialRoute) =>
-    [generateRoute(RouteSettings(name: initialRoute))];
+    [generateRoute(RouteSettings(name: initialRoute), isBoot: true)];
 
 /// Route by URL so share links work signed-out. Everything else lands
 /// on AuthGate, preserving the existing splash -> landing/quiz/shell
 /// flow. Legacy /#/share links are rewritten by the index.html shim.
-Route<dynamic> generateRoute(RouteSettings settings) {
+Route<dynamic> generateRoute(RouteSettings settings, {bool isBoot = false}) {
   final uri = Uri.tryParse(settings.name ?? '/');
   final segments = uri?.pathSegments ?? const <String>[];
   if (segments.length == 2 && segments[0] == 'share') {
@@ -90,25 +94,16 @@ Route<dynamic> generateRoute(RouteSettings settings) {
       builder: (_) => ConnectAppScreen(requestToken: segments[1]),
     );
   }
-  // A connector's create_trip returns a /trip/<id> URL so the AI's answer can
-  // link straight into the app.
-  if (segments.length == 2 && segments[0] == 'trip') {
-    return MaterialPageRoute(
-      settings: settings,
-      builder: (_) => TripDetailScreen(tripId: segments[1]),
-    );
-  }
-  // Price-alert emails deep-link here; the screen itself handles the
-  // signed-out case with a sign-in prompt.
-  if (segments.length == 1 && segments[0] == 'alerts') {
-    return MaterialPageRoute(
-      settings: settings,
-      builder: (_) => const AlertsScreen(),
-    );
-  }
+  // URL persistence (specs/url-page-persistence): recognized app paths —
+  // tabs, /trips/<id> (and the connector's /trip/<id> alias), /alerts and the
+  // other utility screens, /plan/<chatId> — land on the normal gate carrying
+  // a parsed target that URL sync applies once the session resolves, so the
+  // page boots inside the shell. Unknown paths parse to null and behave like
+  // the plain catch-all.
+  final target = uri == null ? null : parseBootTarget(uri);
   return MaterialPageRoute(
     settings: settings,
-    builder: (_) => const AuthGate(),
+    builder: (_) => AuthGate(bootTarget: isBoot ? target : null),
   );
 }
 
@@ -135,6 +130,9 @@ class TravelRoutePlannerApp extends ConsumerWidget {
       ],
       onGenerateRoute: generateRoute,
       onGenerateInitialRoutes: generateInitialRoutes,
+      // URL persistence write half: re-asserts the synced location after
+      // root-navigator events (specs/url-page-persistence).
+      navigatorObservers: [ref.watch(rootUrlObserverProvider)],
     );
   }
 }
@@ -142,11 +140,28 @@ class TravelRoutePlannerApp extends ConsumerWidget {
 /// Shows a loading splash until the stored session is checked, then routes to
 /// the landing page (signed out), the one-time signup quiz (signed in but not
 /// yet onboarded), or the home screen.
-class AuthGate extends ConsumerWidget {
-  const AuthGate({super.key});
+class AuthGate extends ConsumerStatefulWidget {
+  /// Where the boot URL pointed (specs/url-page-persistence); null everywhere
+  /// but the cold-boot route. URL sync holds it until the session resolves
+  /// signed-in-and-onboarded, so it survives the landing page and the quiz.
+  final BootTarget? bootTarget;
+
+  const AuthGate({super.key, this.bootTarget});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends ConsumerState<AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    // A plain field hand-off (no provider writes — illegal in initState).
+    ref.read(urlSyncProvider).registerBootTarget(widget.bootTarget);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final Widget child;
     if (!auth.initialized) {

@@ -11,6 +11,7 @@ import '../providers/recent_trip_provider.dart';
 import '../providers/resumable_chats_provider.dart';
 import '../providers/trips_provider.dart';
 import '../navigation/app_nav.dart';
+import '../navigation/app_routes.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import '../theme/spacing.dart';
@@ -176,8 +177,9 @@ class HomeScreen extends ConsumerWidget {
                   LiveTripCard(
                     trip: liveTrip,
                     onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => TripDetailScreen(tripId: liveTrip.id),
+                      locatedRoute(
+                        TripDetailScreen(tripId: liveTrip.id),
+                        tripDetailLocation(liveTrip.id),
                       ),
                     ),
                   ),
@@ -197,9 +199,9 @@ class HomeScreen extends ConsumerWidget {
                           dateRange: recentTrip.dateRange,
                           status: recentTrip.status,
                           onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  TripDetailScreen(tripId: recentTrip.tripId),
+                            locatedRoute(
+                              TripDetailScreen(tripId: recentTrip.tripId),
+                              tripDetailLocation(recentTrip.tripId),
                             ),
                           ),
                         )
@@ -581,7 +583,8 @@ class _LocalGuidesRow extends ConsumerWidget {
           title: context.l10n.homeLocalGuidesTitle,
           action: TextButton(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const GuidesScreen()),
+              locatedRoute(
+                  const GuidesScreen(), utilityLocation(BootUtility.guides)),
             ),
             child: Text(context.l10n.commonSeeAll),
           ),
@@ -628,6 +631,8 @@ class _GuideCard extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
+          // Unnamed on purpose: the screen takes the full guide object, so a
+          // URL couldn't reconstruct it — refresh lands on the page beneath.
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => LocalGuideDetailScreen(guide: guide),

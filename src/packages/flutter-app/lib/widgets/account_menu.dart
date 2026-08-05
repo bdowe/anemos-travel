@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../navigation/app_nav.dart';
+import '../navigation/app_routes.dart';
 import '../providers/notifications_provider.dart';
 import '../providers/auth_provider.dart';
 import '../screens/account_settings_screen.dart';
@@ -41,17 +42,23 @@ void _onSelected(BuildContext context, WidgetRef ref, String value) {
     ref.read(authProvider.notifier).logout();
   } else if (value == 'preferences') {
     // Push onto the active tab's navigator so the rail/bar stays put.
-    pushOnActiveTab(ref, const PreferencesScreen());
+    pushOnActiveTab(ref, const PreferencesScreen(),
+        location: utilityLocation(BootUtility.preferences));
   } else if (value == 'alerts') {
-    pushOnActiveTab(ref, const AlertsScreen());
+    pushOnActiveTab(ref, const AlertsScreen(),
+        location: utilityLocation(BootUtility.alerts));
   } else if (value == 'retake_quiz') {
+    // No location: a transient flow, not a page worth restoring on refresh.
     pushOnActiveTab(ref, const OnboardingQuizScreen(retake: true));
   } else if (value == 'account_settings') {
-    pushOnActiveTab(ref, const AccountSettingsScreen());
+    pushOnActiveTab(ref, const AccountSettingsScreen(),
+        location: utilityLocation(BootUtility.account));
   } else if (value == 'local_admin') {
-    pushOnActiveTab(ref, const LocalAdminScreen());
+    pushOnActiveTab(ref, const LocalAdminScreen(),
+        location: utilityLocation(BootUtility.adminLocal));
   } else if (value == 'admin_metrics') {
-    pushOnActiveTab(ref, const AdminMetricsScreen());
+    pushOnActiveTab(ref, const AdminMetricsScreen(),
+        location: utilityLocation(BootUtility.adminMetrics));
   }
 }
 

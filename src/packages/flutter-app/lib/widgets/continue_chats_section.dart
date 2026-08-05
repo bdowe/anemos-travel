@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../models/chat_session.dart';
-import '../models/plan_message.dart';
 import '../navigation/app_nav.dart';
 import '../providers/plan_provider.dart';
+import '../providers/plan_resume.dart';
 import '../providers/resumable_chats_provider.dart';
 import '../theme/spacing.dart';
 import 'offline_banner.dart' show relativeTime;
@@ -61,33 +61,14 @@ class ContinueChatCard extends ConsumerWidget {
   Future<void> _resume(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
-    try {
-      final detail =
-          await ref.read(chatsApiServiceProvider).getChat(chat.chatId);
-      ref.read(planProvider.notifier).resumeConversation(
-            chatId: detail.chatId,
-            summary: detail.summary,
-            messages: [
-              for (final m in detail.messages)
-                PlanMessage(
-                  role: m.role == 'user'
-                      ? MessageRole.user
-                      : MessageRole.assistant,
-                  content: m.content,
-                  // Restores the seed context chip (e.g. "Near my current
-                  // location") instead of the raw coordinate bubble.
-                  displayLabel: m.displayLabel,
-                  // Pixels are stripped server-side; null bytes renders the
-                  // "Image" placeholder chip and stays out of resent history.
-                  attachments: [
-                    for (final img in m.images)
-                      PlanAttachment(bytes: null, mediaType: img.mediaType),
-                  ],
-                ),
-            ],
-          );
+    final ok = await resumePlanChat(
+      chats: ref.read(chatsApiServiceProvider),
+      plan: ref.read(planProvider.notifier),
+      chatId: chat.chatId,
+    );
+    if (ok) {
       ref.read(navIndexProvider.notifier).state = AppTab.plan.index;
-    } catch (_) {
+    } else {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.continueChatsReopenError)),
       );

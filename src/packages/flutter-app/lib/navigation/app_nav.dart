@@ -20,12 +20,25 @@ final tabNavKeysProvider = Provider<List<GlobalKey<NavigatorState>>>(
   (ref) => List.generate(AppTab.values.length, (_) => GlobalKey<NavigatorState>()),
 );
 
+/// A [MaterialPageRoute] whose settings name is the page's location in the
+/// URL grammar (app_routes.dart), which makes it visible to URL sync: the
+/// address bar shows [location] while the route is on top, and a refresh
+/// there restores the page. Pushes without a location keep the URL of the
+/// page beneath them.
+Route<T> locatedRoute<T>(Widget page, String location) => MaterialPageRoute<T>(
+      settings: RouteSettings(name: location),
+      builder: (_) => page,
+    );
+
 /// Push [page] onto the currently-selected tab's navigator, so the content area
-/// animates while the persistent rail/bar stays put.
-void pushOnActiveTab(WidgetRef ref, Widget page) {
+/// animates while the persistent rail/bar stays put. Pass [location] when the
+/// page is restorable from a URL (see [locatedRoute]).
+void pushOnActiveTab(WidgetRef ref, Widget page, {String? location}) {
   final keys = ref.read(tabNavKeysProvider);
   final state = keys[ref.read(navIndexProvider)].currentState;
-  state?.push(MaterialPageRoute(builder: (_) => page));
+  state?.push(location == null
+      ? MaterialPageRoute(builder: (_) => page)
+      : locatedRoute(page, location));
 }
 
 /// Return to the Home tab — the logo-tap action. Mirrors the shell's

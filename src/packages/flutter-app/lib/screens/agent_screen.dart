@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
+import '../navigation/app_nav.dart';
+import '../navigation/app_routes.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../widgets/account_menu.dart';
@@ -56,7 +58,8 @@ class _AgentScreenState extends ConsumerState<AgentScreen> {
 
   void _openTrip(String tripId) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => TripDetailScreen(tripId: tripId)),
+      locatedRoute(
+          TripDetailScreen(tripId: tripId), tripDetailLocation(tripId)),
     );
   }
 
