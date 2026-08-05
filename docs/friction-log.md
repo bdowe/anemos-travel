@@ -5,6 +5,21 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-04 — trip-detail dogfooding (map home legs)
+
+- **[app] Friction re-filed → fixed (shipped-but-unreachable):** "Map doesn't
+  show arrows to and from home airport" came back hours after PR #286 shipped
+  the home-airport legs — because they render only on the full-screen map,
+  whose sole entry points (tap-to-expand + fullscreen button) are phone-only
+  (`expandable` is gated on `< 800px`). At the desktop widths the app is
+  dogfooded at, the feature was structurally invisible; the item also never
+  made it into this log, so nothing flagged the gap. Fix: the inline
+  trip-detail card now draws the legs itself (same All/Day 1/last-day gating,
+  whole-journey fit) and the wide card gets a fullscreen control beside the
+  zoom column, so the big map is finally reachable on desktop. Lesson: **a
+  feature scoped to one surface must ship with a reachability check on every
+  breakpoint** — "the tap-to-expand map" didn't exist at ≥800px.
+
 ## 2026-08-04 — trip-detail dogfooding (cluster order)
 
 - **[app] Friction recurred → fixed (reorder, not relocation):** the 08-03

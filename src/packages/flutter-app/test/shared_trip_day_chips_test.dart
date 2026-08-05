@@ -124,6 +124,9 @@ void main() {
     // carries no empty-state CTA.
     expect(tester.widget<MapDayChips>(chips).mappedDays, {1, 2});
     expect(map(tester).emptyAction, isNull);
+
+    // Shared views are viewer-agnostic: never a home-airport overlay.
+    expect(map(tester).home, isNull);
   });
 
   testWidgets('day chip filters the shared map; All restores',

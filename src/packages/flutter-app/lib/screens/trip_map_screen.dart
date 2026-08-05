@@ -12,6 +12,35 @@ import '../widgets/gradient_app_bar.dart';
 import '../widgets/map_day_chips.dart';
 import '../widgets/trip_map.dart';
 
+/// Builds the home-airport overlay for a trip-map surface, or null while the
+/// IATA → coordinate lookup is pending / failed (the map simply omits the
+/// legs; the provider watch rebuilds when it resolves). The outbound leg
+/// belongs to day 1 and the return leg to the last day, so mid-trip day
+/// chips show no orphan home pin. Shared by the full-screen map and the
+/// inline trip-detail card so both surfaces gate identically.
+TripMapHome? homeOverlayFor(
+  WidgetRef ref, {
+  required String? homeAirport,
+  required int? day, // null = All
+  required int dayCount, // the surface's mapDayCount
+  required LatLng? firstCityPoint,
+  required LatLng? lastCityPoint,
+}) {
+  final code = homeAirport;
+  if (code == null || code.isEmpty) return null;
+  final point = ref.watch(homeAirportPointProvider(code)).valueOrNull;
+  if (point == null) return null;
+  final outboundTo = (day == null || day == 1) ? firstCityPoint : null;
+  final returnFrom = (day == null || day == dayCount) ? lastCityPoint : null;
+  if (outboundTo == null && returnFrom == null) return null;
+  return TripMapHome(
+    point: LatLng(point.lat, point.lng),
+    label: code,
+    outboundTo: outboundTo,
+    returnFrom: returnFrom,
+  );
+}
+
 /// Full-screen interactive trip map, pushed from the trip detail screen on
 /// phones (where the inline map is a static tap-to-expand preview). Pushed as
 /// a `fullscreenDialog` route so the framework provides the localized close
@@ -83,28 +112,14 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
   late int? _day = widget.initialDay;
   int? _selectedPosition;
 
-  /// The home overlay for the current day selection, or null while the IATA →
-  /// coordinate lookup is pending / failed (the map simply omits the legs;
-  /// the provider watch rebuilds when it resolves). The outbound leg belongs
-  /// to day 1 and the return leg to the last day, so mid-trip day chips show
-  /// no orphan home pin.
-  TripMapHome? _homeOverlay() {
-    final code = widget.homeAirport;
-    if (code == null || code.isEmpty) return null;
-    final point = ref.watch(homeAirportPointProvider(code)).valueOrNull;
-    if (point == null) return null;
-    final outboundTo =
-        (_day == null || _day == 1) ? widget.firstCityPoint : null;
-    final returnFrom =
-        (_day == null || _day == widget.dayCount) ? widget.lastCityPoint : null;
-    if (outboundTo == null && returnFrom == null) return null;
-    return TripMapHome(
-      point: LatLng(point.lat, point.lng),
-      label: code,
-      outboundTo: outboundTo,
-      returnFrom: returnFrom,
-    );
-  }
+  TripMapHome? _homeOverlay() => homeOverlayFor(
+        ref,
+        homeAirport: widget.homeAirport,
+        day: _day,
+        dayCount: widget.dayCount,
+        firstCityPoint: widget.firstCityPoint,
+        lastCityPoint: widget.lastCityPoint,
+      );
 
   @override
   Widget build(BuildContext context) {

@@ -4239,6 +4239,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     Set<int> mappedDays, {
     required bool expandable,
   }) {
+    final endpoints = _homeLegEndpoints(trip);
+    final home = homeOverlayFor(
+      ref,
+      homeAirport: _homeAirport,
+      day: _selectedDay,
+      dayCount: mapDayCount,
+      firstCityPoint: endpoints.first,
+      lastCityPoint: endpoints.last,
+    );
     Widget map = TripMap(
       items: _dayFiltered(trip, _selectedDay),
       accommodations: _dayFilteredStays(trip, _selectedDay),
@@ -4248,6 +4257,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       // across the gaps a day filter creates, and the category filter
       // already empties this map.
       segmentLabels: _segmentLabels(),
+      home: home,
       fitSignature: _selectedDay,
       // Keep fitted markers clear of the chip row overlaid below.
       topOverlayInset: mapDayCount > 0 ? MapDayChips.mapTopInset : 0,
@@ -4272,6 +4282,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               final it = trip.items!.firstWhere((i) => i.position == pos);
               _showSnack(it.name);
             },
+      onExpand: expandable
+          ? null
+          : () => _openFullMap(trip, mapDayCount, mappedDays),
     );
     if (expandable) {
       map = GestureDetector(
@@ -4313,16 +4326,25 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
+  /// Home-leg endpoints are the trip's first/last location groups — the same
+  /// derivation the outbound/return booking todos trust — never the first/
+  /// last mapped pin, which shifts under day/category filters.
+  ({LatLng? first, LatLng? last}) _homeLegEndpoints(Trip trip) {
+    final ranges = _locationGroupRanges(trip);
+    final firstCoord = ranges.isEmpty ? null : ranges.first.coord;
+    final lastCoord = ranges.isEmpty ? null : ranges.last.coord;
+    return (
+      first:
+          firstCoord == null ? null : LatLng(firstCoord.lat, firstCoord.lng),
+      last: lastCoord == null ? null : LatLng(lastCoord.lat, lastCoord.lng),
+    );
+  }
+
   /// Pushes the full-screen interactive map. Root navigator so the map
   /// covers the bottom navigation bar; the closures read the live [_trip] so
   /// a silent refresh propagates on the next chip tap.
   void _openFullMap(Trip trip, int mapDayCount, Set<int> mappedDays) {
-    // Home-leg endpoints are the trip's first/last location groups — the same
-    // derivation the outbound/return booking todos trust — never the first/
-    // last mapped pin, which shifts under day/category filters.
-    final ranges = _locationGroupRanges(trip);
-    final firstCoord = ranges.isEmpty ? null : ranges.first.coord;
-    final lastCoord = ranges.isEmpty ? null : ranges.last.coord;
+    final endpoints = _homeLegEndpoints(trip);
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         fullscreenDialog: true,
@@ -4330,10 +4352,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           title: _displayTitle(trip),
           destinations: _mapDestinations(trip),
           homeAirport: _homeAirport,
-          firstCityPoint:
-              firstCoord == null ? null : LatLng(firstCoord.lat, firstCoord.lng),
-          lastCityPoint:
-              lastCoord == null ? null : LatLng(lastCoord.lat, lastCoord.lng),
+          firstCityPoint: endpoints.first,
+          lastCityPoint: endpoints.last,
           itemsForDay: (d) {
             final t = _trip;
             return t == null ? const <ItineraryItem>[] : _dayFiltered(t, d);
