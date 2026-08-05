@@ -52,6 +52,12 @@ class TripMapScreen extends ConsumerStatefulWidget {
   final LatLng? firstCityPoint;
   final LatLng? lastCityPoint;
 
+  /// Trip-overview destination pins, derived by the parent from the full
+  /// itinerary. Shown only under the All chip (day chips flip back to
+  /// per-item pins). Frozen at push time like the home-leg endpoints — a
+  /// silent refresh shows up on the next open.
+  final List<TripMapDestination>? destinations;
+
   const TripMapScreen({
     super.key,
     required this.title,
@@ -66,6 +72,7 @@ class TripMapScreen extends ConsumerStatefulWidget {
     this.homeAirport,
     this.firstCityPoint,
     this.lastCityPoint,
+    this.destinations,
   });
 
   @override
@@ -136,6 +143,7 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
               child: TripMap(
                 items: items,
                 accommodations: widget.staysForDay(_day),
+                destinations: _day == null ? widget.destinations : null,
                 selectedPosition: _selectedPosition,
                 segmentLabels: widget.segmentLabels,
                 home: _homeOverlay(),

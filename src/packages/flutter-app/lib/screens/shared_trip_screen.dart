@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 import '../l10n/l10n.dart';
 import '../models/accommodation.dart';
 import '../models/itinerary_item.dart';
@@ -14,6 +15,7 @@ import '../theme/spacing.dart';
 import '../utils/errors.dart';
 import '../utils/trip_days.dart';
 import '../utils/trip_format.dart';
+import '../utils/trip_legs.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
@@ -102,24 +104,20 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
 
   Trip get _trip => widget.shared.trip;
 
-  /// Groups items by hub city (day_trip_from ?? city) in itinerary order —
-  /// the same locality rule the owner's trip detail uses.
+  /// Groups items by hub city in itinerary order — the same shared [tripLegs]
+  /// rule the owner's trip detail uses (day_trip_from ?? city ?? a city
+  /// parsed from the address).
   List<({String label, List<ItineraryItem> items})> _groups(
       AppLocalizations l10n) {
-    final items = _trip.items ?? const <ItineraryItem>[];
-    final groups = <({String label, List<ItineraryItem> items})>[];
-    for (final it in items) {
-      final hub = (it.dayTripFrom?.trim().isNotEmpty ?? false)
-          ? it.dayTripFrom!.trim()
-          : (it.city?.trim().isNotEmpty ?? false)
-              ? it.city!.trim()
-              : l10n.sharedPlacesGroup;
-      if (groups.isEmpty || groups.last.label != hub) {
-        groups.add((label: hub, items: <ItineraryItem>[]));
-      }
-      groups.last.items.add(it);
-    }
-    return groups;
+    return [
+      for (final leg in tripLegs(_trip.items ?? const <ItineraryItem>[]))
+        (
+          label: leg.label == kOtherPlacesLabel
+              ? l10n.sharedPlacesGroup
+              : leg.label,
+          items: leg.items,
+        ),
+    ];
   }
 
   /// Routes through sign-in if needed; true when a session exists after.
@@ -246,6 +244,21 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
                     DateTime(tripStart.year, tripStart.month,
                         tripStart.day + _selectedDay! - 1)))
                 .toList();
+    // Trip-overview destination pins (All chip only): one numbered pin per
+    // city leg, from the unfiltered itinerary. Label-only tooltips — the
+    // owner-side date allocation doesn't exist on this read-only view.
+    final destinations = _selectedDay != null
+        ? null
+        : <TripMapDestination>[
+            for (final leg in tripLegs(items))
+              if (leg.coord != null)
+                TripMapDestination(
+                  label: leg.label == kOtherPlacesLabel
+                      ? l10n.sharedPlacesGroup
+                      : leg.label,
+                  point: LatLng(leg.coord!.lat, leg.coord!.lng),
+                ),
+          ];
 
     return Stack(
       children: [
@@ -292,6 +305,7 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
                               child: TripMap(
                                 items: dayItems,
                                 accommodations: dayStays,
+                                destinations: destinations,
                                 selectedPosition: _selectedPosition,
                                 fitSignature: _selectedDay,
                                 // Keep fitted markers clear of the chip row

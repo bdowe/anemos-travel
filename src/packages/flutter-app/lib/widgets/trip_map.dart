@@ -57,12 +57,40 @@ class TripMapHome {
   });
 }
 
+/// A destination (city leg) pin for the trip-overview map. With at least two
+/// of these, [TripMap] renders one numbered pin per entry — 1..N in list
+/// (visit) order — instead of per-item pins, and walks the route line through
+/// their coordinates. Callers derive the list from the FULL itinerary (never
+/// a day/category-filtered view, which would shift the numbering) and pass
+/// null on day views to restore per-item stop pins.
+class TripMapDestination {
+  /// Display label for the tooltip, already localized by the caller.
+  final String label;
+
+  /// The destination's representative coordinate.
+  final LatLng point;
+
+  /// Pre-formatted date range for the tooltip; null shows the label alone.
+  final String? dates;
+
+  const TripMapDestination({
+    required this.label,
+    required this.point,
+    this.dates,
+  });
+}
+
 /// Plots a trip's itinerary on a satellite basemap: a numbered, category-tinted
 /// pin per place, a route line connecting them in itinerary order, auto-fit to
 /// the trip's extent. Tapping a pin calls [onPinTap] with that item's position.
 /// When [selectedPosition] changes the camera recenters on that place.
 /// [accommodations] render as distinct stay markers (see [_StayPin]) that join
 /// the auto-fit bounds but stay out of the route line and numbering.
+///
+/// With ≥2 [destinations] the map renders the trip-overview mode instead: one
+/// numbered pin per destination (1..N in visit order) with the route line
+/// walking the destinations — per-item pins, clustering, and travel-time
+/// labels don't render there.
 class TripMap extends StatefulWidget {
   final List<ItineraryItem> items;
   final int? selectedPosition;
@@ -110,6 +138,13 @@ class TripMap extends StatefulWidget {
   /// inline map card and shared views pass — renders exactly as before.
   final TripMapHome? home;
 
+  /// Trip-overview destination pins (see [TripMapDestination]). With ≥2
+  /// entries the map renders one numbered pin per destination instead of
+  /// per-item pins. Null or a shorter list — the default, day views, and
+  /// single-city trips — keeps per-item pins, so existing call sites are
+  /// unchanged.
+  final List<TripMapDestination>? destinations;
+
   const TripMap({
     super.key,
     required this.items,
@@ -124,6 +159,7 @@ class TripMap extends StatefulWidget {
     this.topOverlayInset = 0,
     this.interactive = true,
     this.home,
+    this.destinations,
   });
 
   /// Whether [a] would render as a stay pin: geocoded (null means "not
@@ -153,6 +189,14 @@ class _TripMapState extends State<TripMap> {
 
   static bool _hasCoords(ItineraryItem i) =>
       i.latitude != 0 || i.longitude != 0;
+
+  /// Destination (trip-overview) mode: at least two pinnable destinations
+  /// supplied. 0/1 entries — a single-city trip, or every destination
+  /// ungeocoded — falls back to per-item pins so city trips keep place-level
+  /// detail. The one home of the ≥2 rule, shared by [build] and the static
+  /// fit-point mirror.
+  static bool _destinationMode(List<TripMapDestination>? destinations) =>
+      destinations != null && destinations.length >= 2;
 
   /// [TripMapHome] after the antimeridian guard documented on the class:
   /// legs spanning more than 180° of longitude (or with equal endpoints) are
@@ -230,19 +274,23 @@ class _TripMapState extends State<TripMap> {
     } catch (_) {}
   }
 
-  /// Every coordinate the camera should frame: mapped items plus geocoded
-  /// stays, plus the home airport when its overlay has a visible leg (the
-  /// camera must never stretch to a point nothing connects to). Mirrors the
-  /// fitPoints assembled in [build]. Static so it can run against an
-  /// oldWidget's lists in [didUpdateWidget].
+  /// Every coordinate the camera should frame: destination pins (overview
+  /// mode) or mapped items, plus geocoded stays, plus the home airport when
+  /// its overlay has a visible leg (the camera must never stretch to a point
+  /// nothing connects to). Mirrors the fitPoints assembled in [build]. Static
+  /// so it can run against an oldWidget's lists in [didUpdateWidget].
   static List<LatLng> _fitPointsOf(
+    List<TripMapDestination>? destinations,
     List<ItineraryItem> items,
     List<Accommodation> accommodations,
     LatLng? homePoint,
   ) {
     final points = <LatLng>[
-      for (final it in items)
-        if (_hasCoords(it)) LatLng(it.latitude, it.longitude),
+      if (_destinationMode(destinations))
+        for (final d in destinations!) d.point
+      else
+        for (final it in items)
+          if (_hasCoords(it)) LatLng(it.latitude, it.longitude),
     ];
     for (final a in accommodations) {
       if (TripMap.stayHasCoords(a)) {
@@ -254,6 +302,7 @@ class _TripMapState extends State<TripMap> {
   }
 
   List<LatLng> _fitPoints() => _fitPointsOf(
+        widget.destinations,
         widget.items,
         widget.accommodations,
         _effectiveHome(widget.home)?.point,
@@ -276,6 +325,7 @@ class _TripMapState extends State<TripMap> {
       // flipping null → resolved (the IATA lookup completing after mount)
       // changes the fit-point set, so the camera refits to include home.
       final oldPoints = _fitPointsOf(
+        oldWidget.destinations,
         oldWidget.items,
         oldWidget.accommodations,
         _effectiveHome(oldWidget.home)?.point,
@@ -330,7 +380,11 @@ class _TripMapState extends State<TripMap> {
       }
     }
 
-    if (mapped.isEmpty && stays.isEmpty) {
+    final destMode = _destinationMode(widget.destinations);
+
+    // Destination mode always has ≥2 route points to show, even when a
+    // category lens empties the day-filtered items.
+    if (mapped.isEmpty && stays.isEmpty && !destMode) {
       return Container(
         color: theme.colorScheme.surfaceContainerHighest,
         // Keep the centered content clear of the day-chip band's *visible*
@@ -352,21 +406,25 @@ class _TripMapState extends State<TripMap> {
       );
     }
 
-    final points = mapped.map((m) => m.point).toList();
+    // The route walks the destinations (city legs) in overview mode,
+    // per-item points otherwise; pins, polyline, and arrows all follow it.
+    final routePoints = destMode
+        ? [for (final d in widget.destinations!) d.point]
+        : mapped.map((m) => m.point).toList();
     final home = _effectiveHome(widget.home);
     // Camera framing covers stays and the home airport too; the route
-    // polyline sticks to [points].
+    // polyline sticks to [routePoints].
     final fitPoints = [
-      ...points,
+      ...routePoints,
       for (final s in stays) s.point,
       if (home != null) home.point,
     ];
     final selected = _selectedPoint();
 
     // Home-airport legs (outbound home → first city, return last city →
-    // home). Kept out of [mapped]/[points]: appending there would silently
-    // reindex the numbered pins and break segment-label adjacency, so the
-    // legs get their own dashed polylines and arrow markers below.
+    // home). Kept out of [mapped]/[routePoints]: appending there would
+    // silently reindex the numbered pins and break segment-label adjacency,
+    // so the legs get their own dashed polylines and arrow markers below.
     final homeSegments = <({LatLng a, LatLng b})>[
       if (home != null && home.outboundTo != null)
         (a: home.point, b: home.outboundTo!),
@@ -377,40 +435,46 @@ class _TripMapState extends State<TripMap> {
     // Travel-time labels at the midpoint of each within-city leg (only between
     // truly adjacent itinerary stops that are both mapped). Kept as endpoint
     // records — _SegmentLabelLayer decides per camera frame which are visible.
+    // Destination mode has none: segmentLabels hold within-city legs by
+    // construction, and the overview draws only city→city legs.
     final labelSegments = <({LatLng a, LatLng b, String text})>[];
-    for (var k = 0; k < mapped.length - 1; k++) {
-      final a = mapped[k];
-      final b = mapped[k + 1];
-      if (b.item.position != a.item.position + 1) continue;
-      final label = widget.segmentLabels[a.item.position];
-      if (label == null) continue;
-      labelSegments.add((a: a.point, b: b.point, text: label));
+    if (!destMode) {
+      for (var k = 0; k < mapped.length - 1; k++) {
+        final a = mapped[k];
+        final b = mapped[k + 1];
+        if (b.item.position != a.item.position + 1) continue;
+        final label = widget.segmentLabels[a.item.position];
+        if (label == null) continue;
+        labelSegments.add((a: a.point, b: b.point, text: label));
+      }
     }
 
-    // Direction arrows on every drawn segment (each consecutive pair of mapped
+    // Direction arrows on every drawn segment (each consecutive pair of route
     // points, matching the polyline). Placed at the midpoint, or further along
     // when a travel-time label already occupies the midpoint. Placement stays
     // static even though labels hide dynamically on short legs: on such a leg
     // (< _SegmentLabelLayer.minLegPx on screen) t=0.7 vs 0.5 differs by a few
-    // px and the arrow tucks behind the pins anyway.
+    // px and the arrow tucks behind the pins anyway. In destination mode
+    // [routePoints] and [mapped] no longer align, so the label lookup (an
+    // item-mode concept) must not touch [mapped] there.
     final arrowMarkers = <Marker>[];
-    for (var k = 0; k < mapped.length - 1; k++) {
-      final a = mapped[k];
-      final b = mapped[k + 1];
-      if (a.point == b.point) continue;
-      final hasLabel =
-          b.item.position == a.item.position + 1 &&
-          widget.segmentLabels[a.item.position] != null;
+    for (var k = 0; k < routePoints.length - 1; k++) {
+      final a = routePoints[k];
+      final b = routePoints[k + 1];
+      if (a == b) continue;
+      final hasLabel = !destMode &&
+          mapped[k + 1].item.position == mapped[k].item.position + 1 &&
+          widget.segmentLabels[mapped[k].item.position] != null;
       final t = hasLabel ? 0.7 : 0.5;
       arrowMarkers.add(
         Marker(
           point: LatLng(
-            a.point.latitude + (b.point.latitude - a.point.latitude) * t,
-            a.point.longitude + (b.point.longitude - a.point.longitude) * t,
+            a.latitude + (b.latitude - a.latitude) * t,
+            a.longitude + (b.longitude - a.longitude) * t,
           ),
           width: 18,
           height: 18,
-          child: _SegmentArrow(angle: _bearing(a.point, b.point)),
+          child: _SegmentArrow(angle: _bearing(a, b)),
         ),
       );
     }
@@ -471,21 +535,21 @@ class _TripMapState extends State<TripMap> {
                 interactionOptions: interaction,
               )
             : fitPoints.length == 1
-            // Single point: bounds collapse, so center with a sensible zoom.
-            ? appMapOptions(
-                initialCenter: fitPoints.first,
-                initialZoom: 13,
-                minZoom: minZoom,
-                interactionOptions: interaction,
-              )
-            : appMapOptions(
-                initialCameraFit: CameraFit.bounds(
-                  bounds: LatLngBounds.fromPoints(fitPoints),
-                  padding: _fitPadding,
-                ),
-                minZoom: minZoom,
-                interactionOptions: interaction,
-              );
+                // Single point: bounds collapse, so center with a sensible zoom.
+                ? appMapOptions(
+                    initialCenter: fitPoints.first,
+                    initialZoom: 13,
+                    minZoom: minZoom,
+                    interactionOptions: interaction,
+                  )
+                : appMapOptions(
+                    initialCameraFit: CameraFit.bounds(
+                      bounds: LatLngBounds.fromPoints(fitPoints),
+                      padding: _fitPadding,
+                    ),
+                    minZoom: minZoom,
+                    interactionOptions: interaction,
+                  );
 
         return Stack(
           children: [
@@ -494,18 +558,18 @@ class _TripMapState extends State<TripMap> {
               options: options,
               children: [
                 ...appMapTileLayers(context),
-                if (points.length >= 2)
+                if (routePoints.length >= 2)
                   PolylineLayer(
                     polylines: [
                       // Two passes make a thin line with a soft glow that stays
                       // legible over satellite imagery.
                       Polyline(
-                        points: points,
+                        points: routePoints,
                         strokeWidth: 6,
                         color: Colors.white.withValues(alpha: 0.25),
                       ),
                       Polyline(
-                        points: points,
+                        points: routePoints,
                         strokeWidth: 2,
                         color: Colors.white.withValues(alpha: 0.95),
                       ),
@@ -583,51 +647,75 @@ class _TripMapState extends State<TripMap> {
                         ),
                     ],
                   ),
-                MarkerClusterLayerWidget(
-                  options: MarkerClusterLayerOptions(
-                    maxClusterRadius: 45,
-                    size: const Size(32, 32),
-                    padding: const EdgeInsets.all(40),
+                if (destMode)
+                  // Trip overview: one numbered pin per destination (city
+                  // leg), 1..N in visit order — a plain layer, never
+                  // clustered: a count bubble here reads as a bogus route
+                  // number at world zoom.
+                  MarkerLayer(
                     markers: [
-                      // Labels count 1..N over what this map view shows (the whole
-                      // trip on All, one day on Day N) — not the item's trip-wide
-                      // position, which reads as arbitrary once the view filters
-                      // or skips ungeocoded items.
-                      for (final (k, m) in mapped.indexed)
+                      for (final (k, d) in widget.destinations!.indexed)
                         Marker(
-                          point: m.point,
-                          // Transparent 44px halo around the 24/28px dot, tap
-                          // handling on the whole box; centered so the dot stays
-                          // anchored on its coordinate (see _pinHitBox).
+                          point: d.point,
+                          // Transparent 44px halo around the 24px dot; the
+                          // box stays centered on the coordinate (see
+                          // _pinHitBox).
                           width: _pinHitBox,
                           height: _pinHitBox,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: widget.onPinTap == null
-                                ? null
-                                : () => widget.onPinTap!(m.item.position),
-                            child: Center(
-                              child: SizedBox.square(
-                                dimension:
-                                    widget.selectedPosition == m.item.position
-                                    ? 28
-                                    : 24,
-                                child: _Pin(
-                                  label: '${k + 1}',
-                                  category: m.item.category,
-                                  selected:
-                                      widget.selectedPosition ==
-                                      m.item.position,
+                          child: _DestinationPin(
+                            label: '${k + 1}',
+                            name: d.label,
+                            dates: d.dates,
+                          ),
+                        ),
+                    ],
+                  )
+                else
+                  MarkerClusterLayerWidget(
+                    options: MarkerClusterLayerOptions(
+                      maxClusterRadius: 45,
+                      size: const Size(32, 32),
+                      padding: const EdgeInsets.all(40),
+                      markers: [
+                        // Labels count 1..N over what this map view shows (the
+                        // whole trip on All, one day on Day N) — not the item's
+                        // trip-wide position, which reads as arbitrary once the
+                        // view filters or skips ungeocoded items.
+                        for (final (k, m) in mapped.indexed)
+                          Marker(
+                            point: m.point,
+                            // Transparent 44px halo around the 24/28px dot, tap
+                            // handling on the whole box; centered so the dot
+                            // stays anchored on its coordinate (see
+                            // _pinHitBox).
+                            width: _pinHitBox,
+                            height: _pinHitBox,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: widget.onPinTap == null
+                                  ? null
+                                  : () => widget.onPinTap!(m.item.position),
+                              child: Center(
+                                child: SizedBox.square(
+                                  dimension:
+                                      widget.selectedPosition == m.item.position
+                                          ? 28
+                                          : 24,
+                                  child: _Pin(
+                                    label: '${k + 1}',
+                                    category: m.item.category,
+                                    selected: widget.selectedPosition ==
+                                        m.item.position,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
-                    builder: (context, clusterMarkers) =>
-                        _ClusterBubble(count: clusterMarkers.length),
+                      ],
+                      builder: (context, clusterMarkers) =>
+                          _ClusterBubble(count: clusterMarkers.length),
+                    ),
                   ),
-                ),
                 appMapAttribution(),
               ],
             ),
@@ -797,13 +885,18 @@ class _Pin extends StatelessWidget {
   final String? category;
   final bool selected;
 
+  /// Overrides the category tint ([_DestinationPin]: one consistent color).
+  final Color? color;
+
   const _Pin({
     required this.label,
     required this.category,
     required this.selected,
+    this.color,
   });
 
-  Color _color(ColorScheme scheme) => AppColors.forCategory(category, scheme);
+  Color _color(ColorScheme scheme) =>
+      color ?? AppColors.forCategory(category, scheme);
 
   @override
   Widget build(BuildContext context) {
@@ -831,6 +924,49 @@ class _Pin extends StatelessWidget {
           color: Colors.white,
           fontSize: 11,
           fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+/// A destination (city-leg) pin for the trip-overview mode: the same round
+/// numbered dot as itinerary pins, in one consistent color (category tinting
+/// is meaningless for a whole city). Destinations sit outside the
+/// position-based selection sync, so a tap shows a self-contained tooltip
+/// (city + dates) like [_StayPin] instead of driving [TripMap.onPinTap].
+class _DestinationPin extends StatelessWidget {
+  /// The 1..N visit-order ordinal shown in the dot.
+  final String label;
+
+  /// Display city for the tooltip, already localized by the caller.
+  final String name;
+
+  /// Pre-formatted date range; null shows the name alone.
+  final String? dates;
+
+  const _DestinationPin({
+    required this.label,
+    required this.name,
+    this.dates,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // The tooltip's tap detector fills the marker's [_pinHitBox] box, so the
+    // whole transparent halo around the 24px dot triggers it.
+    return Tooltip(
+      message: dates == null ? name : '$name\n$dates',
+      triggerMode: TooltipTriggerMode.tap,
+      child: Center(
+        child: SizedBox.square(
+          dimension: 24,
+          child: _Pin(
+            label: label,
+            category: null,
+            selected: false,
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
       ),
     );
