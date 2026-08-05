@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -587,6 +588,182 @@ void main() {
 
     expect(find.text('No mapped places'), findsNothing);
     expect(find.byIcon(Icons.hotel), findsOneWidget);
+  });
+
+  group('destination mode (trip overview)', () {
+    const dests = [
+      TripMapDestination(
+        label: 'Paris',
+        point: LatLng(48.8566, 2.3522),
+        dates: 'Jun 10 – Jun 12',
+      ),
+      TripMapDestination(
+        label: 'Rome',
+        point: LatLng(41.9028, 12.4964),
+        dates: 'Jun 12 – Jun 14',
+      ),
+      TripMapDestination(label: 'Athens', point: LatLng(37.9838, 23.7275)),
+    ];
+
+    /// Pin labels scoped to the map: the trip surfaces around it render
+    /// their own numbers.
+    Finder inMap(String text) =>
+        find.descendant(of: find.byType(FlutterMap), matching: find.text(text));
+
+    testWidgets('one numbered pin per destination in visit order, unclustered',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        _host(TripMap(items: items, destinations: dests)),
+      );
+      await tester.pump();
+
+      // 1..N over the destinations — the items (which would render two pins
+      // of their own) stay off the overview entirely.
+      expect(inMap('1'), findsOneWidget);
+      expect(inMap('2'), findsOneWidget);
+      expect(inMap('3'), findsOneWidget);
+      expect(inMap('4'), findsNothing);
+      expect(find.byType(MarkerClusterLayerWidget), findsNothing);
+
+      // Order lock: pin "2" sits on the 2nd destination's coordinate.
+      final mapTopLeft = tester.getTopLeft(find.byType(FlutterMap));
+      final projected = _camera(tester).latLngToScreenOffset(dests[1].point);
+      final pinCenter = tester.getCenter(inMap('2'));
+      expect((pinCenter - (mapTopLeft + projected)).distance, lessThan(1.0));
+    });
+
+    testWidgets('a single destination falls back to per-item pins', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(TripMap(items: items, destinations: [dests.first])),
+      );
+      await tester.pump();
+
+      expect(find.byType(MarkerClusterLayerWidget), findsOneWidget);
+      expect(inMap('1'), findsOneWidget);
+      expect(inMap('2'), findsOneWidget);
+    });
+
+    testWidgets('destination mode renders with no mappable items (lens-proof)',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        _host(const TripMap(items: [], destinations: dests)),
+      );
+      await tester.pump();
+
+      expect(find.text('No mapped places'), findsNothing);
+      expect(inMap('1'), findsOneWidget);
+      expect(inMap('3'), findsOneWidget);
+      // The route walks the destinations: one arrow per city→city leg.
+      expect(find.byIcon(Icons.navigation), findsNWidgets(2));
+    });
+
+    testWidgets(
+        'tap shows a city tooltip — dates when known, label alone '
+        'otherwise', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        _host(const TripMap(items: [], destinations: dests)),
+      );
+      await tester.pump();
+
+      // The overlay flow on the mid-map pin (the SE-most pin sits under the
+      // zoom/reset column, where a tap would hit the buttons instead).
+      await tester.tap(inMap('2'));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Rome\nJun 12 – Jun 14'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      // Dates-less destination: label-only message, asserted on the widget.
+      final athens = tester.widget<Tooltip>(
+        find.ancestor(of: inMap('3'), matching: find.byType(Tooltip)),
+      );
+      expect(athens.message, 'Athens');
+    });
+
+    testWidgets('travel-time labels never render on the overview', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          TripMap(
+            items: items,
+            segmentLabels: const {0: '12 min'},
+            destinations: dests,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('12 min'), findsNothing);
+    });
+
+    testWidgets(
+        'stays and home legs still render; the fit frames every '
+        'destination plus home', (WidgetTester tester) async {
+      const homePoint = LatLng(40.6895, -74.1745); // Newark
+      final home = TripMapHome(
+        point: homePoint,
+        label: 'EWR',
+        outboundTo: dests.first.point,
+        returnFrom: dests.last.point,
+      );
+      const stays = [
+        Accommodation(
+          id: 'a1',
+          name: 'Hotel Roma',
+          latitude: 41.9,
+          longitude: 12.5,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _host(
+          TripMap(
+            items: items,
+            accommodations: stays,
+            home: home,
+            destinations: dests,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+      expect(find.byIcon(Icons.hotel), findsOneWidget);
+      // Two destination legs + outbound + return home legs.
+      expect(find.byIcon(Icons.navigation), findsNWidgets(4));
+
+      final bounds = _camera(tester).visibleBounds;
+      for (final d in dests) {
+        expect(bounds.contains(d.point), isTrue);
+      }
+      expect(bounds.contains(homePoint), isTrue);
+    });
+
+    testWidgets('dropping the destinations (day view) refits to the items', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(TripMap(items: items, destinations: dests)),
+      );
+      await tester.pump();
+      expect(_camera(tester).visibleBounds.contains(dests.last.point), isTrue);
+
+      // Same fitSignature — the content comparison alone must notice the
+      // destination points leaving the fit set and reframe on the items.
+      await tester.pumpWidget(_host(TripMap(items: items)));
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        _camera(tester).visibleBounds.contains(dests.last.point),
+        isFalse,
+      );
+      expect(find.byType(MarkerClusterLayerWidget), findsOneWidget);
+    });
   });
 
   group('single world fills a wide map band (no background side bars)', () {

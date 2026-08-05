@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
@@ -8,6 +10,7 @@ import 'package:travel_route_planner/models/itinerary_item.dart';
 import 'package:travel_route_planner/providers/flights_provider.dart';
 import 'package:travel_route_planner/screens/trip_map_screen.dart';
 import 'package:travel_route_planner/widgets/map_day_chips.dart';
+import 'package:travel_route_planner/widgets/trip_map.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -35,6 +38,7 @@ Widget _app({
   String? homeAirport,
   LatLng? firstCityPoint,
   LatLng? lastCityPoint,
+  List<TripMapDestination>? destinations,
   List<Override> overrides = const [],
 }) {
   return ProviderScope(
@@ -58,6 +62,7 @@ Widget _app({
         homeAirport: homeAirport,
         firstCityPoint: firstCityPoint,
         lastCityPoint: lastCityPoint,
+        destinations: destinations,
       ),
     ),
   );
@@ -205,6 +210,48 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('destination pins (trip overview)', () {
+    const dests = [
+      TripMapDestination(label: 'Paris', point: LatLng(48.8566, 2.3522)),
+      TripMapDestination(label: 'Rome', point: LatLng(41.9028, 12.4964)),
+    ];
+
+    Finder inMap(String text) =>
+        find.descendant(of: find.byType(FlutterMap), matching: find.text(text));
+
+    Future<void> tapDay(WidgetTester tester, String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MapDayChips),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+        'All shows destination pins; day chips flip to item pins '
+        'and back', (tester) async {
+      await tester.pumpWidget(_app(destinations: dests));
+      await tester.pumpAndSettle();
+
+      // All: the overview — numbered destinations, no clusterer.
+      expect(find.byType(MarkerClusterLayerWidget), findsNothing);
+      expect(inMap('1'), findsOneWidget);
+      expect(inMap('2'), findsOneWidget);
+
+      // A day selection restores per-item pins (the fixture's two items).
+      await tapDay(tester, 'Day 1');
+      expect(find.byType(MarkerClusterLayerWidget), findsOneWidget);
+
+      await tapDay(tester, 'All');
+      expect(find.byType(MarkerClusterLayerWidget), findsNothing);
+      expect(inMap('1'), findsOneWidget);
+      expect(inMap('2'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

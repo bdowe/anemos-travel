@@ -49,6 +49,7 @@ import '../utils/share_link.dart';
 import '../utils/tracked_launch.dart';
 import '../utils/trip_days.dart';
 import '../utils/trip_format.dart';
+import '../utils/trip_legs.dart';
 import '../widgets/add_itinerary_item_dialog.dart';
 import '../widgets/add_to_trip_sheet.dart';
 import '../widgets/app_map.dart';
@@ -80,8 +81,9 @@ typedef _Coord = ({double lat, double lng});
 
 /// Canonical group key for items whose locality can't be resolved. It keys the
 /// collapse/header registries and gates refine/events/local sections, so it is
-/// NEVER translated — only its display label is (specs/i18n-spanish).
-const _kOtherPlaces = 'Other places';
+/// NEVER translated — only its display label is (specs/i18n-spanish). Now
+/// canonically defined next to the shared leg split (utils/trip_legs.dart).
+const _kOtherPlaces = kOtherPlacesLabel;
 
 /// Display text for a city-group label: the canonical [_kOtherPlaces] key gets
 /// a translated label, every real city keeps the name as-is.
@@ -1873,20 +1875,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   }
 
   /// The group an item belongs to: its day-trip hub city when set, else its own
-  /// city. Day trips (e.g. Versailles) thus fold under the hub (e.g. Paris).
-  String? _hubOf(ItineraryItem item) {
-    final h = item.dayTripFrom?.trim();
-    if (h != null && h.isNotEmpty) return h;
-    return _cityOf(item);
-  }
+  /// city (the shared rule in utils/trip_legs.dart).
+  String? _hubOf(ItineraryItem item) => hubOf(item);
 
   /// The city an item belongs to: the AI-assigned [ItineraryItem.city] when set,
-  /// otherwise a best-effort parse of the formatted address.
-  String? _cityOf(ItineraryItem item) {
-    final c = item.city?.trim();
-    if (c != null && c.isNotEmpty) return c;
-    return _cityFromAddress(item.address);
-  }
+  /// otherwise a best-effort parse of the formatted address (shared rule in
+  /// utils/trip_legs.dart).
+  String? _cityOf(ItineraryItem item) => cityOf(item);
 
   /// True for the AI's "city filler" placeholder — an item whose name is just
   /// the city it renders under (e.g. name 'Prague', city 'Prague'), emitted for
@@ -1899,31 +1894,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return eq(_cityOf(item)) || eq(item.dayTripFrom);
   }
 
-  /// Fallback city from a formatted address. Drops the country (last segment)
-  /// and strips postal-code tokens from the segment before it, e.g.
-  /// "Av. ..., 1400-206 Lisboa, Portugal" -> "Lisboa"; a bare "Paris" stays as is.
-  String? _cityFromAddress(String? address) {
-    if (address == null) return null;
-    final parts = address
-        .split(',')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return null;
-    if (parts.length == 1) return parts.first;
-    final candidate = parts[parts.length - 2]; // segment before the country
-    final tokens = candidate
-        .split(RegExp(r'\s+'))
-        .where((t) =>
-            !RegExp(r'^[0-9][0-9\-]*$').hasMatch(t)) // drop postal tokens
-        .toList();
-    final city = tokens.join(' ').trim();
-    return city.isEmpty ? candidate : city;
-  }
-
-  /// Groups items into consecutive runs sharing the same locality, labelling
-  /// each run with the date range precomputed for that location (keyed by the
-  /// first item's position).
+  /// Groups items into consecutive runs sharing the same locality (the shared
+  /// [tripLegs] split), labelling each run with the date range precomputed for
+  /// that location (keyed by the first item's position).
   ///
   /// [label] is the display city and stays shared across runs (it feeds the
   /// per-city weather/events/local-intel lookups). [key] identifies the *run*:
@@ -1943,33 +1916,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     List<ItineraryItem> items,
     Map<int, String> locationDates,
   ) {
-    final groups = <({
-      String key,
-      String label,
-      String? dateRange,
-      List<ItineraryItem> items
-    })>[];
-    final seen = <String, int>{};
-    String? currentKey;
-    List<ItineraryItem>? current;
-    for (final item in items) {
-      final locality = _hubOf(item);
-      if (current == null || locality != currentKey) {
-        current = [];
-        currentKey = locality;
-        final label = locality ?? _kOtherPlaces;
-        final n = (seen[label] ?? 0) + 1;
-        seen[label] = n;
-        groups.add((
-          key: n == 1 ? label : '$label#$n',
-          label: label,
-          dateRange: locationDates[item.position],
-          items: current,
-        ));
-      }
-      current.add(item);
-    }
-    return groups;
+    return [
+      for (final leg in tripLegs(items))
+        (
+          key: leg.key,
+          label: leg.label,
+          dateRange: locationDates[leg.items.first.position],
+          items: leg.items,
+        ),
+    ];
   }
 
   /// Renders a hub group's items as slivers, split into "Day N" sub-sections
@@ -3660,23 +3615,20 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Maps each itinerary item's position to its location's formatted date range.
   /// Delegates to [_locationGroupRanges] so the itinerary labels and the booking
-  /// checklist derive dates the same way.
+  /// checklist derive dates the same way. The two derivations index-align by
+  /// construction: both run the same [tripLegs] split over the same items.
   Map<int, String> _locationDates(Trip trip) {
     final items = trip.items ?? const <ItineraryItem>[];
     if (items.isEmpty) return const {};
     final ranges = _locationGroupRanges(trip);
+    final legs = tripLegs(items);
     final result = <int, String>{};
-    var gi = -1;
-    String? currentKey;
-    for (final item in items) {
-      final locality = _hubOf(item);
-      if (gi < 0 || locality != currentKey) {
-        gi++;
-        currentKey = locality;
-      }
+    for (var gi = 0; gi < legs.length; gi++) {
       final r = ranges[gi];
-      if (r.start != null && r.end != null) {
-        result[item.position] = _formatRange(r.start!, r.end!);
+      if (r.start == null || r.end == null) continue;
+      final text = _formatRange(r.start!, r.end!);
+      for (final item in legs[gi].items) {
+        result[item.position] = text;
       }
     }
     return result;
@@ -3694,30 +3646,21 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // letting them back in via _accDateRangeFor would freeze the ranges.
     final stays = _confirmedStays(trip);
 
-    // Canonical locality runs over the full itinerary.
-    final groups = <List<ItineraryItem>>[];
-    String? currentKey;
-    for (final item in items) {
-      final locality = _hubOf(item);
-      if (groups.isEmpty || locality != currentKey) {
-        groups.add([]);
-        currentKey = locality;
-      }
-      groups.last.add(item);
-    }
+    // Canonical locality runs over the full itinerary (shared split).
+    final legs = tripLegs(items);
 
     // Auto-split the trip span across groups, weighted by item count.
     final start = DateTime.tryParse(trip.startDate ?? '');
     final end = DateTime.tryParse(trip.endDate ?? '');
     final auto =
-        List<({DateTime start, DateTime end})?>.filled(groups.length, null);
+        List<({DateTime start, DateTime end})?>.filled(legs.length, null);
     if (start != null && end != null && !end.isBefore(start)) {
       final totalDays = end.difference(start).inDays + 1;
-      final n = groups.length;
+      final n = legs.length;
       if (n <= totalDays) {
         // Enough days: give each location a contiguous slice weighted by size.
-        final counts =
-            _allocateDays(totalDays, [for (final g in groups) g.length]);
+        final counts = _allocateDays(
+            totalDays, [for (final leg in legs) leg.items.length]);
         var cursor = start;
         for (var i = 0; i < n; i++) {
           final rStart = cursor.isAfter(end) ? end : cursor;
@@ -3739,17 +3682,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
     final result =
         <({String label, DateTime? start, DateTime? end, _Coord? coord})>[];
-    for (var i = 0; i < groups.length; i++) {
-      final g = groups[i];
-      final locality = _hubOf(g.first);
-      final accRange = _accDateRangeFor(locality, stays);
-      final dayRange = _dayRangeFor(g, start);
+    for (var i = 0; i < legs.length; i++) {
+      final leg = legs[i];
+      // The raw nullable locality feeds the stay-address match — the
+      // 'Other places' placeholder label would falsely substring-match.
+      final accRange = _accDateRangeFor(leg.locality, stays);
+      final dayRange = _dayRangeFor(leg.items, start);
       final a = auto[i];
       result.add((
-        label: locality ?? _kOtherPlaces,
+        label: leg.label,
         start: accRange?.start ?? dayRange?.start ?? a?.start,
         end: accRange?.end ?? dayRange?.end ?? a?.end,
-        coord: _groupCoord(g),
+        coord: leg.coord,
       ));
     }
     return result;
@@ -3769,17 +3713,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     if (arrival == null) return own;
     if (own == null || arrival.isBefore(own)) return arrival;
     return own;
-  }
-
-  /// A representative coordinate for a location group: the first item with real
-  /// coordinates. (0,0) is the "no location" sentinel for manually-added places.
-  _Coord? _groupCoord(List<ItineraryItem> group) {
-    for (final it in group) {
-      if (it.latitude != 0 || it.longitude != 0) {
-        return (lat: it.latitude, lng: it.longitude);
-      }
-    }
-    return null;
   }
 
   /// Date range for a location group from its items' AI-assigned day numbers,
@@ -4270,6 +4203,28 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
+  /// Destination pins for the trip-overview map (the All chip): one per
+  /// location group with a real coordinate, in visit order, derived from the
+  /// FULL itinerary — never the day/category-filtered view, which would shift
+  /// the numbering (the home-leg doctrine in [_openFullMap]). Ungeocoded
+  /// groups are skipped so the visible numbering stays contiguous; TripMap
+  /// falls back to per-item pins below two entries, keeping single-city trips
+  /// on place-level detail.
+  List<TripMapDestination> _mapDestinations(Trip trip) {
+    final l10n = context.l10n;
+    return [
+      for (final r in _locationGroupRanges(trip))
+        if (r.coord != null)
+          TripMapDestination(
+            label: _groupLabelText(l10n, r.label),
+            point: LatLng(r.coord!.lat, r.coord!.lng),
+            dates: r.start != null && r.end != null
+                ? _formatRange(r.start!, r.end!)
+                : null,
+          ),
+    ];
+  }
+
   /// The rounded map card shared by the wide (pinned header) and phone
   /// (scroll-away) layouts. When [expandable], the map is a static preview:
   /// an [AbsorbPointer] swallows the pin/stay gesture detectors so the whole
@@ -4287,6 +4242,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     Widget map = TripMap(
       items: _dayFiltered(trip, _selectedDay),
       accommodations: _dayFilteredStays(trip, _selectedDay),
+      destinations: _selectedDay == null ? _mapDestinations(trip) : null,
       selectedPosition: _selectedPosition,
       // Unfiltered by day: TripMap's position+1 adjacency guard drops labels
       // across the gaps a day filter creates, and the category filter
@@ -4372,6 +4328,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         fullscreenDialog: true,
         builder: (_) => TripMapScreen(
           title: _displayTitle(trip),
+          destinations: _mapDestinations(trip),
           homeAirport: _homeAirport,
           firstCityPoint:
               firstCoord == null ? null : LatLng(firstCoord.lat, firstCoord.lng),
