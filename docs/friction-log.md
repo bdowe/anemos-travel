@@ -5,6 +5,31 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-05 — trip-detail dogfooding (leg dates, round two)
+
+- **[app] BREAKAGE → fixed (specs/set-leg-dates v2):** the SAME "change LA to
+  Sep 24–27" ask failed again after PR #287 — now the tool "succeeded" (or
+  honestly no-opped: "already spans Sep 24–27") while the page still showed
+  Sep 20–24, plus a "Trip updated" chip on pure no-ops. Root cause: the
+  screen derives a leg's visible dates as [previous leg's end → its max item
+  day] and rebuilds the stay/flight rows (booking_todos) from item days on
+  every load, but the tool moved a different axis — min-day-anchored
+  renumbering on a placeholder trip whose single item day encodes the
+  DEPARTURE, and a leg-only cascade that left Panama City's end (= LA's
+  visible start) untouched. The no-op branch echoed the requested range and
+  `trip_updated` fired before the change check. Compounding: PR #287's
+  "client re-derives drafts on refetch" premise had been false since PR #274
+  removed the drafts sync — frozen auto=true stays also masked trip-health
+  lodging gaps. Fix: end-anchored item renumbering, previous-leg end extends
+  to meet a later start in the same tx (decision 2026-08-05; overlap still
+  narrate-and-ask), zero-change calls commit nothing (no SSE) and report
+  actual saved state, `get_trip` now lists stay/transport/todo dates,
+  migration 00053 deletes the frozen drafts + `checkLodging` skips auto,
+  and the city-header range is arrival-adjusted to match the stay rows.
+  Lessons: **a write tool must move the axis the UI renders — verify against
+  the derived view, not the storage model**, and **no-op results must
+  describe post-state read back from the DB, never echo the request**.
+
 ## 2026-08-04 — trip-detail dogfooding (map home legs)
 
 - **[app] Friction re-filed → fixed (shipped-but-unreachable):** "Map doesn't

@@ -137,6 +137,15 @@ func TestCheckLodging_GateAndCoverage(t *testing.T) {
 		t.Fatalf("single-night run should keep the singular message, got %q", fs[0].Message)
 	}
 
+	// An auto draft is a suggestion, not lodging — it must not mask the
+	// uncovered-nights finding even when it "covers" every night.
+	autoAcc := []store.Accommodation{{ID: uuid.New(), Name: "Suggested stay", Auto: true,
+		CheckIn: dateVal(t, "2026-08-01"), CheckOut: dateVal(t, "2026-08-04")}}
+	fs = checkLodging("en", exportData{Trip: trip, Accommodations: autoAcc})
+	if len(fs) != 1 || fs[0].Day == nil || *fs[0].Day != 1 {
+		t.Fatalf("auto draft masked the lodging gap: %+v", fs)
+	}
+
 	// Empty draft (draft status, no accommodations) is not nagged.
 	draft := trip
 	draft.Status = "draft"

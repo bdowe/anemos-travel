@@ -572,3 +572,34 @@ func TestGetTripToolShowsBookingChecklist(t *testing.T) {
 		t.Fatalf("auto marker missing from detail:\n%s", detail)
 	}
 }
+
+// get_trip must expose stay/transport dates so the model can verify the
+// calendar state it narrates after a date-change tool; auto drafts stay
+// invisible.
+func TestGetTripToolShowsStayAndTransportDates(t *testing.T) {
+	resetDB(t)
+	owner, _ := createTestUser(t, "agent@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	seedMultiCityTrip(t, trip, owner.ID)
+
+	detail, isErr := runGetTripTool(context.Background(), true, owner.ID, nil,
+		json.RawMessage(`{"trip_id":"`+trip.ID.String()+`"}`))
+	if isErr {
+		t.Fatalf("detail errored: %q", detail)
+	}
+	for _, want := range []string{
+		"Stays:",
+		`"Hotel Casco Viejo" 2026-09-15 to 2026-09-20 (not booked)`,
+		`"Stay in Los Angeles" 2026-09-20 to 2026-09-24 (not booked)`,
+		"Transport:",
+		"flight Panama City -> Los Angeles, departs 2026-09-20",
+		"flight Los Angeles -> Newark, departs 2026-09-24",
+	} {
+		if !strings.Contains(detail, want) {
+			t.Fatalf("detail missing %q:\n%s", want, detail)
+		}
+	}
+	if strings.Contains(detail, "Suggested stay in Los Angeles") {
+		t.Fatalf("auto draft leaked into detail:\n%s", detail)
+	}
+}
