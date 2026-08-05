@@ -365,6 +365,12 @@ func checkLodging(locale string, d exportData) []Finding {
 		night := start.AddDate(0, 0, n)
 		covered := false
 		for _, a := range d.Accommodations {
+			// Auto drafts are itinerary-derived suggestions, not real lodging —
+			// counting them as coverage hides genuinely unbooked nights (same
+			// skip as checkBookings).
+			if a.Auto {
+				continue
+			}
 			if stayCoversNight(a.CheckIn, a.CheckOut, night) {
 				covered = true
 				break

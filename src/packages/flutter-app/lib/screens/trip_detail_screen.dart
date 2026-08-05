@@ -3616,7 +3616,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Maps each itinerary item's position to its location's formatted date range.
   /// Delegates to [_locationGroupRanges] so the itinerary labels and the booking
   /// checklist derive dates the same way. The two derivations index-align by
-  /// construction: both run the same [tripLegs] split over the same items.
+  /// construction: both run the same [tripLegs] split over the same items. The
+  /// range start is arrival-adjusted via [_stayStartFor], matching the stay
+  /// todos — a leg whose items collapse onto one day reads "Sep 24 – Sep 27",
+  /// not a bare "Sep 27" contradicting the stay row beneath it.
   Map<int, String> _locationDates(Trip trip) {
     final items = trip.items ?? const <ItineraryItem>[];
     if (items.isEmpty) return const {};
@@ -3624,9 +3627,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final legs = tripLegs(items);
     final result = <int, String>{};
     for (var gi = 0; gi < legs.length; gi++) {
-      final r = ranges[gi];
-      if (r.start == null || r.end == null) continue;
-      final text = _formatRange(r.start!, r.end!);
+      final start = _stayStartFor(ranges, gi);
+      final end = ranges[gi].end;
+      if (start == null || end == null) continue;
+      final text = _formatRange(start, end);
       for (final item in legs[gi].items) {
         result[item.position] = text;
       }

@@ -109,4 +109,44 @@ void main() {
     expect(gothenburgStay['subtitle'], 'Aug 24 – Aug 26');
     expect(gothenburgStay['depart_date'], '2026-08-24');
   });
+
+  testWidgets(
+      'city header range is arrival-adjusted like the stay todos',
+      (WidgetTester tester) async {
+    // Same collapsed-leg shape: Madrid's one item sits on day 5 (Aug 28), so
+    // its raw range is that single day. The header must read from the arrival
+    // (Gothenburg's end, Aug 26) — a bare "Aug 28" chip would contradict the
+    // stay row right beneath it.
+    final trip = Trip(
+      id: 't1',
+      title: 'Iberia',
+      status: 'planned',
+      startDate: '2026-08-24',
+      endDate: '2026-08-28',
+      createdAt: '2026-08-01',
+      updatedAt: '2026-08-01',
+      items: [
+        _item(0, 'Feskekôrka', 'Gothenburg', day: 1),
+        _item(1, 'Liseberg', 'Gothenburg', day: 3),
+        _item(2, 'Prado', 'Madrid', day: 5),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          tripsApiServiceProvider.overrideWithValue(_FakeTripsApiService(trip)),
+          bookingTodosApiServiceProvider
+              .overrideWithValue(_CapturingBookingTodosApiService()),
+        ],
+        child: MaterialApp(
+            localizationsDelegates: testLocalizationsDelegates,
+            home: TripDetailScreen(tripId: 't1')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aug 26 – Aug 28'), findsWidgets);
+    expect(find.text('Aug 28'), findsNothing);
+  });
 }

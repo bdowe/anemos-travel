@@ -19,6 +19,19 @@ move its stay's check-in/check-out by **different** deltas (Sep 20→24 is +4,
 Sep 24→27 is +3 — endpoint-anchored), move the transport into and out of the
 city, and extend the trip's end date when the leg now runs past it.
 
+**Amended 2026-08-05** after the same dogfood ask failed a second time: the
+trip screen draws a leg as [previous leg's end → its max item day], so v1's
+min-day-anchored renumbering and leg-only cascade left the *visible* dates
+unchanged (a single-item placeholder leg encodes its DEPARTURE day), and the
+"already spans" no-op echoed the requested range while `trip_updated` fired
+unconditionally. v2: item renumbering is END-anchored, the previous leg's end
+extends to meet a later start in the same transaction, zero-change calls
+commit nothing (no SSE) and report actual saved state, and `get_trip` exposes
+stay/transport/todo dates so the model can verify what it narrates. The v1
+premise "the client re-derives draft stays/segments on refresh" had been
+false since PR #274 removed that sync — migration 00053 deletes the frozen
+`auto=true` rows and trip health's lodging check now skips `auto`.
+
 ## User Stories
 
 - As a **traveler refining a saved multi-city trip in chat**, I want to say
@@ -37,10 +50,27 @@ city, and extend the trip's end date when the leg now runs past it.
       check-out Sep 27), the arriving segment (Sep 24), and the departing
       segment (Sep 27), extends the trip end to Sep 27, and leaves every
       Panama City row byte-identical. The trip page refreshes.
-- [ ] The agent's reply surfaces the Sep 20–24 gap with Panama City and
-      offers to fix it (tool result carries a deterministic gap/overlap note).
+- [ ] Moving a leg LATER extends the previous leg's end to the new start in
+      the same transaction — its matched confirmed stay's check-out when one
+      anchors its span, else its departure-day items — and the result
+      narrates it ("Panama City now ends Sep 24 (was Sep 20)"). Moving a leg
+      EARLIER (overlap) never shrinks the neighbor; the tool result carries a
+      deterministic overlap note the agent relays and offers to fix.
+- [ ] A single-item placeholder leg is an end-carrier: "LA Sep 24–27" lands
+      its one item on Sep 27 (the departure day the screen renders), not
+      Sep 24.
+- [ ] A zero-change call commits nothing: no `trip_updated` SSE (no "Trip
+      updated" chip), no analytics, no `updated_at` bump, and the result
+      reports the ACTUAL saved state (item-day dates, matched stay, previous
+      leg's end, derived visible range) — never the requested range echoed
+      back.
+- [ ] `get_trip` lists saved stays and transport with their dates (auto rows
+      excluded) and appends dates to booking-checklist lines, so the model
+      can verify the calendar state it narrates.
 - [ ] Auto-suggested (draft) stays/segments are never moved or confirmed by
-      the tool; the client re-derives them on refresh.
+      the tool; migration 00053 deletes the frozen pre-#274 rows and
+      `checkLodging` skips any `auto` row, so a stale draft can't mask
+      uncovered nights.
 - [ ] Omitting `end_date` keeps the leg's current length.
 - [ ] Shrinking a leg clamps trailing items onto its new last day and says so.
 - [ ] A leg start before the trip's first day is an honest error directing
@@ -75,17 +105,23 @@ tail (after `set_trip_dates`).
 
 ## Data Model
 
-No schema changes, no new SQL. Reuses `UpdateItineraryItem` (day),
-`UpdateAccommodation` (check_in/check_out), `UpdateSegment`
-(depart/arrive dates), `SetTripDates` (end extension), all inside one
-transaction under the `GetTripForUpdate` row lock. `booking_todos` are left
-untouched: the client re-derives auto rows on every trip load, and a leg move
-changes todo identity rather than applying a uniform offset.
+No schema changes, no new SQL queries. Reuses `UpdateItineraryItem` (day),
+`UpdateAccommodation` (check_in/check_out — also for the previous leg's
+check-out extension), `UpdateSegment` (depart/arrive dates), `SetTripDates`
+(end extension), all inside one transaction under the `GetTripForUpdate` row
+lock; a zero-change call rolls the transaction back. Migration 00053
+(data-only) deletes the orphaned `auto=true` accommodation/segment rows the
+retired drafts sync left behind. `booking_todos` are left untouched: the
+client re-derives auto rows on every trip load, and a leg move changes todo
+identity rather than applying a uniform offset.
 
 ## UI Behavior
 
-No new UI. Existing `trip_updated` SSE handling silently refreshes the trip
-detail screen; its booking-draft/todo syncs then converge on the new dates.
+Existing `trip_updated` SSE handling silently refreshes the trip detail
+screen; its booking-TODO sync then converges the visible stay/transport rows
+on the moved item days. The city header's range start is arrival-adjusted
+(`_stayStartFor`), matching the stay rows, so a collapsed leg reads
+"Sep 24 – Sep 27" rather than a bare end date.
 
 ## Edge Cases & Error States
 
@@ -101,12 +137,14 @@ detail screen; its booking-draft/todo syncs then converge on the new dates.
 
 ## Out of Scope
 
-- Auto-shifting neighboring legs (decided: leg only; the agent offers
-  follow-up fixes and trip health flags leftovers).
+- Shrinking neighboring legs on overlap (decided 2026-08-05: gap extends the
+  previous leg; overlap narrates and asks; the next leg never moves).
 - Rescheduling real provider bookings.
 - An `occurrence` parameter for revisited cities (v1 errors and asks).
 - Moving the trip's start date via a leg (routes to `set_trip_dates`).
 
 ## Open Questions
 
-None — cascade semantics decided 2026-08-04: leg only + agent asks.
+None — cascade semantics decided 2026-08-04 (leg only + agent asks), revised
+2026-08-05 (previous leg's end extends to meet a later start; overlap still
+narrate-and-ask).

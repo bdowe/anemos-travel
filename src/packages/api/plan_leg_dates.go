@@ -5,13 +5,18 @@ package main
 // set_trip_dates shifts everything by one delta; a leg move is endpoint-
 // anchored instead — the start and end can shift by different amounts (LA
 // Sep 20-24 -> Sep 24-27 is +4 on check-in, +3 on check-out). One transaction
-// renumbers the leg's item days, moves its matched confirmed stays and
-// boundary transport, and extends the trip's end date when the leg now runs
-// past it. Neighbor legs deliberately do NOT move (decided 2026-08-04): the
-// tool result narrates any gap/overlap it opened so the agent can offer the
-// follow-up fix, and the trip health review flags whatever remains. Gated
-// authedOnly (per-conversation stable, prompt-cache safe); target-trip
-// resolution reuses resolveDateShiftTrip.
+// renumbers the leg's item days END-anchored (the old last day is the
+// departure day the trip screen renders), moves its matched confirmed stays
+// and boundary transport, and extends the trip's end date when the leg now
+// runs past it. The PREVIOUS leg's end extends to meet a later start in the
+// same transaction (decided 2026-08-05 — the screen draws a leg from the
+// neighbor's end, so an unmoved boundary makes the change invisible); an
+// earlier start (overlap) and the NEXT leg still only narrate, so the agent
+// can offer the follow-up fix and trip health flags whatever remains. A
+// zero-change call commits nothing and reports actual saved state — never
+// the requested range, and no trip_updated SSE. Gated authedOnly
+// (per-conversation stable, prompt-cache safe); target-trip resolution
+// reuses resolveDateShiftTrip.
 
 import (
 	"encoding/json"
@@ -20,6 +25,7 @@ import (
 	"time"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"travel-route-planner/store"
@@ -29,7 +35,7 @@ var setLegDatesTool = anthropic.ToolParam{
 	Name: "set_leg_dates",
 	Description: anthropic.String("Change the dates of ONE city's leg within the traveler's saved trip — 'make LA Sep 24 to 27', 'arrive in Rome a day later' — without moving the rest of the trip. " +
 		"It moves that city's itinerary days, its stay's check-in/check-out, and the transport into and out of that city, extending the trip's end date when the new leg runs past it. " +
-		"Other cities do NOT move: the result reports any gap or overlap this created with neighboring legs — relay it to the traveler and offer to fix those legs too. " +
+		"Moving a leg later also extends the PREVIOUS city's end to meet the new start (the result says so); other cities do not move — the result reports any remaining gap or overlap with neighboring legs, so relay every change it describes to the traveler and offer to fix those legs too. " +
 		"Omit end_date to keep the leg the same length. " +
 		"When the WHOLE trip moves, use set_trip_dates instead. " +
 		"Only the saved plan changes: anything already booked with a real provider keeps its original dates, so remind the traveler to re-check those bookings."),
@@ -126,18 +132,30 @@ func stayMatchesHub(a store.Accommodation, hubLower string) bool {
 	return name != "" && fuzzyMatch(name, hubLower)
 }
 
-// legDisplayRange resolves the calendar span a leg currently occupies, with
-// the same precedence the trip screen renders: the first confirmed matched
-// stay with both dates, else the dated items' day range off the trip anchor.
-func legDisplayRange(run legRun, stays []store.Accommodation, tripStart time.Time) (time.Time, time.Time) {
+// matchedConfirmedStay finds the stay that anchors a leg's displayed span:
+// the first confirmed (non-auto) hub-matched stay with both dates. Nil means
+// the leg's span comes from its item days — whoever moves a leg boundary must
+// edit the same source that produced the span, so this is shared by
+// legDisplayRange and the previous-boundary extension.
+func matchedConfirmedStay(run legRun, stays []store.Accommodation) *store.Accommodation {
 	hubLower := strings.ToLower(run.hub)
-	for _, a := range stays {
+	for i, a := range stays {
 		if a.Auto || !a.CheckIn.Valid || !a.CheckOut.Valid {
 			continue
 		}
 		if stayMatchesHub(a, hubLower) {
-			return a.CheckIn.Time, a.CheckOut.Time
+			return &stays[i]
 		}
+	}
+	return nil
+}
+
+// legDisplayRange resolves the calendar span a leg currently occupies, with
+// the same precedence the trip screen renders: the first confirmed matched
+// stay with both dates, else the dated items' day range off the trip anchor.
+func legDisplayRange(run legRun, stays []store.Accommodation, tripStart time.Time) (time.Time, time.Time) {
+	if a := matchedConfirmedStay(run, stays); a != nil {
+		return a.CheckIn.Time, a.CheckOut.Time
 	}
 	return tripStart.AddDate(0, 0, run.minDay-1), tripStart.AddDate(0, 0, run.maxDay-1)
 }
@@ -286,6 +304,17 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 	hubLower := strings.ToLower(run.hub)
 	oldLegStart, oldLegEnd := legDisplayRange(run, stays, tripStart)
 
+	// The previous leg's end is what the trip screen renders as this leg's
+	// visible start (arrival = the neighbor's departure), so a later start
+	// must drag that boundary along. Resolve it before any writes.
+	prevRun := prevDatedRun(runs, matched[0])
+	var prevEnd time.Time
+	var prevStay *store.Accommodation
+	if prevRun != nil {
+		_, prevEnd = legDisplayRange(*prevRun, stays, tripStart)
+		prevStay = matchedConfirmedStay(*prevRun, stays)
+	}
+
 	ch, err := computeLegDateChange(tripStart, oldLegStart, oldLegEnd, start.Time, newEnd)
 	switch err {
 	case nil:
@@ -297,9 +326,13 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 		return "Could not compute the leg's new dates.", true
 	}
 
-	// Renumber the run's dated items, preserving within-leg offsets; items
-	// past a shortened leg fold onto its new last day (the item-beyond-span
-	// review finding covers the same shape for manual edits).
+	// Renumber the run's dated items endpoint-anchored: the old last day IS
+	// the leg's departure day (the trip screen renders a leg as [previous
+	// leg's end → max item day]), so its items ride the new END — a
+	// single-item placeholder leg is an end-carrier, not a start-carrier.
+	// Everything else keeps its within-leg offset and folds into the new span
+	// (the item-beyond-span review finding covers the same shape for manual
+	// edits).
 	dayShift := ch.newStartIdx - run.minDay
 	itemsMoved, itemsClamped := 0, 0
 	for _, it := range run.items {
@@ -307,12 +340,19 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 			continue
 		}
 		nd := int(*it.Day) + dayShift
-		if nd > ch.newEndIdx {
+		clamped := false
+		if int(*it.Day) == run.maxDay {
 			nd = ch.newEndIdx
-			itemsClamped++
+		} else if nd > ch.newEndIdx {
+			nd, clamped = ch.newEndIdx, true
+		} else if nd < ch.newStartIdx {
+			nd = ch.newStartIdx
 		}
 		if nd == int(*it.Day) {
 			continue
+		}
+		if clamped {
+			itemsClamped++
 		}
 		d32 := int32(nd)
 		if _, err := q.UpdateItineraryItem(s.ctx, store.UpdateItineraryItemParams{Day: &d32, ID: it.ID, TripID: tid}); err != nil {
@@ -326,6 +366,7 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 	// which would silently adopt a suggestion the traveler never chose — and
 	// the client re-derives drafts from the refreshed itinerary anyway.
 	staysMoved := 0
+	movedStayIDs := map[uuid.UUID]bool{}
 	for _, a := range stays {
 		if a.Auto || !stayMatchesHub(a, hubLower) {
 			continue
@@ -346,6 +387,7 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 		if _, err := q.UpdateAccommodation(s.ctx, store.UpdateAccommodationParams{CheckIn: newIn, CheckOut: newOut, ID: a.ID, TripID: tid}); err != nil {
 			return "Could not move the leg's stay dates.", true
 		}
+		movedStayIDs[a.ID] = true
 		staysMoved++
 	}
 
@@ -388,6 +430,43 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 		}
 	}
 
+	// Previous-boundary extension (decided 2026-08-05): when the leg now
+	// starts after the previous leg's end, drag that boundary to the new
+	// start in the same transaction — editing the SAME source that produced
+	// prevEnd (its confirmed stay's check-out, else its departure-day items),
+	// so the visible arrival matches the ask. Gap-only: an earlier start
+	// (overlap) still narrates-and-asks, neighbors never shrink.
+	prevExtended := false
+	var prevWasEnd time.Time
+	if prevRun != nil && ch.newStart.After(prevEnd) {
+		prevWasEnd = prevEnd
+		switch {
+		case prevStay != nil && !movedStayIDs[prevStay.ID]:
+			// UpdateAccommodation flips auto=false — harmless, prevStay is
+			// already confirmed; COALESCE keeps check_in.
+			if _, err := q.UpdateAccommodation(s.ctx, store.UpdateAccommodationParams{
+				CheckOut: pgtype.Date{Time: ch.newStart, Valid: true},
+				ID:       prevStay.ID, TripID: tid,
+			}); err != nil {
+				return "Could not extend the previous leg's stay.", true
+			}
+			prevExtended = true
+		case prevStay == nil:
+			for _, it := range prevRun.items {
+				if it.Day == nil || int(*it.Day) != prevRun.maxDay {
+					continue
+				}
+				d32 := int32(ch.newStartIdx)
+				if _, err := q.UpdateItineraryItem(s.ctx, store.UpdateItineraryItemParams{Day: &d32, ID: it.ID, TripID: tid}); err != nil {
+					return "Could not extend the previous leg's days.", true
+				}
+				prevExtended = true
+			}
+		}
+		// prevStay already moved as part of THIS leg (degenerate double-hub
+		// match): leave the boundary alone rather than moving it twice.
+	}
+
 	tripEndExtended := false
 	if trip.EndDate.Valid && ch.newEnd.After(trip.EndDate.Time) {
 		if err := q.SetTripDates(s.ctx, store.SetTripDatesParams{
@@ -398,6 +477,33 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 			return "Could not extend the trip's end date.", true
 		}
 		tripEndExtended = true
+	}
+
+	// Honest no-op: nothing changed, so nothing is committed — no touched
+	// updated_at, no trip_updated SSE (the client must not flash "Trip
+	// updated"), no analytics. The result reports the ACTUAL saved state,
+	// never the requested range echoed back as if achieved: this branch is
+	// exactly where a mismatch between what the traveler sees and what the
+	// tool tracks surfaces, and the model needs the real numbers to explain
+	// it (the deferred tx.Rollback discards the open transaction).
+	if itemsMoved+staysMoved+arrMoved+depMoved == 0 && !prevExtended && !tripEndExtended {
+		itemStart := tripStart.AddDate(0, 0, run.minDay-1)
+		itemEnd := tripStart.AddDate(0, 0, run.maxDay-1)
+		var b strings.Builder
+		fmt.Fprintf(&b, "No saved rows changed. Actual saved state for %s: itinerary items sit on %s (trip days %d-%d)", run.hub, legRangeText(itemStart, itemEnd), run.minDay, run.maxDay)
+		if a := matchedConfirmedStay(run, stays); a != nil {
+			fmt.Fprintf(&b, "; its confirmed stay %q runs %s", a.Name, legRangeText(a.CheckIn.Time, a.CheckOut.Time))
+		}
+		if prevRun != nil {
+			fmt.Fprintf(&b, "; the previous leg (%s) ends %s", prevRun.hub, prevEnd.Format(dateLayout))
+		}
+		visStart, visEnd := oldLegStart, oldLegEnd
+		if prevRun != nil && prevEnd.Before(visStart) {
+			visStart = prevEnd
+		}
+		fmt.Fprintf(&b, ". The trip page shows this leg as %s (a leg's visible start is the previous leg's end when that comes first) and was NOT refreshed.", legRangeText(visStart, visEnd))
+		b.WriteString(" Never tell the traveler anything changed; if this state doesn't match what they asked for, tell them the actual dates and ask how to adjust.")
+		return b.String(), false
 	}
 
 	if err := q.TouchTrip(s.ctx, store.TouchTripParams{
@@ -423,6 +529,7 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 			"stays":             staysMoved,
 			"segments":          arrMoved + depMoved,
 			"trip_end_extended": tripEndExtended,
+			"prev_leg_extended": prevExtended,
 			"is_collaborator":   s.uid != ownerID,
 		})
 	})
@@ -433,9 +540,6 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 	}
 
 	rangeText := legRangeText(ch.newStart, ch.newEnd)
-	if itemsMoved+staysMoved+arrMoved+depMoved == 0 && !tripEndExtended {
-		return fmt.Sprintf("Nothing needed to move — %s already spans %s. The traveler's trip page has refreshed.", run.hub, rangeText), false
-	}
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s is now %s.", run.hub, rangeText)
@@ -461,17 +565,23 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 	if tripEndExtended {
 		fmt.Fprintf(&b, " Trip end extended to %s.", ch.newEnd.Format(dateLayout))
 	}
+	if prevExtended {
+		if prevStay != nil {
+			fmt.Fprintf(&b, " %s now ends %s (was %s) — its stay's check-out moved to match this leg's start.", prevRun.hub, ch.newStart.Format(dateLayout), prevWasEnd.Format(dateLayout))
+		} else {
+			fmt.Fprintf(&b, " %s now ends %s (was %s) — its last itinerary day moved to match this leg's start.", prevRun.hub, ch.newStart.Format(dateLayout), prevWasEnd.Format(dateLayout))
+		}
+	}
 
 	// Deterministic neighbor narration: the prompt's "point out the gap"
 	// instruction only works if the gap is computed here, not hoped for.
-	if i := matched[0]; i > 0 {
-		if prev := prevDatedRun(runs, i); prev != nil {
-			_, prevEnd := legDisplayRange(*prev, stays, tripStart)
-			if n := int(ch.newStart.Sub(prevEnd).Hours() / 24); n > 0 {
-				fmt.Fprintf(&b, " NOTE: the previous leg (%s) ends %s but this leg now starts %s — %d uncovered night(s). Point this out to the traveler and offer to extend that stay or fix it with another set_leg_dates call.", prev.hub, prevEnd.Format(dateLayout), ch.newStart.Format(dateLayout), n)
-			} else if n < 0 {
-				fmt.Fprintf(&b, " NOTE: the previous leg (%s) ends %s, which now overlaps this leg's start %s by %d night(s). Point this out to the traveler and offer to fix it.", prev.hub, prevEnd.Format(dateLayout), ch.newStart.Format(dateLayout), -n)
-			}
+	// prevEnd is the pre-move value, so the gap branch is skipped once the
+	// boundary extension closed it.
+	if prevRun != nil && !prevExtended {
+		if n := int(ch.newStart.Sub(prevEnd).Hours() / 24); n > 0 {
+			fmt.Fprintf(&b, " NOTE: the previous leg (%s) ends %s but this leg now starts %s — %d uncovered night(s). Point this out to the traveler and offer to extend that stay or fix it with another set_leg_dates call.", prevRun.hub, prevEnd.Format(dateLayout), ch.newStart.Format(dateLayout), n)
+		} else if n < 0 {
+			fmt.Fprintf(&b, " NOTE: the previous leg (%s) ends %s, which now overlaps this leg's start %s by %d night(s). Point this out to the traveler and offer to fix it.", prevRun.hub, prevEnd.Format(dateLayout), ch.newStart.Format(dateLayout), -n)
 		}
 	}
 	if i := matched[0]; i < len(runs)-1 {

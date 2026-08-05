@@ -702,6 +702,48 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 		}
 		b.WriteString(line + "\n")
 	}
+	// Saved stays and transport WITH their dates, so the model can verify the
+	// calendar state it narrates after a date-change tool call instead of
+	// trusting its own claim; degrade silently on error, like the checklist.
+	if stays, err := q.ListAccommodationsByTrip(ctx, trip.ID); err == nil {
+		var lines []string
+		for _, a := range stays {
+			if a.Auto {
+				continue
+			}
+			span := "dates not set"
+			if in, out := dateString(a.CheckIn), dateString(a.CheckOut); in != "" || out != "" {
+				span = in + " to " + out
+			}
+			status := "not booked"
+			if a.Booked {
+				status = "booked"
+			}
+			lines = append(lines, fmt.Sprintf("- %q %s (%s)\n", a.Name, span, status))
+		}
+		if len(lines) > 0 {
+			b.WriteString("Stays:\n" + strings.Join(lines, ""))
+		}
+	}
+	if segs, err := q.ListSegmentsByTrip(ctx, trip.ID); err == nil {
+		var lines []string
+		for _, sg := range segs {
+			if sg.Auto {
+				continue
+			}
+			line := fmt.Sprintf("- %s %s -> %s", sg.Mode, strPtrVal(sg.Origin), strPtrVal(sg.Destination))
+			if d := dateString(sg.DepartDate); d != "" {
+				line += ", departs " + d
+			}
+			if d := dateString(sg.ArriveDate); d != "" {
+				line += ", arrives " + d
+			}
+			lines = append(lines, line+"\n")
+		}
+		if len(lines) > 0 {
+			b.WriteString("Transport:\n" + strings.Join(lines, ""))
+		}
+	}
 	// Booking checklist with ids so the agent can update/remove stale items;
 	// degrade silently on error — the itinerary alone is still useful.
 	if todos, err := q.ListBookingTodosByTrip(ctx, trip.ID); err == nil && len(todos) > 0 {
@@ -718,7 +760,14 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 			case strings.HasPrefix(td.TodoKey, "agent:"):
 				origin = "agent-added"
 			}
-			fmt.Fprintf(&b, "- %q [todo_id: %s] (%s, %s, %s)\n", td.Title, td.ID, td.Kind, status, origin)
+			dates := ""
+			if d := dateString(td.DepartDate); d != "" {
+				dates = ", " + d
+				if r := dateString(td.ReturnDate); r != "" {
+					dates += " to " + r
+				}
+			}
+			fmt.Fprintf(&b, "- %q [todo_id: %s] (%s, %s, %s%s)\n", td.Title, td.ID, td.Kind, status, origin, dates)
 		}
 	}
 	return b.String(), false
