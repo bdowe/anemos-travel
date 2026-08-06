@@ -3,6 +3,7 @@ import 'itinerary_item.dart';
 import 'accommodation.dart';
 import 'trip_segment.dart';
 import 'booking_todo.dart';
+import 'trip_leg_dto.dart';
 
 part 'trip.g.dart';
 
@@ -53,6 +54,11 @@ class Trip {
   /// polls for freshness. Editors poll based on [access] alone.
   final bool? shared;
 
+  /// Server-computed city legs (specs/server-leg-dates) — present on full
+  /// trip views; absent on list responses, offline caches, and old
+  /// snapshots, where clients fall back to the local derivation.
+  final List<TripLegDto>? legs;
+
   const Trip({
     required this.id,
     required this.title,
@@ -74,6 +80,7 @@ class Trip {
     this.ownerName,
     this.updatedByName,
     this.shared,
+    this.legs,
   });
 
   /// True when the current user may edit this trip: owner or editor
