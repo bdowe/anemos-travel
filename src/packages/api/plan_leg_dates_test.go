@@ -469,6 +469,135 @@ func TestPlanSetLegDatesOverlapNarratesOnly(t *testing.T) {
 	}
 }
 
+// seedPragueKrakowBerlinTrip is Brian's real post-move trip head: single
+// placeholder items whose day encodes each city's DEPARTURE, first city's
+// item pushed past day 1 by an earlier boundary extension, no stays or
+// segments. krakowDay parameterizes the middle leg (9 = the squeezed state,
+// 6 = the pre-squeeze state).
+func seedPragueKrakowBerlinTrip(t *testing.T, trip store.Trip, owner uuid.UUID, krakowDay int) {
+	t.Helper()
+	ctx := context.Background()
+	q := store.New(dbPool)
+	if _, err := q.UpdateTrip(ctx, store.UpdateTripParams{
+		ID: trip.ID, UserID: owner,
+		StartDate: validDate("2026-08-24"), EndDate: validDate("2026-09-27"),
+	}); err != nil {
+		t.Fatalf("seed trip dates: %v", err)
+	}
+	for i, leg := range []struct {
+		city string
+		day  int
+	}{{"Prague", 4}, {"Kraków", krakowDay}, {"Berlin", 9}} {
+		d := int32(leg.day)
+		city := leg.city
+		if _, err := q.CreateItineraryItem(ctx, store.CreateItineraryItemParams{
+			TripID: trip.ID, Position: int32(i), Name: leg.city,
+			City: &city, Day: &d, Latitude: 50.08, Longitude: 14.44,
+		}); err != nil {
+			t.Fatalf("seed item %s: %v", leg.city, err)
+		}
+	}
+}
+
+// The first leg's visible start is the trip's start date: asking for exactly
+// that state must be an honest no-op whose report QUOTES the anchored range —
+// not the collapsed item day — so the model can tell the traveler the page
+// already shows what they asked for.
+func TestPlanSetLegDatesFirstLegNoOpReportsAnchoredRange(t *testing.T) {
+	resetDB(t)
+	user, _ := createTestUser(t, "firstleg@example.com")
+	trip := createTestTrip(t, user.ID, 0)
+	seedPragueKrakowBerlinTrip(t, trip, user.ID, 9)
+
+	s, rec := testPlanSession(true, user.ID)
+	s.boundTripID = &trip.ID
+	msg, isErr := runSetLegDatesTool(s, []byte(`{"city":"Prague","start_date":"2026-08-24","end_date":"2026-08-27"}`))
+	if isErr {
+		t.Fatalf("first-leg no-op errored: %s", msg)
+	}
+	for _, want := range []string{
+		"No saved rows changed",
+		"itinerary items sit on 2026-08-27 to 2026-08-27 (trip days 4-4)",
+		"shows this leg as 2026-08-24 to 2026-08-27",
+		"was NOT refreshed",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("no-op result missing %q: %s", want, msg)
+		}
+	}
+	if strings.Contains(rec.Body.String(), "trip_updated") {
+		t.Fatal("first-leg no-op emitted trip_updated")
+	}
+	if got := legDays(t, trip.ID, "Prague"); !daysEqual(got, 4) {
+		t.Fatalf("Prague day = %v, want [4] unchanged", got)
+	}
+}
+
+// A first-leg start other than the trip's start date is really a trip-start
+// change — honest steer to set_trip_dates, in BOTH directions, nothing moves.
+func TestPlanSetLegDatesFirstLegStartSteersToTripDates(t *testing.T) {
+	resetDB(t)
+	user, _ := createTestUser(t, "firststeer@example.com")
+	trip := createTestTrip(t, user.ID, 0)
+	seedPragueKrakowBerlinTrip(t, trip, user.ID, 9)
+
+	s, _ := testPlanSession(true, user.ID)
+	s.boundTripID = &trip.ID
+	for _, startDate := range []string{"2026-08-25", "2026-08-23"} {
+		msg, isErr := runSetLegDatesTool(s, []byte(`{"city":"Prague","start_date":"`+startDate+`","end_date":"2026-08-27"}`))
+		if !isErr {
+			t.Fatalf("first-leg start %s did not error: %s", startDate, msg)
+		}
+		for _, want := range []string{"first city", "2026-08-24", "set_trip_dates"} {
+			if !strings.Contains(msg, want) {
+				t.Fatalf("steer for %s missing %q: %s", startDate, want, msg)
+			}
+		}
+	}
+	if got := legDays(t, trip.ID, "Prague"); !daysEqual(got, 4) {
+		t.Fatalf("Prague day = %v, want [4] untouched", got)
+	}
+}
+
+// Extending a leg onto the next leg's departure day consumes ALL its nights
+// while the start math reads as contiguous (n == 0) — the squeeze NOTE must
+// name the eaten leg and tell the agent to chain fixes. This replays exactly
+// how Kraków's extension silently zeroed Berlin on Brian's trip.
+func TestPlanSetLegDatesSqueezeNoteNamesNextLeg(t *testing.T) {
+	resetDB(t)
+	user, _ := createTestUser(t, "squeeze@example.com")
+	trip := createTestTrip(t, user.ID, 0)
+	seedPragueKrakowBerlinTrip(t, trip, user.ID, 6)
+
+	s, rec := testPlanSession(true, user.ID)
+	s.boundTripID = &trip.ID
+	msg, isErr := runSetLegDatesTool(s, []byte(`{"city":"Kraków","start_date":"2026-08-27","end_date":"2026-09-01"}`))
+	if isErr {
+		t.Fatalf("squeeze move errored: %s", msg)
+	}
+	for _, want := range []string{
+		"Kraków is now 2026-08-27 to 2026-09-01",
+		"Berlin has no nights left",
+		"set_leg_dates once per leg in order",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("result missing %q: %s", want, msg)
+		}
+	}
+	if !strings.Contains(rec.Body.String(), "trip_updated") {
+		t.Fatal("squeeze move did not emit trip_updated")
+	}
+	if got := legDays(t, trip.ID, "Kraków"); !daysEqual(got, 9) {
+		t.Fatalf("Kraków day = %v, want [9] (Sep 1, the departure)", got)
+	}
+	if got := legDays(t, trip.ID, "Prague"); !daysEqual(got, 4) {
+		t.Fatalf("Prague day = %v, want [4] (contiguous — no boundary move)", got)
+	}
+	if got := legDays(t, trip.ID, "Berlin"); !daysEqual(got, 9) {
+		t.Fatalf("Berlin day = %v, want [9] (next leg never auto-moves)", got)
+	}
+}
+
 // Shrinking a leg folds trailing items onto its new last day and says so.
 func TestPlanSetLegDatesShrinkClampsItems(t *testing.T) {
 	resetDB(t)

@@ -11,12 +11,15 @@ package main
 // runs past it. The PREVIOUS leg's end extends to meet a later start in the
 // same transaction (decided 2026-08-05 — the screen draws a leg from the
 // neighbor's end, so an unmoved boundary makes the change invisible); an
-// earlier start (overlap) and the NEXT leg still only narrate, so the agent
-// can offer the follow-up fix and trip health flags whatever remains. A
-// zero-change call commits nothing and reports actual saved state — never
-// the requested range, and no trip_updated SSE. Gated authedOnly
-// (per-conversation stable, prompt-cache safe); target-trip resolution
-// reuses resolveDateShiftTrip.
+// earlier start (overlap) and the NEXT leg still only narrate — including a
+// SQUEEZE note when the new end consumes all the next leg's nights, which
+// the agent resolves by chaining further set_leg_dates calls. The FIRST
+// dated leg's visible start is the trip's start date (anchored, mirroring
+// the client's _locationGroupRanges clamp) so a first-leg start change
+// steers to set_trip_dates. A zero-change call commits nothing and reports
+// actual saved state — never the requested range, and no trip_updated SSE.
+// Gated authedOnly (per-conversation stable, prompt-cache safe); target-trip
+// resolution reuses resolveDateShiftTrip.
 
 import (
 	"encoding/json"
@@ -160,6 +163,33 @@ func legDisplayRange(run legRun, stays []store.Accommodation, tripStart time.Tim
 	return tripStart.AddDate(0, 0, run.minDay-1), tripStart.AddDate(0, 0, run.maxDay-1)
 }
 
+// firstDatedRunIdx finds the lowest-index movable run — the leg whose arrival
+// IS the trip's start date. -1 when none. Same dated-run criteria as
+// prevDatedRunIdx/nextDatedRunIdx.
+func firstDatedRunIdx(runs []legRun) int {
+	for i, r := range runs {
+		if r.minDay >= 1 && r.hub != "" {
+			return i
+		}
+	}
+	return -1
+}
+
+// anchoredLegDisplayRange is legDisplayRange plus the first-leg anchor: the
+// first dated run's visible start pulls back to the trip start when its span
+// is item-derived — the traveler is in the first city from the trip's first
+// day, so a single late item must not read as a late arrival. A confirmed
+// stay still wins, mirroring the client's _locationGroupRanges clamp
+// (trip_detail_screen.dart). Item days are >= 1, so the anchor only ever
+// pulls the start back, never forward.
+func anchoredLegDisplayRange(runs []legRun, i int, stays []store.Accommodation, tripStart time.Time) (time.Time, time.Time) {
+	s, e := legDisplayRange(runs[i], stays, tripStart)
+	if i == firstDatedRunIdx(runs) && matchedConfirmedStay(runs[i], stays) == nil && tripStart.Before(s) {
+		s = tripStart
+	}
+	return s, e
+}
+
 // legDateChange is the pure outcome of a leg move: the resolved new span,
 // the endpoint-anchored day deltas, and the leg's new 1-based trip-day
 // indices.
@@ -207,11 +237,11 @@ func legRangeText(start, end time.Time) string {
 // honest error payload when the requested city doesn't resolve.
 func legsSummary(runs []legRun, stays []store.Accommodation, tripStart time.Time) string {
 	var parts []string
-	for _, r := range runs {
+	for i, r := range runs {
 		if r.minDay < 1 || r.hub == "" {
 			continue
 		}
-		s, e := legDisplayRange(r, stays, tripStart)
+		s, e := anchoredLegDisplayRange(runs, i, stays, tripStart)
 		parts = append(parts, fmt.Sprintf("%s (%s)", r.hub, legRangeText(s, e)))
 	}
 	return strings.Join(parts, ", ")
@@ -294,7 +324,7 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 	if len(matched) > 1 {
 		var spans []string
 		for _, i := range matched {
-			s0, e0 := legDisplayRange(runs[i], stays, tripStart)
+			s0, e0 := anchoredLegDisplayRange(runs, i, stays, tripStart)
 			spans = append(spans, legRangeText(s0, e0))
 		}
 		return fmt.Sprintf("The itinerary visits %s more than once (%s), and moving just one of several visits isn't supported yet — tell the traveler plainly what you couldn't do.", runs[matched[0]].hub, strings.Join(spans, "; ")), true
@@ -302,16 +332,27 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 
 	run := runs[matched[0]]
 	hubLower := strings.ToLower(run.hub)
-	oldLegStart, oldLegEnd := legDisplayRange(run, stays, tripStart)
+	oldLegStart, oldLegEnd := anchoredLegDisplayRange(runs, matched[0], stays, tripStart)
+
+	// The first leg's arrival IS the trip's start date (its span is anchored
+	// there), so a different start is really a trip-start change — steer to
+	// set_trip_dates rather than silently re-numbering items into a shape the
+	// screen can't show. Carve-out: a confirmed stay anchors the leg's start
+	// instead, and its check-in stays movable like any other leg's.
+	if matched[0] == firstDatedRunIdx(runs) && matchedConfirmedStay(run, stays) == nil && !start.Time.Equal(tripStart) {
+		return fmt.Sprintf("%s is the trip's first city, so its arrival IS the trip's start date (%s). To move when the trip begins, use set_trip_dates; to change only the departure from %s, call set_leg_dates again with start_date=%s and the new end_date.",
+			run.hub, tripStart.Format(dateLayout), run.hub, tripStart.Format(dateLayout)), true
+	}
 
 	// The previous leg's end is what the trip screen renders as this leg's
 	// visible start (arrival = the neighbor's departure), so a later start
 	// must drag that boundary along. Resolve it before any writes.
-	prevRun := prevDatedRun(runs, matched[0])
+	var prevRun *legRun
 	var prevEnd time.Time
 	var prevStay *store.Accommodation
-	if prevRun != nil {
-		_, prevEnd = legDisplayRange(*prevRun, stays, tripStart)
+	if pi := prevDatedRunIdx(runs, matched[0]); pi >= 0 {
+		prevRun = &runs[pi]
+		_, prevEnd = anchoredLegDisplayRange(runs, pi, stays, tripStart)
 		prevStay = matchedConfirmedStay(*prevRun, stays)
 	}
 
@@ -332,8 +373,11 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 	// single-item placeholder leg is an end-carrier, not a start-carrier.
 	// Everything else keeps its within-leg offset and folds into the new span
 	// (the item-beyond-span review finding covers the same shape for manual
-	// edits).
-	dayShift := ch.newStartIdx - run.minDay
+	// edits). The shift is the DISPLAY start's delta, not min-item-day
+	// anchored: for the trip-start-anchored first leg a same-start ask yields
+	// zero, so interior items hold still while only the end-carrier moves;
+	// item-anchored legs get the identical value either way.
+	dayShift := ch.startDelta
 	itemsMoved, itemsClamped := 0, 0
 	for _, it := range run.items {
 		if it.Day == nil {
@@ -501,7 +545,7 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 		if prevRun != nil && prevEnd.Before(visStart) {
 			visStart = prevEnd
 		}
-		fmt.Fprintf(&b, ". The trip page shows this leg as %s (a leg's visible start is the previous leg's end when that comes first) and was NOT refreshed.", legRangeText(visStart, visEnd))
+		fmt.Fprintf(&b, ". The trip page shows this leg as %s (a leg's visible start is the previous leg's end — or the trip's start date for the first leg — when that comes first) and was NOT refreshed.", legRangeText(visStart, visEnd))
 		b.WriteString(" Never tell the traveler anything changed; if this state doesn't match what they asked for, tell them the actual dates and ask how to adjust.")
 		return b.String(), false
 	}
@@ -584,14 +628,21 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 			fmt.Fprintf(&b, " NOTE: the previous leg (%s) ends %s, which now overlaps this leg's start %s by %d night(s). Point this out to the traveler and offer to fix it.", prevRun.hub, prevEnd.Format(dateLayout), ch.newStart.Format(dateLayout), -n)
 		}
 	}
-	if i := matched[0]; i < len(runs)-1 {
-		if next := nextDatedRun(runs, i); next != nil {
-			nextStart, _ := legDisplayRange(*next, stays, tripStart)
-			if n := int(nextStart.Sub(ch.newEnd).Hours() / 24); n > 0 {
-				fmt.Fprintf(&b, " NOTE: this leg now ends %s but the next leg (%s) starts %s — %d uncovered night(s). Point this out to the traveler and offer to fix it.", ch.newEnd.Format(dateLayout), next.hub, nextStart.Format(dateLayout), n)
-			} else if n < 0 {
-				fmt.Fprintf(&b, " NOTE: this leg now ends %s, overlapping the next leg (%s) which starts %s. Point this out to the traveler and offer to fix it.", ch.newEnd.Format(dateLayout), next.hub, nextStart.Format(dateLayout))
-			}
+	if ni := nextDatedRunIdx(runs, matched[0]); ni >= 0 {
+		next := &runs[ni]
+		nextStart, nextEnd := anchoredLegDisplayRange(runs, ni, stays, tripStart)
+		n := int(nextStart.Sub(ch.newEnd).Hours() / 24)
+		switch {
+		// Squeeze first: the next leg's visible span is [this leg's end → its
+		// own departure day], so newEnd reaching its END consumes ALL its
+		// nights even when the starts compare as contiguous (n == 0) — the
+		// exact case gap/overlap math is silent on.
+		case !ch.newEnd.Before(nextEnd):
+			fmt.Fprintf(&b, " NOTE: this leg now ends %s, which reaches the end of the next leg (%s, currently ending %s) — %s has no nights left. Point this out and offer to move %s later with set_leg_dates; if the traveler agrees, also move any legs after it, calling set_leg_dates once per leg in order (earliest first) in this same turn.", ch.newEnd.Format(dateLayout), next.hub, nextEnd.Format(dateLayout), next.hub, next.hub)
+		case n < 0:
+			fmt.Fprintf(&b, " NOTE: this leg now ends %s, overlapping the next leg (%s) which starts %s. Point this out to the traveler and offer to fix it.", ch.newEnd.Format(dateLayout), next.hub, nextStart.Format(dateLayout))
+		case n > 0:
+			fmt.Fprintf(&b, " NOTE: this leg now ends %s but the next leg (%s) starts %s — %d uncovered night(s). Point this out to the traveler and offer to fix it.", ch.newEnd.Format(dateLayout), next.hub, nextStart.Format(dateLayout), n)
 		}
 	}
 
@@ -599,22 +650,24 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 	return b.String(), false
 }
 
-// prevDatedRun / nextDatedRun find the nearest movable neighbor for the
-// gap/overlap narration; hubless or undated filler runs are skipped.
-func prevDatedRun(runs []legRun, i int) *legRun {
+// prevDatedRunIdx / nextDatedRunIdx find the nearest movable neighbor for
+// the boundary moves and gap/overlap/squeeze narration; hubless or undated
+// filler runs are skipped. -1 when there is none. Index-returning so callers
+// can resolve ranges through anchoredLegDisplayRange.
+func prevDatedRunIdx(runs []legRun, i int) int {
 	for j := i - 1; j >= 0; j-- {
 		if runs[j].minDay >= 1 && runs[j].hub != "" {
-			return &runs[j]
+			return j
 		}
 	}
-	return nil
+	return -1
 }
 
-func nextDatedRun(runs []legRun, i int) *legRun {
+func nextDatedRunIdx(runs []legRun, i int) int {
 	for j := i + 1; j < len(runs); j++ {
 		if runs[j].minDay >= 1 && runs[j].hub != "" {
-			return &runs[j]
+			return j
 		}
 	}
-	return nil
+	return -1
 }

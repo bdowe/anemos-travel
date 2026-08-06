@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/models/itinerary_item.dart';
 import 'package:travel_route_planner/models/booking_todo.dart';
+import 'package:travel_route_planner/models/traveler_preferences.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/booking_todos_api_service.dart';
+import 'package:travel_route_planner/services/preferences_api_service.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/booking_todos_provider.dart';
+import 'package:travel_route_planner/providers/preferences_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
@@ -37,6 +40,25 @@ class _CapturingBookingTodosApiService extends BookingTodosApiService {
     syncedPayloads.add(derived);
     throw Exception('offline test env');
   }
+}
+
+class _FakePrefsApi implements PreferencesApiService {
+  @override
+  ApiClient get apiClient => throw UnsupportedError('unused in tests');
+
+  @override
+  Future<TravelerPreferences> getPreferences() async =>
+      const TravelerPreferences(homeAirport: 'EWR');
+
+  @override
+  Future<TravelerPreferences> savePreferences({
+    String? budget,
+    String? pace,
+    required List<String> interests,
+    String? homeAirport,
+    String? profileNotes,
+  }) async =>
+      const TravelerPreferences(homeAirport: 'EWR');
 }
 
 ItineraryItem _item(int pos, String name, String city, {int? day}) =>
@@ -103,11 +125,75 @@ void main() {
         .singleWhere((t) => t['todo_key'] == 'transport:gothenburg>>madrid');
     expect(leg['depart_date'], '2026-08-26');
 
-    // The first city keeps its own range untouched.
+    // The first city is anchored to the trip start — here its day-1 range
+    // already begins there, so the anchor is a no-op.
     final gothenburgStay =
         derived.singleWhere((t) => t['todo_key'] == 'stay:gothenburg');
     expect(gothenburgStay['subtitle'], 'Aug 24 – Aug 26');
     expect(gothenburgStay['depart_date'], '2026-08-24');
+  });
+
+  testWidgets(
+      'first leg anchors to the trip start when its items sit on a late day',
+      (WidgetTester tester) async {
+    // Prague's single item is on day 4 (Aug 27) of an Aug 24 trip — the
+    // shape a set_leg_dates boundary extension leaves behind. The traveler
+    // is in Prague from the trip's first day, so the header, stay todo, and
+    // the EWR home leg must all read from Aug 24, never a bare "Aug 27".
+    final trip = Trip(
+      id: 't1',
+      title: 'Big Summer',
+      status: 'planned',
+      startDate: '2026-08-24',
+      endDate: '2026-09-01',
+      createdAt: '2026-08-01',
+      updatedAt: '2026-08-01',
+      items: [
+        _item(0, 'Prague', 'Prague', day: 4),
+        _item(1, 'Kraków', 'Kraków', day: 9),
+      ],
+    );
+
+    final fake = _CapturingBookingTodosApiService();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          tripsApiServiceProvider.overrideWithValue(_FakeTripsApiService(trip)),
+          bookingTodosApiServiceProvider.overrideWithValue(fake),
+          preferencesApiServiceProvider.overrideWithValue(_FakePrefsApi()),
+        ],
+        child: MaterialApp(
+            localizationsDelegates: testLocalizationsDelegates,
+            home: TripDetailScreen(tripId: 't1')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Header shows the anchored range, not a bare end date.
+    expect(find.text('Aug 24 – Aug 27'), findsWidgets);
+    expect(find.text('Aug 27'), findsNothing);
+
+    // The prefs load is async and can re-trigger the derivation — assert on
+    // the last synced payload, which reflects the loaded home airport.
+    expect(fake.syncedPayloads, isNotEmpty);
+    final derived = fake.syncedPayloads.last;
+
+    final pragueStay =
+        derived.singleWhere((t) => t['todo_key'] == 'stay:prague');
+    expect(pragueStay['subtitle'], 'Aug 24 – Aug 27');
+    expect(pragueStay['depart_date'], '2026-08-24');
+    expect(pragueStay['return_date'], '2026-08-27');
+
+    final homeLeg =
+        derived.singleWhere((t) => t['todo_key'] == 'transport:ewr>>prague');
+    expect(homeLeg['title'], 'EWR → Prague');
+    expect(homeLeg['depart_date'], '2026-08-24');
+
+    // The second city's arrival stays the previous leg's end — the i>0
+    // arrival logic is untouched by the anchor.
+    final krakowStay =
+        derived.singleWhere((t) => t['todo_key'] == 'stay:kraków');
+    expect(krakowStay['depart_date'], '2026-08-27');
   });
 
   testWidgets(
