@@ -72,6 +72,53 @@ type TripResponse struct {
 	// the owner's client polls /status only when set (editors always poll).
 	UpdatedByName *string `json:"updated_by_name,omitempty"`
 	Shared        bool    `json:"shared,omitempty"`
+	// Legs is the server-computed city-leg view (specs/server-leg-dates):
+	// the rendered date span per contiguous city run, from computeTripLegs —
+	// the one derivation. Attached only on the full trip views (GET
+	// /trips/{id} and the shared view), never on list/stub responses whose
+	// partial data would yield anchor-less legs. Old clients ignore it.
+	Legs []TripLegResponse `json:"legs,omitempty"`
+}
+
+// TripLegResponse is one rendered city leg. Dates are YYYY-MM-DD; absent
+// when the leg has no calendar span. See RenderLeg (trip_render_legs.go)
+// for the field semantics.
+type TripLegResponse struct {
+	Key        string   `json:"key"`
+	Label      string   `json:"label"`
+	Hub        *string  `json:"hub,omitempty"`
+	StartDate  *string  `json:"start_date,omitempty"`
+	EndDate    *string  `json:"end_date,omitempty"`
+	DateSource string   `json:"date_source,omitempty"`
+	ZeroNight  bool     `json:"zero_night,omitempty"`
+	FirstPos   int32    `json:"first_position"`
+	LastPos    int32    `json:"last_position"`
+	Lat        *float64 `json:"lat,omitempty"`
+	Lng        *float64 `json:"lng,omitempty"`
+}
+
+// tripLegsResponse computes the legs payload for a full trip view.
+func tripLegsResponse(t store.Trip, items []store.ItineraryItem, stays []store.Accommodation) []TripLegResponse {
+	legs := computeTripLegs(t, items, stays)
+	out := make([]TripLegResponse, 0, len(legs))
+	for _, l := range legs {
+		r := TripLegResponse{
+			Key: l.Key, Label: l.Label, Hub: l.Hub,
+			DateSource: l.DateSource, ZeroNight: l.ZeroNight,
+			FirstPos: l.FirstPos, LastPos: l.LastPos,
+			Lat: l.Lat, Lng: l.Lng,
+		}
+		if l.Start != nil {
+			s := l.Start.Format(dateLayout)
+			r.StartDate = &s
+		}
+		if l.End != nil {
+			e := l.End.Format(dateLayout)
+			r.EndDate = &e
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // TripStatusResponse is the freshness-poll payload for shared trips.
@@ -426,6 +473,7 @@ func getTripHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	resp := toTripResponse(trip, items, accommodations, segments, bookingTodos)
+	resp.Legs = tripLegsResponse(trip, items, accommodations)
 	resp.Access = row.Access
 	if row.Access != "owner" {
 		// The chat_id keys the OWNER's plan sessions; a collaborator seeding a

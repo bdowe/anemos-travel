@@ -185,6 +185,7 @@ func buildSharedTripResponse(ctx context.Context, ownerID uuid.UUID, trip store.
 		ownerName = *owner.DisplayName
 	}
 	resp := toTripResponse(trip, items, accommodations, segments, nil)
+	resp.Legs = tripLegsResponse(trip, items, accommodations)
 	resp.ChatID = nil
 	return SharedTripResponse{Trip: resp, OwnerName: ownerName, Role: role}, nil
 }
