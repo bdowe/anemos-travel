@@ -136,20 +136,19 @@ func TestLegRunsAndMatching(t *testing.T) {
 // arrival rule, and the zero-night collapse for an inverted leg all flow
 // through, one line per dated leg.
 func TestLegsRenderSummary(t *testing.T) {
-	tripStart := civilDate("2026-08-24")
 	items := []store.ItineraryItem{
 		legItem(0, "Prague", "", 4),  // first leg, anchored to trip start
 		legItem(1, "Kraków", "", 10), // Sep 2
 		legItem(2, "Berlin", "", 9),  // Sep 1 — INVERTED, collapses to Sep 2
 	}
-	got := legsRenderSummary(items, nil, tripStart)
+	got := legsRenderSummary(rlTrip("2026-08-24", ""), items, nil)
 	want := "- Prague: 2026-08-24 to 2026-08-27\n" +
 		"- Kraków: 2026-08-27 to 2026-09-02\n" +
 		"- Berlin: 2026-09-02 to 2026-09-02\n"
 	if got != want {
 		t.Fatalf("legsRenderSummary =\n%s\nwant\n%s", got, want)
 	}
-	if legsRenderSummary(nil, nil, tripStart) != "" {
+	if legsRenderSummary(rlTrip("2026-08-24", ""), nil, nil) != "" {
 		t.Fatal("empty itinerary should yield an empty summary")
 	}
 }

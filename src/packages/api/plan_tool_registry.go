@@ -729,7 +729,7 @@ func sectionLegsRender(s *planSession) string {
 	if err != nil {
 		return ""
 	}
-	return legsRenderSummary(items, stays, trip.StartDate.Time)
+	return legsRenderSummary(trip, items, stays)
 }
 
 func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool) {
