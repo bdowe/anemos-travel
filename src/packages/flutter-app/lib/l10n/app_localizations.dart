@@ -2918,6 +2918,18 @@ abstract class AppLocalizations {
   /// **'Shared with you'**
   String get tripsListSharedWithYou;
 
+  /// No description provided for @tripsListPastTrips.
+  ///
+  /// In en, this message translates to:
+  /// **'Past trips'**
+  String get tripsListPastTrips;
+
+  /// No description provided for @tripsListPastTripsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 trip} other{{count} trips}}'**
+  String tripsListPastTripsCount(int count);
+
   /// No description provided for @tripsListCreated.
   ///
   /// In en, this message translates to:

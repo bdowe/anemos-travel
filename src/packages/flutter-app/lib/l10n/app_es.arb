@@ -470,6 +470,8 @@
   "tripsListEmptyMessage": "Habla con el agente de IA para crear tu primer viaje.",
   "tripsListPlanTrip": "Planear un viaje",
   "tripsListSharedWithYou": "Compartidos contigo",
+  "tripsListPastTrips": "Viajes pasados",
+  "tripsListPastTripsCount": "{count, plural, one{1 viaje} other{{count} viajes}}",
   "tripsListCreated": "Creado el {date}",
   "tripsListPlannedWith": "Planeado con {name}",
   "tripsListSharedBy": "Compartido por {name}",

@@ -1037,6 +1037,15 @@
   "tripsListEmptyMessage": "Chat with the AI agent to create your first trip.",
   "tripsListPlanTrip": "Plan a trip",
   "tripsListSharedWithYou": "Shared with you",
+  "tripsListPastTrips": "Past trips",
+  "tripsListPastTripsCount": "{count, plural, one{1 trip} other{{count} trips}}",
+  "@tripsListPastTripsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "tripsListCreated": "Created {date}",
   "@tripsListCreated": {
     "placeholders": {

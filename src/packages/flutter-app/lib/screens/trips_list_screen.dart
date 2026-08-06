@@ -5,7 +5,9 @@ import '../navigation/app_nav.dart';
 import '../navigation/app_routes.dart';
 import '../theme/spacing.dart';
 import '../utils/trip_format.dart';
+import '../utils/trip_list_order.dart';
 import '../widgets/account_menu.dart';
+import '../widgets/collapsible_section.dart';
 import '../widgets/continue_chats_section.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
@@ -32,6 +34,11 @@ class TripsListScreen extends ConsumerStatefulWidget {
 }
 
 class _TripsListScreenState extends ConsumerState<TripsListScreen> {
+  /// "Past trips" starts collapsed; kept in screen state (the
+  /// [CollapsibleSection] contract) so it survives silent refreshes and the
+  /// offline-banner reparent.
+  bool _pastExpanded = false;
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +109,18 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     } else {
       final isAdmin = ref.watch(authProvider).user?.isAdmin ?? false;
       final liveTrip = ref.watch(liveTripProvider);
+      // Server order is newest-created-first; the list shows travel-date
+      // order instead — next trip on top, finished trips tucked into a
+      // collapsed group (utils/trip_list_order.dart). The live trip is
+      // exempt from the past group so its Live pill never hides in there.
+      final now = DateTime.now();
+      final groups =
+          partitionTripsForList(state.trips, now, liveTripId: liveTrip?.id);
+      // Same ordering for shared-with-me, but no collapse: the section is
+      // short, and a header-inside-a-header would read as clutter. Past
+      // shared trips simply sort last.
+      final sharedGroups = partitionTripsForList(shared, now);
+      final sharedOrdered = [...sharedGroups.upcoming, ...sharedGroups.past];
       body = RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(sharedWithMeProvider);
@@ -147,19 +166,45 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                           AppSpacing.xs, 0, 0, AppSpacing.sm),
                       child: SectionHeader(title: l10n.tripsListTitle),
                     ),
-                  for (final t in state.trips)
+                  for (final t in groups.upcoming)
                     _TripCard(trip: t, isAdmin: isAdmin),
+                  if (groups.past.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      child: CollapsibleSection(
+                        title: l10n.tripsListPastTrips,
+                        icon: Icons.history,
+                        pill: StatusPill.custom(
+                          label: l10n
+                              .tripsListPastTripsCount(groups.past.length),
+                          background:
+                              theme.colorScheme.surfaceContainerHighest,
+                          foreground: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        expanded: _pastExpanded,
+                        onToggle: () =>
+                            setState(() => _pastExpanded = !_pastExpanded),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final t in groups.past)
+                              _TripCard(trip: t, isAdmin: isAdmin),
+                          ],
+                        ),
+                      ),
+                    ),
                   // Trips others invited this user to co-plan. Kept as a
                   // separate section: "mine" vs "shared with me" is the
                   // mental model, and the card shows the owner instead of
                   // admin version chrome.
-                  if (shared.isNotEmpty) ...[
+                  if (sharedOrdered.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(
                           AppSpacing.xs, AppSpacing.lg, 0, AppSpacing.sm),
                       child: SectionHeader(title: l10n.tripsListSharedWithYou),
                     ),
-                    for (final t in shared) _TripCard(trip: t, isAdmin: false),
+                    for (final t in sharedOrdered)
+                      _TripCard(trip: t, isAdmin: false),
                   ],
                 ],
               ),
