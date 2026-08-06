@@ -28,6 +28,11 @@ var clientEventTypes = map[string]bool{
 	// A place added to a trip from a browse surface (local rec, event, guide
 	// pin) — specs/add-to-itinerary. Distinguished by metadata "source".
 	"itinerary_item_added": true,
+	// Transition telemetry (specs/server-leg-dates): the client compared the
+	// server `legs` payload against its local derivation on a trip load and
+	// they DISAGREED. Expected volume: zero — any row is a derivation-parity
+	// bug and blocks the stage-2a client repoint. Remove at stage 6a.
+	"legs_parity_mismatch": true,
 }
 
 // anonymousClientEventTypes is the tighter whitelist for UNAUTHENTICATED

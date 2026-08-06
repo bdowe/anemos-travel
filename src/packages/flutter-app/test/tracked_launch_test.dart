@@ -30,6 +30,11 @@ class _FakeUrlLauncher extends UrlLauncherPlatform {
 /// Captures booking-click records; can be told to blow up to prove that
 /// analytics failure never blocks the launch.
 class _RecordingAnalytics implements AnalyticsApiService {
+  @override
+  Future<void> recordLegsParityMismatch(
+          {required String tripId, required List<String> details}) =>
+      Future.value();
+
   final calls = <Map<String, String?>>[];
   final bool throwOnRecord;
 

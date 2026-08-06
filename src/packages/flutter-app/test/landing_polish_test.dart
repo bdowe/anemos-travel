@@ -12,6 +12,11 @@ import 'support/l10n_test_app.dart';
 
 class _NoopAnalytics implements AnalyticsApiService {
   @override
+  Future<void> recordLegsParityMismatch(
+          {required String tripId, required List<String> details}) =>
+      Future.value();
+
+  @override
   ApiClient get apiClient => throw UnimplementedError();
 
   @override

@@ -19,6 +19,7 @@ import '../models/location_timing.dart';
 import '../models/route_request.dart';
 import '../models/trip_segment.dart';
 import '../providers/accommodations_provider.dart';
+import '../providers/analytics_provider.dart';
 import '../providers/transport_provider.dart';
 import '../providers/trips_provider.dart';
 import '../providers/recent_trip_provider.dart';
@@ -44,6 +45,7 @@ import '../services/trip_cache.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../utils/calendar_links.dart';
+import '../utils/leg_parity.dart';
 import '../utils/leg_ranges.dart';
 import '../utils/money_format.dart';
 import '../utils/share_link.dart';
@@ -361,6 +363,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       final trip =
           await ref.read(tripsApiServiceProvider).getTrip(widget.tripId);
       if (mounted) {
+        // Transition telemetry (specs/server-leg-dates): daily dogfooding is
+        // the parity monitor for the server legs payload vs the local
+        // derivation this screen still renders. Zero expected volume;
+        // fire-and-forget; deleted with the fallback at stage 6a.
+        final parityDiffs = legParityMismatches(trip);
+        if (parityDiffs.isNotEmpty) {
+          unawaited(ref.read(analyticsApiServiceProvider).recordLegsParityMismatch(
+              tripId: trip.id, details: parityDiffs));
+        }
         // Write-through for offline viewing; fire-and-forget (never throws)
         // so the online path is unaffected.
         unawaited(ref.read(tripCacheProvider).writeTrip(trip));

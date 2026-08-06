@@ -60,6 +60,25 @@ class AnalyticsApiService {
   /// Call sites guard this to once per app session.
   Future<void> recordLandingViewed() => _record('landing_viewed');
 
+  /// Transition telemetry (specs/server-leg-dates): the server `legs`
+  /// payload and the local derivation disagreed on a trip load. Expected
+  /// volume: zero — any event is a parity bug that blocks the client
+  /// repoint. Removed at stage 6a. [details] is truncated defensively;
+  /// authed-only like every trip-scoped event.
+  Future<void> recordLegsParityMismatch({
+    required String tripId,
+    required List<String> details,
+  }) {
+    final joined = details.join('; ');
+    return _record(
+      'legs_parity_mismatch',
+      tripId: tripId,
+      metadata: {
+        'details': joined.length > 400 ? joined.substring(0, 400) : joined,
+      },
+    );
+  }
+
   Future<void> _record(
     String eventType, {
     String? tripId,
