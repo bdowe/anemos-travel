@@ -705,7 +705,16 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 	// Saved stays and transport WITH their dates, so the model can verify the
 	// calendar state it narrates after a date-change tool call instead of
 	// trusting its own claim; degrade silently on error, like the checklist.
-	if stays, err := q.ListAccommodationsByTrip(ctx, trip.ID); err == nil {
+	stays, staysErr := q.ListAccommodationsByTrip(ctx, trip.ID)
+	// The render truth per city leg — item day numbers are positional (a
+	// city's last item day is its DEPARTURE), so without this the model
+	// cannot falsify a wrong day→date mental model from anything it reads.
+	if staysErr == nil && trip.StartDate.Valid {
+		if legs := legsRenderSummary(items, stays, trip.StartDate.Time); legs != "" {
+			b.WriteString("City legs as rendered on the trip page (arrival to departure):\n" + legs)
+		}
+	}
+	if staysErr == nil {
 		var lines []string
 		for _, a := range stays {
 			if a.Auto {

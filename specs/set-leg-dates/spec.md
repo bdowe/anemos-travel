@@ -101,6 +101,15 @@ the agent to chain follow-up set_leg_dates calls.
       honest no-op quotes the zero-night render). A confirmed stay's
       explicit dates are never collapsed; partial overlaps (arrival lands
       mid-leg with nights remaining) keep the leg's own start.
+- [ ] **Rendered-leg observability (round five)**: `get_trip` lists every
+      dated leg's rendered calendar span ("City legs as rendered on the trip
+      page"), and `update_itinerary_section`'s success result echoes the same
+      per-leg render plus the day-semantics rule (a city's LAST item day is
+      its departure) and a steer away from resending recomputed day numbers —
+      so a wrong day→date mental model is falsifiable from tool output
+      instead of surviving successful rewrites (`legsRenderSummary`, shared
+      with `visibleLegDisplayRange`). The refine prompt teaches the same
+      semantics.
 - [ ] Auto-suggested (draft) stays/segments are never moved or confirmed by
       the tool; migration 00053 deletes the frozen pre-#274 rows and
       `checkLodging` skips any `auto` row, so a stale draft can't mask

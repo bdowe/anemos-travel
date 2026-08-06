@@ -132,6 +132,28 @@ func TestLegRunsAndMatching(t *testing.T) {
 	}
 }
 
+// legsRenderSummary is the model-facing render truth: first-leg anchor,
+// arrival rule, and the zero-night collapse for an inverted leg all flow
+// through, one line per dated leg.
+func TestLegsRenderSummary(t *testing.T) {
+	tripStart := civilDate("2026-08-24")
+	items := []store.ItineraryItem{
+		legItem(0, "Prague", "", 4),  // first leg, anchored to trip start
+		legItem(1, "Kraków", "", 10), // Sep 2
+		legItem(2, "Berlin", "", 9),  // Sep 1 — INVERTED, collapses to Sep 2
+	}
+	got := legsRenderSummary(items, nil, tripStart)
+	want := "- Prague: 2026-08-24 to 2026-08-27\n" +
+		"- Kraków: 2026-08-27 to 2026-09-02\n" +
+		"- Berlin: 2026-09-02 to 2026-09-02\n"
+	if got != want {
+		t.Fatalf("legsRenderSummary =\n%s\nwant\n%s", got, want)
+	}
+	if legsRenderSummary(nil, nil, tripStart) != "" {
+		t.Fatal("empty itinerary should yield an empty summary")
+	}
+}
+
 // seedMultiCityTrip builds the dogfood trip: Sep 15-24, Panama City days 1-6
 // then Los Angeles days 6-9, confirmed stays for both (PC by address, LA by
 // name), the two boundary flights, and one auto draft stay for LA that must

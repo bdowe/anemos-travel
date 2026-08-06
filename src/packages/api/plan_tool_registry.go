@@ -697,7 +697,39 @@ func runUpdateItinerarySectionTool(s *planSession, input json.RawMessage) (strin
 	if s.uid != s.boundTripOwnerID {
 		safeGo("notifyCollabEdit", func() { notifyCollabEdit(*s.boundTripID, s.uid) })
 	}
-	return "Section updated — the traveler's trip page has refreshed.", false
+	// Echo the post-state the traveler will SEE. A rewrite's day numbers are
+	// positional, so a model with a wrong day→date mental model can "succeed"
+	// indefinitely while the page never shows what it narrates (the Sep-24-27
+	// loop of 2026-08-06); the rendered ranges make that falsifiable in the
+	// same tool result. Best-effort: any read error degrades to the plain
+	// confirmation rather than failing a write that already committed.
+	result := "Section updated — the traveler's trip page has refreshed."
+	if legs := sectionLegsRender(s); legs != "" {
+		result += " The page now renders these city legs:\n" + legs +
+			"A city's LAST item day is its departure day; each leg renders from the previous city's departure through its own last day. If these ranges don't match what the traveler asked for, do NOT resend the list with recomputed day numbers — use set_leg_dates (one city's dates) or set_trip_dates (the whole trip) with calendar dates."
+	}
+	return result, false
+}
+
+// sectionLegsRender re-reads the bound trip after a section rewrite and
+// returns legsRenderSummary for it — "" when the trip has no start date, no
+// dated legs, or any read fails (the write already committed; visibility is
+// best-effort).
+func sectionLegsRender(s *planSession) string {
+	q := store.New(dbPool)
+	trip, err := q.GetEditableTripByID(s.ctx, store.GetEditableTripByIDParams{ID: *s.boundTripID, UserID: s.uid})
+	if err != nil || !trip.StartDate.Valid {
+		return ""
+	}
+	items, err := q.GetItineraryItemsByTrip(s.ctx, *s.boundTripID)
+	if err != nil {
+		return ""
+	}
+	stays, err := q.ListAccommodationsByTrip(s.ctx, *s.boundTripID)
+	if err != nil {
+		return ""
+	}
+	return legsRenderSummary(items, stays, trip.StartDate.Time)
 }
 
 func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool) {
