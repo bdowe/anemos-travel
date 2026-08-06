@@ -122,7 +122,16 @@ services:
   # the client address — see that file for why the compose subnet below is
   # the trusted range.
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    # Version-PINNED, never :latest. Deploys ride this tunnel (CI SSHes in
+    # through it), and `compose up` recreates this container whenever its
+    # config or image changes — severing the deploy's own SSH session the
+    # moment the old cloudflared stops. With :latest, any upstream release
+    # turned the next routine deploy into that self-severing recreate (this
+    # is exactly what took the Pi host down on 2026-07-23). Bump this pin
+    # deliberately, on its own deploy: the CI restart step runs `up`
+    # detached on the host, so the recreate completes and the tunnel
+    # returns after a seconds-long blip even though the SSH pipe drops.
+    image: cloudflare/cloudflared:2026.7.3
     command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:?TUNNEL_TOKEN must be set}
     depends_on:
       - gateway
