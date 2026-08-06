@@ -1367,6 +1367,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String tripLegDatesWithNights(String range, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count nights',
+      one: '1 night',
+    );
+    return '$range · $_temp0';
+  }
+
+  @override
   String tripTravelMinutes(int minutes) {
     return '$minutes min';
   }

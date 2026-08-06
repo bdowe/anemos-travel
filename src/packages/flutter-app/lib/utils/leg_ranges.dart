@@ -220,3 +220,13 @@ List<int> allocateDays(int totalDays, List<int> weights) {
   }
   return counts;
 }
+
+/// Whole nights between two local-midnight dates, checkout-exclusive
+/// (Aug 24 -> Aug 27 = 3; same day = 0). UTC-normalized so a DST
+/// transition inside the range can't skew the count. Client display
+/// only — NOT part of the Go-twin contract; the legs payload carries
+/// no nights field.
+int nightsBetween(DateTime a, DateTime b) =>
+    DateTime.utc(b.year, b.month, b.day)
+        .difference(DateTime.utc(a.year, a.month, a.day))
+        .inDays;

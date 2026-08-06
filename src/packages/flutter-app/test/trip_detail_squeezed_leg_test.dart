@@ -127,10 +127,11 @@ void main() {
     expect(galStay['return_date'], '2026-09-07');
 
     // Headers: no stale bare "Sep 5" chip anywhere; the squeezed leg shows
-    // its arrival and the next leg follows from it.
+    // its bare arrival (zero nights -> no counter) and the next leg follows
+    // from it with a night count.
     expect(find.text('Sep 5'), findsNothing);
     expect(find.text('Sep 6'), findsWidgets);
-    expect(find.text('Sep 6 – Sep 7'), findsWidgets);
+    expect(find.text('Sep 6 – Sep 7 · 1 night'), findsWidgets);
   });
 
   testWidgets('consecutive squeezed legs chain onto the same arrival',
@@ -190,6 +191,6 @@ void main() {
         derived.singleWhere((t) => t['todo_key'] == 'stay:quito');
     expect(quitoStay['depart_date'], '2026-09-03');
     expect(quitoStay['return_date'], '2026-09-05');
-    expect(find.text('Sep 3 – Sep 5'), findsWidgets);
+    expect(find.text('Sep 3 – Sep 5 · 2 nights'), findsWidgets);
   });
 }

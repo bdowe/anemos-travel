@@ -2180,10 +2180,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       Icon(Icons.event,
                           size: 14, color: theme.colorScheme.primary),
                       const SizedBox(width: 4),
-                      Text(
-                        group.dateRange!,
-                        style: theme.textTheme.labelMedium
-                            ?.copyWith(color: theme.colorScheme.primary),
+                      Flexible(
+                        child: Text(
+                          group.dateRange!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelMedium
+                              ?.copyWith(color: theme.colorScheme.primary),
+                        ),
                       ),
                     ],
                     // 'Other places' has no hub the section tool can target;
@@ -3849,8 +3853,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// visible ranges are arrival-adjusted, matching the stay todos — a leg whose
   /// items collapse onto one day reads "Sep 24 – Sep 27", not a bare "Sep 27"
   /// contradicting the stay row beneath it, and a squeezed leg collapses to a
-  /// zero-night stop at its arrival.
+  /// zero-night stop at its arrival. Multi-night legs carry a nights suffix
+  /// ("Aug 24 – Aug 27 · 3 nights") computed from the same range pair;
+  /// squeezed zero-night legs keep the bare single-date label.
   Map<int, String> _locationDates(Trip trip) {
+    final l10n = context.l10n;
     final items = trip.items ?? const <ItineraryItem>[];
     if (items.isEmpty) return const {};
     final ranges = visibleLegRanges(trip);
@@ -3861,8 +3868,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       final end = ranges[gi].end;
       if (start == null || end == null) continue;
       final text = _formatRange(start, end);
+      final nights = nightsBetween(start, end);
+      final label =
+          nights > 0 ? l10n.tripLegDatesWithNights(text, nights) : text;
       for (final item in legs[gi].items) {
-        result[item.position] = text;
+        result[item.position] = label;
       }
     }
     return result;
