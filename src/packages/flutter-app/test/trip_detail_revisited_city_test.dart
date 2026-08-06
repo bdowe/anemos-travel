@@ -9,6 +9,7 @@ import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
+import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 class _FakeTripsApiService extends TripsApiService {
@@ -72,15 +73,17 @@ void main() {
 
     // The body built at all (the GlobalKey clash used to blank it out)...
     expect(tester.takeException(), isNull);
-    expect(find.text('Acropolis'), findsOneWidget);
     // ...and each city that is visited twice has two pinned headers, one per
-    // run, rather than one collapsed/duplicated header.
+    // run, rather than one merged/duplicated header.
     expect(find.text('Fira'), findsNWidgets(2));
     expect(find.text('Oia'), findsNWidgets(2));
     expect(find.text('Athens'), findsOneWidget);
+    // Groups default collapsed — expanding Athens reveals its items.
+    await expandCity(tester, 'Athens');
+    expect(find.text('Acropolis'), findsOneWidget);
   });
 
-  testWidgets('collapsing one visit leaves the other visit expanded',
+  testWidgets('expanding one visit leaves the other visit collapsed',
       (WidgetTester tester) async {
     final trip = Trip(
       id: 't2',
@@ -108,16 +111,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Fira first stop'), findsOneWidget);
+    // All three groups start collapsed.
+    expect(find.text('Fira first stop'), findsNothing);
 
-    // Tap the first Fira header: that run's items go away, the second Fira
-    // header stays (a label-keyed collapse set would have hidden both), and
-    // the freed space reveals the next group's item.
+    // Expanding the first Fira run reveals only that run's items — a
+    // label-keyed expansion set would have opened both Fira runs.
+    await expandCity(tester, 'Fira');
+    expect(find.text('Fira first stop'), findsOneWidget);
+    expect(find.text('Fira second stop'), findsNothing);
+    expect(find.text('Oia detour'), findsNothing);
+    expect(find.text('Fira'), findsNWidgets(2));
+
+    // Collapsing it again hides that run without touching the other header.
     await tester.tap(find.text('Fira').first);
     await tester.pumpAndSettle();
-
     expect(find.text('Fira first stop'), findsNothing);
     expect(find.text('Fira'), findsNWidgets(2));
-    expect(find.text('Oia detour'), findsOneWidget);
   });
 }

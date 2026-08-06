@@ -9,6 +9,7 @@ import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
+import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 /// Returns a fixed trip without hitting the network, so we can exercise the
@@ -117,7 +118,16 @@ void main() {
 
     await _pump(tester, trip);
 
+    // Both groups default collapsed — expand them so these asserts exercise
+    // the filler suppression, not the collapse (a collapsed Vienna hides day
+    // headers regardless).
+    await expandCity(tester, 'Prague');
+    await expandCity(tester, 'Vienna');
+
+    // Still exactly one 'Vienna': the header. A broken filler filter would
+    // render the filler tile as a second one inside the expanded group.
     expect(find.text('Vienna'), findsOneWidget);
+    expect(find.text('Prague Castle'), findsOneWidget);
     expect(find.text('Fri, Jun 12'), findsNothing);
   });
 }

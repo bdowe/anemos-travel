@@ -1308,6 +1308,23 @@ class AppLocalizationsEn extends AppLocalizations {
       'Nothing left to book on this trip — you\'re all set.';
 
   @override
+  String get tripBookingsLensFilterLabel => 'All bookings';
+
+  @override
+  String get tripBookingsLensEmptyTitle => 'No bookings yet';
+
+  @override
+  String get tripBookingsLensEmptyMessage =>
+      'Flights, stays, and reservations for this trip will show up here.';
+
+  @override
+  String get tripBookingsLensNoneForDestination =>
+      'No bookings for this destination.';
+
+  @override
+  String get tripBookingsLensCounterHint => 'View all bookings';
+
+  @override
   String get tripFilterNoMatch => 'No places match this filter.';
 
   @override

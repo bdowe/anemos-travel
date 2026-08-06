@@ -9,6 +9,7 @@ import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
+import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 class _FakeTripsApiService extends TripsApiService {
@@ -67,6 +68,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    // Groups default collapsed — open both so scrolling has content. Rome
+    // first: while everything is collapsed both headers sit in the viewport,
+    // whereas expanding Paris first would push Rome's header below the fold
+    // and the tap would miss.
+    await expandCity(tester, 'Rome');
+    await expandCity(tester, 'Paris');
 
     expect(find.text('Paris'), findsOneWidget);
 

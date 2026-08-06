@@ -2426,6 +2426,36 @@ abstract class AppLocalizations {
   /// **'Nothing left to book on this trip — you\'re all set.'**
   String get tripFilterAllBookedMessage;
 
+  /// No description provided for @tripBookingsLensFilterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'All bookings'**
+  String get tripBookingsLensFilterLabel;
+
+  /// No description provided for @tripBookingsLensEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No bookings yet'**
+  String get tripBookingsLensEmptyTitle;
+
+  /// No description provided for @tripBookingsLensEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Flights, stays, and reservations for this trip will show up here.'**
+  String get tripBookingsLensEmptyMessage;
+
+  /// No description provided for @tripBookingsLensNoneForDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'No bookings for this destination.'**
+  String get tripBookingsLensNoneForDestination;
+
+  /// No description provided for @tripBookingsLensCounterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'View all bookings'**
+  String get tripBookingsLensCounterHint;
+
   /// No description provided for @tripFilterNoMatch.
   ///
   /// In en, this message translates to:
