@@ -64,6 +64,7 @@ import '../widgets/checklist_section.dart';
 import '../widgets/collapsible_section.dart';
 import '../widgets/trip_review_section.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/choice_chip_row.dart';
 import '../widgets/event_card.dart';
 import '../widgets/hover_reveal.dart';
 import '../widgets/local_rec_card.dart';
@@ -95,9 +96,17 @@ String _groupLabelText(AppLocalizations l10n, String label) =>
 
 // Canonical API values. These are sent to the server (or matched against
 // server data), so they are NEVER translated — only their display labels are.
-// 'local' and 'unbooked' are client-only lenses: locals' picks (items with a
-// local_source_name credit) and left-to-book booking rows.
-const _itemFilters = ['all', 'attraction', 'restaurant', 'local', 'unbooked'];
+// 'local', 'unbooked', and 'bookings' are client-only lenses: locals' picks
+// (items with a local_source_name credit), left-to-book booking rows, and the
+// trip-wide all-bookings list (destination-filterable).
+const _itemFilters = [
+  'all',
+  'attraction',
+  'restaurant',
+  'local',
+  'unbooked',
+  'bookings',
+];
 
 String _filterLabel(AppLocalizations l10n, String value) => switch (value) {
       'all' => l10n.tripFilterAll,
@@ -105,6 +114,7 @@ String _filterLabel(AppLocalizations l10n, String value) => switch (value) {
       'restaurant' => l10n.tripFilterRestaurants,
       'local' => l10n.tripFilterLocalPicks,
       'unbooked' => l10n.tripFilterUnbooked,
+      'bookings' => l10n.tripBookingsLensFilterLabel,
       _ => value,
     };
 
@@ -143,6 +153,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   bool _panelOpen = false;
   RefineTarget? _refineTarget;
   String _itemFilter = 'all'; // one of _itemFilters
+  // Destination chip selection inside the 'bookings' lens (null = All).
+  // Reset on every lens change so the lens always opens at All; clamped in
+  // _bookingsLensBody against the current leg labels (edits can stale it).
+  String? _bookingsLensDestination;
   int? _selectedDay; // map day-chip selection; null = All (specs/today-mode)
   // Whether the map renders as the wide layout's pinned header (true) or the
   // phone layout's scroll-away tap-to-expand card (false). Assigned each
@@ -164,8 +178,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   int? _pendingTodayScroll;
   // Stable identities for the pinned headers so the Today scroller can find
   // their render objects. Days share the `'$cityKey#$day'` scheme with
-  // _collapsedDays; cities are keyed by group label like _collapsedCities.
+  // _collapsedDays; cities are keyed by run key (group.key) like
+  // _expandedCities.
   final Map<String, GlobalKey> _dayHeaderKeys = {};
+  // Day keys of the CURRENT groups, collapsed ones included — recomputed each
+  // build. _dayHeaderKeys only gains entries when a group's slivers build, so
+  // on a cold all-collapsed screen it would be empty; day-jump resolution
+  // reads THIS set instead, so _scrollToDay can expand a group that has never
+  // rendered and still land (specs/today-mode).
+  Set<String> _liveDayKeys = const {};
   final Map<String, GlobalKey> _cityHeaderKeys = {};
   int?
       _selectedPosition; // position of the place focused via a map pin / list tap
@@ -177,10 +198,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   List<Accommodation> _stays = [];
   List<TripSegment> _segments = [];
   bool _overviewExpanded = false;
-  // Collapsed sets (empty => all expanded). Cities keyed by group label; days
-  // keyed by "<city>#<day>" since day numbers repeat across cities.
-  final Set<String> _collapsedCities = {};
+  // City groups the user opened, keyed by run key (group.key, `#2`-suffixed
+  // on revisits): empty => all collapsed, the default view (place + dates
+  // headers only). A sole group is seeded open once (_citySeedConsumed) so a
+  // one-city trip isn't an empty screen; late-arriving groups (refine adds a
+  // city mid-session) start collapsed by absence. Days stay inverted —
+  // _collapsedDays empty => open within an expanded group, keyed
+  // "<cityKey>#<day>" since day numbers repeat across cities.
+  final Set<String> _expandedCities = {};
   final Set<String> _collapsedDays = {};
+  bool _citySeedConsumed = false;
   // Trailing sections (Packing/Budget/Trip health) render as collapsed
   // one-line summaries; this holds the ones the user opened. Session-only,
   // like the city/day sets, and held HERE (not in the section widgets) so
@@ -210,13 +237,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   Map<int, LocationTiming> _travelByPos = {};
 
   /// Itinerary items matching the active places lens, used by both the map
-  /// and the list so they stay in sync. 'unbooked' is a bookings lens, not a
-  /// places one — the list swaps to left-to-book rows while the places set
-  /// (and thus the maps) stays whole.
+  /// and the list so they stay in sync. 'unbooked' and 'bookings' are
+  /// bookings lenses, not places ones — the list swaps to booking rows while
+  /// the places set (and thus the maps) stays whole.
   List<ItineraryItem> _filtered(Trip trip) {
     final items = trip.items ?? const <ItineraryItem>[];
     return switch (_itemFilter) {
-      'all' || 'unbooked' => items.toList(),
+      'all' || 'unbooked' || 'bookings' => items.toList(),
       'local' => items
           .where((i) => (i.localSourceName ?? '').trim().isNotEmpty)
           .toList(),
@@ -561,15 +588,25 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Scrolls the itinerary so [day]'s header rests just below the pinned
   /// chrome (map + title + city header). Missing headers fall back to the
   /// nearest prior day, then the nearest following; a collapsed city/day is
-  /// expanded first. Pure view work — safe offline and with the panel open.
+  /// expanded first, and a bookings lens (which swaps the city groups out
+  /// entirely, so no day header could ever build) is exited back to the full
+  /// itinerary — the Today chip and health day-links read as "show me that
+  /// day". Pure view work — safe offline and with the panel open.
   void _scrollToDay(int day) {
     final dayKey = _resolveDayHeaderKey(day);
     if (dayKey == null) return;
     final cityKey = dayKey.substring(0, dayKey.lastIndexOf('#'));
-    if (_collapsedCities.contains(cityKey) ||
+    final inBookingsLens =
+        _itemFilter == 'unbooked' || _itemFilter == 'bookings';
+    if (inBookingsLens ||
+        !_expandedCities.contains(cityKey) ||
         _collapsedDays.contains(dayKey)) {
       setState(() {
-        _collapsedCities.remove(cityKey);
+        if (inBookingsLens) {
+          _itemFilter = 'all';
+          _bookingsLensDestination = null;
+        }
+        _expandedCities.add(cityKey);
         _collapsedDays.remove(dayKey);
       });
       // Continue once the expanded section has laid out.
@@ -582,25 +619,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// The registry key of the day header [day] should scroll to: the first
   /// (build-order) header for that exact day, else the nearest prior day
-  /// with a header, else the nearest following. Only headers that are
-  /// currently built count, except those hidden inside a collapsed city —
-  /// still reachable because [_scrollToDay] expands them first.
+  /// with a header, else the nearest following. Candidates come from
+  /// [_liveDayKeys] — the current build's groups, collapsed ones included
+  /// (still reachable because [_scrollToDay] expands them first) — so days
+  /// removed by an edit can never linger as phantom targets.
   String? _resolveDayHeaderKey(int day) {
     String? prior;
     String? next;
     int? priorDay;
     int? nextDay;
-    for (final entry in _dayHeaderKeys.entries) {
-      final key = entry.key;
+    for (final key in _liveDayKeys) {
       final hashAt = key.lastIndexOf('#');
       final d = int.tryParse(key.substring(hashAt + 1));
       if (d == null) continue;
-      // Skip stale keys whose day no longer renders (removed items), as
-      // opposed to ones merely hidden inside a collapsed city group.
-      if (entry.value.currentContext == null &&
-          !_collapsedCities.contains(key.substring(0, hashAt))) {
-        continue;
-      }
       if (d == day) return key;
       if (d < day && (priorDay == null || d > priorDay)) {
         priorDay = d;
@@ -1284,11 +1315,36 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     if (_guardOffline()) return;
     final trip = _trip;
     if (trip == null) return;
+    final beforeIds = {
+      for (final i in trip.items ?? const <ItineraryItem>[]) i.id
+    };
     final added = await showDialog<bool>(
       context: context,
       builder: (_) => AddItineraryItemDialog(trip: trip, initialDay: day),
     );
-    if (added == true) await _load();
+    if (added == true) {
+      await _load();
+      _expandRunsOfNewItems(beforeIds);
+    }
+  }
+
+  /// Groups default collapsed, so a place added into a collapsed run would
+  /// vanish with zero visible feedback — open the run(s) holding items that
+  /// weren't in the trip before the add.
+  void _expandRunsOfNewItems(Set<String> beforeIds) {
+    final items = _trip?.items ?? const <ItineraryItem>[];
+    final fresh = {
+      for (final i in items)
+        if (!beforeIds.contains(i.id)) i.id
+    };
+    if (fresh.isEmpty) return;
+    setState(() {
+      for (final leg in tripLegs(items)) {
+        if (leg.items.any((i) => fresh.contains(i.id))) {
+          _expandedCities.add(leg.key);
+        }
+      }
+    });
   }
 
   Future<void> _patch(
@@ -2081,16 +2137,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       }) group,
       ThemeData theme) {
     final l10n = context.l10n;
-    final cityCollapsed = _collapsedCities.contains(group.key);
+    final cityCollapsed = !_expandedCities.contains(group.key);
     return HoverReveal(
       builder: (context, revealed) => Material(
         color: theme.scaffoldBackgroundColor,
         child: InkWell(
           onTap: () => setState(() {
             if (cityCollapsed) {
-              _collapsedCities.remove(group.key);
+              _expandedCities.add(group.key);
             } else {
-              _collapsedCities.add(group.key);
+              _expandedCities.remove(group.key);
             }
           }),
           child: Padding(
@@ -2524,6 +2580,154 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         _detailRowFor(stay: a, segment: null, detailOnly: true),
       for (final s in grouped.residualSegments.where((s) => !s.booked))
         _detailRowFor(stay: null, segment: s, detailOnly: true),
+    ];
+  }
+
+  /// The 'bookings' lens rows: every city slot's rows — booked and unbooked —
+  /// in trip order, then the residual todos and detail-only records that
+  /// matched no city. Reuses the same row widgets (and the _setRowBooked
+  /// writer) as the inline city view, so checking a box here behaves
+  /// identically; the row stays put, struck through.
+  ///
+  /// [destination] narrows to one leg label (null = all): slot i is included
+  /// when labels[i] matches; residuals only under All or the 'Other places'
+  /// chip (they matched no destination by definition). This filters the
+  /// OUTPUT of the one full-label _groupedBookings call — never re-run
+  /// _groupedBookings on a label subset: its claim-once matching is
+  /// order-dependent, so a subset call would assign rows differently than
+  /// the inline city view (docs/zen.md).
+  List<Widget> _allBookingRows(
+    ({
+      List<
+          ({
+            BookingTodo? arrival,
+            TripSegment? arrivalMatch,
+            BookingTodo? stay,
+            Accommodation? stayMatch,
+            BookingTodo? departure,
+            TripSegment? departureMatch,
+          })> slots,
+      List<BookingTodo> residual,
+      List<Accommodation> residualStays,
+      List<TripSegment> residualSegments,
+    }) grouped,
+    List<String> labels, {
+    String? destination,
+  }) {
+    final l10n = context.l10n;
+    bool slotShown(int i) =>
+        destination == null ||
+        (i < labels.length && labels[i] == destination);
+    final showResiduals =
+        destination == null || destination == _kOtherPlaces;
+    return [
+      for (final (i, slot) in grouped.slots.indexed)
+        if (slotShown(i)) ...[
+          ..._bookingRowWidgets(slot, departureOnly: false),
+          if (i == grouped.slots.length - 1)
+            ..._bookingRowWidgets(slot, departureOnly: true),
+        ],
+      if (showResiduals) ...[
+        for (final todo in grouped.residual)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: BookingTodoCard(
+              todo: todo,
+              onBookedChanged: (v) => _setRowBooked(v, todo: todo),
+              onOpen: _openCallbackFor(todo),
+              openLabelOverride: _flightLegs.containsKey(todo.todoKey)
+                  ? l10n.tripFindFlights
+                  : null,
+              onEdit: todo.auto ? null : () => _editTodo(todo),
+              onDelete: todo.auto ? null : () => _deleteTodo(todo),
+            ),
+          ),
+        for (final a in grouped.residualStays)
+          _detailRowFor(stay: a, segment: null, detailOnly: true),
+        for (final s in grouped.residualSegments)
+          _detailRowFor(stay: null, segment: s, detailOnly: true),
+      ],
+    ];
+  }
+
+  /// Chip values for the 'bookings' lens destination filter: the leg labels
+  /// deduped in trip order (a revisited city gets ONE chip covering both its
+  /// runs — chips select by label equality, and run-suffixed chips would
+  /// leak the internal `#2` key grammar), plus the canonical 'Other places'
+  /// value when residual bookings exist and no real 'Other places' leg
+  /// already supplied it.
+  List<String> _bookingsLensChips(List<String> labels,
+      {required bool hasResiduals}) {
+    final chips = <String>[];
+    for (final l in labels) {
+      if (!chips.contains(l)) chips.add(l);
+    }
+    if (hasResiduals && !chips.contains(_kOtherPlaces)) {
+      chips.add(_kOtherPlaces);
+    }
+    return chips;
+  }
+
+  /// The 'bookings' lens body: destination filter chips above the flat
+  /// all-bookings list. Returns [] when the trip has no bookings at all so
+  /// build can swap in the lens empty state. A stale chip selection (leg
+  /// labels change when the itinerary is edited) is clamped here — we're
+  /// already in build, so this frame renders the clamped value (the
+  /// _selectedDay clamp idiom).
+  List<Widget> _bookingsLensBody(
+    ({
+      List<
+          ({
+            BookingTodo? arrival,
+            TripSegment? arrivalMatch,
+            BookingTodo? stay,
+            Accommodation? stayMatch,
+            BookingTodo? departure,
+            TripSegment? departureMatch,
+          })> slots,
+      List<BookingTodo> residual,
+      List<Accommodation> residualStays,
+      List<TripSegment> residualSegments,
+    }) grouped,
+    List<String> labels,
+  ) {
+    final l10n = context.l10n;
+    final all = _allBookingRows(grouped, labels);
+    if (all.isEmpty) return const [];
+    final hasResiduals = grouped.residual.isNotEmpty ||
+        grouped.residualStays.isNotEmpty ||
+        grouped.residualSegments.isNotEmpty;
+    final chips = _bookingsLensChips(labels, hasResiduals: hasResiduals);
+    if (_bookingsLensDestination != null &&
+        !chips.contains(_bookingsLensDestination)) {
+      _bookingsLensDestination = null;
+    }
+    final rows = _bookingsLensDestination == null
+        ? all
+        : _allBookingRows(grouped, labels,
+            destination: _bookingsLensDestination);
+    return [
+      Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        child: ChoiceChipRow(
+          options: chips,
+          selected: _bookingsLensDestination,
+          onSelected: (v) => setState(() => _bookingsLensDestination = v),
+          labelBuilder: (v) =>
+              v == _kOtherPlaces ? l10n.tripOtherBookings : v,
+        ),
+      ),
+      if (rows.isEmpty)
+        SizedBox(
+          height: 120,
+          child: EmptyState(
+            icon: Icons.search_off,
+            title: l10n.tripBookingsLensNoneForDestination,
+            compact: true,
+          ),
+        )
+      else
+        ...rows,
     ];
   }
 
@@ -4149,8 +4353,17 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       onPinTap: expandable
           ? null
           : (pos) {
-              setState(() => _selectedPosition = pos);
               final it = trip.items!.firstWhere((i) => i.position == pos);
+              setState(() {
+                _selectedPosition = pos;
+                // The highlighted row can only be seen if its run renders:
+                // groups default collapsed, so open the tapped item's run.
+                for (final leg in tripLegs(trip.items!)) {
+                  if (leg.items.any((i) => i.position == pos)) {
+                    _expandedCities.add(leg.key);
+                  }
+                }
+              });
               _showSnack(it.name);
             },
       onExpand: expandable
@@ -4390,12 +4603,39 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       // City-matched bookings render inside their city group;
                       // the rest fall through to the Bookings section's
                       // "Other" sub-group.
-                      final grouped = _groupedBookings([
+                      final legLabels = [
                         for (final r in rawLegRanges(trip)) r.label
-                      ]);
+                      ];
+                      final grouped = _groupedBookings(legLabels);
                       final filtered = _filtered(trip);
                       final groups =
                           _buildGroups(filtered, _locationDates(trip));
+                      // Groups default collapsed (empty _expandedCities); a
+                      // sole group is seeded open once — a one-city trip
+                      // collapsed to a single header line is an empty screen.
+                      // One-shot so later groups (refine adds a city) arrive
+                      // collapsed and the seeded one stays re-collapsible.
+                      if (!_citySeedConsumed && groups.isNotEmpty) {
+                        _citySeedConsumed = true;
+                        if (groups.length == 1) {
+                          _expandedCities.add(groups.first.key);
+                        }
+                      }
+                      // Day-key registry from the CURRENT groups, not from
+                      // whatever happens to be built: a collapsed group's day
+                      // headers don't exist yet, but their keys must still
+                      // resolve so _scrollToDay can expand the group and land
+                      // (specs/today-mode). Mirrors _buildGroupItemSlivers'
+                      // day-header rule: non-filler items carrying a day tag.
+                      _liveDayKeys = {
+                        for (final g in groups)
+                          for (final it in g.items)
+                            if (!_isCityFiller(it) && it.day != null)
+                              '${g.key}#${it.day}',
+                      };
+                      for (final key in _liveDayKeys) {
+                        _dayHeaderKeys.putIfAbsent(key, GlobalKey.new);
+                      }
                       // Date window per city group, for the embedded events
                       // lookup (keyed by the same label _buildGroups uses).
                       final groupRanges = {
@@ -4566,23 +4806,64 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                             // overflow on narrow widths.
                                             if (_bookingTodos.isNotEmpty) ...[
                                               const SizedBox(width: 8),
+                                              // Tappable shortcut into the
+                                              // all-bookings lens; idempotent
+                                              // (the filter menu is the way
+                                              // back out). Pure view work, so
+                                              // not offline-gated. Padded so
+                                              // the hit target fills the 36px
+                                              // header row. Disabled on a
+                                              // place-less trip: the
+                                              // items-empty branch shadows
+                                              // the lens there and the filter
+                                              // menu (the only exit) is
+                                              // hidden — the tap would trap
+                                              // an invisible sticky lens.
                                               Flexible(
-                                                child: Text(
-                                                  l10n.bookingsSummaryProgress(
-                                                      _bookingTodos
-                                                          .where(
-                                                              (t) => t.booked)
-                                                          .length,
-                                                      _bookingTodos.length),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: theme
-                                                      .textTheme.bodySmall
-                                                      ?.copyWith(
-                                                          color: theme
-                                                              .colorScheme
-                                                              .onSurfaceVariant),
+                                                child: Semantics(
+                                                  button: true,
+                                                  label: l10n
+                                                      .tripBookingsLensCounterHint,
+                                                  child: InkWell(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                    onTap: (trip.items ??
+                                                                const <
+                                                                    ItineraryItem>[])
+                                                            .isEmpty
+                                                        ? null
+                                                        : () => setState(() {
+                                                              _itemFilter =
+                                                                  'bookings';
+                                                              _bookingsLensDestination =
+                                                                  null;
+                                                            }),
+                                                    child: Padding(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 4,
+                                                          vertical: 8),
+                                                      child: Text(
+                                                        l10n.bookingsSummaryProgress(
+                                                            _bookingTodos
+                                                                .where((t) =>
+                                                                    t.booked)
+                                                                .length,
+                                                            _bookingTodos
+                                                                .length),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: theme.textTheme
+                                                            .bodySmall
+                                                            ?.copyWith(
+                                                                color: theme
+                                                                    .colorScheme
+                                                                    .onSurfaceVariant),
+                                                      ),
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -4632,8 +4913,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                                         .colorScheme.primary
                                                     : theme.colorScheme
                                                         .onSurfaceVariant),
-                                            onSelected: (f) => setState(
-                                                () => _itemFilter = f),
+                                            onSelected: (f) => setState(() {
+                                              _itemFilter = f;
+                                              _bookingsLensDestination = null;
+                                            }),
                                             itemBuilder: (_) => [
                                               for (final f
                                                   in _itemFilters) ...[
@@ -4708,6 +4991,33 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                 final rows => _boxSliver(rows),
                               },
                             )
+                          else if (_itemFilter == 'bookings')
+                            // All-bookings lens: the whole trip's bookings
+                            // (booked and unbooked) in place of the city
+                            // groups, filterable by destination. One surface
+                            // at a time — the inline rows render only under
+                            // == 'all', so booked-state never shows on two
+                            // surfaces at once (the PR #274 bar).
+                            SliverPadding(
+                              padding:
+                                  EdgeInsets.fromLTRB(gutter, 4, gutter, 0),
+                              sliver: switch (
+                                  _bookingsLensBody(grouped, legLabels)) {
+                                [] => SliverToBoxAdapter(
+                                    child: SizedBox(
+                                      height: 260,
+                                      child: EmptyState(
+                                        icon: Icons.book_online_outlined,
+                                        title:
+                                            l10n.tripBookingsLensEmptyTitle,
+                                        message: l10n
+                                            .tripBookingsLensEmptyMessage,
+                                      ),
+                                    ),
+                                  ),
+                                final body => _boxSliver(body),
+                              },
+                            )
                           else if (filtered.isEmpty)
                             SliverPadding(
                               padding:
@@ -4739,7 +5049,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                                   group.key, GlobalKey.new),
                                               child: _cityHeader(
                                                   trip, group, theme))),
-                                      if (!_collapsedCities
+                                      if (_expandedCities
                                           .contains(group.key)) ...[
                                         // Embedded bookings render only in the
                                         // unfiltered view: a category filter can

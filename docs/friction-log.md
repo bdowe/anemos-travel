@@ -5,6 +5,30 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-06 — trip-detail dogfooding (top-level clutter)
+
+- **[app] Friction → fixed (collapse default + All-bookings lens):** on a
+  7-destination trip the itinerary's top level was a wall of repeated
+  flight/stay pairs ("EWR → Prague · Find flights" / "Stay in Prague · Open
+  in Airbnb" × 7) before any actual content. Fixed two ways, per the 08-03
+  doctrine (collapse, don't relocate; the menus rejection defended exactly
+  this collapsed-rows shape): (1) destination groups now DEFAULT to
+  collapsed — the resting view is one place-plus-dates header line per
+  destination; a sole group seeds open, and today-mode still force-expands
+  today's group on live trips (day-jump targets now come from a build-time
+  `_liveDayKeys` registry, since a never-expanded group has no built day
+  headers). (2) A new trip-wide "All bookings" filter lens — booked and
+  unbooked, destination filter chips, residuals under an Other chip — entered
+  from the filter menu or by tapping the "N of M booked" counter. A lens, not
+  a section: it REPLACES the list, so booked-state never renders on two
+  surfaces at once (the PR #274 bar), and every row keeps the one
+  `_setRowBooked` writer. Open debt, on purpose: the counter still counts
+  todos only (residual confirmed records were never "to book"), booking→
+  destination attribution is still the fuzzy claim-once `_groupedBookings`
+  matcher (the lens filters its OUTPUT — a stored leg association is the
+  specs/server-leg-dates lane-1a follow-up), and lens/collapse usage still
+  has zero telemetry (`clientEventTypes` whitelist makes that a Go change).
+
 ## 2026-08-06 — trip-detail dogfooding (leg dates, round five)
 
 - **[app] BREAKAGE → fixed (specs/set-leg-dates round five):** the agent

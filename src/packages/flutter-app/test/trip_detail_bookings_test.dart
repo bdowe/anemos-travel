@@ -14,6 +14,7 @@ import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/booking_todo_card.dart';
 
+import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 /// Returns a fixed trip without hitting the network, so we can exercise the
@@ -115,6 +116,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    // Groups default collapsed — open both cities to reach the embedded
+    // rows (the header counter and Other bookings render regardless).
+    await expandCity(tester, 'Paris');
+    await expandCity(tester, 'Rome');
 
     // City-matched bookings render once each, as compact embedded rows.
     expect(

@@ -10,6 +10,7 @@ import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
+import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 /// Returns a fixed trip without hitting the network, so we can exercise the
@@ -93,6 +94,10 @@ void main() {
     // The Green Turtle Cay group is labelled with the stay's date range.
     expect(find.text('Jun 10 – Jun 12'), findsOneWidget);
 
+    // Groups default collapsed — open both to reach their contents.
+    await expandCity(tester, 'Green Turtle Cay');
+    await expandCity(tester, 'Great Guana Cay');
+
     // Items still render under their groups.
     expect(find.text("Brendal's Dive Center"), findsOneWidget);
     expect(find.text('Dive Guana'), findsOneWidget);
@@ -138,6 +143,10 @@ void main() {
     // City headers.
     expect(find.text('Paris'), findsOneWidget);
     expect(find.text('Rome'), findsOneWidget);
+
+    // Groups default collapsed — open both to reach the day sub-headers.
+    await expandCity(tester, 'Paris');
+    await expandCity(tester, 'Rome');
 
     // Day sub-headers show the weekday + date derived from the trip start
     // (day N -> startDate + (N-1)). Jun 10 2026 is a Wednesday.

@@ -63,7 +63,7 @@ import 'app_localizations_es.dart';
 /// property.
 abstract class AppLocalizations {
   AppLocalizations(String locale)
-      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -86,16 +86,16 @@ abstract class AppLocalizations {
   /// of delegates is preferred or required.
   static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
       <LocalizationsDelegate<dynamic>>[
-    delegate,
-    GlobalMaterialLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-  ];
+        delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
-    Locale('es')
+    Locale('es'),
   ];
 
   /// Product name. Not translated — it is a brand name.
@@ -2425,6 +2425,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing left to book on this trip — you\'re all set.'**
   String get tripFilterAllBookedMessage;
+
+  /// No description provided for @tripBookingsLensFilterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'All bookings'**
+  String get tripBookingsLensFilterLabel;
+
+  /// No description provided for @tripBookingsLensEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No bookings yet'**
+  String get tripBookingsLensEmptyTitle;
+
+  /// No description provided for @tripBookingsLensEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Flights, stays, and reservations for this trip will show up here.'**
+  String get tripBookingsLensEmptyMessage;
+
+  /// No description provided for @tripBookingsLensNoneForDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'No bookings for this destination.'**
+  String get tripBookingsLensNoneForDestination;
+
+  /// No description provided for @tripBookingsLensCounterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'View all bookings'**
+  String get tripBookingsLensCounterHint;
 
   /// No description provided for @tripFilterNoMatch.
   ///
@@ -5322,8 +5352,9 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   }
 
   throw FlutterError(
-      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-      'an issue with the localizations generation tool. Please file an issue '
-      'on GitHub with a reproducible sample app and the gen-l10n configuration '
-      'that was used.');
+    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.',
+  );
 }
