@@ -1,0 +1,283 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:travel_route_planner/models/accommodation.dart';
+import 'package:travel_route_planner/models/itinerary_item.dart';
+import 'package:travel_route_planner/models/trip.dart';
+import 'package:travel_route_planner/utils/leg_ranges.dart';
+
+// CROSS-LANGUAGE CONTRACT (specs/trip-dates-truth): these fixtures and
+// expected values are hand-mirrored in the Go twin suite
+// (api/trip_render_legs_test.go, stage 0b) — same trips, same expected
+// spans, city names and all. Pinning both sides to the same literals means a
+// drift on either side fails a test instead of shipping silently (the
+// calendar-title parity convention). Divergences that are DELIBERATE are
+// marked "diverges:" below with the decision.
+
+ItineraryItem _item(int pos, String name, String? city, {int? day}) =>
+    ItineraryItem(
+      id: 'i$pos',
+      position: pos,
+      name: name,
+      address: city == null ? null : '$city address',
+      latitude: 0,
+      longitude: 0,
+      category: 'attraction',
+      day: day,
+      city: city,
+    );
+
+Trip _trip(
+  List<ItineraryItem> items, {
+  String? startDate,
+  String? endDate,
+  List<Accommodation>? stays,
+}) =>
+    Trip(
+      id: 't1',
+      title: 'Fixture',
+      status: 'planned',
+      startDate: startDate,
+      endDate: endDate,
+      createdAt: '2026-08-01',
+      updatedAt: '2026-08-01',
+      items: items,
+      accommodations: stays,
+    );
+
+DateTime _d(String iso) => DateTime.parse(iso);
+
+void main() {
+  group('rawLegRanges', () {
+    test('item-day ranges anchored to the trip start', () {
+      final ranges = rawLegRanges(_trip(
+        [
+          _item(0, 'Feskekôrka', 'Gothenburg', day: 1),
+          _item(1, 'Liseberg', 'Gothenburg', day: 3),
+          _item(2, 'Prado', 'Madrid', day: 5),
+        ],
+        startDate: '2026-08-24',
+        endDate: '2026-08-28',
+      ));
+      expect(ranges.length, 2);
+      expect(ranges[0].start, _d('2026-08-24'));
+      expect(ranges[0].end, _d('2026-08-26'));
+      // Madrid's raw range collapses to its single item day — the visible
+      // pass, not this one, pulls its start back to the arrival.
+      expect(ranges[1].start, _d('2026-08-28'));
+      expect(ranges[1].end, _d('2026-08-28'));
+      expect(ranges[1].stayAnchored, isFalse);
+    });
+
+    test('first leg anchors to the trip start when items sit late', () {
+      final ranges = rawLegRanges(_trip(
+        [
+          _item(0, 'Prague', 'Prague', day: 4),
+          _item(1, 'Kraków', 'Kraków', day: 9),
+        ],
+        startDate: '2026-08-24',
+        endDate: '2026-09-01',
+      ));
+      expect(ranges[0].start, _d('2026-08-24'));
+      expect(ranges[0].end, _d('2026-08-27'));
+    });
+
+    test('a confirmed stay overrides item days and sets stayAnchored', () {
+      final ranges = rawLegRanges(_trip(
+        [
+          _item(0, 'Museo', 'Medellín', day: 1),
+          _item(1, 'Quito', 'Quito', day: 5),
+        ],
+        startDate: '2026-09-01',
+        endDate: '2026-09-07',
+        stays: const [
+          Accommodation(
+            id: 'a1',
+            name: 'Hotel Quito',
+            address: 'Av. González Suárez, Quito, Ecuador',
+            checkIn: '2026-09-03',
+            checkOut: '2026-09-05',
+          ),
+        ],
+      ));
+      expect(ranges[1].start, _d('2026-09-03'));
+      expect(ranges[1].end, _d('2026-09-05'));
+      expect(ranges[1].stayAnchored, isTrue);
+    });
+
+    // diverges: stay matching is address-only client-side today; the Go twin
+    // also matches by NAME (agent-added stays carry no address). The unified
+    // rule after the payload cutover is address-then-name — this pin
+    // documents the pre-cutover client behavior.
+    test('an address-less stay does not anchor (client rule, pre-cutover)',
+        () {
+      final ranges = rawLegRanges(_trip(
+        [_item(0, 'Quito', 'Quito', day: 3)],
+        startDate: '2026-09-01',
+        endDate: '2026-09-05',
+        stays: const [
+          Accommodation(
+            id: 'a1',
+            name: 'Stay in Quito',
+            checkIn: '2026-09-02',
+            checkOut: '2026-09-04',
+          ),
+        ],
+      ));
+      expect(ranges[0].stayAnchored, isFalse);
+      // First-leg anchor applies instead: start = trip start.
+      expect(ranges[0].start, _d('2026-09-01'));
+      expect(ranges[0].end, _d('2026-09-03'));
+    });
+
+    test('undated legs take the weighted auto-allocation slice', () {
+      final ranges = rawLegRanges(_trip(
+        [
+          _item(0, 'Louvre', 'Paris'),
+          _item(1, 'Orsay', 'Paris'),
+          _item(2, 'Marais walk', 'Paris'),
+          _item(3, 'Colosseum', 'Rome'),
+        ],
+        startDate: '2026-06-01',
+        endDate: '2026-06-08', // 8 days: Paris (3 items) 6, Rome (1 item) 2
+      ));
+      expect(ranges[0].start, _d('2026-06-01'));
+      expect(ranges[0].end, _d('2026-06-06'));
+      expect(ranges[1].start, _d('2026-06-07'));
+      expect(ranges[1].end, _d('2026-06-08'));
+    });
+
+    test('more locations than days maps each to one ascending day', () {
+      final ranges = rawLegRanges(_trip(
+        [
+          _item(0, 'A', 'Alpha'),
+          _item(1, 'B', 'Beta'),
+          _item(2, 'C', 'Gamma'),
+        ],
+        startDate: '2026-06-01',
+        endDate: '2026-06-02', // 2 days, 3 cities
+      ));
+      expect(ranges[0].start, _d('2026-06-01'));
+      expect(ranges[1].start, _d('2026-06-01'));
+      expect(ranges[2].start, _d('2026-06-02'));
+      for (final r in ranges) {
+        expect(r.start, r.end);
+      }
+    });
+
+    test('a dateless trip yields null ranges', () {
+      final ranges = rawLegRanges(_trip(
+        [_item(0, 'Louvre', 'Paris', day: 1)],
+      ));
+      expect(ranges.single.start, isNull);
+      expect(ranges.single.end, isNull);
+    });
+  });
+
+  group('visibleLegRanges', () {
+    test('arrival pulls a late-starting leg back to the previous end', () {
+      final ranges = visibleLegRanges(_trip(
+        [
+          _item(0, 'Feskekôrka', 'Gothenburg', day: 1),
+          _item(1, 'Liseberg', 'Gothenburg', day: 3),
+          _item(2, 'Prado', 'Madrid', day: 5),
+        ],
+        startDate: '2026-08-24',
+        endDate: '2026-08-28',
+      ));
+      expect(ranges[1].start, _d('2026-08-26'));
+      expect(ranges[1].end, _d('2026-08-28'));
+    });
+
+    test('a squeezed leg collapses to a zero-night stop and cascades', () {
+      final ranges = visibleLegRanges(_trip(
+        [
+          _item(0, 'Museo', 'Medellín', day: 1),
+          _item(1, 'Comuna 13', 'Medellín', day: 6),
+          _item(2, 'Quito', 'Quito', day: 5),
+          _item(3, 'Mitad del Mundo', 'Galápagos', day: 6),
+          _item(4, 'Tortuga Bay', 'Galápagos', day: 7),
+        ],
+        startDate: '2026-09-01',
+        endDate: '2026-09-07',
+      ));
+      expect(ranges[1].start, _d('2026-09-06'));
+      expect(ranges[1].end, _d('2026-09-06'));
+      expect(ranges[2].start, _d('2026-09-06'));
+      expect(ranges[2].end, _d('2026-09-07'));
+    });
+
+    test('consecutive squeezed legs chain onto the same arrival', () {
+      final ranges = visibleLegRanges(_trip(
+        [
+          _item(0, 'Museo', 'Medellín', day: 1),
+          _item(1, 'Comuna 13', 'Medellín', day: 6),
+          _item(2, 'Quito', 'Quito', day: 4),
+          _item(3, 'Guayaquil', 'Guayaquil', day: 5),
+        ],
+        startDate: '2026-09-01',
+        endDate: '2026-09-07',
+      ));
+      expect(ranges[1].start, _d('2026-09-06'));
+      expect(ranges[1].end, _d('2026-09-06'));
+      expect(ranges[2].start, _d('2026-09-06'));
+      expect(ranges[2].end, _d('2026-09-06'));
+    });
+
+    test('a confirmed stay is never collapsed', () {
+      final ranges = visibleLegRanges(_trip(
+        [
+          _item(0, 'Museo', 'Medellín', day: 1),
+          _item(1, 'Comuna 13', 'Medellín', day: 6),
+          _item(2, 'Quito', 'Quito', day: 5),
+        ],
+        startDate: '2026-09-01',
+        endDate: '2026-09-07',
+        stays: const [
+          Accommodation(
+            id: 'a1',
+            name: 'Hotel Quito',
+            address: 'Av. González Suárez, Quito, Ecuador',
+            checkIn: '2026-09-03',
+            checkOut: '2026-09-05',
+          ),
+        ],
+      ));
+      expect(ranges[1].start, _d('2026-09-03'));
+      expect(ranges[1].end, _d('2026-09-05'));
+    });
+
+    // diverges: client-side a null-range leg still participates in the chain
+    // (prevEnd is overwritten with null, disabling adjustment downstream);
+    // the Go twin SKIPS undated legs without touching prevEnd. The unified
+    // payload rule is the Go one; this pin documents the pre-cutover client
+    // behavior so the cutover diff is deliberate.
+    test('a dateless interior leg resets the chain (client rule, pre-cutover)',
+        () {
+      final ranges = visibleLegRanges(_trip(
+        [
+          _item(0, 'A', 'Alpha', day: 1),
+          _item(1, 'mystery', null),
+          _item(2, 'C', 'Gamma', day: 5),
+        ],
+        startDate: '2026-06-01',
+        // No end date: no auto-allocation, so the hubless leg has null range.
+      ));
+      expect(ranges.length, 3);
+      expect(ranges[1].start, _d('2026-06-01')); // adopts prev end...
+      expect(ranges[1].end, isNull); // ...but its own end is null
+      // Chain reset: Gamma keeps its raw start, un-adjusted.
+      expect(ranges[2].start, _d('2026-06-05'));
+    });
+  });
+
+  group('allocateDays', () {
+    test('splits by weight with largest-remainder distribution', () {
+      expect(allocateDays(8, [3, 1]), [6, 2]);
+      expect(allocateDays(10, [1, 1, 1]), [4, 3, 3]);
+    });
+
+    test('floors at one day each and handles totalDays <= n', () {
+      expect(allocateDays(2, [5, 5, 5]), [1, 1, 1]);
+    });
+  });
+}

@@ -44,6 +44,7 @@ import '../services/trip_cache.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../utils/calendar_links.dart';
+import '../utils/leg_ranges.dart';
 import '../utils/money_format.dart';
 import '../utils/share_link.dart';
 import '../utils/tracked_launch.dart';
@@ -230,7 +231,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// The trip's user-confirmed stays. Suggested drafts (auto=true) are working
   /// state for the bookings hub only — they must never feed the map, the
-  /// Tonight caption, or (crucially) [_locationGroupRanges]: seeded draft
+  /// Tonight caption, or (crucially) [rawLegRanges]: seeded draft
   /// dates flowing back into derivation would freeze the derived ranges.
   List<Accommodation> _confirmedStays(Trip trip) =>
       (trip.accommodations ?? const <Accommodation>[])
@@ -748,11 +749,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Builds the auto-TODO payload from the itinerary's location groups: a stay
   /// per city (with its dates) and a transport leg between consecutive cities.
-  /// Dates come from [_visibleGroupRanges], so stay check-ins, inter-city leg
+  /// Dates come from [visibleLegRanges], so stay check-ins, inter-city leg
   /// dates, and the header chips all agree — including squeezed legs, which
   /// read as a zero-night stop at their arrival.
   List<Map<String, dynamic>> _deriveTodos(Trip trip) {
-    final ranges = _visibleGroupRanges(trip);
+    final ranges = visibleLegRanges(trip);
     final todos = <Map<String, dynamic>>[];
     final legs = <String,
         ({
@@ -3619,7 +3620,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   }
 
   /// Maps each itinerary item's position to its location's formatted date range.
-  /// Delegates to [_visibleGroupRanges] so the itinerary labels and the booking
+  /// Delegates to [visibleLegRanges] so the itinerary labels and the booking
   /// checklist derive dates the same way. The two derivations index-align by
   /// construction: both run the same [tripLegs] split over the same items. The
   /// visible ranges are arrival-adjusted, matching the stay todos — a leg whose
@@ -3629,7 +3630,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   Map<int, String> _locationDates(Trip trip) {
     final items = trip.items ?? const <ItineraryItem>[];
     if (items.isEmpty) return const {};
-    final ranges = _visibleGroupRanges(trip);
+    final ranges = visibleLegRanges(trip);
     final legs = tripLegs(items);
     final result = <int, String>{};
     for (var gi = 0; gi < legs.length; gi++) {
@@ -3644,226 +3645,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return result;
   }
 
-  /// Per-location-group label and date range. Each location gets a contiguous
-  /// slice of the trip's start–end span, weighted by how many places it has; an
-  /// accommodation with its own dates overrides the computed slice (and sets
-  /// [stayAnchored], which exempts the leg from the visible-range collapse).
-  /// Computed over the full itinerary so the category filter doesn't shift the
-  /// allocation.
-  List<
-      ({
-        String label,
-        DateTime? start,
-        DateTime? end,
-        _Coord? coord,
-        bool stayAnchored
-      })> _locationGroupRanges(Trip trip) {
-    final items = trip.items ?? const <ItineraryItem>[];
-    if (items.isEmpty) return const [];
-    // Confirmed only: a suggested draft's dates come FROM this derivation, so
-    // letting them back in via _accDateRangeFor would freeze the ranges.
-    final stays = _confirmedStays(trip);
-
-    // Canonical locality runs over the full itinerary (shared split).
-    final legs = tripLegs(items);
-
-    // Auto-split the trip span across groups, weighted by item count.
-    final start = DateTime.tryParse(trip.startDate ?? '');
-    final end = DateTime.tryParse(trip.endDate ?? '');
-    final auto =
-        List<({DateTime start, DateTime end})?>.filled(legs.length, null);
-    if (start != null && end != null && !end.isBefore(start)) {
-      final totalDays = end.difference(start).inDays + 1;
-      final n = legs.length;
-      if (n <= totalDays) {
-        // Enough days: give each location a contiguous slice weighted by size.
-        final counts = _allocateDays(
-            totalDays, [for (final leg in legs) leg.items.length]);
-        var cursor = start;
-        for (var i = 0; i < n; i++) {
-          final rStart = cursor.isAfter(end) ? end : cursor;
-          var rEnd = rStart.add(Duration(days: counts[i] - 1));
-          if (rEnd.isAfter(end)) rEnd = end;
-          auto[i] = (start: rStart, end: rEnd);
-          cursor = rEnd.add(const Duration(days: 1));
-        }
-      } else {
-        // More locations than days: map each to a single day in order, so dates
-        // stay ascending and within the trip (some days carry several stops).
-        for (var i = 0; i < n; i++) {
-          final d = start.add(
-              Duration(days: (i * totalDays ~/ n).clamp(0, totalDays - 1)));
-          auto[i] = (start: d, end: d);
-        }
-      }
-    }
-
-    final result = <({
-      String label,
-      DateTime? start,
-      DateTime? end,
-      _Coord? coord,
-      bool stayAnchored
-    })>[];
-    for (var i = 0; i < legs.length; i++) {
-      final leg = legs[i];
-      // The raw nullable locality feeds the stay-address match — the
-      // 'Other places' placeholder label would falsely substring-match.
-      final accRange = _accDateRangeFor(leg.locality, stays);
-      final dayRange = _dayRangeFor(leg.items, start);
-      final a = auto[i];
-      var rangeStart = accRange?.start ?? dayRange?.start ?? a?.start;
-      // First-leg trip-start anchor: the traveler is in the first city from
-      // the trip's first day, so an item-derived range must not start later
-      // (a single late item would render a bare "Aug 27" on an Aug 24 trip).
-      // A confirmed stay's check-in still wins; the server mirrors this in
-      // anchoredLegDisplayRange (plan_leg_dates.go).
-      if (i == 0 &&
-          accRange == null &&
-          start != null &&
-          rangeStart != null &&
-          start.isBefore(rangeStart)) {
-        rangeStart = start;
-      }
-      result.add((
-        label: leg.label,
-        start: rangeStart,
-        end: accRange?.end ?? dayRange?.end ?? a?.end,
-        coord: leg.coord,
-        stayAnchored: accRange != null,
-      ));
-    }
-    return result;
-  }
-
-  /// The ranges the page RENDERS: [_locationGroupRanges] plus the arrival
-  /// rule, as one forward pass. A leg renders from its arrival — the previous
-  /// group's VISIBLE end — when that comes first (the old per-consumer
-  /// arrival adjustment), and COLLAPSES to a zero-night stop at the arrival
-  /// when the previous leg has run past the leg's own last day (the interim
-  /// state a set_leg_dates squeeze leaves behind, narrated as "no nights
-  /// left" in chat). Cascading: each leg clamps against the previous VISIBLE
-  /// end, so consecutive squeezed legs chain and the inter-city leg dates
-  /// (previous end) follow automatically. A confirmed stay's explicit dates
-  /// are never collapsed (same carve-out as the first-leg anchor); an arrival
-  /// strictly inside a leg's own span keeps the leg's start (partial
-  /// overlap — unchanged). Stay todos, inter-city leg dates, and header chips
-  /// consume THIS; map pins and weather/events stay on the raw ranges. The
-  /// server mirrors this in visibleLegDisplayRange (plan_leg_dates.go).
-  List<
-      ({
-        String label,
-        DateTime? start,
-        DateTime? end,
-        _Coord? coord,
-        bool stayAnchored
-      })> _visibleGroupRanges(Trip trip) {
-    final raw = _locationGroupRanges(trip);
-    final result = <({
-      String label,
-      DateTime? start,
-      DateTime? end,
-      _Coord? coord,
-      bool stayAnchored
-    })>[];
-    DateTime? prevEnd;
-    for (final r in raw) {
-      var start = r.start;
-      var end = r.end;
-      if (prevEnd != null) {
-        if (start == null || prevEnd.isBefore(start)) {
-          start = prevEnd;
-        } else if (end != null && prevEnd.isAfter(end) && !r.stayAnchored) {
-          start = prevEnd;
-          end = prevEnd;
-        }
-      }
-      result.add((
-        label: r.label,
-        start: start,
-        end: end,
-        coord: r.coord,
-        stayAnchored: r.stayAnchored,
-      ));
-      prevEnd = end;
-    }
-    return result;
-  }
-
-  /// Date range for a location group from its items' AI-assigned day numbers,
-  /// anchored to the trip start: day N -> startDate + (N-1). Null when the trip
-  /// has no start date or none of the items carry a day.
-  ({DateTime start, DateTime end})? _dayRangeFor(
-      List<ItineraryItem> items, DateTime? tripStart) {
-    if (tripStart == null) return null;
-    int? lo, hi;
-    for (final it in items) {
-      final d = it.day;
-      if (d == null || d < 1) continue;
-      if (lo == null || d < lo) lo = d;
-      if (hi == null || d > hi) hi = d;
-    }
-    if (lo == null || hi == null) return null;
-    return (
-      start: tripStart.add(Duration(days: lo - 1)),
-      end: tripStart.add(Duration(days: hi - 1)),
-    );
-  }
-
-  /// First accommodation in [locality] with both check-in/out dates, as DateTimes.
-  ({DateTime start, DateTime end})? _accDateRangeFor(
-      String? locality, List<Accommodation> stays) {
-    if (locality == null) return null;
-    final key = locality.toLowerCase();
-    for (final acc in stays) {
-      final addr = acc.address?.toLowerCase();
-      if (addr == null) continue;
-      if ((addr.contains(key) || key.contains(addr)) &&
-          acc.checkIn != null &&
-          acc.checkOut != null) {
-        final ci = DateTime.tryParse(acc.checkIn!);
-        final co = DateTime.tryParse(acc.checkOut!);
-        if (ci != null && co != null) return (start: ci, end: co);
-      }
-    }
-    return null;
-  }
-
-  /// Splits [totalDays] across groups proportional to [weights], each group at
-  /// least 1 day, summing to totalDays (largest-remainder; trims overflow from
-  /// the largest groups when the min-1 floor pushes the total over).
-  List<int> _allocateDays(int totalDays, List<int> weights) {
-    final n = weights.length;
-    if (n == 0) return const [];
-    if (totalDays <= n) {
-      return List.filled(n, 1); // ranges clamp to the trip end
-    }
-    final totalW = weights.fold<int>(0, (s, w) => s + (w <= 0 ? 1 : w));
-    final exact = [
-      for (final w in weights) totalDays * (w <= 0 ? 1 : w) / totalW
-    ];
-    final counts = [for (final e in exact) e.floor() < 1 ? 1 : e.floor()];
-    var used = counts.fold<int>(0, (s, c) => s + c);
-    // Hand out any remaining days to the largest fractional remainders.
-    final byRemainder = List<int>.generate(n, (i) => i)
-      ..sort((a, b) =>
-          (exact[b] - exact[b].floor()).compareTo(exact[a] - exact[a].floor()));
-    for (var k = 0; used < totalDays; k++) {
-      counts[byRemainder[k % n]] += 1;
-      used++;
-    }
-    // Or trim back from the largest groups if min-1 overshot.
-    final byCount = List<int>.generate(n, (i) => i)
-      ..sort((a, b) => counts[b].compareTo(counts[a]));
-    for (var k = 0; used > totalDays; k++) {
-      final j = byCount[k % n];
-      if (counts[j] > 1) {
-        counts[j]--;
-        used--;
-      }
-    }
-    return counts;
-  }
+  // The leg date-range derivation (raw + visible) lives in
+  // utils/leg_ranges.dart (specs/trip-dates-truth stage 0a) — one testable
+  // definition shared with the booking-todo derivation and, soon, the Go
+  // twin behind the server legs payload.
 
   String _formatRange(DateTime a, DateTime b) {
     final sameDay = a.year == b.year && a.month == b.month && a.day == b.day;
@@ -4288,7 +4073,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   List<TripMapDestination> _mapDestinations(Trip trip) {
     final l10n = context.l10n;
     return [
-      for (final r in _locationGroupRanges(trip))
+      for (final r in rawLegRanges(trip))
         if (r.coord != null)
           TripMapDestination(
             label: _groupLabelText(l10n, r.label),
@@ -4405,7 +4190,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// derivation the outbound/return booking todos trust — never the first/
   /// last mapped pin, which shifts under day/category filters.
   ({LatLng? first, LatLng? last}) _homeLegEndpoints(Trip trip) {
-    final ranges = _locationGroupRanges(trip);
+    final ranges = rawLegRanges(trip);
     final firstCoord = ranges.isEmpty ? null : ranges.first.coord;
     final lastCoord = ranges.isEmpty ? null : ranges.last.coord;
     return (
@@ -4595,7 +4380,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       // the rest fall through to the Bookings section's
                       // "Other" sub-group.
                       final grouped = _groupedBookings([
-                        for (final r in _locationGroupRanges(trip)) r.label
+                        for (final r in rawLegRanges(trip)) r.label
                       ]);
                       final filtered = _filtered(trip);
                       final groups =
@@ -4603,7 +4388,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       // Date window per city group, for the embedded events
                       // lookup (keyed by the same label _buildGroups uses).
                       final groupRanges = {
-                        for (final r in _locationGroupRanges(trip))
+                        for (final r in rawLegRanges(trip))
                           r.label: (start: r.start, end: r.end)
                       };
                       final tripStart = DateTime.tryParse(trip.startDate ?? '');
