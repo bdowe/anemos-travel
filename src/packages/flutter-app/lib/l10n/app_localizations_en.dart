@@ -1605,6 +1605,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripsListSharedWithYou => 'Shared with you';
 
   @override
+  String get tripsListPastTrips => 'Past trips';
+
+  @override
+  String tripsListPastTripsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count trips',
+      one: '1 trip',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String tripsListCreated(String date) {
     return 'Created $date';
   }

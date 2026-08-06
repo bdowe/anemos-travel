@@ -23,6 +23,25 @@ int? tripDayOn(String? startDate, String? endDate, DateTime when) {
   return day;
 }
 
+/// Whether the trip is entirely behind [today]'s device-local calendar date:
+/// its last day — [endDate], falling back to [startDate] for end-less trips —
+/// is strictly before today. A trip ending today is not past; trips with no
+/// parseable date at all are never past.
+///
+/// Deliberately diverges from [tripDayOn]'s "no end date means the trip never
+/// ends once started" rule (which serves the live-trip spotlight): for list
+/// grouping, a start-only trip whose start has gone by counts as past —
+/// otherwise stale drafts would sit among upcoming trips forever. Callers that
+/// also surface a live trip should exempt it rather than let the two rules
+/// disagree about the same card.
+bool tripIsPast(String? startDate, String? endDate, DateTime today) {
+  final last =
+      DateTime.tryParse(endDate ?? '') ?? DateTime.tryParse(startDate ?? '');
+  if (last == null) return false;
+  return DateTime(last.year, last.month, last.day)
+      .isBefore(DateTime(today.year, today.month, today.day));
+}
+
 /// How many days a trip spans for day chips / pickers: the later of the
 /// highest tagged day in [itemDays] and the [startDate]–[endDate] span (so an
 /// empty dated trip still offers its real days, and an item tagged beyond the
