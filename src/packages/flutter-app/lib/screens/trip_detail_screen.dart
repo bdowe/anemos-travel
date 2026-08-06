@@ -852,7 +852,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       }
     }
 
-    // Outbound: home airport -> first city, on the trip's start date.
+    // Outbound: home airport -> first city, on the first group's start (the
+    // trip's start date via the first-leg anchor, unless a confirmed stay
+    // overrides it).
     if (hasHome) {
       if (ground != null) {
         addGround(home, ranges.first.label, ranges.first.start);
@@ -3693,9 +3695,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       final accRange = _accDateRangeFor(leg.locality, stays);
       final dayRange = _dayRangeFor(leg.items, start);
       final a = auto[i];
+      var rangeStart = accRange?.start ?? dayRange?.start ?? a?.start;
+      // First-leg trip-start anchor: the traveler is in the first city from
+      // the trip's first day, so an item-derived range must not start later
+      // (a single late item would render a bare "Aug 27" on an Aug 24 trip).
+      // A confirmed stay's check-in still wins; the server mirrors this in
+      // anchoredLegDisplayRange (plan_leg_dates.go).
+      if (i == 0 &&
+          accRange == null &&
+          start != null &&
+          rangeStart != null &&
+          start.isBefore(rangeStart)) {
+        rangeStart = start;
+      }
       result.add((
         label: leg.label,
-        start: accRange?.start ?? dayRange?.start ?? a?.start,
+        start: rangeStart,
         end: accRange?.end ?? dayRange?.end ?? a?.end,
         coord: leg.coord,
       ));

@@ -32,6 +32,19 @@ premise "the client re-derives draft stays/segments on refresh" had been
 false since PR #274 removed that sync — migration 00053 deletes the frozen
 `auto=true` rows and trip health's lodging check now skips `auto`.
 
+**Amended 2026-08-05 (round three)**, after the next dogfood ask: a boundary
+extension left the FIRST city's single item on a late day and the leg
+rendered as a bare end date ("Aug 27" on an Aug 24 trip) — nothing anchored
+the first leg's visible start to the trip start on either side of the render
+mirror (the rule previously held only implicitly, via the deleted draft
+rows), and the honest no-op reported the same wrong range. Separately, a
+move whose new end landed exactly ON the next leg's departure day narrated
+nothing (gap/overlap math is silent at n == 0) while visibly consuming all
+of that leg's nights. v3: both sides anchor the first dated leg's start to
+the trip start (confirmed stay still wins), a first-leg start change steers
+to set_trip_dates, and a squeeze NOTE names the consumed next leg and tells
+the agent to chain follow-up set_leg_dates calls.
+
 ## User Stories
 
 - As a **traveler refining a saved multi-city trip in chat**, I want to say
@@ -67,6 +80,19 @@ false since PR #274 removed that sync — migration 00053 deletes the frozen
 - [ ] `get_trip` lists saved stays and transport with their dates (auto rows
       excluded) and appends dates to booking-checklist lines, so the model
       can verify the calendar state it narrates.
+- [ ] The FIRST dated leg's visible start is the trip's start date unless a
+      confirmed stay anchors it — on both sides: the client clamps it in
+      `_locationGroupRanges` (header, stay todo, home flight row, map pin,
+      weather window) and the server mirrors it in `anchoredLegDisplayRange`
+      (no-op report, deltas, leg summaries).
+- [ ] Asking to change the first leg's START to anything other than the trip
+      start is an honest error steering to `set_trip_dates` (its arrival IS
+      the trip start); start == trip start with a new end is the supported
+      first-leg edit and moves only the departure.
+- [ ] A move whose new end reaches the next leg's end (zero or negative
+      nights left) gets a squeeze NOTE naming that leg; the agent offers to
+      shift the remaining cities and chains one set_leg_dates call per leg
+      (earliest first) in the same turn — no new tool parameters.
 - [ ] Auto-suggested (draft) stays/segments are never moved or confirmed by
       the tool; migration 00053 deletes the frozen pre-#274 rows and
       `checkLodging` skips any `auto` row, so a stale draft can't mask
@@ -138,7 +164,8 @@ on the moved item days. The city header's range start is arrival-adjusted
 ## Out of Scope
 
 - Shrinking neighboring legs on overlap (decided 2026-08-05: gap extends the
-  previous leg; overlap narrates and asks; the next leg never moves).
+  previous leg; overlap and squeeze narrate and ask; the next leg never
+  auto-moves — downstream ripple is agent-chained set_leg_dates calls).
 - Rescheduling real provider bookings.
 - An `occurrence` parameter for revisited cities (v1 errors and asks).
 - Moving the trip's start date via a leg (routes to `set_trip_dates`).

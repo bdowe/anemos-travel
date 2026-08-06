@@ -5,6 +5,25 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-05 — trip-detail dogfooding (leg dates, round three — late)
+
+- **[app] BREAKAGE → fixed (specs/set-leg-dates v3):** after the Kraków move,
+  Prague rendered as a bare "Aug 27" on an Aug 24 trip, and asking to "update
+  Prague to Aug 24–27" no-opped with the tool agreeing with the wrong
+  rendering ("holding Prague at Aug 27–27") — the agent then suggested a full
+  rebuild and manual trip-page edits. The DATA was right all along (in Prague
+  Aug 24–27): nothing anchored the FIRST leg's visible start to the trip
+  start on either side — a rule that had held only implicitly via the draft
+  stay rows migration 00053 deleted. Separately, Kraków's extension landed
+  exactly ON Berlin's departure day and consumed all its nights silently
+  (gap/overlap narration is mute at n == 0). Fix: first-leg trip-start
+  anchor in `_locationGroupRanges` + `anchoredLegDisplayRange` (confirmed
+  stay still wins), first-leg start changes steer to set_trip_dates, squeeze
+  NOTE + prompt nudge so the agent chains set_leg_dates down the affected
+  legs. Lessons: **an invariant that exists only implicitly (via rows that
+  can be deleted) must be explicit on both sides of the render mirror**, and
+  **boundary narration must cover the == case, not just gap and overlap**.
+
 ## 2026-08-05 — trip-detail dogfooding (leg dates, round two)
 
 - **[app] BREAKAGE → fixed (specs/set-leg-dates v2):** the SAME "change LA to
