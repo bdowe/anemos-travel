@@ -52,6 +52,11 @@ class _FakeAuthService extends AuthService {
 
 class _NoopAnalytics implements AnalyticsApiService {
   @override
+  Future<void> recordLegsParityMismatch(
+          {required String tripId, required List<String> details}) =>
+      Future.value();
+
+  @override
   ApiClient get apiClient => throw UnimplementedError();
 
   @override
