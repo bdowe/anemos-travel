@@ -65,6 +65,17 @@ then does normal SSH-key auth on top. The host firewall needs
 inbound 80/443 rules at all. Enable **Always Use HTTPS** at the edge —
 the origin serves plain :80 and never sees an http URL a user typed.
 
+**The `cloudflared` image is version-pinned** in `docker-compose.yml` —
+never `:latest`. Deploys ride the tunnel, and recreating the cloudflared
+container severs the deploy's own SSH session; with `:latest`, any
+upstream release turned the next routine deploy into that recreate and
+left the stack half-down with no way back in (the 2026-07-23 Pi outage).
+To upgrade cloudflared: bump the pin in its own commit and deploy
+normally — CI runs `compose up` detached on the host, so the recreate
+completes and the tunnel returns after a seconds-long blip (the deploy's
+Verify step still confirms the site came back). If a bump ever goes
+wrong, the DO web console is the tunnel-free way in.
+
 ## Environment / secrets
 
 All runtime configuration lives in one file: `/opt/goldentempo/.env`

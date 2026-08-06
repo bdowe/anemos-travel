@@ -330,6 +330,17 @@ jobs:
       # silently rolled the stack back to the old image (2026-08-01 incident).
       # The gate step's IMAGE_TAG charset check ([A-Za-z0-9._-]) keeps the
       # sed replacement injection-free.
+      #
+      # `compose up` runs DETACHED (setsid + nohup, all fds redirected):
+      # this SSH session arrives through the cloudflared tunnel, so if the
+      # deploy recreates the cloudflared container (e.g. a version-pin bump
+      # in docker-compose.yml), the session is severed the moment the old
+      # cloudflared stops. Inline, that killed `up` between "remove old" and
+      # "start new" and left the stack down with no way back in (2026-07-23
+      # Pi incident). Detached, the recreate finishes on the host and the
+      # tunnel returns on its own; the Verify step below is the real success
+      # gate either way. If verify then fails, the up's output is in
+      # /opt/goldentempo/deploy-up.log (fetched by the step after it).
       - name: Pull images and restart stack
         if: steps.gate.outputs.configured == 'true'
         env:
@@ -346,8 +357,10 @@ jobs:
             fi
             export IMAGE_TAG='${IMAGE_TAG}'
             docker compose pull
-            docker compose up -d --remove-orphans
-            docker image prune -f"
+            rm -f deploy-up.log
+            setsid nohup sh -c 'docker compose up -d --remove-orphans && docker image prune -f' \
+              </dev/null >deploy-up.log 2>&1 &
+            echo 'compose up dispatched (detached); see Verify step / deploy-up.log'"
 
       # A green deploy should mean "this SHA is live and serving", not just
       # "the restart script ran": poll the public site until both the api
@@ -376,3 +389,16 @@ jobs:
           done
           echo "::error::deployed release never became ${IMAGE_TAG}"
           exit 1
+
+      # When verify fails, the detached up's output on the host is the first
+      # place to look — and by this point the tunnel is usually back even if
+      # the deploy recreated cloudflared. Best-effort: if the tunnel is still
+      # down this step can't help, and the DO web console is the way in.
+      - name: Fetch deploy-up.log on failure
+        if: failure() && steps.gate.outputs.configured == 'true'
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          ssh -o ConnectTimeout=15 deploy-target \
+            "cd /opt/goldentempo && tail -100 deploy-up.log; docker compose ps -a" || true
