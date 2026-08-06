@@ -166,6 +166,87 @@ void main() {
     expect(find.text('Hidden gem'), findsOneWidget);
   });
 
+  testWidgets('collapsed headers scroll as full-height rows (no squish)',
+      (WidgetTester tester) async {
+    // Eight collapsed groups in the default 600px viewport: scrolling pins
+    // the chrome, which used to subtract its overlap from every zero-body
+    // pinned group — headers squished to slivers, then vanished, leaving
+    // phantom scroll extent.
+    final trip = Trip(
+      id: 't1',
+      title: 'Grand Tour',
+      status: 'planned',
+      startDate: '2026-06-10',
+      endDate: '2026-06-18',
+      createdAt: '2026-06-01',
+      updatedAt: '2026-06-01',
+      items: [
+        for (var k = 1; k <= 8; k++) _item(k, 'Place $k', 'Stop$k', k),
+      ],
+    );
+    await _pump(tester, trip);
+
+    final position = _position(tester);
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+
+    // The tail headers render at full row spacing, on screen — not
+    // squished, not blank.
+    final dy7 = tester.getTopLeft(find.text('Stop7')).dy;
+    final dy8 = tester.getTopLeft(find.text('Stop8')).dy;
+    expect(dy8 - dy7, greaterThan(40));
+    expect(dy8, lessThan(600));
+  });
+
+  testWidgets(
+      'a collapsed day header scrolls at full height inside an expanded group',
+      (WidgetTester tester) async {
+    // Same zero-body pinned hazard one level down (pre-dates the collapsed
+    // city default): a collapsed day's header used to vanish once the
+    // chrome plus the pinned city header exceeded its height.
+    final trip = Trip(
+      id: 't1',
+      title: 'Getaway',
+      status: 'planned',
+      startDate: '2026-06-10',
+      endDate: '2026-06-12',
+      createdAt: '2026-06-01',
+      updatedAt: '2026-06-01',
+      items: [
+        for (var d = 1; d <= 4; d++)
+          for (var k = 0; k < 3; k++)
+            _item((d - 1) * 3 + k, 'D$d stop $k', 'Paris', d),
+      ],
+    );
+    await _pump(tester, trip);
+
+    // Sole group is seeded open; collapse every day — four consecutive
+    // zero-body day sections, the same stacked shape as collapsed cities.
+    for (final label in const [
+      'Wed, Jun 10',
+      'Thu, Jun 11',
+      'Fri, Jun 12',
+      'Sat, Jun 13'
+    ]) {
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('D1 stop 0'), findsNothing);
+
+    // Deep enough that the pinned chrome and city header have scrolled in —
+    // the overlap that used to compress the zero-body day sections.
+    final position = _position(tester);
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+
+    // Consecutive collapsed day headers keep their full row spacing.
+    final dy2 = tester.getTopLeft(find.text('Thu, Jun 11')).dy;
+    final dy3 = tester.getTopLeft(find.text('Fri, Jun 12')).dy;
+    final dy4 = tester.getTopLeft(find.text('Sat, Jun 13')).dy;
+    expect(dy3 - dy2, greaterThan(30));
+    expect(dy4 - dy3, greaterThan(30));
+  });
+
   testWidgets('expansion survives a silent refresh; the seed stays one-shot',
       (WidgetTester tester) async {
     final service = await _pump(tester, twoCityTrip());

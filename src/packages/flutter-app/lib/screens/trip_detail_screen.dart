@@ -2098,17 +2098,25 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 _weatherChip(theme, wd, weatherReport.isHistorical);
           }
         }
-        slivers.add(MultiSliver(
-          pushPinnedChildren: true,
-          children: [
-            SliverPinnedHeader(child: header),
-            if (!collapsed) ...[
+        // A collapsed day pins nothing: pinning exists so a header stays
+        // visible while its content scrolls beneath it, and a zero-body
+        // pinned group's paintOrigin (= viewport overlap) poisons
+        // MultiSliver's minPaintOrigin — the header squishes, then
+        // vanishes, as the pinned chrome scrolls in. Same hazard as the
+        // collapsed city groups in build.
+        if (collapsed) {
+          slivers.add(SliverToBoxAdapter(child: header));
+        } else {
+          slivers.add(MultiSliver(
+            pushPinnedChildren: true,
+            children: [
+              SliverPinnedHeader(child: header),
               if (weatherChip != null) _boxSliver([weatherChip]),
               if (tonight != null) _boxSliver([tonight]),
               ..._dayTripSectionSlivers(run, theme),
             ],
-          ],
-        ));
+          ));
+        }
       } else {
         slivers.addAll(_dayTripSectionSlivers(run, theme));
       }
@@ -5036,21 +5044,40 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                   EdgeInsets.fromLTRB(gutter, 4, gutter, 0),
                               sliver: MultiSliver(children: [
                                 for (final (gi, group) in groups.indexed)
-                                  MultiSliver(
-                                    pushPinnedChildren: true,
-                                    children: [
-                                      SliverPinnedHeader(
-                                          child: KeyedSubtree(
-                                              // Keyed by the run, not the city:
-                                              // a revisited city renders two
-                                              // headers at once and a shared
-                                              // GlobalKey would break the build.
-                                              key: _cityHeaderKeys.putIfAbsent(
-                                                  group.key, GlobalKey.new),
-                                              child: _cityHeader(
-                                                  trip, group, theme))),
-                                      if (_expandedCities
-                                          .contains(group.key)) ...[
+                                  // A collapsed group is a plain scrolling
+                                  // row, NOT a pinned header: pinning exists
+                                  // so a header stays visible while its
+                                  // content scrolls beneath it, and a
+                                  // zero-body pinned group's paintOrigin
+                                  // (= viewport overlap) poisons
+                                  // MultiSliver's minPaintOrigin — every
+                                  // collapsed header squishes, then
+                                  // vanishes, as the pinned chrome scrolls
+                                  // in. (pushPinnedChildren: false is no
+                                  // fix either — the header would pin
+                                  // forever and overlay the next group.)
+                                  if (!_expandedCities.contains(group.key))
+                                    SliverToBoxAdapter(
+                                        child: KeyedSubtree(
+                                            // Keyed by the run, not the city:
+                                            // a revisited city renders two
+                                            // headers at once and a shared
+                                            // GlobalKey would break the build.
+                                            key: _cityHeaderKeys.putIfAbsent(
+                                                group.key, GlobalKey.new),
+                                            child: _cityHeader(
+                                                trip, group, theme)))
+                                  else
+                                    MultiSliver(
+                                      pushPinnedChildren: true,
+                                      children: [
+                                        SliverPinnedHeader(
+                                            child: KeyedSubtree(
+                                                key: _cityHeaderKeys
+                                                    .putIfAbsent(group.key,
+                                                        GlobalKey.new),
+                                                child: _cityHeader(
+                                                    trip, group, theme))),
                                         // Embedded bookings render only in the
                                         // unfiltered view: a category filter can
                                         // merge adjacent same-label runs, which
@@ -5090,8 +5117,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                               grouped.slots[gi],
                                               departureOnly: true)),
                                       ],
-                                    ],
-                                  ),
+                                    ),
                               ]),
                             ),
                           // Residual bookings + add actions, at the tail of

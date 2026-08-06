@@ -29,6 +29,21 @@ actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
   specs/server-leg-dates lane-1a follow-up), and lens/collapse usage still
   has zero telemetry (`clientEventTypes` whitelist makes that a Go change).
 
+- **[app] BREAKAGE same-day → fixed (collapsed headers squished on
+  scroll):** first dogfood of the collapsed default found every header
+  squishing to a sliver, then a blank still-scrollable area, as the page
+  scrolled. Root cause (verified against sliver_tools source): a collapsed
+  group was a `MultiSliver(pushPinnedChildren)` whose ONLY child was its
+  `SliverPinnedHeader`; the pinned child reports `paintOrigin = overlap`,
+  and with no body sliver contributing `paintOrigin: 0`, the pinned
+  chrome's overlap gets subtracted from the group's paint AND layout
+  extents while scrollExtent stays full. Fix: pin a header only while its
+  section is expanded — collapsed cities AND collapsed days (the same
+  zero-body shape, latent since before the collapse default) render as
+  plain scrolling rows. Lesson: **a pinned sliver only earns its pin while
+  it has content to preside over — a zero-body pinned group is a geometry
+  hazard, not a no-op.**
+
 ## 2026-08-06 — trip-detail dogfooding (leg dates, round five)
 
 - **[app] BREAKAGE → fixed (specs/set-leg-dates round five):** the agent
