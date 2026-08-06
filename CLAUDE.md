@@ -10,6 +10,17 @@ A travel route planning platform with two packages:
 
 A single **nginx gateway** on port **3000** serves the Flutter UI and proxies `/api/v1/` to the Go API, keeping everything same-origin.
 
+## Coding Principles
+
+This repo codes by the Zen of Python — see [`docs/zen.md`](docs/zen.md) for
+the full text and the repo-specific lessons attached to it. The headline,
+paid for by the leg-dates arc: **explicit is better than implicit** — data
+semantics live in schema/types/enforced boundaries, never in conventions
+someone must remember; derived state is computed in exactly one place; a
+mutating tool's result states the post-state its consumer will observe.
+Read `docs/zen.md` before designing a data model, tool contract, or
+derivation.
+
 ## Spec-Driven Development
 
 Non-trivial features start as a spec under `specs/<feature-name>/` (copied from
