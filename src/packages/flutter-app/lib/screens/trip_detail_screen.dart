@@ -748,8 +748,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Builds the auto-TODO payload from the itinerary's location groups: a stay
   /// per city (with its dates) and a transport leg between consecutive cities.
+  /// Dates come from [_visibleGroupRanges], so stay check-ins, inter-city leg
+  /// dates, and the header chips all agree — including squeezed legs, which
+  /// read as a zero-night stop at their arrival.
   List<Map<String, dynamic>> _deriveTodos(Trip trip) {
-    final ranges = _locationGroupRanges(trip);
+    final ranges = _visibleGroupRanges(trip);
     final todos = <Map<String, dynamic>>[];
     final legs = <String,
         ({
@@ -867,7 +870,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     for (var i = 0; i < ranges.length; i++) {
       final r = ranges[i];
       final label = r.label;
-      final start = _stayStartFor(ranges, i);
+      final start = r.start;
       final checkIn = start == null ? null : _fmt(start);
       final checkOut = r.end == null ? null : _fmt(r.end!);
       todos.add({
@@ -3616,20 +3619,21 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   }
 
   /// Maps each itinerary item's position to its location's formatted date range.
-  /// Delegates to [_locationGroupRanges] so the itinerary labels and the booking
+  /// Delegates to [_visibleGroupRanges] so the itinerary labels and the booking
   /// checklist derive dates the same way. The two derivations index-align by
   /// construction: both run the same [tripLegs] split over the same items. The
-  /// range start is arrival-adjusted via [_stayStartFor], matching the stay
-  /// todos — a leg whose items collapse onto one day reads "Sep 24 – Sep 27",
-  /// not a bare "Sep 27" contradicting the stay row beneath it.
+  /// visible ranges are arrival-adjusted, matching the stay todos — a leg whose
+  /// items collapse onto one day reads "Sep 24 – Sep 27", not a bare "Sep 27"
+  /// contradicting the stay row beneath it, and a squeezed leg collapses to a
+  /// zero-night stop at its arrival.
   Map<int, String> _locationDates(Trip trip) {
     final items = trip.items ?? const <ItineraryItem>[];
     if (items.isEmpty) return const {};
-    final ranges = _locationGroupRanges(trip);
+    final ranges = _visibleGroupRanges(trip);
     final legs = tripLegs(items);
     final result = <int, String>{};
     for (var gi = 0; gi < legs.length; gi++) {
-      final start = _stayStartFor(ranges, gi);
+      final start = ranges[gi].start;
       final end = ranges[gi].end;
       if (start == null || end == null) continue;
       final text = _formatRange(start, end);
@@ -3642,10 +3646,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Per-location-group label and date range. Each location gets a contiguous
   /// slice of the trip's start–end span, weighted by how many places it has; an
-  /// accommodation with its own dates overrides the computed slice. Computed over
-  /// the full itinerary so the category filter doesn't shift the allocation.
-  List<({String label, DateTime? start, DateTime? end, _Coord? coord})>
-      _locationGroupRanges(Trip trip) {
+  /// accommodation with its own dates overrides the computed slice (and sets
+  /// [stayAnchored], which exempts the leg from the visible-range collapse).
+  /// Computed over the full itinerary so the category filter doesn't shift the
+  /// allocation.
+  List<
+      ({
+        String label,
+        DateTime? start,
+        DateTime? end,
+        _Coord? coord,
+        bool stayAnchored
+      })> _locationGroupRanges(Trip trip) {
     final items = trip.items ?? const <ItineraryItem>[];
     if (items.isEmpty) return const [];
     // Confirmed only: a suggested draft's dates come FROM this derivation, so
@@ -3686,8 +3698,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       }
     }
 
-    final result =
-        <({String label, DateTime? start, DateTime? end, _Coord? coord})>[];
+    final result = <({
+      String label,
+      DateTime? start,
+      DateTime? end,
+      _Coord? coord,
+      bool stayAnchored
+    })>[];
     for (var i = 0; i < legs.length; i++) {
       final leg = legs[i];
       // The raw nullable locality feeds the stay-address match — the
@@ -3713,25 +3730,64 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         start: rangeStart,
         end: accRange?.end ?? dayRange?.end ?? a?.end,
         coord: leg.coord,
+        stayAnchored: accRange != null,
       ));
     }
     return result;
   }
 
-  /// Effective check-in for the stay in city group [i]: the arrival date into
-  /// the city. The inbound leg is dated with the previous group's end, so when
-  /// that precedes the group's own start (e.g. a city whose items all sit on
-  /// one late day collapses its range to that single day), the stay would
-  /// otherwise show a start after the traveler has already arrived.
-  DateTime? _stayStartFor(
-      List<({String label, DateTime? start, DateTime? end, _Coord? coord})>
-          ranges,
-      int i) {
-    final own = ranges[i].start;
-    final arrival = i > 0 ? ranges[i - 1].end : null;
-    if (arrival == null) return own;
-    if (own == null || arrival.isBefore(own)) return arrival;
-    return own;
+  /// The ranges the page RENDERS: [_locationGroupRanges] plus the arrival
+  /// rule, as one forward pass. A leg renders from its arrival — the previous
+  /// group's VISIBLE end — when that comes first (the old per-consumer
+  /// arrival adjustment), and COLLAPSES to a zero-night stop at the arrival
+  /// when the previous leg has run past the leg's own last day (the interim
+  /// state a set_leg_dates squeeze leaves behind, narrated as "no nights
+  /// left" in chat). Cascading: each leg clamps against the previous VISIBLE
+  /// end, so consecutive squeezed legs chain and the inter-city leg dates
+  /// (previous end) follow automatically. A confirmed stay's explicit dates
+  /// are never collapsed (same carve-out as the first-leg anchor); an arrival
+  /// strictly inside a leg's own span keeps the leg's start (partial
+  /// overlap — unchanged). Stay todos, inter-city leg dates, and header chips
+  /// consume THIS; map pins and weather/events stay on the raw ranges. The
+  /// server mirrors this in visibleLegDisplayRange (plan_leg_dates.go).
+  List<
+      ({
+        String label,
+        DateTime? start,
+        DateTime? end,
+        _Coord? coord,
+        bool stayAnchored
+      })> _visibleGroupRanges(Trip trip) {
+    final raw = _locationGroupRanges(trip);
+    final result = <({
+      String label,
+      DateTime? start,
+      DateTime? end,
+      _Coord? coord,
+      bool stayAnchored
+    })>[];
+    DateTime? prevEnd;
+    for (final r in raw) {
+      var start = r.start;
+      var end = r.end;
+      if (prevEnd != null) {
+        if (start == null || prevEnd.isBefore(start)) {
+          start = prevEnd;
+        } else if (end != null && prevEnd.isAfter(end) && !r.stayAnchored) {
+          start = prevEnd;
+          end = prevEnd;
+        }
+      }
+      result.add((
+        label: r.label,
+        start: start,
+        end: end,
+        coord: r.coord,
+        stayAnchored: r.stayAnchored,
+      ));
+      prevEnd = end;
+    }
+    return result;
   }
 
   /// Date range for a location group from its items' AI-assigned day numbers,
