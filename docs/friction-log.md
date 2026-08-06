@@ -5,6 +5,27 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-06 — trip-detail dogfooding (leg dates, round five)
+
+- **[app] BREAKAGE → fixed (specs/set-leg-dates round five):** the agent
+  looped three turns claiming updates that never appeared, "apologizing"
+  that it hadn't called the tool — but analytics show it called
+  `update_itinerary_section` scope=trip SEVEN times, each committing. Its
+  day→date mental model was wrong (it read a city's item day as the ARRIVAL;
+  it's the departure), so its full-trip rewrites re-wrote ≈ the saved day
+  numbers — zero visible change — and clobbered an earlier correct
+  set_leg_dates move. Nothing it could read exposed rendered ranges: the
+  tool's success result was a fixed 47-char sentence and get_trip showed raw
+  day numbers, so the wrong model was unfalsifiable and the least-wrong
+  story became "I never called it." Fix: `legsRenderSummary` (render truth
+  via `visibleLegDisplayRange`) in BOTH the get_trip output and every
+  update_itinerary_section result, plus the day-semantics rule and a
+  do-not-resend steer in the result and refine prompt. Dev replay: the
+  seven-turn loop's exact ask now resolves in one turn with two
+  set_leg_dates calls. Lesson: **a mutating tool whose result carries zero
+  derived state lets a wrong mental model survive any number of successful
+  calls — every write result must echo the post-state the USER will see.**
+
 ## 2026-08-05 — trip-detail dogfooding (leg dates, round four — later still)
 
 - **[app] Minor error → fixed (specs/set-leg-dates v4):** "Medellín should get

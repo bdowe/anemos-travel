@@ -588,6 +588,9 @@ func TestGetTripToolShowsStayAndTransportDates(t *testing.T) {
 		t.Fatalf("detail errored: %q", detail)
 	}
 	for _, want := range []string{
+		"City legs as rendered on the trip page (arrival to departure):",
+		"- Panama City: 2026-09-15 to 2026-09-20",
+		"- Los Angeles: 2026-09-20 to 2026-09-24",
 		"Stays:",
 		`"Hotel Casco Viejo" 2026-09-15 to 2026-09-20 (not booked)`,
 		`"Stay in Los Angeles" 2026-09-20 to 2026-09-24 (not booked)`,
@@ -601,5 +604,43 @@ func TestGetTripToolShowsStayAndTransportDates(t *testing.T) {
 	}
 	if strings.Contains(detail, "Suggested stay in Los Angeles") {
 		t.Fatalf("auto draft leaked into detail:\n%s", detail)
+	}
+}
+
+// A section rewrite's result must echo the rendered leg ranges — day numbers
+// are positional, so a wrong day->date mental model would otherwise survive
+// any number of "successful" rewrites (the Sep-24-27 loop).
+func TestUpdateItinerarySectionResultShowsRenderedLegs(t *testing.T) {
+	resetDB(t)
+	owner, _ := createTestUser(t, "sectionlegs@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	seedMultiCityTrip(t, trip, owner.ID)
+
+	s, rec := testPlanSession(true, owner.ID)
+	s.boundTripID = &trip.ID
+	s.boundTripOwnerID = owner.ID
+	msg, isErr := runUpdateItinerarySectionTool(s, json.RawMessage(
+		`{"scope":"trip","items":[`+
+			`{"name":"PC Spot 1","latitude":8.98,"longitude":-79.52,"day":1,"city":"Panama City"},`+
+			`{"name":"LA Spot 1","latitude":34.05,"longitude":-118.24,"day":9,"city":"Los Angeles"}]}`))
+	if isErr {
+		t.Fatalf("section rewrite errored: %s", msg)
+	}
+	for _, want := range []string{
+		"Section updated",
+		"The page now renders these city legs:",
+		"- Panama City: 2026-09-15 to 2026-09-20",
+		// LA's single item landed on day 9 (Sep 23); its leg renders from the
+		// stay-anchored span, which the rewrite did not touch.
+		"- Los Angeles: 2026-09-20 to 2026-09-24",
+		"do NOT resend the list with recomputed day numbers",
+		"set_leg_dates",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("result missing %q:\n%s", want, msg)
+		}
+	}
+	if !strings.Contains(rec.Body.String(), "trip_updated") {
+		t.Fatal("section rewrite did not emit trip_updated")
 	}
 }

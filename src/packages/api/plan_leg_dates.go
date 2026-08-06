@@ -277,6 +277,26 @@ func legsSummary(runs []legRun, stays []store.Accommodation, tripStart time.Time
 	return strings.Join(parts, ", ")
 }
 
+// legsRenderSummary lists every dated leg with the calendar span the trip
+// page RENDERS for it (visibleLegDisplayRange: first-leg anchor, arrival
+// rule, zero-night squeeze collapse) — one "- City: X to Y" line per leg.
+// This is the model-facing render truth: it goes into get_trip and into
+// update_itinerary_section's result so a wrong day-number mental model is
+// falsifiable from the tool output instead of surviving successful writes.
+// Empty when no run is dated.
+func legsRenderSummary(items []store.ItineraryItem, stays []store.Accommodation, tripStart time.Time) string {
+	runs := legRuns(items)
+	var b strings.Builder
+	for i, r := range runs {
+		if r.minDay < 1 || r.hub == "" {
+			continue
+		}
+		s, e := visibleLegDisplayRange(runs, i, stays, tripStart)
+		fmt.Fprintf(&b, "- %s: %s\n", r.hub, legRangeText(s, e))
+	}
+	return b.String()
+}
+
 func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 	var in struct {
 		City      string `json:"city"`
