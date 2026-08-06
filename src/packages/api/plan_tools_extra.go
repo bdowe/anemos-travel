@@ -710,7 +710,7 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 	// city's last item day is its DEPARTURE), so without this the model
 	// cannot falsify a wrong day→date mental model from anything it reads.
 	if staysErr == nil && trip.StartDate.Valid {
-		if legs := legsRenderSummary(items, stays, trip.StartDate.Time); legs != "" {
+		if legs := legsRenderSummary(trip, items, stays); legs != "" {
 			b.WriteString("City legs as rendered on the trip page (arrival to departure):\n" + legs)
 		}
 	}
