@@ -91,8 +91,9 @@ void main() {
     expect(find.text('Green Turtle Cay'), findsOneWidget);
     expect(find.text('Great Guana Cay'), findsOneWidget);
 
-    // The Green Turtle Cay group is labelled with the stay's date range.
-    expect(find.text('Jun 10 – Jun 12'), findsOneWidget);
+    // The Green Turtle Cay group is labelled with the stay's date range
+    // plus its night count.
+    expect(find.text('Jun 10 – Jun 12 · 2 nights'), findsOneWidget);
 
     // Groups default collapsed — open both to reach their contents.
     await expandCity(tester, 'Green Turtle Cay');
@@ -154,8 +155,8 @@ void main() {
     expect(find.text('Thu, Jun 11'), findsOneWidget);
     expect(find.text('Sat, Jun 13'), findsOneWidget);
 
-    // Paris spans days 1–2 -> Jun 10 – Jun 11 next to the city name.
-    expect(find.text('Jun 10 – Jun 11'), findsOneWidget);
+    // Paris spans days 1–2 -> Jun 10 – Jun 11 (1 night) next to the city name.
+    expect(find.text('Jun 10 – Jun 11 · 1 night'), findsOneWidget);
 
     // The Versailles day trip still nests under its day.
     expect(find.text('Day trip · Versailles'), findsOneWidget);

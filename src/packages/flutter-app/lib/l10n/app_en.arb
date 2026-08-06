@@ -829,6 +829,17 @@
       }
     }
   },
+  "tripLegDatesWithNights": "{range} · {count, plural, one{1 night} other{{count} nights}}",
+  "@tripLegDatesWithNights": {
+    "placeholders": {
+      "range": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "tripTravelMinutes": "{minutes} min",
   "@tripTravelMinutes": {
     "placeholders": {

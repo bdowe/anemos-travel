@@ -280,4 +280,24 @@ void main() {
       expect(allocateDays(2, [5, 5, 5]), [1, 1, 1]);
     });
   });
+
+  // nightsBetween is a client-display helper only — deliberately NOT part of
+  // the hand-mirrored Go-twin contract above; the legs payload carries no
+  // nights field.
+  group('nightsBetween', () {
+    test('checkout-exclusive whole nights', () {
+      expect(nightsBetween(DateTime(2026, 8, 24), DateTime(2026, 8, 27)), 3);
+      expect(nightsBetween(DateTime(2026, 8, 27), DateTime(2026, 9, 1)), 5);
+    });
+
+    test('same day is zero nights', () {
+      expect(nightsBetween(DateTime(2026, 9, 6), DateTime(2026, 9, 6)), 0);
+    });
+
+    test('DST spring-forward does not drop a night', () {
+      // US DST starts Mar 8 2026; a raw local-midnight Duration diff reads
+      // ~1.96 days and would truncate to 1.
+      expect(nightsBetween(DateTime(2026, 3, 7), DateTime(2026, 3, 9)), 2);
+    });
+  });
 }

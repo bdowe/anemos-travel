@@ -98,7 +98,7 @@ void main() {
     // Headers with their date ranges are the whole resting view.
     expect(find.text('Paris'), findsOneWidget);
     expect(find.text('Rome'), findsOneWidget);
-    expect(find.text('Jun 10 – Jun 11'), findsOneWidget);
+    expect(find.text('Jun 10 – Jun 11 · 1 night'), findsOneWidget);
 
     // Items and embedded booking rows are hidden until a group is opened.
     expect(find.text('Louvre'), findsNothing);

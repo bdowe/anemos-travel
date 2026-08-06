@@ -169,8 +169,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Header shows the anchored range, not a bare end date.
-    expect(find.text('Aug 24 – Aug 27'), findsWidgets);
+    // Header shows the anchored range with its night count, not a bare
+    // end date.
+    expect(find.text('Aug 24 – Aug 27 · 3 nights'), findsWidgets);
     expect(find.text('Aug 27'), findsNothing);
 
     // The prefs load is async and can re-trigger the derivation — assert on
@@ -232,7 +233,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Aug 26 – Aug 28'), findsWidgets);
+    expect(find.text('Aug 26 – Aug 28 · 2 nights'), findsWidgets);
     expect(find.text('Aug 28'), findsNothing);
   });
 }
