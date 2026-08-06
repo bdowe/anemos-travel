@@ -598,6 +598,60 @@ func TestPlanSetLegDatesSqueezeNoteNamesNextLeg(t *testing.T) {
 	}
 }
 
+// An INVERTED leg (previous leg ran past its departure day) renders as a
+// zero-night stop at the arrival — the no-op report must quote THAT range,
+// not the stale item dates the page no longer shows; and the natural fix ask
+// (move the leg to the arrival day) must be a real move, not a no-op.
+func TestPlanSetLegDatesInvertedLegNoOpShowsZeroNightStop(t *testing.T) {
+	resetDB(t)
+	user, _ := createTestUser(t, "inverted@example.com")
+	trip := createTestTrip(t, user.ID, 0)
+	// Kraków day 10 (Sep 2) ends AFTER Berlin's day 9 (Sep 1): strict inversion.
+	seedPragueKrakowBerlinTrip(t, trip, user.ID, 10)
+
+	s1, rec1 := testPlanSession(true, user.ID)
+	s1.boundTripID = &trip.ID
+	msg, isErr := runSetLegDatesTool(s1, []byte(`{"city":"Berlin","start_date":"2026-09-01","end_date":"2026-09-01"}`))
+	if isErr {
+		t.Fatalf("inverted no-op errored: %s", msg)
+	}
+	for _, want := range []string{
+		"No saved rows changed",
+		"itinerary items sit on 2026-09-01 to 2026-09-01 (trip days 9-9)",
+		"the previous leg (Kraków) ends 2026-09-02",
+		"shows this leg as 2026-09-02 to 2026-09-02",
+		"zero-night stop",
+		"was NOT refreshed",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("no-op result missing %q: %s", want, msg)
+		}
+	}
+	if strings.Contains(rec1.Body.String(), "trip_updated") {
+		t.Fatal("inverted no-op emitted trip_updated")
+	}
+	if got := legDays(t, trip.ID, "Berlin"); !daysEqual(got, 9) {
+		t.Fatalf("Berlin day = %v, want [9] unchanged", got)
+	}
+
+	// The fix: move Berlin to the arrival day — a real move.
+	s2, rec2 := testPlanSession(true, user.ID)
+	s2.boundTripID = &trip.ID
+	msg, isErr = runSetLegDatesTool(s2, []byte(`{"city":"Berlin","start_date":"2026-09-02","end_date":"2026-09-02"}`))
+	if isErr {
+		t.Fatalf("fix move errored: %s", msg)
+	}
+	if !strings.Contains(msg, "Berlin is now 2026-09-02 to 2026-09-02") {
+		t.Fatalf("fix result missing new range: %s", msg)
+	}
+	if !strings.Contains(rec2.Body.String(), "trip_updated") {
+		t.Fatal("fix move did not emit trip_updated")
+	}
+	if got := legDays(t, trip.ID, "Berlin"); !daysEqual(got, 10) {
+		t.Fatalf("Berlin day = %v, want [10] (Sep 2)", got)
+	}
+}
+
 // Shrinking a leg folds trailing items onto its new last day and says so.
 func TestPlanSetLegDatesShrinkClampsItems(t *testing.T) {
 	resetDB(t)

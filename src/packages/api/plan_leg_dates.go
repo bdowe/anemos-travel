@@ -190,6 +190,36 @@ func anchoredLegDisplayRange(runs []legRun, i int, stays []store.Accommodation, 
 	return s, e
 }
 
+// visibleLegDisplayRange is the span the trip page actually RENDERS for run
+// i: anchoredLegDisplayRange with the arrival rule folded in, as a forward
+// pass over the dated runs so consecutive squeezed legs chain. A leg renders
+// from its arrival (the previous dated leg's VISIBLE end) when that comes
+// first; when the arrival has run PAST the leg's own last day, an
+// item-derived leg collapses to a zero-night stop at the arrival (a
+// confirmed stay's explicit dates never collapse — same carve-out as the
+// first-leg anchor). An arrival strictly inside the leg's own span keeps the
+// leg's start (partial overlap, unchanged). Mirrors _visibleGroupRanges in
+// trip_detail_screen.dart.
+func visibleLegDisplayRange(runs []legRun, i int, stays []store.Accommodation, tripStart time.Time) (time.Time, time.Time) {
+	var s, e, prevEnd time.Time
+	havePrev := false
+	for j := 0; j <= i; j++ {
+		if runs[j].minDay < 1 || runs[j].hub == "" {
+			continue
+		}
+		s, e = anchoredLegDisplayRange(runs, j, stays, tripStart)
+		if havePrev {
+			if prevEnd.Before(s) {
+				s = prevEnd
+			} else if prevEnd.After(e) && matchedConfirmedStay(runs[j], stays) == nil {
+				s, e = prevEnd, prevEnd
+			}
+		}
+		prevEnd, havePrev = e, true
+	}
+	return s, e
+}
+
 // legDateChange is the pure outcome of a leg move: the resolved new span,
 // the endpoint-anchored day deltas, and the leg's new 1-based trip-day
 // indices.
@@ -541,11 +571,8 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 		if prevRun != nil {
 			fmt.Fprintf(&b, "; the previous leg (%s) ends %s", prevRun.hub, prevEnd.Format(dateLayout))
 		}
-		visStart, visEnd := oldLegStart, oldLegEnd
-		if prevRun != nil && prevEnd.Before(visStart) {
-			visStart = prevEnd
-		}
-		fmt.Fprintf(&b, ". The trip page shows this leg as %s (a leg's visible start is the previous leg's end — or the trip's start date for the first leg — when that comes first) and was NOT refreshed.", legRangeText(visStart, visEnd))
+		visStart, visEnd := visibleLegDisplayRange(runs, matched[0], stays, tripStart)
+		fmt.Fprintf(&b, ". The trip page shows this leg as %s (a leg renders from its arrival — the previous leg's visible end, or the trip's start date for the first leg — when that comes first, and collapses to a zero-night stop at that arrival when the previous leg has run past this leg's last day) and was NOT refreshed.", legRangeText(visStart, visEnd))
 		b.WriteString(" Never tell the traveler anything changed; if this state doesn't match what they asked for, tell them the actual dates and ask how to adjust.")
 		return b.String(), false
 	}

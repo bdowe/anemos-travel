@@ -5,6 +5,24 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-05 — trip-detail dogfooding (leg dates, round four — later still)
+
+- **[app] Minor error → fixed (specs/set-leg-dates v4):** "Medellín should get
+  5 nights" worked and the squeeze was narrated + offered for fixing (round
+  three machinery), but the interim inverted state rendered "Medellín →
+  Quito, Sep 14" directly above "Stay in Quito, Sep 13" — check-in before
+  the flight lands. The arrival-adjustment only let the arrival win when it
+  was EARLIER than the leg's own start, and inter-city flight rows read the
+  previous leg's RAW end, so no local patch could make the chain coherent.
+  Fix: one shared visible-ranges derivation (`_visibleGroupRanges` client /
+  `visibleLegDisplayRange` server) — a squeezed leg collapses to a
+  zero-night stop at its arrival, cascading so downstream flights and
+  headers follow; confirmed stays never collapse; the honest no-op quotes
+  the zero-night render. Lesson: **when data can be legitimately
+  inconsistent mid-conversation, the renderer needs an explicit rule for the
+  inconsistent state too — "it can't happen" states that CAN happen
+  transiently still get looked at.**
+
 ## 2026-08-05 — trip-detail dogfooding (leg dates, round three — late)
 
 - **[app] BREAKAGE → fixed (specs/set-leg-dates v3):** after the Kraków move,

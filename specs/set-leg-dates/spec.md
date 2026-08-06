@@ -93,6 +93,14 @@ the agent to chain follow-up set_leg_dates calls.
       nights left) gets a squeeze NOTE naming that leg; the agent offers to
       shift the remaining cities and chains one set_leg_dates call per leg
       (earliest first) in the same turn — no new tool parameters.
+- [ ] While a squeeze is unresolved (an INVERTED leg — the previous leg ran
+      past its departure day), the page renders it as a zero-night stop at
+      its arrival, cascading: stay row, header chip, and both flight dates
+      agree, and consecutive squeezed legs chain onto the same arrival
+      (client `_visibleGroupRanges` ↔ server `visibleLegDisplayRange`; the
+      honest no-op quotes the zero-night render). A confirmed stay's
+      explicit dates are never collapsed; partial overlaps (arrival lands
+      mid-leg with nights remaining) keep the leg's own start.
 - [ ] Auto-suggested (draft) stays/segments are never moved or confirmed by
       the tool; migration 00053 deletes the frozen pre-#274 rows and
       `checkLodging` skips any `auto` row, so a stale draft can't mask
