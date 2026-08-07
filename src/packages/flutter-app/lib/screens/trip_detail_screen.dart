@@ -2180,7 +2180,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       Icon(Icons.event,
                           size: 14, color: theme.colorScheme.primary),
                       const SizedBox(width: 4),
-                      Flexible(
+                      // Deliberately NOT Flexible: a second flex child would
+                      // split the free space with the label's Expanded and
+                      // drag the chip+chevron cluster off the right edge.
+                      // The fixed cap bounds the cluster instead — the
+                      // longest localized chip ("27 ago – 1 sep · 5 noches")
+                      // measures ~175px, so real text never truncates; only
+                      // pathological widths ellipsize rather than overflow.
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 200),
                         child: Text(
                           group.dateRange!,
                           maxLines: 1,
