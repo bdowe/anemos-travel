@@ -132,6 +132,59 @@ void main() {
     expect(find.textContaining('5 noches'), findsOneWidget);
   });
 
+  testWidgets('date chips sit flush right with aligned chevrons',
+      (WidgetTester tester) async {
+    // Regression: wrapping the chip Text in Flexible gave the header Row two
+    // flex children, so the label's Expanded only claimed half the free
+    // space and the chip+chevron cluster drifted left by a per-row amount.
+    // The chevron must end exactly where its Row ends, on every row.
+    await _pump(tester, _pragueKrakowTrip());
+
+    double chevronRightIn(String chipText) {
+      final row = find
+          .ancestor(of: find.text(chipText), matching: find.byType(Row))
+          .first;
+      final chevron = find.descendant(
+          of: row, matching: find.byIcon(Icons.chevron_right));
+      expect(chevron, findsOneWidget);
+      expect(
+        tester.getTopRight(chevron).dx,
+        moreOrLessEquals(tester.getTopRight(row).dx, epsilon: 0.1),
+        reason: 'chevron of "$chipText" must be flush with its row end',
+      );
+      return tester.getTopRight(chevron).dx;
+    }
+
+    final prague = chevronRightIn('Aug 24 – Aug 27 · 3 nights');
+    final krakow = chevronRightIn('Aug 27 – Sep 1 · 5 nights');
+    expect(prague, moreOrLessEquals(krakow, epsilon: 0.1),
+        reason: 'chevrons must align across rows');
+  });
+
+  testWidgets('phone width: header row never overflows and stays flush right',
+      (WidgetTester tester) async {
+    // The test font renders every glyph as a full-size square, so the chip
+    // here measures far wider than any real font — the harshest squeeze the
+    // row can see. The ConstrainedBox cap must ellipsize the chip (never
+    // overflow), and the chevron must stay flush with the row end.
+    await tester.binding.setSurfaceSize(const Size(375, 667));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pump(tester, _pragueKrakowTrip());
+
+    final row = find
+        .ancestor(
+            of: find.text('Aug 24 – Aug 27 · 3 nights'),
+            matching: find.byType(Row))
+        .first;
+    final chevron = find.descendant(
+        of: row, matching: find.byIcon(Icons.chevron_right));
+    expect(
+      tester.getTopRight(chevron).dx,
+      moreOrLessEquals(tester.getTopRight(row).dx, epsilon: 0.1),
+      reason: 'chevron must stay flush with the row end at phone width',
+    );
+  });
+
   // The only tests that pin the separator and order — if the format ever
   // changes, the ARB lines and these literals are the whole diff.
   test('message-level plural forms in en and es', () async {
