@@ -21,7 +21,7 @@ import (
 // read lazily per request so tests can t.Setenv, and the endpoint URLs have
 // overrides as a test seam (same idea as ANTHROPIC_BASE_URL).
 
-var googleOAuthHTTPClient = &http.Client{Timeout: 15 * time.Second}
+var googleOAuthHTTPClient = newUpstreamClient(15 * time.Second)
 
 func googleOAuthClientID() string     { return os.Getenv("GOOGLE_OAUTH_CLIENT_ID") }
 func googleOAuthClientSecret() string { return os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET") }

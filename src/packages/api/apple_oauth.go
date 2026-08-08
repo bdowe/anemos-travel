@@ -26,7 +26,7 @@ import (
 // .p8 key (not a static string), PKCE is not supported, and the callback is a
 // form_post POST (see apple_auth_handler.go).
 
-var appleOAuthHTTPClient = &http.Client{Timeout: 15 * time.Second}
+var appleOAuthHTTPClient = newUpstreamClient(15 * time.Second)
 
 func appleTeamID() string   { return os.Getenv("APPLE_TEAM_ID") }
 func appleClientID() string { return os.Getenv("APPLE_CLIENT_ID") } // the Services ID

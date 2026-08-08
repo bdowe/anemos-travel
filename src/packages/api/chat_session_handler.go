@@ -118,7 +118,8 @@ func savePlanChatSession(ctx context.Context, uid uuid.UUID, chatID, summary str
 func listChatSessionsHandler(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFromContext(r.Context())
 	q := store.New(dbPool)
-	_ = q.DeleteStalePlanChatSessions(r.Context()) // opportunistic prune
+	// Stale sessions (idle 60+ days) are pruned by the hourly janitor
+	// (janitor.go), no longer opportunistically on every list request.
 	rows, err := q.ListResumablePlanChatSessions(r.Context(), user.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not load conversations")

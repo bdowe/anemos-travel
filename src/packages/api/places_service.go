@@ -178,9 +178,10 @@ func NewGooglePlacesService() *GooglePlacesService {
 		// with a zero-value (no-timeout) client would stall the whole SSE
 		// stream forever. This is a hard backstop on top of the per-call
 		// context deadline threaded through each method.
-		Client: &http.Client{Timeout: 15 * time.Second},
+		Client: newUpstreamClient(15 * time.Second),
 		PhotoClient: &http.Client{
-			Timeout: 15 * time.Second,
+			Timeout:   15 * time.Second,
+			Transport: sharedTransport, // pool shared with Client; CheckRedirect is per-client
 			CheckRedirect: func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			},

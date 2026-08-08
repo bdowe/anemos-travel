@@ -80,7 +80,7 @@ func NewEventsService() *EventsService {
 	return &EventsService{
 		APIKey:  apiKey,
 		BaseURL: strings.TrimRight(baseURL, "/"),
-		Client:  &http.Client{Timeout: 30 * time.Second},
+		Client:  newUpstreamClient(30 * time.Second),
 		cache:   newTTLCache[[]Event](eventsCacheTTL, 1000),
 	}
 }

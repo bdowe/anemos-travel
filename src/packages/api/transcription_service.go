@@ -60,7 +60,7 @@ func NewTranscriptionService() *TranscriptionService {
 		APIKey:  key,
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		Model:   model,
-		Client:  &http.Client{Timeout: 60 * time.Second},
+		Client:  newUpstreamClient(60 * time.Second),
 	}
 }
 

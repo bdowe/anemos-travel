@@ -59,7 +59,7 @@ func NewWeatherService() *WeatherService {
 		GeocodeBaseURL:  "https://geocoding-api.open-meteo.com",
 		ForecastBaseURL: "https://api.open-meteo.com",
 		ArchiveBaseURL:  "https://archive-api.open-meteo.com",
-		Client:          &http.Client{Timeout: 10 * time.Second},
+		Client:          newUpstreamClient(10 * time.Second),
 		geoCache:        newTTLCache[geoResult](24*time.Hour, 500),
 		summaryCache:    newTTLCache[WeatherReport](3*time.Hour, 500),
 	}
