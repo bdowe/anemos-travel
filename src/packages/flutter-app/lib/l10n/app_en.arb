@@ -2055,5 +2055,17 @@
   "nearMeDialogTitle": "Where are you?",
   "nearMeDialogMessage": "We couldn't get your location. Type a city or neighborhood instead, or enable location access and try again.",
   "nearMeDialogHint": "e.g. Athens, Plaka",
-  "nearMeDialogCta": "Ask"
+  "nearMeDialogCta": "Ask",
+  "wearSectionTitle": "What to wear & pack",
+  "wearBandFreezing": "Freezing — thermals and an insulated coat",
+  "wearBandCold": "Cold — warm coat, hat, and gloves",
+  "wearBandCool": "Cool — a jacket and layers",
+  "wearBandMild": "Mild — light layers",
+  "wearBandWarm": "Warm — summer clothes, a light evening layer",
+  "wearBandHot": "Hot — light fabrics and sun protection",
+  "wearRainLikely": "rain likely, pack an umbrella",
+  "wearBigSwing": "big day–night range, bring layers",
+  "wearExtremeHeat": "very hot days, extra sun protection",
+  "wearFreezingNights": "freezing nights, warm layers",
+  "wearSummaryRain": "rain likely"
 }

@@ -891,5 +891,17 @@
   "nearMeDialogTitle": "¿Dónde estás?",
   "nearMeDialogMessage": "No pudimos obtener tu ubicación. Escribe una ciudad o un barrio, o activa el acceso a la ubicación e inténtalo de nuevo.",
   "nearMeDialogHint": "p. ej. Atenas, Plaka",
-  "nearMeDialogCta": "Preguntar"
+  "nearMeDialogCta": "Preguntar",
+  "wearSectionTitle": "Qué ponerte y qué llevar",
+  "wearBandFreezing": "Bajo cero — ropa térmica y abrigo aislante",
+  "wearBandCold": "Frío — abrigo, gorro y guantes",
+  "wearBandCool": "Fresco — chaqueta y varias capas",
+  "wearBandMild": "Templado — capas ligeras",
+  "wearBandWarm": "Cálido — ropa de verano y una capa ligera para la noche",
+  "wearBandHot": "Calor — ropa ligera y protección solar",
+  "wearRainLikely": "lluvia probable, lleva paraguas",
+  "wearBigSwing": "gran variación día-noche, lleva capas",
+  "wearExtremeHeat": "días muy calurosos, protección solar extra",
+  "wearFreezingNights": "noches bajo cero, capas de abrigo",
+  "wearSummaryRain": "lluvia probable"
 }

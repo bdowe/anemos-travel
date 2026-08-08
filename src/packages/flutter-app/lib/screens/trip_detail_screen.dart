@@ -45,6 +45,7 @@ import '../services/trip_cache.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../utils/calendar_links.dart';
+import '../utils/clothing_recs.dart';
 import '../utils/leg_parity.dart';
 import '../utils/leg_ranges.dart';
 import '../utils/money_format.dart';
@@ -74,6 +75,7 @@ import '../widgets/source_links_card.dart';
 import '../widgets/status_pill.dart';
 import '../widgets/trip_map.dart';
 import '../widgets/trip_refine_panel.dart';
+import '../widgets/wear_recs.dart';
 import 'flight_search_screen.dart';
 import 'local_guide_detail_screen.dart';
 import 'trip_map_screen.dart';
@@ -3097,7 +3099,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final parts = <String>['$hi° / $lo°'];
     if (!historical &&
         day.precipProbability != null &&
-        day.precipProbability! >= 20) {
+        day.precipProbability! >= rainChanceCaptionPct) {
       parts.add(context.l10n.tripRainChance(day.precipProbability!));
     }
     return Padding(
@@ -3135,20 +3137,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  /// Condition glyph + color from precipitation. Forecast days key off the rain
-  /// probability (%), historical days off observed rainfall (mm): sunny below
-  /// the light threshold, cloud in between, umbrella above the wet threshold.
+  /// Condition glyph + color from precipitation: sunny / cloud / umbrella by
+  /// [rainLevel] — the client's one rain-threshold definition, shared with
+  /// the what-to-wear recommendations (utils/clothing_recs.dart).
   (IconData, Color) _weatherGlyph(ThemeData theme, WeatherDay day) {
     final scheme = theme.colorScheme;
-    final pct = day.precipProbability;
-    if (pct != null) {
-      if (pct >= 60) return (Icons.umbrella, scheme.primary);
-      if (pct >= 30) return (Icons.cloud, scheme.onSurfaceVariant);
-      return (Icons.wb_sunny, Colors.amber.shade700);
-    }
-    if (day.precipMm >= 5) return (Icons.umbrella, scheme.primary);
-    if (day.precipMm >= 1) return (Icons.cloud, scheme.onSurfaceVariant);
-    return (Icons.wb_sunny, Colors.amber.shade700);
+    return switch (rainLevel(day)) {
+      RainLevel.likely => (Icons.umbrella, scheme.primary),
+      RainLevel.some => (Icons.cloud, scheme.onSurfaceVariant),
+      RainLevel.none => (Icons.wb_sunny, Colors.amber.shade700),
+    };
   }
 
   /// "Tonight: <stay>" caption for today's day section (specs/happening-now
@@ -4011,24 +4009,102 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
+  /// Per-leg what-to-wear derivations for the merged section
+  /// (specs/what-to-wear). Weather queries stay on rawLegRanges — the
+  /// doc-pinned range source shared with the day chips (leg_ranges.dart) —
+  /// while the DISPLAYED dates come from the index-aligned visibleLegRanges
+  /// pair, so a row's dates can never disagree with the city-header chips
+  /// above it (the same raw-vs-visible twin the nights counter rides).
+  /// Iterates the leg LIST — not groupRanges, whose label keying is
+  /// last-wins for revisited cities — so a revisited city gets one row per
+  /// visit. Fetch sharing: a single-visit city's WeatherQuery is
+  /// byte-identical to its city-group watch, so the provider family dedups;
+  /// a revisited city's earlier visits query per-visit windows the chips
+  /// never build — one extra cached /weather call each, the accepted cost of
+  /// per-visit rows. Loading or failed reports derive null and drop out;
+  /// offline this is simply empty.
+  List<WearRegionRec> _legClothingRecs(Trip trip) {
+    final raw = rawLegRanges(trip);
+    final visible = visibleLegRanges(trip); // 1:1 by index with raw
+    final recs = <WearRegionRec>[];
+    for (var i = 0; i < raw.length; i++) {
+      final r = raw[i];
+      final start = r.start, end = r.end;
+      if (r.label == _kOtherPlaces || start == null || end == null) continue;
+      final report = ref
+          .watch(weatherByCityProvider(WeatherQuery(
+            city: r.label,
+            startDate: _fmt(start),
+            endDate: _fmt(end),
+          )))
+          .valueOrNull;
+      if (report == null) continue;
+      final rec = clothingRec(report);
+      if (rec == null) continue;
+      final v = visible[i];
+      recs.add((
+        label: r.label,
+        start: v.start ?? start,
+        end: v.end ?? end,
+        rec: rec,
+      ));
+    }
+    return recs;
+  }
+
+  /// Collapsed one-liner for the merged row: the cross-region temperature
+  /// envelope plus the rain signal. Kind-neutral by design — the "typical"
+  /// qualifier stays on the expanded per-region rows.
+  String _wearSummary(List<WearRegionRec> recs) {
+    final s = clothingSummary([for (final r in recs) r.rec]);
+    // Spaced dash like the date ranges ("Sep 15 – Sep 20"), so a negative low
+    // never collides with it ("-6° – 2°").
+    final range = '${s.loC}° – ${s.hiC}°';
+    return s.rainLikely ? '$range · ${context.l10n.wearSummaryRain}' : range;
+  }
+
   Widget? _packingSectionRow(Trip trip, ThemeData theme) {
-    // Mirrors ChecklistSection's own gates (nothing until loaded; viewers
-    // with an empty list get no section) so the collapsed row hides exactly
-    // when the expanded section would.
+    // Merged "What to wear & pack" (specs/what-to-wear): weather-derived
+    // recommendations on top, the editable checklist below. Recommendations
+    // alone can show the row (read-only viewers get guidance even with an
+    // empty checklist); without weather the gate reduces exactly to the old
+    // checklist-only rule, which mirrors ChecklistSection's own gates
+    // (nothing until loaded; viewers with an empty list get no checklist).
     final items = ref.watch(checklistProvider(trip.id)).valueOrNull;
-    if (items == null || (items.isEmpty && _readOnly)) return null;
-    final checked = items.where((i) => i.checked).length;
+    final recs = _legClothingRecs(trip);
+    final showChecklist = items != null && !(items.isEmpty && _readOnly);
+    if (!showChecklist && recs.isEmpty) return null;
+    final checked = items?.where((i) => i.checked).length ?? 0;
+    // With recs in the summary slot, the checked-count stays glanceable via
+    // the pill (same chrome as ChecklistSection's standalone header).
+    final summary = recs.isNotEmpty
+        ? _wearSummary(recs)
+        : context.l10n.checklistSummary(checked, items!.length);
     return CollapsibleSection(
-      title: context.l10n.checklistTitle,
+      title: context.l10n.wearSectionTitle,
       icon: Icons.luggage_outlined,
-      summary: context.l10n.checklistSummary(checked, items.length),
+      summary: summary,
+      pill: (recs.isEmpty || items == null || items.isEmpty)
+          ? null
+          : StatusPill.custom(
+              label: '$checked/${items.length}',
+              background: theme.colorScheme.surfaceContainerHighest,
+              foreground: theme.colorScheme.onSurfaceVariant,
+            ),
       expanded: _sectionExpanded('packing'),
       onToggle: () => _toggleSection('packing'),
-      child: ChecklistSection(
-        tripId: trip.id,
-        canEdit: !_readOnly,
-        isOffline: _isOffline,
-        showHeader: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (recs.isNotEmpty) WearRecsList(regions: recs),
+          if (recs.isNotEmpty && showChecklist) const Divider(height: 24),
+          ChecklistSection(
+            tripId: trip.id,
+            canEdit: !_readOnly,
+            isOffline: _isOffline,
+            showHeader: false,
+          ),
+        ],
       ),
     );
   }

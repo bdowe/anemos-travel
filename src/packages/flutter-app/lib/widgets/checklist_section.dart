@@ -9,10 +9,13 @@ import 'empty_state.dart';
 import 'section_header.dart';
 import 'status_pill.dart';
 
-/// The trip-detail "Packing & prep" section: a lightweight per-trip checklist
-/// the AI assistant seeds (add_packing_item) and the traveler edits freely.
-/// Self-contained — it owns its data via [checklistProvider] and reconciles
-/// mutations by invalidating that family key.
+/// The per-trip packing checklist: a lightweight list the AI assistant seeds
+/// (add_packing_item) and the traveler edits freely. On trip detail it renders
+/// body-only (showHeader: false) inside the merged "What to wear & pack" row
+/// (specs/what-to-wear), below the weather-derived recommendations; standalone
+/// it keeps its own "Packing & prep" header. Self-contained — it owns its data
+/// via [checklistProvider] and reconciles mutations by invalidating that
+/// family key.
 class ChecklistSection extends ConsumerStatefulWidget {
   final String tripId;
   final bool canEdit;
