@@ -1,0 +1,388 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
+import 'package:travel_route_planner/models/checklist_item.dart';
+import 'package:travel_route_planner/models/itinerary_item.dart';
+import 'package:travel_route_planner/models/trip.dart';
+import 'package:travel_route_planner/models/weather.dart';
+import 'package:travel_route_planner/services/api_client.dart';
+import 'package:travel_route_planner/services/checklist_api_service.dart';
+import 'package:travel_route_planner/services/trips_api_service.dart';
+import 'package:travel_route_planner/services/weather_api_service.dart';
+import 'package:travel_route_planner/providers/checklist_provider.dart';
+import 'package:travel_route_planner/providers/trips_provider.dart';
+import 'package:travel_route_planner/providers/weather_provider.dart';
+import 'package:travel_route_planner/screens/trip_detail_screen.dart';
+import 'package:travel_route_planner/widgets/collapsible_section.dart';
+import 'package:travel_route_planner/widgets/wear_recs.dart';
+
+import 'support/l10n_test_app.dart';
+
+/// The merged "What to wear & pack" section (specs/what-to-wear): collapsed
+/// summary = cross-region temperature envelope + rain signal; expanded =
+/// per-region deterministic phrases above the intact checklist; historical
+/// reports carry the "typical" qualifier ON THE WEAR ROW; a revisited city
+/// gets one row per visit with per-visit weather queries; a leg whose report
+/// is empty drops out without hiding the section; recommendations alone show
+/// the row for read-only viewers; without weather the old checklist gating
+/// holds.
+
+class _FakeTripsApiService extends TripsApiService {
+  final Trip trip;
+  _FakeTripsApiService(this.trip) : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<Trip> getTrip(String id) async => trip;
+}
+
+/// One fixed report for every lookup — enough when every leg should resolve
+/// the same way.
+class _FakeWeatherApiService extends WeatherApiService {
+  final WeatherReport report;
+  _FakeWeatherApiService(this.report)
+      : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<WeatherReport> getTripWeather(String city, String startDate,
+          {String? endDate}) async =>
+      report;
+}
+
+/// Per-window reports keyed '<city>|<startDate>', recording every query — for
+/// pinning per-visit windows and the empty-report drop-out. Unknown keys get
+/// an empty report (the server's own failure contract).
+class _MapWeatherApiService extends WeatherApiService {
+  final Map<String, WeatherReport> byKey;
+  final List<String> calls = [];
+  _MapWeatherApiService(this.byKey) : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<WeatherReport> getTripWeather(String city, String startDate,
+      {String? endDate}) async {
+    final key = '$city|$startDate';
+    calls.add(key);
+    return byKey[key] ?? const WeatherReport();
+  }
+}
+
+class _FakeChecklistApiService extends ChecklistApiService {
+  final List<ChecklistItem> items;
+  _FakeChecklistApiService(this.items)
+      : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<List<ChecklistItem>> list(String tripId) async => items;
+}
+
+ItineraryItem _item(int pos, String name, int day, {String city = 'Paris'}) =>
+    ItineraryItem(
+      id: 'i$pos',
+      position: pos,
+      name: name,
+      address: '$name street, $city',
+      latitude: 0,
+      longitude: 0,
+      category: 'attraction',
+      day: day,
+      city: city,
+    );
+
+Trip _trip({String? access, List<ItineraryItem>? items, String? endDate}) =>
+    Trip(
+      id: 't1',
+      title: 'Paris',
+      status: 'planned',
+      createdAt: '2026-06-01',
+      updatedAt: '2026-06-01',
+      startDate: '2026-09-15',
+      endDate: endDate ?? '2026-09-16',
+      access: access,
+      items: items ??
+          [
+            _item(0, 'Louvre', 1),
+            _item(1, 'Orsay', 2),
+          ],
+    );
+
+/// Warm + rainy forecast: envelope 15° – 24°, median high 24 → warm band,
+/// day 1 at 70% → rain likely; spreads under 12 → no swing flag.
+final _warmRainyForecast = WeatherReport(
+  location: 'Paris, France',
+  kind: 'forecast',
+  days: const [
+    WeatherDay(
+        date: '2026-09-15', tempMinC: 16, tempMaxC: 24, precipProbability: 70),
+    WeatherDay(
+        date: '2026-09-16', tempMinC: 15, tempMaxC: 22, precipProbability: 10),
+  ],
+);
+
+final _dryHistorical = WeatherReport(
+  location: 'Paris, France',
+  kind: 'historical',
+  days: const [
+    WeatherDay(date: '2025-09-15', tempMinC: 18, tempMaxC: 27),
+    WeatherDay(date: '2025-09-16', tempMinC: 17, tempMaxC: 26),
+  ],
+);
+
+Future<void> _pump(
+  WidgetTester tester, {
+  required Trip trip,
+  WeatherReport? report,
+  WeatherApiService? weather,
+  List<ChecklistItem> checklist = const [],
+  Locale? locale,
+}) async {
+  // Tall viewport so the trailing cluster lays out without scrolling.
+  tester.view.physicalSize = const Size(800, 3000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        tripsApiServiceProvider.overrideWithValue(_FakeTripsApiService(trip)),
+        weatherApiServiceProvider
+            .overrideWithValue(weather ?? _FakeWeatherApiService(report!)),
+        checklistApiServiceProvider
+            .overrideWithValue(_FakeChecklistApiService(checklist)),
+      ],
+      child: localizedTestApp(
+          home: TripDetailScreen(tripId: 't1'), locale: locale),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _expand(WidgetTester tester,
+    {String title = 'What to wear & pack'}) async {
+  await tester.ensureVisible(find.text(title));
+  await tester.tap(find.text(title));
+  await tester.pumpAndSettle();
+}
+
+/// Finder scoped to the wear block, so day-chip text (which shares strings
+/// like the "typical" qualifier) can never satisfy a wear-row assertion.
+Finder _inRecs(String text) => find.descendant(
+    of: find.byType(WearRecsList), matching: find.textContaining(text));
+
+Finder _wearSectionDividers() => find.descendant(
+    of: find.widgetWithText(CollapsibleSection, 'What to wear & pack'),
+    matching: find.byType(Divider));
+
+void main() {
+  testWidgets('collapsed row shows the envelope summary and the checked pill',
+      (tester) async {
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: _warmRainyForecast,
+      checklist: const [
+        ChecklistItem(id: 'c1', category: 'general', title: 'Umbrella'),
+        ChecklistItem(
+            id: 'c2', category: 'clothing', title: 'Jacket', checked: true),
+      ],
+    );
+
+    expect(find.text('What to wear & pack'), findsOneWidget);
+    expect(find.text('15° – 24° · rain likely'), findsOneWidget);
+    // Checked count stays glanceable via the pill while recs own the summary.
+    expect(find.text('1/2'), findsOneWidget);
+    // Collapsed: no phrases, no checklist rows.
+    expect(find.textContaining('Warm —'), findsNothing);
+    expect(find.text('Umbrella'), findsNothing);
+  });
+
+  testWidgets('expanded: per-region phrase rows above the intact checklist',
+      (tester) async {
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: _warmRainyForecast,
+      checklist: const [
+        ChecklistItem(id: 'c1', category: 'general', title: 'Umbrella'),
+      ],
+    );
+    await _expand(tester);
+
+    // Region line: label · dates · envelope.
+    expect(_inRecs('Paris · Sep 15 – Sep 16 · 15° – 24°'), findsOneWidget);
+    // Band phrase plus the rain flag, joined on one line; no "typical" for a
+    // forecast, and no swing flag for these mild spreads.
+    expect(_inRecs('Warm — summer clothes, a light evening layer'),
+        findsOneWidget);
+    expect(_inRecs('rain likely, pack an umbrella'), findsOneWidget);
+    expect(_inRecs('typical for these dates'), findsNothing);
+    expect(_inRecs('big day–night range'), findsNothing);
+    // Recs and checklist both present → exactly one separating divider.
+    expect(_wearSectionDividers(), findsOneWidget);
+    // The checklist renders below, still editable: item row + add field.
+    expect(find.text('Umbrella'), findsOneWidget);
+    expect(find.byType(Checkbox), findsOneWidget);
+    expect(find.byType(TextField), findsWidgets);
+  });
+
+  testWidgets('historical report carries the typical qualifier on its row',
+      (tester) async {
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: _dryHistorical,
+      checklist: const [
+        ChecklistItem(id: 'c1', category: 'general', title: 'Umbrella'),
+      ],
+    );
+    await _expand(tester);
+
+    expect(_inRecs('Warm — summer clothes'), findsOneWidget);
+    // Scoped to the wear block: the day chips also render this string, so an
+    // unscoped find would pass even if the wear row dropped it.
+    expect(_inRecs('typical for these dates'), findsOneWidget);
+    // Dry historical days: no rain phrase, summary has no rain suffix.
+    expect(find.textContaining('rain likely'), findsNothing);
+    expect(find.text('17° – 27°'), findsOneWidget);
+  });
+
+  testWidgets('a revisited city gets one row per visit, queried per window',
+      (tester) async {
+    // Paris (day 1) → Nice (day 2) → Paris (day 3): the wear rows must come
+    // from the leg LIST, not a label-keyed map (which would collapse the two
+    // Paris visits into the last window).
+    final weather = _MapWeatherApiService({
+      'Paris|2026-09-15': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-15', tempMinC: 10, tempMaxC: 18),
+      ]),
+      'Nice|2026-09-16': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-16', tempMinC: 14, tempMaxC: 22),
+      ]),
+      'Paris|2026-09-17': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-17', tempMinC: 16, tempMaxC: 25),
+      ]),
+    });
+    await _pump(
+      tester,
+      trip: _trip(endDate: '2026-09-17', items: [
+        _item(0, 'Louvre', 1),
+        _item(1, 'Promenade', 2, city: 'Nice'),
+        _item(2, 'Orsay', 3),
+      ]),
+      weather: weather,
+    );
+    await _expand(tester);
+
+    // Two Paris rows with their own visit windows and temps, Nice between.
+    // Displayed dates are the VISIBLE ranges (arrival-inclusive, matching the
+    // city headers); the weather queries below stay on the raw windows.
+    expect(_inRecs('Paris · Sep 15 · 10° – 18°'), findsOneWidget);
+    expect(_inRecs('Nice · Sep 15 – Sep 16 · 14° – 22°'), findsOneWidget);
+    expect(_inRecs('Paris · Sep 16 – Sep 17 · 16° – 25°'), findsOneWidget);
+    // Both Paris visit windows were genuinely queried (per-visit keys).
+    expect(weather.calls, contains('Paris|2026-09-15'));
+    expect(weather.calls, contains('Paris|2026-09-17'));
+    // Collapsed summary spans all three legs: 10..25, no rain.
+    expect(find.text('10° – 25°'), findsOneWidget);
+  });
+
+  testWidgets('a leg with an empty report drops out; the rest still render',
+      (tester) async {
+    final weather = _MapWeatherApiService({
+      'Paris|2026-09-15': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-15', tempMinC: 16, tempMaxC: 24),
+      ]),
+      // Nice deliberately absent → empty report (provider failure contract).
+    });
+    await _pump(
+      tester,
+      trip: _trip(items: [
+        _item(0, 'Louvre', 1),
+        _item(1, 'Promenade', 2, city: 'Nice'),
+      ]),
+      weather: weather,
+    );
+
+    // Summary is Paris's envelope alone — the unresolved leg can't zero it.
+    expect(find.text('16° – 24°'), findsOneWidget);
+    await _expand(tester);
+    expect(_inRecs('Paris · Sep 15'), findsOneWidget);
+    expect(_inRecs('Nice'), findsNothing);
+  });
+
+  testWidgets('read-only viewer with an empty checklist still sees the recs',
+      (tester) async {
+    await _pump(
+      tester,
+      trip: _trip(access: 'viewer'),
+      report: _warmRainyForecast,
+    );
+
+    expect(find.text('What to wear & pack'), findsOneWidget);
+    expect(find.text('15° – 24° · rain likely'), findsOneWidget);
+    // No checked pill for an empty checklist.
+    expect(find.text('0/0'), findsNothing);
+
+    await _expand(tester);
+    expect(_inRecs('Warm — summer clothes'), findsOneWidget);
+    // Viewer + empty checklist: no add affordance, no checkboxes, and no
+    // dangling divider under the recs (the checklist rendered nothing).
+    expect(find.byType(Checkbox), findsNothing);
+    expect(find.textContaining('Add an item'), findsNothing);
+    expect(_wearSectionDividers(), findsNothing);
+  });
+
+  testWidgets('no weather: gating is exactly the old checklist behavior',
+      (tester) async {
+    // Viewer + empty checklist + empty weather → no section at all.
+    await _pump(
+      tester,
+      trip: _trip(access: 'viewer'),
+      report: const WeatherReport(),
+    );
+    expect(find.text('What to wear & pack'), findsNothing);
+  });
+
+  testWidgets('no weather, owner: checklist-only row with the count summary',
+      (tester) async {
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: const WeatherReport(),
+      checklist: const [
+        ChecklistItem(id: 'c1', category: 'general', title: 'Umbrella'),
+      ],
+    );
+
+    expect(find.text('What to wear & pack'), findsOneWidget);
+    // Old summary shape (checked of total), no envelope text anywhere.
+    expect(find.textContaining('° – '), findsNothing);
+    expect(find.textContaining('0/1'), findsNothing); // count is not a pill…
+    expect(find.textContaining('0 of 1'), findsOneWidget); // …but the summary
+  });
+
+  testWidgets('renders the Spanish strings under the es locale',
+      (tester) async {
+    // The locale provider sets Intl.defaultLocale in the real app; tests set
+    // it explicitly (same pattern as guides_polish_test.dart).
+    await initializeDateFormatting('es');
+    Intl.defaultLocale = 'es';
+    addTearDown(() => Intl.defaultLocale = null);
+
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: _warmRainyForecast,
+      locale: const Locale('es'),
+    );
+
+    expect(find.text('Qué ponerte y qué llevar'), findsOneWidget);
+    expect(find.textContaining('lluvia probable'), findsWidgets);
+    await _expand(tester, title: 'Qué ponerte y qué llevar');
+    expect(
+        find.descendant(
+            of: find.byType(WearRecsList),
+            matching: find.textContaining('Cálido — ropa de verano')),
+        findsOneWidget);
+  });
+}

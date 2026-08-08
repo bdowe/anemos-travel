@@ -3149,4 +3149,41 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get nearMeDialogCta => 'Preguntar';
+
+  @override
+  String get wearSectionTitle => 'Qué ponerte y qué llevar';
+
+  @override
+  String get wearBandFreezing => 'Bajo cero — ropa térmica y abrigo aislante';
+
+  @override
+  String get wearBandCold => 'Frío — abrigo, gorro y guantes';
+
+  @override
+  String get wearBandCool => 'Fresco — chaqueta y varias capas';
+
+  @override
+  String get wearBandMild => 'Templado — capas ligeras';
+
+  @override
+  String get wearBandWarm =>
+      'Cálido — ropa de verano y una capa ligera para la noche';
+
+  @override
+  String get wearBandHot => 'Calor — ropa ligera y protección solar';
+
+  @override
+  String get wearRainLikely => 'lluvia probable, lleva paraguas';
+
+  @override
+  String get wearBigSwing => 'gran variación día-noche, lleva capas';
+
+  @override
+  String get wearExtremeHeat => 'días muy calurosos, protección solar extra';
+
+  @override
+  String get wearFreezingNights => 'noches bajo cero, capas de abrigo';
+
+  @override
+  String get wearSummaryRain => 'lluvia probable';
 }

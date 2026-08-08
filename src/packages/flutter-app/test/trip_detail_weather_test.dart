@@ -102,18 +102,21 @@ void main() {
         WeatherDay(
             date: '2000-$md1', tempMinC: 16, tempMaxC: 24, precipProbability: 70),
         WeatherDay(
-            date: '2000-$md2', tempMinC: 15, tempMaxC: 22, precipProbability: 10),
+            date: '2000-$md2', tempMinC: 15, tempMaxC: 22, precipProbability: 40),
       ],
     );
     await _pump(tester, _twoDayTrip(start), report);
 
-    // Hi/lo temps rendered (rounded) for both days. Day 1 folds the rain
+    // Hi/lo temps rendered (rounded) for both days. Both days fold the rain
     // chance into the same Text, so match on substring.
     expect(find.textContaining('24° / 16°'), findsOneWidget);
-    expect(find.text('22° / 15°'), findsOneWidget);
-    // The rainy day surfaces its chance; the umbrella glyph appears.
+    expect(find.textContaining('22° / 15°'), findsOneWidget);
+    // Each rain tier keeps its glyph through the rainLevel refactor
+    // (specs/what-to-wear): 70% → umbrella, 40% → cloud.
     expect(find.textContaining('70% rain'), findsOneWidget);
+    expect(find.textContaining('40% rain'), findsOneWidget);
     expect(find.byIcon(Icons.umbrella), findsWidgets);
+    expect(find.byIcon(Icons.cloud), findsOneWidget);
     // Forecast, so no "typical" affordance.
     expect(find.textContaining('typical'), findsNothing);
   });
@@ -132,8 +135,10 @@ void main() {
 
     expect(find.text('27° / 18°'), findsOneWidget);
     expect(find.textContaining('typical for these dates'), findsWidgets);
-    // Historical never shows a rain-chance percentage.
+    // Historical never shows a rain-chance percentage; dry days keep the
+    // sunny glyph (RainLevel.none tier).
     expect(find.textContaining('% rain'), findsNothing);
+    expect(find.byIcon(Icons.wb_sunny), findsWidgets);
   });
 
   test('dayFor falls back to the nearest adjacent day for a missing 02-29',

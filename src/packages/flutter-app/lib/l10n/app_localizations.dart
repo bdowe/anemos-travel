@@ -5329,6 +5329,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ask'**
   String get nearMeDialogCta;
+
+  /// No description provided for @wearSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What to wear & pack'**
+  String get wearSectionTitle;
+
+  /// No description provided for @wearBandFreezing.
+  ///
+  /// In en, this message translates to:
+  /// **'Freezing — thermals and an insulated coat'**
+  String get wearBandFreezing;
+
+  /// No description provided for @wearBandCold.
+  ///
+  /// In en, this message translates to:
+  /// **'Cold — warm coat, hat, and gloves'**
+  String get wearBandCold;
+
+  /// No description provided for @wearBandCool.
+  ///
+  /// In en, this message translates to:
+  /// **'Cool — a jacket and layers'**
+  String get wearBandCool;
+
+  /// No description provided for @wearBandMild.
+  ///
+  /// In en, this message translates to:
+  /// **'Mild — light layers'**
+  String get wearBandMild;
+
+  /// No description provided for @wearBandWarm.
+  ///
+  /// In en, this message translates to:
+  /// **'Warm — summer clothes, a light evening layer'**
+  String get wearBandWarm;
+
+  /// No description provided for @wearBandHot.
+  ///
+  /// In en, this message translates to:
+  /// **'Hot — light fabrics and sun protection'**
+  String get wearBandHot;
+
+  /// No description provided for @wearRainLikely.
+  ///
+  /// In en, this message translates to:
+  /// **'rain likely, pack an umbrella'**
+  String get wearRainLikely;
+
+  /// No description provided for @wearBigSwing.
+  ///
+  /// In en, this message translates to:
+  /// **'big day–night range, bring layers'**
+  String get wearBigSwing;
+
+  /// No description provided for @wearExtremeHeat.
+  ///
+  /// In en, this message translates to:
+  /// **'very hot days, extra sun protection'**
+  String get wearExtremeHeat;
+
+  /// No description provided for @wearFreezingNights.
+  ///
+  /// In en, this message translates to:
+  /// **'freezing nights, warm layers'**
+  String get wearFreezingNights;
+
+  /// No description provided for @wearSummaryRain.
+  ///
+  /// In en, this message translates to:
+  /// **'rain likely'**
+  String get wearSummaryRain;
 }
 
 class _AppLocalizationsDelegate

@@ -355,8 +355,9 @@ void main() {
   testWidgets('trailing cluster leads with Trip health, empty rows trail',
       (tester) async {
     // Layout contract (friction-log 2026-08-04): the cluster is ordered
-    // Trip health → Packing & prep → Budget, so actionable review state is
-    // met before the empty-state rows.
+    // Trip health → What to wear & pack → Budget, so actionable review state
+    // is met before the empty-state rows. (The packing slot was retitled by
+    // the merged what-to-wear section, specs/what-to-wear.)
     final review = _FakeReviewApiService([
       _finding('packing', 'No umbrella for rainy Athens',
           const FindingFix(
@@ -373,7 +374,7 @@ void main() {
 
     // The tall test viewport lays out the whole cluster in one frame.
     final healthY = tester.getTopLeft(find.text('Trip health')).dy;
-    final packingY = tester.getTopLeft(find.text('Packing & prep')).dy;
+    final packingY = tester.getTopLeft(find.text('What to wear & pack')).dy;
     final budgetY = tester.getTopLeft(find.text('Budget')).dy;
     expect(healthY, lessThan(packingY));
     expect(packingY, lessThan(budgetY));
