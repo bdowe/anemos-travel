@@ -44,7 +44,12 @@ func initDB(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	// connections. HealthCheckPeriod actively pings idle conns so a mid-idle
 	// server restart is noticed and the conn replaced before a request grabs it.
 	cfg.MaxConns = 10
-	cfg.MinConns = 0
+	// MinConns = 2 keeps a couple of warm connections through quiet periods.
+	// With MinConns = 0, MaxConnIdleTime (5m) drains the pool to zero on a
+	// quiet single-user deployment, so the first click after any idle stretch
+	// paid a fresh TCP + TLS + Postgres-auth handshake before its query ran.
+	// The pool's background health check maintains the floor.
+	cfg.MinConns = 2
 	cfg.ConnConfig.ConnectTimeout = 5 * time.Second
 	cfg.HealthCheckPeriod = 30 * time.Second
 	cfg.MaxConnLifetime = 1 * time.Hour

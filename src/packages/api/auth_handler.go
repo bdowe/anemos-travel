@@ -179,7 +179,8 @@ func authMiddleware(next http.Handler) http.Handler {
 			writeJSONError(w, http.StatusUnauthorized, "invalid or expired session")
 			return
 		}
-		_ = q.DeleteExpiredSessions(r.Context()) // opportunistic cleanup
+		// Expired-session rows are pruned by the hourly janitor (janitor.go);
+		// the ExpiresAt check above is what actually rejects stale tokens.
 		ctx := context.WithValue(r.Context(), userContextKey, row.User)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

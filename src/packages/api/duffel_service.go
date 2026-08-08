@@ -176,7 +176,7 @@ func NewDuffelService() *DuffelService {
 		Token:       token,
 		BaseURL:     strings.TrimRight(baseURL, "/"),
 		Version:     version,
-		Client:      &http.Client{Timeout: 60 * time.Second},
+		Client:      newUpstreamClient(60 * time.Second),
 		placesCache: newTTLCache[[]Airport](24*time.Hour, 5000),
 	}
 }

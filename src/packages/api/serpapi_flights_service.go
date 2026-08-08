@@ -80,7 +80,7 @@ func NewSerpapiFlightsService() *SerpapiFlightsService {
 	}
 	s := &SerpapiFlightsService{
 		BaseURL:     strings.TrimRight(baseURL, "/"),
-		Client:      &http.Client{Timeout: 60 * time.Second},
+		Client:      newUpstreamClient(60 * time.Second),
 		offersCache: newTTLCache[[]FlightOffer](serpapiCacheTTL, 500),
 		daily:       newDailyCounter(),
 	}

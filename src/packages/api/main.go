@@ -592,6 +592,10 @@ func main() {
 	// transitions (DB reachability + backup freshness); no-op in degraded mode.
 	startHealthMonitor(ctx)
 
+	// Background janitor (perf): hourly prune of expired sessions and stale
+	// plan-chat rows, moved off the request hot path; no-op in degraded mode.
+	startJanitor(ctx)
+
 	startServer(buildRouter())
 }
 
