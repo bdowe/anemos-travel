@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
@@ -30,7 +32,8 @@ class AirportField extends ConsumerStatefulWidget {
 
 class _AirportFieldState extends ConsumerState<AirportField> {
   final _controller = TextEditingController();
-  String _query = '';
+  Timer? _debounce;
+  String _query = ''; // debounced search text driving airportSearchProvider
 
   /// Hides the suggestion list after an outside tap without discarding the
   /// typed text; typing or tapping back into the field re-opens it.
@@ -40,8 +43,28 @@ class _AirportFieldState extends ConsumerState<AirportField> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Debounces the [_query] update that drives [airportSearchProvider] so one
+  /// autocomplete request fires 350 ms after typing stops, instead of one per
+  /// keystroke. Immediate UI state (reopening the dismissed list) stays
+  /// synchronous in [build]'s onChanged.
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) setState(() => _query = value);
+    });
+  }
+
+  /// Clears the field immediately (selection / clear button), cancelling any
+  /// pending debounce so stale text can't resurrect the dropdown afterwards.
+  void _resetQuery() {
+    _debounce?.cancel();
+    _controller.clear();
+    setState(() => _query = '');
   }
 
   /// Shared bordered shell for the suggestion list and its empty/error rows,
@@ -76,8 +99,7 @@ class _AirportFieldState extends ConsumerState<AirportField> {
             icon: const Icon(Icons.close),
             onPressed: () {
               widget.onSelected(null);
-              _controller.clear();
-              setState(() => _query = '');
+              _resetQuery();
             },
           ),
         ),
@@ -108,10 +130,12 @@ class _AirportFieldState extends ConsumerState<AirportField> {
               border: const OutlineInputBorder(),
             ),
             onTap: () => setState(() => _dismissed = false),
-            onChanged: (v) => setState(() {
-              _query = v;
-              _dismissed = false;
-            }),
+            onChanged: (v) {
+              // Reopen the list immediately; only the provider-feeding
+              // _query update is debounced.
+              setState(() => _dismissed = false);
+              _onSearchChanged(v);
+            },
           ),
           if (_listOpen)
             Consumer(
@@ -150,8 +174,7 @@ class _AirportFieldState extends ConsumerState<AirportField> {
                                           : Text(a.country),
                                       onTap: () {
                                         widget.onSelected(a);
-                                        _controller.clear();
-                                        setState(() => _query = '');
+                                        _resetQuery();
                                       },
                                     ))
                                 .toList(),

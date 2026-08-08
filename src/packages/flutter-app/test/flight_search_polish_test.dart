@@ -214,6 +214,8 @@ void main() {
           matching: find.byType(TextField)),
       'par',
     );
+    // The field debounces the provider-feeding query by 350 ms.
+    await tester.pump(const Duration(milliseconds: 350));
     await tester.pumpAndSettle();
     expect(find.text('Paris (CDG)'), findsOneWidget);
 

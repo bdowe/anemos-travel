@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import '../theme/spacing.dart';
 
 /// Golden Tempo Travel brand mark: a horse head inside an omega-shaped gold
@@ -41,10 +40,43 @@ class BrandLogo extends StatelessWidget {
       fit: BoxFit.contain,
       semanticLabel: 'Golden Tempo Travel',
       // Degrade gracefully if the image asset fails to load: the mark falls
-      // back to a horse-head glyph, the lockup to the wordmark.
+      // back to a "GT" monogram, the lockup to the wordmark.
       errorBuilder: (context, _, __) => _isLockup
           ? _WordmarkFallback(height: _height)
-          : Icon(MdiIcons.horseVariant, size: _height, color: Colors.black87),
+          : _MonogramFallback(size: _height),
+    );
+  }
+}
+
+/// "GT" monogram stand-in for the horseshoe mark when the image asset is
+/// unavailable. Fills the same [size]×[size] square the icon glyph did, so
+/// layout is identical either way, and uses the same black-on-light palette
+/// as the artwork (it sits on a light [BrandBadge] surface).
+class _MonogramFallback extends StatelessWidget {
+  final double size;
+  const _MonogramFallback({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: Colors.black87,
+        borderRadius: AppRadius.smAll,
+      ),
+      child: Text(
+        'GT',
+        style: TextStyle(
+          fontFamily: 'Playfair Display',
+          fontWeight: FontWeight.w600,
+          fontSize: size * 0.42,
+          height: 1,
+          color: Colors.white,
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
 }
@@ -59,7 +91,7 @@ class _WordmarkFallback extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(MdiIcons.horseVariant, size: height, color: Colors.black87),
+        _MonogramFallback(size: height),
         const SizedBox(width: AppSpacing.sm),
         Text(
           'Golden Tempo',
