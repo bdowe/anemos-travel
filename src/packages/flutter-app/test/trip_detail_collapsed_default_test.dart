@@ -12,6 +12,7 @@ import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/booking_todo_card.dart';
 import 'package:travel_route_planner/widgets/status_pill.dart';
 
+import 'support/chip_finders.dart';
 import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
@@ -98,7 +99,12 @@ void main() {
     // Headers with their date ranges are the whole resting view.
     expect(find.text('Paris'), findsOneWidget);
     expect(find.text('Rome'), findsOneWidget);
-    expect(find.text('Jun 10 – Jun 11 · 1 night'), findsOneWidget);
+    // Scoping revealed what the old global finder hid: the counted range
+    // belongs to ROME (Paris's single day-1 item makes it a zero-night leg
+    // with a bare date chip).
+    expect(chipTextIn('Paris', 'Jun 10'), findsOneWidget);
+    expect(chipTextIn('Rome', 'Jun 10 – Jun 11'), findsOneWidget);
+    expect(chipTextIn('Rome', '· 1 night'), findsOneWidget);
 
     // Items and embedded booking rows are hidden until a group is opened.
     expect(find.text('Louvre'), findsNothing);

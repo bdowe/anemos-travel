@@ -96,6 +96,21 @@ const _kOtherPlaces = kOtherPlacesLabel;
 String _groupLabelText(AppLocalizations l10n, String label) =>
     label == _kOtherPlaces ? l10n.tripOtherPlaces : label;
 
+/// City-header date-chip parts, kept separate so the header can align them as
+/// columns across rows: [range] renders left-aligned after the calendar icon,
+/// [nights] (the localized "· N nights" suffix) renders flush right. Null
+/// [nights] = zero-night squeezed leg — no nights widget renders at all.
+typedef _LegDateChip = ({String range, String? nights});
+
+/// One city group as built by [_TripDetailScreenState._buildGroups] and
+/// consumed by [_TripDetailScreenState._cityHeader].
+typedef _CityGroup = ({
+  String key,
+  String label,
+  _LegDateChip? dateRange,
+  List<ItineraryItem> items
+});
+
 // Canonical API values. These are sent to the server (or matched against
 // server data), so they are NEVER translated — only their display labels are.
 // 'local', 'unbooked', and 'bookings' are client-only lenses: locals' picks
@@ -535,6 +550,29 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// map-pinning and refine-dock breakpoints (a constraining wrapper would
   /// starve them and the map would never pin).
   static const double _contentMaxWidth = 900;
+
+  // ── City-header date-chip columns ─────────────────────────────────────
+  // Every header's chip renders inside one shared width measured per build
+  // ([_dateChipWidth]), so calendar icons, range starts, and nights suffixes
+  // form columns across rows.
+
+  /// Calendar icon size and trailing gap inside the chip — consumed by both
+  /// the render and the measurement ([_chipIconSpan]) so they cannot drift.
+  static const double _chipIconSize = 14;
+  static const double _chipIconGap = 4;
+  static const double _chipIconSpan = _chipIconSize + _chipIconGap;
+
+  /// Minimum gap between the range text and the nights suffix. Also the
+  /// error budget for TextPainter-vs-Text measurement divergence: a chip can
+  /// only spuriously ellipsize if measurement undershoots by more than this.
+  static const double _chipInnerGap = 8;
+
+  /// Pathological ceiling (kept from the pre-column layout): real localized
+  /// chips measure well under it; absurd text scales ellipsize instead of
+  /// overflowing the header row. Never scale this with the textScaler — the
+  /// chip is a rigid child of the header row and a scaled cap could exceed a
+  /// phone row's width.
+  static const double _chipMaxWidth = 200;
 
   /// Pinned-header heights, shared by the build method and the Today scroll
   /// math so the two can never drift apart.
@@ -1981,15 +2019,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// apart or two live widgets share one GlobalKey and the itinerary fails to
   /// build. Repeats get a `#2`, `#3`, … suffix; the scroll helpers parse day
   /// keys with `lastIndexOf('#')`, so a suffixed key round-trips fine.
-  List<
-      ({
-        String key,
-        String label,
-        String? dateRange,
-        List<ItineraryItem> items
-      })> _buildGroups(
+  List<_CityGroup> _buildGroups(
     List<ItineraryItem> items,
-    Map<int, String> locationDates,
+    Map<int, _LegDateChip> locationDates,
   ) {
     return [
       for (final leg in tripLegs(items))
@@ -2134,20 +2166,58 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         ),
       );
 
+  /// Shared width for every city-header date chip this build: max over groups
+  /// of icon + range + gap + nights, measured with the exact strings and the
+  /// exact style the chips render, capped at [_chipMaxWidth]. One width for
+  /// all rows is what makes the chips align as columns. Compute it as a
+  /// build-local alongside the groups list — never cache it in state: pinned
+  /// headers rebuild from the same pass as scrolling rows, and a stale cached
+  /// width would misalign them against fresh ones.
+  /// The one chip text style, shared by the chip Texts and the measurement
+  /// so the two cannot drift.
+  TextStyle? _chipTextStyle(ThemeData theme) =>
+      theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.primary);
+
+  double _dateChipWidth(List<_CityGroup> groups, ThemeData theme) {
+    var style = _chipTextStyle(theme);
+    // Text applies the boldText accessibility flag internally; TextPainter
+    // does not — merge it here or measurement undershoots the rendered width.
+    if (MediaQuery.boldTextOf(context)) {
+      style = style?.copyWith(fontWeight: FontWeight.bold);
+    }
+    final tp = TextPainter(
+      textDirection: Directionality.of(context),
+      // The TextScaler object, not a factor: Android 14+ scaling is nonlinear.
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    );
+    double measure(String s) {
+      tp.text = TextSpan(text: s, style: style);
+      tp.layout();
+      // Whole px: a float-exact fit on the widest row would self-ellipsize.
+      return tp.width.ceilToDouble();
+    }
+
+    var w = 0.0;
+    for (final g in groups) {
+      final chip = g.dateRange;
+      if (chip == null) continue;
+      var cw = _chipIconSpan + measure(chip.range);
+      if (chip.nights != null) cw += _chipInnerGap + measure(chip.nights!);
+      if (cw > w) w = cw;
+    }
+    tp.dispose();
+    return w > _chipMaxWidth ? _chipMaxWidth : w;
+  }
+
   /// City group header: name, date range, refine + collapse controls. Pinned
   /// at the top of the scroll area while its group scrolls past; the opaque
   /// Material keeps items from showing through while pinned.
   Widget _cityHeader(
-      Trip trip,
-      ({
-        String key,
-        String label,
-        String? dateRange,
-        List<ItineraryItem> items
-      }) group,
-      ThemeData theme) {
+      Trip trip, _CityGroup group, ThemeData theme, double dateChipWidth) {
     final l10n = context.l10n;
     final cityCollapsed = !_expandedCities.contains(group.key);
+    final chipStyle = _chipTextStyle(theme);
     return HoverReveal(
       builder: (context, revealed) => Material(
         color: theme.scaffoldBackgroundColor,
@@ -2178,46 +2248,99 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
-                    if (group.dateRange != null) ...[
-                      Icon(Icons.event,
-                          size: 14, color: theme.colorScheme.primary),
-                      const SizedBox(width: 4),
+                    if (group.dateRange != null)
+                      // A rigid SizedBox at the per-build shared width
+                      // ([_dateChipWidth]), so calendar icons, range starts,
+                      // and nights suffixes form columns across rows.
                       // Deliberately NOT Flexible: a second flex child would
                       // split the free space with the label's Expanded and
-                      // drag the chip+chevron cluster off the right edge.
-                      // The fixed cap bounds the cluster instead — the
-                      // longest localized chip ("27 ago – 1 sep · 5 noches")
-                      // measures ~175px, so real text never truncates; only
-                      // pathological widths ellipsize rather than overflow.
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 200),
-                        child: Text(
-                          group.dateRange!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelMedium
-                              ?.copyWith(color: theme.colorScheme.primary),
+                      // drag the chip+chevron cluster off the right edge
+                      // (PR #307) — the inner Expanded on the range lives
+                      // inside the chip's own Row, invisible to the outer
+                      // flex accounting, and absorbs any deficit by
+                      // ellipsizing when the shared width hits the
+                      // pathological [_chipMaxWidth] cap; the nights suffix
+                      // keeps its intrinsic width flush right.
+                      MergeSemantics(
+                        // One utterance per chip ("Aug 24 – Aug 27 · 3
+                        // nights"), matching the pre-split reading order.
+                        child: SizedBox(
+                          width: dateChipWidth,
+                          child: Row(
+                            children: [
+                              Icon(Icons.event,
+                                  size: _chipIconSize,
+                                  color: theme.colorScheme.primary),
+                              const SizedBox(width: _chipIconGap),
+                              Expanded(
+                                child: Text(
+                                  group.dateRange!.range,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: chipStyle,
+                                ),
+                              ),
+                              if (group.dateRange!.nights != null) ...[
+                                const SizedBox(width: _chipInnerGap),
+                                ConstrainedBox(
+                                  // Guard: at extreme accessibility scale a
+                                  // nights label alone could exceed the
+                                  // capped chip — bound it so it ellipsizes
+                                  // instead of overflowing the inner Row.
+                                  constraints: const BoxConstraints(
+                                      maxWidth: _chipMaxWidth -
+                                          _chipIconSpan -
+                                          _chipInnerGap),
+                                  child: Text(
+                                    group.dateRange!.nights!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: chipStyle,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
-                    ],
                     // 'Other places' has no hub the section tool can target;
                     // refine also needs the network. Hover-revealed on
                     // pointer devices (always visible on touch) to keep the
-                    // resting row quiet.
-                    if (group.label != _kOtherPlaces &&
-                        trip.canEdit &&
-                        !_isOffline)
-                      HoverRevealed(
-                        revealed: revealed,
-                        child: IconButton(
-                          icon: const Icon(Icons.auto_awesome, size: 16),
-                          tooltip: l10n.tripRefineCity(group.label),
-                          visualDensity: VisualDensity.compact,
-                          color: theme.colorScheme.primary,
-                          onPressed: () =>
-                              _openRefine(trip, RefineTarget.city(group.label)),
-                        ),
-                      ),
+                    // resting row quiet. canEdit/offline are screen-wide —
+                    // when they drop the button they drop it on EVERY row, so
+                    // the chip columns stay aligned. 'Other places' is the
+                    // one per-row variance: it keeps an invisible,
+                    // width-identical placeholder (same IconButton config, so
+                    // density changes can't drift it) or its chip cluster
+                    // would sit a button-slot right of the other rows.
+                    if (trip.canEdit && !_isOffline)
+                      group.label != _kOtherPlaces
+                          ? HoverRevealed(
+                              revealed: revealed,
+                              child: IconButton(
+                                icon: const Icon(Icons.auto_awesome, size: 16),
+                                tooltip: l10n.tripRefineCity(group.label),
+                                visualDensity: VisualDensity.compact,
+                                color: theme.colorScheme.primary,
+                                onPressed: () => _openRefine(
+                                    trip, RefineTarget.city(group.label)),
+                              ),
+                            )
+                          : ExcludeSemantics(
+                              child: IgnorePointer(
+                                child: Opacity(
+                                  opacity: 0,
+                                  // No tooltip: IgnorePointer blocks hover, a
+                                  // ghost tooltip target would outlive it.
+                                  child: IconButton(
+                                    icon: const Icon(Icons.auto_awesome,
+                                        size: 16),
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: null,
+                                  ),
+                                ),
+                              ),
+                            ),
                     const SizedBox(width: 4),
                     Icon(
                       cityCollapsed ? Icons.chevron_right : Icons.expand_more,
@@ -3852,33 +3975,38 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return '$base&query=${Uri.encodeComponent('${it.name} ${it.address ?? ''}'.trim())}';
   }
 
-  /// Maps each itinerary item's position to its location's formatted date range.
+  /// Maps each itinerary item's position to its location's date-chip parts.
   /// Delegates to [visibleLegRanges] so the itinerary labels and the booking
   /// checklist derive dates the same way. The two derivations index-align by
   /// construction: both run the same [tripLegs] split over the same items. The
   /// visible ranges are arrival-adjusted, matching the stay todos — a leg whose
   /// items collapse onto one day reads "Sep 24 – Sep 27", not a bare "Sep 27"
   /// contradicting the stay row beneath it, and a squeezed leg collapses to a
-  /// zero-night stop at its arrival. Multi-night legs carry a nights suffix
-  /// ("Aug 24 – Aug 27 · 3 nights") computed from the same range pair;
-  /// squeezed zero-night legs keep the bare single-date label.
-  Map<int, String> _locationDates(Trip trip) {
+  /// zero-night stop at its arrival. Multi-night legs carry a localized nights
+  /// suffix ("· 3 nights") computed from the same range pair; squeezed
+  /// zero-night legs get `nights: null` and render the bare single date. Both
+  /// strings are final display text — [_dateChipWidth] measures these exact
+  /// strings, never re-formatted copies (the range follows
+  /// Intl.defaultLocale via DateFormat while nights follows the widget
+  /// locale, so re-deriving could measure different text than renders).
+  Map<int, _LegDateChip> _locationDates(Trip trip) {
     final l10n = context.l10n;
     final items = trip.items ?? const <ItineraryItem>[];
     if (items.isEmpty) return const {};
     final ranges = visibleLegRanges(trip);
     final legs = tripLegs(items);
-    final result = <int, String>{};
+    final result = <int, _LegDateChip>{};
     for (var gi = 0; gi < legs.length; gi++) {
       final start = ranges[gi].start;
       final end = ranges[gi].end;
       if (start == null || end == null) continue;
-      final text = _formatRange(start, end);
       final nights = nightsBetween(start, end);
-      final label =
-          nights > 0 ? l10n.tripLegDatesWithNights(text, nights) : text;
+      final chip = (
+        range: _formatRange(start, end),
+        nights: nights > 0 ? l10n.tripLegNights(nights) : null,
+      );
       for (final item in legs[gi].items) {
-        result[item.position] = label;
+        result[item.position] = chip;
       }
     }
     return result;
@@ -4712,6 +4840,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       final filtered = _filtered(trip);
                       final groups =
                           _buildGroups(filtered, _locationDates(trip));
+                      // Shared per-build chip width — see _dateChipWidth's
+                      // doc for why this must stay a build-local.
+                      final dateChipWidth = _dateChipWidth(groups, theme);
                       // Groups default collapsed (empty _expandedCities); a
                       // sole group is seeded open once — a one-city trip
                       // collapsed to a single header line is an empty screen.
@@ -5159,8 +5290,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                             // GlobalKey would break the build.
                                             key: _cityHeaderKeys.putIfAbsent(
                                                 group.key, GlobalKey.new),
-                                            child: _cityHeader(
-                                                trip, group, theme)))
+                                            child: _cityHeader(trip, group,
+                                                theme, dateChipWidth)))
                                   else
                                     MultiSliver(
                                       pushPinnedChildren: true,
@@ -5170,8 +5301,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                                 key: _cityHeaderKeys
                                                     .putIfAbsent(group.key,
                                                         GlobalKey.new),
-                                                child: _cityHeader(
-                                                    trip, group, theme))),
+                                                child: _cityHeader(trip, group,
+                                                    theme, dateChipWidth))),
                                         // Embedded bookings render only in the
                                         // unfiltered view: a category filter can
                                         // merge adjacent same-label runs, which

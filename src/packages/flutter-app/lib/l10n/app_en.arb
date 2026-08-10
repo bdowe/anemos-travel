@@ -829,12 +829,9 @@
       }
     }
   },
-  "tripLegDatesWithNights": "{range} · {count, plural, one{1 night} other{{count} nights}}",
-  "@tripLegDatesWithNights": {
+  "tripLegNights": "· {count, plural, one{1 night} other{{count} nights}}",
+  "@tripLegNights": {
     "placeholders": {
-      "range": {
-        "type": "String"
-      },
       "count": {
         "type": "int"
       }

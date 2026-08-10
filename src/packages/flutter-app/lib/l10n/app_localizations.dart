@@ -2522,11 +2522,11 @@ abstract class AppLocalizations {
   /// **'Tonight: {stays}'**
   String tripTonight(String stays);
 
-  /// No description provided for @tripLegDatesWithNights.
+  /// No description provided for @tripLegNights.
   ///
   /// In en, this message translates to:
-  /// **'{range} · {count, plural, one{1 night} other{{count} nights}}'**
-  String tripLegDatesWithNights(String range, int count);
+  /// **'· {count, plural, one{1 night} other{{count} nights}}'**
+  String tripLegNights(int count);
 
   /// No description provided for @tripTravelMinutes.
   ///

@@ -10,6 +10,7 @@ import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
+import 'support/chip_finders.dart';
 import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
@@ -93,7 +94,8 @@ void main() {
 
     // The Green Turtle Cay group is labelled with the stay's date range
     // plus its night count.
-    expect(find.text('Jun 10 – Jun 12 · 2 nights'), findsOneWidget);
+    expect(chipTextIn('Green Turtle Cay', 'Jun 10 – Jun 12'), findsOneWidget);
+    expect(chipTextIn('Green Turtle Cay', '· 2 nights'), findsOneWidget);
 
     // Groups default collapsed — open both to reach their contents.
     await expandCity(tester, 'Green Turtle Cay');
@@ -156,7 +158,8 @@ void main() {
     expect(find.text('Sat, Jun 13'), findsOneWidget);
 
     // Paris spans days 1–2 -> Jun 10 – Jun 11 (1 night) next to the city name.
-    expect(find.text('Jun 10 – Jun 11 · 1 night'), findsOneWidget);
+    expect(chipTextIn('Paris', 'Jun 10 – Jun 11'), findsOneWidget);
+    expect(chipTextIn('Paris', '· 1 night'), findsOneWidget);
 
     // The Versailles day trip still nests under its day.
     expect(find.text('Day trip · Versailles'), findsOneWidget);

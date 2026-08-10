@@ -13,6 +13,7 @@ import 'package:travel_route_planner/providers/booking_todos_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
+import 'support/chip_finders.dart';
 import 'support/l10n_test_app.dart';
 
 /// Returns a fixed trip without hitting the network, so we can exercise the
@@ -130,8 +131,9 @@ void main() {
     // its bare arrival (zero nights -> no counter) and the next leg follows
     // from it with a night count.
     expect(find.text('Sep 5'), findsNothing);
-    expect(find.text('Sep 6'), findsWidgets);
-    expect(find.text('Sep 6 – Sep 7 · 1 night'), findsWidgets);
+    expect(chipTextIn('Quito', 'Sep 6'), findsOneWidget);
+    expect(chipTextIn('Galápagos', 'Sep 6 – Sep 7'), findsOneWidget);
+    expect(chipTextIn('Galápagos', '· 1 night'), findsOneWidget);
   });
 
   testWidgets('consecutive squeezed legs chain onto the same arrival',
@@ -191,6 +193,7 @@ void main() {
         derived.singleWhere((t) => t['todo_key'] == 'stay:quito');
     expect(quitoStay['depart_date'], '2026-09-03');
     expect(quitoStay['return_date'], '2026-09-05');
-    expect(find.text('Sep 3 – Sep 5 · 2 nights'), findsWidgets);
+    expect(chipTextIn('Quito', 'Sep 3 – Sep 5'), findsOneWidget);
+    expect(chipTextIn('Quito', '· 2 nights'), findsOneWidget);
   });
 }
