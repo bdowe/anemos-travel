@@ -205,6 +205,30 @@ func (q *Queries) SetBookingTodoPosition(ctx context.Context, arg SetBookingTodo
 	return err
 }
 
+const setBookingTodoPositionsBatch = `-- name: SetBookingTodoPositionsBatch :exec
+UPDATE booking_todos b
+SET position = u.pos
+FROM (
+    SELECT unnest($2::uuid[])      AS id,
+           unnest($3::int[]) AS pos
+) AS u
+WHERE b.id = u.id AND b.trip_id = $1::uuid
+`
+
+type SetBookingTodoPositionsBatchParams struct {
+	TripID    uuid.UUID   `json:"trip_id"`
+	Ids       []uuid.UUID `json:"ids"`
+	Positions []int32     `json:"positions"`
+}
+
+// Batch twin of SetBookingTodoPosition: one round trip for the whole reorder.
+// ids and positions are parallel arrays; the trip_id scope mirrors the
+// per-row statement so a foreign id can never move another trip's row.
+func (q *Queries) SetBookingTodoPositionsBatch(ctx context.Context, arg SetBookingTodoPositionsBatchParams) error {
+	_, err := q.db.Exec(ctx, setBookingTodoPositionsBatch, arg.TripID, arg.Ids, arg.Positions)
+	return err
+}
+
 const shiftBookingTodoDates = `-- name: ShiftBookingTodoDates :execrows
 UPDATE booking_todos
 SET depart_date = depart_date + $1::int,
@@ -352,4 +376,82 @@ func (q *Queries) UpsertBookingTodo(ctx context.Context, arg UpsertBookingTodoPa
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const upsertBookingTodosBatch = `-- name: UpsertBookingTodosBatch :exec
+INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto)
+SELECT $1::uuid, u.kind, u.todo_key, u.title,
+       CASE WHEN u.subtitle_null THEN NULL ELSE u.subtitle END,
+       CASE WHEN u.provider_null THEN NULL ELSE u.provider END,
+       CASE WHEN u.search_url_null THEN NULL ELSE u.search_url END,
+       u.depart_date, u.return_date, u.position, true
+FROM (
+    SELECT unnest($2::text[])            AS kind,
+           unnest($3::text[])        AS todo_key,
+           unnest($4::text[])           AS title,
+           unnest($5::text[])        AS subtitle,
+           unnest($6::bool[])   AS subtitle_null,
+           unnest($7::text[])        AS provider,
+           unnest($8::bool[])   AS provider_null,
+           unnest($9::text[])      AS search_url,
+           unnest($10::bool[]) AS search_url_null,
+           unnest($11::date[])     AS depart_date,
+           unnest($12::date[])     AS return_date,
+           unnest($13::int[])         AS position
+) AS u
+ON CONFLICT (trip_id, todo_key) DO UPDATE SET
+    kind = EXCLUDED.kind,
+    title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    provider = EXCLUDED.provider,
+    search_url = EXCLUDED.search_url,
+    depart_date = EXCLUDED.depart_date,
+    return_date = EXCLUDED.return_date,
+    position = EXCLUDED.position
+`
+
+type UpsertBookingTodosBatchParams struct {
+	TripID         uuid.UUID     `json:"trip_id"`
+	Kinds          []string      `json:"kinds"`
+	TodoKeys       []string      `json:"todo_keys"`
+	Titles         []string      `json:"titles"`
+	Subtitles      []string      `json:"subtitles"`
+	SubtitleNulls  []bool        `json:"subtitle_nulls"`
+	Providers      []string      `json:"providers"`
+	ProviderNulls  []bool        `json:"provider_nulls"`
+	SearchUrls     []string      `json:"search_urls"`
+	SearchUrlNulls []bool        `json:"search_url_nulls"`
+	DepartDates    []pgtype.Date `json:"depart_dates"`
+	ReturnDates    []pgtype.Date `json:"return_dates"`
+	Positions      []int32       `json:"positions"`
+}
+
+// Batch twin of UpsertBookingTodo: one round trip for the whole derived set.
+// Same column list and the same ON CONFLICT update set — booked and auto are
+// deliberately absent from DO UPDATE, so a re-sync preserves the booked flag
+// (and never flips a row's auto marker). Nullable date columns ride as
+// date[] with NULL elements; the nullable text columns ride as text[] plus a
+// parallel bool[] null mask, because sqlc maps text[] to []string, which
+// cannot carry NULL elements. The caller must dedupe todo_keys (last
+// occurrence wins, like sequential upserts would) — a single INSERT ... ON
+// CONFLICT cannot update the same row twice. (Parallel single-array unnest
+// calls in one SELECT list expand in lockstep for equal-length arrays;
+// sqlc's catalog lacks the multi-array unnest form.)
+func (q *Queries) UpsertBookingTodosBatch(ctx context.Context, arg UpsertBookingTodosBatchParams) error {
+	_, err := q.db.Exec(ctx, upsertBookingTodosBatch,
+		arg.TripID,
+		arg.Kinds,
+		arg.TodoKeys,
+		arg.Titles,
+		arg.Subtitles,
+		arg.SubtitleNulls,
+		arg.Providers,
+		arg.ProviderNulls,
+		arg.SearchUrls,
+		arg.SearchUrlNulls,
+		arg.DepartDates,
+		arg.ReturnDates,
+		arg.Positions,
+	)
+	return err
 }

@@ -15,6 +15,48 @@ ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     position = EXCLUDED.position
 RETURNING *;
 
+-- name: UpsertBookingTodosBatch :exec
+-- Batch twin of UpsertBookingTodo: one round trip for the whole derived set.
+-- Same column list and the same ON CONFLICT update set — booked and auto are
+-- deliberately absent from DO UPDATE, so a re-sync preserves the booked flag
+-- (and never flips a row's auto marker). Nullable date columns ride as
+-- date[] with NULL elements; the nullable text columns ride as text[] plus a
+-- parallel bool[] null mask, because sqlc maps text[] to []string, which
+-- cannot carry NULL elements. The caller must dedupe todo_keys (last
+-- occurrence wins, like sequential upserts would) — a single INSERT ... ON
+-- CONFLICT cannot update the same row twice. (Parallel single-array unnest
+-- calls in one SELECT list expand in lockstep for equal-length arrays;
+-- sqlc's catalog lacks the multi-array unnest form.)
+INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto)
+SELECT sqlc.arg(trip_id)::uuid, u.kind, u.todo_key, u.title,
+       CASE WHEN u.subtitle_null THEN NULL ELSE u.subtitle END,
+       CASE WHEN u.provider_null THEN NULL ELSE u.provider END,
+       CASE WHEN u.search_url_null THEN NULL ELSE u.search_url END,
+       u.depart_date, u.return_date, u.position, true
+FROM (
+    SELECT unnest(sqlc.arg(kinds)::text[])            AS kind,
+           unnest(sqlc.arg(todo_keys)::text[])        AS todo_key,
+           unnest(sqlc.arg(titles)::text[])           AS title,
+           unnest(sqlc.arg(subtitles)::text[])        AS subtitle,
+           unnest(sqlc.arg(subtitle_nulls)::bool[])   AS subtitle_null,
+           unnest(sqlc.arg(providers)::text[])        AS provider,
+           unnest(sqlc.arg(provider_nulls)::bool[])   AS provider_null,
+           unnest(sqlc.arg(search_urls)::text[])      AS search_url,
+           unnest(sqlc.arg(search_url_nulls)::bool[]) AS search_url_null,
+           unnest(sqlc.arg(depart_dates)::date[])     AS depart_date,
+           unnest(sqlc.arg(return_dates)::date[])     AS return_date,
+           unnest(sqlc.arg(positions)::int[])         AS position
+) AS u
+ON CONFLICT (trip_id, todo_key) DO UPDATE SET
+    kind = EXCLUDED.kind,
+    title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    provider = EXCLUDED.provider,
+    search_url = EXCLUDED.search_url,
+    depart_date = EXCLUDED.depart_date,
+    return_date = EXCLUDED.return_date,
+    position = EXCLUDED.position;
+
 -- name: DeleteStaleAutoBookingTodos :execrows
 DELETE FROM booking_todos
 WHERE trip_id = $1 AND auto = true AND todo_key <> ALL(@keys::text[]);
@@ -46,6 +88,18 @@ RETURNING *;
 
 -- name: SetBookingTodoPosition :exec
 UPDATE booking_todos SET position = $3 WHERE id = $1 AND trip_id = $2;
+
+-- name: SetBookingTodoPositionsBatch :exec
+-- Batch twin of SetBookingTodoPosition: one round trip for the whole reorder.
+-- ids and positions are parallel arrays; the trip_id scope mirrors the
+-- per-row statement so a foreign id can never move another trip's row.
+UPDATE booking_todos b
+SET position = u.pos
+FROM (
+    SELECT unnest(sqlc.arg(ids)::uuid[])      AS id,
+           unnest(sqlc.arg(positions)::int[]) AS pos
+) AS u
+WHERE b.id = u.id AND b.trip_id = sqlc.arg(trip_id)::uuid;
 
 -- name: DeleteBookingTodoNonAuto :execrows
 DELETE FROM booking_todos WHERE id = $1 AND trip_id = $2 AND auto = false;

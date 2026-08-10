@@ -60,8 +60,18 @@ func TestItemOwnerCRUDAndReorder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after[0].ID.String() != ids[0] {
-		t.Fatalf("reorder not applied: first item %s, want %s", after[0].ID, ids[0])
+	if len(after) != len(ids) {
+		t.Fatalf("reorder changed item count: %d, want %d", len(after), len(ids))
+	}
+	// Every item must sit exactly where the submitted order put it (the batch
+	// UPDATE assigns positions 0..n-1 in list order).
+	for i, it := range after {
+		if it.ID.String() != ids[i] {
+			t.Fatalf("reorder not applied at %d: item %s, want %s", i, it.ID, ids[i])
+		}
+		if it.Position != int32(i) {
+			t.Fatalf("item %s position = %d, want %d", it.ID, it.Position, i)
+		}
 	}
 
 	del := doJSON(t, "DELETE", base+"/items/"+newID, token, nil)
