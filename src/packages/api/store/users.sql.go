@@ -115,6 +115,38 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
+const getUserDisplayNames = `-- name: GetUserDisplayNames :many
+SELECT id, display_name FROM users WHERE id = ANY($1::uuid[])
+`
+
+type GetUserDisplayNamesRow struct {
+	ID          uuid.UUID `json:"id"`
+	DisplayName *string   `json:"display_name"`
+}
+
+// Batch display-name lookup for response attribution (owner name + last-editor
+// name on the trip view) — one round trip instead of N GetUserByID calls.
+// Array-param pattern per query/admin.sql / query/price_alerts.sql.
+func (q *Queries) GetUserDisplayNames(ctx context.Context, dollar_1 []uuid.UUID) ([]GetUserDisplayNamesRow, error) {
+	rows, err := q.db.Query(ctx, getUserDisplayNames, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserDisplayNamesRow
+	for rows.Next() {
+		var i GetUserDisplayNamesRow
+		if err := rows.Scan(&i.ID, &i.DisplayName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAdminUsers = `-- name: ListAdminUsers :many
 SELECT id, email, display_name
 FROM users

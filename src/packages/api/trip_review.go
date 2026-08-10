@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/sync/errgroup"
 
 	"travel-route-planner/store"
 )
@@ -676,9 +677,11 @@ func checkWeather(ctx context.Context, locale string, d exportData, weather *Wea
 		}
 	}
 
-	var out []Finding
-	for _, city := range order {
-		days := cityDays[city]
+	// cityFindings is checkWeather's per-city body: one GetTripWeather lookup
+	// spanning the city's trip days, matched back day-by-day. Returns nil on
+	// any provider error or empty report (best-effort, as before).
+	cityFindings := func(city string, days map[int]*dayInfo) []Finding {
+		var out []Finding
 		var first, last time.Time
 		for _, di := range days {
 			if first.IsZero() || di.date.Before(first) {
@@ -690,7 +693,7 @@ func checkWeather(ctx context.Context, locale string, d exportData, weather *Wea
 		}
 		report, err := weather.GetTripWeather(ctx, city, first.Format(dateLayout), last.Format(dateLayout))
 		if err != nil || len(report.Days) == 0 {
-			continue // best-effort
+			return nil // best-effort
 		}
 		// Index the report by day. A forecast carries real (this-year) dates —
 		// match exact. The archive fallback carries LAST year's dates for the
@@ -743,6 +746,30 @@ func checkWeather(ctx context.Context, locale string, d exportData, weather *Wea
 				})
 			}
 		}
+		return out
+	}
+
+	// One lookup per city, fanned out with a small concurrency cap (the
+	// service is TTL-cached and keyless, but stay polite). Findings order is
+	// user-visible, so each city's findings land in the slot indexed by its
+	// position in `order` and are appended in order after Wait. Best-effort
+	// semantics are unchanged: the goroutines always return nil, so a
+	// per-city provider error skips that city, never fails the review.
+	perCity := make([][]Finding, len(order))
+	var g errgroup.Group
+	g.SetLimit(4)
+	for i, city := range order {
+		i, city := i, city
+		days := cityDays[city]
+		g.Go(func() error {
+			perCity[i] = cityFindings(city, days)
+			return nil
+		})
+	}
+	_ = g.Wait() // never errors; Wait just joins the goroutines
+	var out []Finding
+	for _, findings := range perCity {
+		out = append(out, findings...)
 	}
 	return out
 }
