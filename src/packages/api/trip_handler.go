@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/sync/errgroup"
 
 	"travel-route-planner/store"
 )
@@ -435,42 +436,118 @@ func getTripHandler(w http.ResponseWriter, r *http.Request) {
 		Summary: row.Summary, UpdatedBy: row.UpdatedBy, TravelMode: row.TravelMode,
 	}
 	q := store.New(dbPool)
-	items, err := q.GetItineraryItemsByTrip(r.Context(), trip.ID)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "could not load itinerary")
-		return
-	}
+	// The reads below are independent of each other — fan them out on the
+	// pool (pgxpool handles concurrent acquires) instead of paying serial
+	// round-trip latency. Every permission branch is unchanged; only the
+	// scheduling differs. Each goroutine writes its own variable, so there
+	// is no shared mutable state until g.Wait() returns.
+	g, ctx := errgroup.WithContext(r.Context())
+	var (
+		items          []store.ItineraryItem
+		accommodations []store.Accommodation
+		segments       []store.TripSegment
+		bookingTodos   []store.BookingTodo
+		ownerName      *string
+		updatedByName  *string
+		shared         bool
+	)
+	g.Go(func() error {
+		var err error
+		items, err = q.GetItineraryItemsByTrip(ctx, trip.ID)
+		if err != nil {
+			return errors.New("could not load itinerary")
+		}
+		return nil
+	})
 	// Suggested booking drafts (auto=true) are editor-facing working state;
 	// viewer follows get confirmed rows only, matching the public share view.
-	var accommodations []store.Accommodation
-	var segments []store.TripSegment
-	if row.Access == "viewer" {
-		accommodations, err = q.ListConfirmedAccommodationsByTrip(r.Context(), trip.ID)
-	} else {
-		accommodations, err = q.ListAccommodationsByTrip(r.Context(), trip.ID)
-	}
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "could not load accommodations")
-		return
-	}
-	if row.Access == "viewer" {
-		segments, err = q.ListConfirmedSegmentsByTrip(r.Context(), trip.ID)
-	} else {
-		segments, err = q.ListSegmentsByTrip(r.Context(), trip.ID)
-	}
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "could not load segments")
-		return
-	}
+	g.Go(func() error {
+		var err error
+		if row.Access == "viewer" {
+			accommodations, err = q.ListConfirmedAccommodationsByTrip(ctx, trip.ID)
+		} else {
+			accommodations, err = q.ListAccommodationsByTrip(ctx, trip.ID)
+		}
+		if err != nil {
+			return errors.New("could not load accommodations")
+		}
+		return nil
+	})
+	g.Go(func() error {
+		var err error
+		if row.Access == "viewer" {
+			segments, err = q.ListConfirmedSegmentsByTrip(ctx, trip.ID)
+		} else {
+			segments, err = q.ListSegmentsByTrip(ctx, trip.ID)
+		}
+		if err != nil {
+			return errors.New("could not load segments")
+		}
+		return nil
+	})
 	// Booking todos encode the owner's booking state and prices — viewer
 	// follows don't get them, matching the public share view's boundary.
-	var bookingTodos []store.BookingTodo
 	if row.Access != "viewer" {
-		bookingTodos, err = q.ListBookingTodosByTrip(r.Context(), trip.ID)
-		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "could not load booking todos")
-			return
-		}
+		g.Go(func() error {
+			var err error
+			bookingTodos, err = q.ListBookingTodosByTrip(ctx, trip.ID)
+			if err != nil {
+				return errors.New("could not load booking todos")
+			}
+			return nil
+		})
+	}
+	// Display-name attribution: owner name (for collaborators) and last-editor
+	// name resolve from ONE batch lookup. Best-effort like the old per-id
+	// GetUserByID calls — a lookup failure just omits the names.
+	needOwnerName := row.Access != "owner"
+	needEditorName := trip.UpdatedBy.Valid && trip.UpdatedBy.Bytes != user.ID
+	if needOwnerName || needEditorName {
+		g.Go(func() error {
+			ids := make([]uuid.UUID, 0, 2)
+			if needOwnerName {
+				ids = append(ids, trip.UserID)
+			}
+			if needEditorName {
+				ids = append(ids, trip.UpdatedBy.Bytes)
+			}
+			rows, err := q.GetUserDisplayNames(ctx, ids)
+			if err != nil {
+				return nil // best-effort
+			}
+			names := make(map[uuid.UUID]*string, len(rows))
+			for _, u := range rows {
+				names[u.ID] = u.DisplayName
+			}
+			if needOwnerName {
+				if n := names[trip.UserID]; n != nil && *n != "" {
+					ownerName = n
+				}
+			}
+			if needEditorName {
+				if n := names[trip.UpdatedBy.Bytes]; n != nil && *n != "" {
+					updatedByName = n
+				}
+			}
+			return nil
+		})
+	}
+	// Tell the owner's client this trip has co-planners (worth polling for
+	// freshness). Editors know to poll from access alone. Best-effort.
+	if trip.UserID == user.ID && trip.ChatID != nil {
+		chatID := *trip.ChatID
+		g.Go(func() error {
+			if s, err := q.HasActiveCollaborators(ctx, store.HasActiveCollaboratorsParams{
+				OwnerID: trip.UserID, ChatID: chatID,
+			}); err == nil {
+				shared = s
+			}
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	resp := toTripResponse(trip, items, accommodations, segments, bookingTodos)
 	resp.Legs = tripLegsResponse(trip, items, accommodations)
@@ -480,27 +557,11 @@ func getTripHandler(w http.ResponseWriter, r *http.Request) {
 		// freeform /plan chat with it would fork the lineage under their own
 		// account. Refine binds by trip_id, so members never need it.
 		resp.ChatID = nil
-		if owner, err := q.GetUserByID(r.Context(), trip.UserID); err == nil &&
-			owner.DisplayName != nil && *owner.DisplayName != "" {
-			resp.OwnerName = owner.DisplayName
-		}
+		resp.OwnerName = ownerName
 	}
 	// "Updated by X" attribution — omitted for the caller's own edits.
-	if trip.UpdatedBy.Valid && trip.UpdatedBy.Bytes != user.ID {
-		if editor, err := q.GetUserByID(r.Context(), trip.UpdatedBy.Bytes); err == nil &&
-			editor.DisplayName != nil && *editor.DisplayName != "" {
-			resp.UpdatedByName = editor.DisplayName
-		}
-	}
-	// Tell the owner's client this trip has co-planners (worth polling for
-	// freshness). Editors know to poll from access alone.
-	if trip.UserID == user.ID && trip.ChatID != nil {
-		if shared, err := q.HasActiveCollaborators(r.Context(), store.HasActiveCollaboratorsParams{
-			OwnerID: trip.UserID, ChatID: *trip.ChatID,
-		}); err == nil {
-			resp.Shared = shared
-		}
-	}
+	resp.UpdatedByName = updatedByName
+	resp.Shared = shared
 	writeJSON(w, http.StatusOK, resp)
 }
 

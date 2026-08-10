@@ -48,6 +48,12 @@ RETURNING *;
 -- name: DeleteUser :execrows
 DELETE FROM users WHERE id = $1;
 
+-- name: GetUserDisplayNames :many
+-- Batch display-name lookup for response attribution (owner name + last-editor
+-- name on the trip view) — one round trip instead of N GetUserByID calls.
+-- Array-param pattern per query/admin.sql / query/price_alerts.sql.
+SELECT id, display_name FROM users WHERE id = ANY($1::uuid[]);
+
 -- name: ListAdminUsers :many
 -- All admin accounts (is_admin = true), for operational fan-out such as the
 -- ops-health degradation alert. Returns just what an alert needs: id + email +
