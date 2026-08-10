@@ -47,6 +47,16 @@ class PreferencesNotifier extends StateNotifier<PreferencesState> {
     }
   }
 
+  /// Loads preferences only when they aren't already in state. Preferences
+  /// change in-session solely through [save] (profile sheet / onboarding),
+  /// which updates state here, so a loaded copy never goes stale — this
+  /// method is the one place that decides whether a network load is needed.
+  /// A previous failed load (prefs still null) retries, matching [load].
+  Future<void> loadIfNeeded() async {
+    if (state.prefs != null) return;
+    await load();
+  }
+
   Future<bool> save({
     String? budget,
     String? pace,

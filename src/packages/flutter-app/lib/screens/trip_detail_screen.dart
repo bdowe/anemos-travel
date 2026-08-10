@@ -437,14 +437,25 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               status: trip.status,
             );
       }
-      // Load the home airport so the booking checklist can derive the outbound
-      // and return flights (no-op / null for anonymous sessions).
-      await ref.read(preferencesProvider.notifier).load();
-      _homeAirport = ref.read(preferencesProvider).prefs?.homeAirport;
-      if (mounted && (trip.items ?? const []).isNotEmpty) {
-        await _syncBookingTodos(trip);
-        await _computeTravelTimes(trip);
+      // The travel-time computation needs only the trip, while the booking-todo
+      // sync must wait for the home airport from preferences (the checklist
+      // derives the outbound and return flights from it; no-op / null for
+      // anonymous sessions). Run the two chains concurrently and join, so
+      // _load's completion, error, and offline semantics are unchanged — both
+      // helpers self-guard with mounted checks and swallow their own errors.
+      Future<void> syncTodosAfterPrefs() async {
+        await ref.read(preferencesProvider.notifier).loadIfNeeded();
+        _homeAirport = ref.read(preferencesProvider).prefs?.homeAirport;
+        if (mounted && (trip.items ?? const []).isNotEmpty) {
+          await _syncBookingTodos(trip);
+        }
       }
+
+      await Future.wait([
+        if (mounted && (trip.items ?? const []).isNotEmpty)
+          _computeTravelTimes(trip),
+        syncTodosAfterPrefs(),
+      ]);
     } catch (e) {
       // Loud path + network-level failure: fall back to the cached copy and
       // render it read-only. HTTP errors (403/404/500) never reach here —
