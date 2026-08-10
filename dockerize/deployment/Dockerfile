@@ -59,6 +59,7 @@ FROM nginx:alpine
 # separately so both shells can include/rely on them.
 COPY dockerize/deployment/nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY dockerize/deployment/nginx/share-prerender-map.conf /etc/nginx/conf.d/share-prerender-map.conf
+COPY dockerize/deployment/nginx/perf.conf /etc/nginx/conf.d/perf.conf
 COPY dockerize/deployment/nginx/snippets/ /etc/nginx/snippets/
 COPY dockerize/static /usr/share/nginx/html/static
 COPY --from=flutter-build /app/build/web /usr/share/nginx/html/app

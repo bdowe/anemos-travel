@@ -124,11 +124,20 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	// Tell nginx to never buffer this response, independent of location
+	// config — belt and braces with the gateway's dedicated /plan lane.
+	w.Header().Set("X-Accel-Buffering", "no")
 
 	if _, ok := w.(http.Flusher); !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
 		return
 	}
+	// Priming SSE comment, flushed before any body parsing or DB work:
+	// commits nginx/Cloudflare to streaming mode and gives the browser
+	// instant TTFB. The Dart client only parses `data: ` lines, so a
+	// comment frame is invisible to it.
+	fmt.Fprint(w, ": stream-open\n\n")
+	w.(http.Flusher).Flush()
 
 	// Overall wall-clock ceiling on the whole request (see planMaxDuration): a
 	// stuck stream eventually closes and frees its goroutine + concurrency slot.
