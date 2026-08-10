@@ -56,9 +56,6 @@ dependencies:
   # JSON serialization
   json_annotation: ^4.8.1
   
-  # UI components
-  material_design_icons_flutter: ^7.0.7296
-
   # Secure on-device storage for the session token
   flutter_secure_storage: ^9.2.2
 

@@ -44,7 +44,15 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(tripsProvider.notifier).loadTrips();
-      ref.invalidate(resumableChatsProvider);
+      // Boot dedup: this screen mounts at shell boot (IndexedStack keeps all
+      // tabs alive), when HomeScreen's very first resumable-chats fetch is
+      // still in flight — invalidating then would throw that request away and
+      // issue a duplicate /chats call. Skip the refresh while a fetch is
+      // already loading; on later remounts the provider has data (or an
+      // error) and the refresh proceeds as before.
+      if (!ref.read(resumableChatsProvider).isLoading) {
+        ref.invalidate(resumableChatsProvider);
+      }
       ref.invalidate(sharedWithMeProvider);
     });
   }
