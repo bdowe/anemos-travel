@@ -460,13 +460,15 @@ func reorderItineraryItemsHandler(w http.ResponseWriter, r *http.Request) {
 		seen[id] = true
 		ordered = append(ordered, id)
 	}
-	for pos, id := range ordered {
-		if err := q.SetItineraryItemPosition(ctx, store.SetItineraryItemPositionParams{
-			ID: id, TripID: tripID, Position: int32(pos),
-		}); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "could not reorder itinerary")
-			return
-		}
+	positions := make([]int32, len(ordered))
+	for pos := range ordered {
+		positions[pos] = int32(pos)
+	}
+	if err := q.SetItineraryItemPositionsBatch(ctx, store.SetItineraryItemPositionsBatchParams{
+		TripID: tripID, Ids: ordered, Positions: positions,
+	}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "could not reorder itinerary")
+		return
 	}
 	if err := q.TouchTrip(ctx, touchedBy(tripID, r)); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not reorder itinerary")

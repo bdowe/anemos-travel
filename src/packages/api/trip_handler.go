@@ -318,13 +318,19 @@ func persistTrip(ctx context.Context, userID uuid.UUID, chatID, title, summary, 
 		return "", false, err
 	}
 
+	// Bulk insert (COPY) instead of a round trip per item — the per-row
+	// results were always discarded. maxDay stays computed in Go.
 	maxDay := 1
+	rows := make([]store.CreateItineraryItemsParams, 0, len(locations))
 	for i, loc := range locations {
 		params := itemParamsFromLocation(trip.ID, int32(i), loc)
 		if params.Day != nil && int(*params.Day) > maxDay {
 			maxDay = int(*params.Day)
 		}
-		if _, err := q.CreateItineraryItem(ctx, params); err != nil {
+		rows = append(rows, store.CreateItineraryItemsParams(params))
+	}
+	if len(rows) > 0 {
+		if _, err := q.CreateItineraryItems(ctx, rows); err != nil {
 			return "", false, err
 		}
 	}

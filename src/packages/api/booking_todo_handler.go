@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"travel-route-planner/store"
 )
@@ -155,6 +156,11 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 
 	q := store.New(dbPool)
 	keys := make([]string, 0, len(derived))
+	// One batch upsert instead of a round trip per row. The batch statement
+	// cannot touch the same (trip_id, todo_key) twice, so duplicate keys are
+	// collapsed last-wins — the same final state sequential upserts produced.
+	rows := make([]store.UpsertBookingTodoParams, 0, len(derived))
+	rowIdx := make(map[string]int, len(derived))
 	for _, d := range derived {
 		kind := strings.TrimSpace(d.Kind)
 		if !allowedBookingKinds[kind] || strings.TrimSpace(d.TodoKey) == "" || strings.TrimSpace(d.Title) == "" {
@@ -176,7 +182,7 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 		if providerPtr == nil {
 			providerPtr = d.Provider
 		}
-		if _, err := q.UpsertBookingTodo(r.Context(), store.UpsertBookingTodoParams{
+		row := store.UpsertBookingTodoParams{
 			TripID:     tripID,
 			Kind:       kind,
 			TodoKey:    d.TodoKey,
@@ -187,11 +193,20 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 			DepartDate: depart,
 			ReturnDate: ret,
 			Position:   int32(d.Position),
-		}); err != nil {
+		}
+		if i, seen := rowIdx[d.TodoKey]; seen {
+			rows[i] = row
+		} else {
+			rowIdx[d.TodoKey] = len(rows)
+			rows = append(rows, row)
+		}
+		keys = append(keys, d.TodoKey)
+	}
+	if len(rows) > 0 {
+		if err := q.UpsertBookingTodosBatch(r.Context(), upsertBookingTodosBatchParams(tripID, rows)); err != nil {
 			writeJSONError(w, http.StatusInternalServerError, "could not save booking todo")
 			return
 		}
-		keys = append(keys, d.TodoKey)
 	}
 
 	if _, err := q.DeleteStaleAutoBookingTodos(r.Context(), store.DeleteStaleAutoBookingTodosParams{
@@ -203,6 +218,53 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeBookingTodos(w, r, tripID)
+}
+
+// upsertBookingTodosBatchParams flattens per-row upsert params into the
+// parallel arrays UpsertBookingTodosBatch takes. sqlc types text[] as
+// []string (no NULL elements), so each nullable text column travels as a
+// value array plus a bool null mask — the statement restores NULLs, keeping
+// stored rows byte-identical to what per-row UpsertBookingTodo wrote.
+func upsertBookingTodosBatchParams(tripID uuid.UUID, rows []store.UpsertBookingTodoParams) store.UpsertBookingTodosBatchParams {
+	p := store.UpsertBookingTodosBatchParams{
+		TripID:         tripID,
+		Kinds:          make([]string, len(rows)),
+		TodoKeys:       make([]string, len(rows)),
+		Titles:         make([]string, len(rows)),
+		Subtitles:      make([]string, len(rows)),
+		SubtitleNulls:  make([]bool, len(rows)),
+		Providers:      make([]string, len(rows)),
+		ProviderNulls:  make([]bool, len(rows)),
+		SearchUrls:     make([]string, len(rows)),
+		SearchUrlNulls: make([]bool, len(rows)),
+		DepartDates:    make([]pgtype.Date, len(rows)),
+		ReturnDates:    make([]pgtype.Date, len(rows)),
+		Positions:      make([]int32, len(rows)),
+	}
+	for i, r := range rows {
+		p.Kinds[i] = r.Kind
+		p.TodoKeys[i] = r.TodoKey
+		p.Titles[i] = r.Title
+		if r.Subtitle != nil {
+			p.Subtitles[i] = *r.Subtitle
+		} else {
+			p.SubtitleNulls[i] = true
+		}
+		if r.Provider != nil {
+			p.Providers[i] = *r.Provider
+		} else {
+			p.ProviderNulls[i] = true
+		}
+		if r.SearchUrl != nil {
+			p.SearchUrls[i] = *r.SearchUrl
+		} else {
+			p.SearchUrlNulls[i] = true
+		}
+		p.DepartDates[i] = r.DepartDate
+		p.ReturnDates[i] = r.ReturnDate
+		p.Positions[i] = r.Position
+	}
+	return p
 }
 
 type AddBookingTodoRequest struct {
@@ -503,13 +565,15 @@ func reorderBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 		seen[id] = true
 		ordered = append(ordered, id)
 	}
-	for pos, id := range ordered {
-		if err := q.SetBookingTodoPosition(ctx, store.SetBookingTodoPositionParams{
-			ID: id, TripID: tripID, Position: int32(pos),
-		}); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "could not reorder booking todos")
-			return
-		}
+	positions := make([]int32, len(ordered))
+	for pos := range ordered {
+		positions[pos] = int32(pos)
+	}
+	if err := q.SetBookingTodoPositionsBatch(ctx, store.SetBookingTodoPositionsBatchParams{
+		TripID: tripID, Ids: ordered, Positions: positions,
+	}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "could not reorder booking todos")
+		return
 	}
 	if err := q.TouchTrip(ctx, touchedBy(tripID, r)); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not reorder booking todos")
