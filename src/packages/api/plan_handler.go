@@ -332,8 +332,9 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Persist the conversation from its very first turn so leaving
 	// mid-discussion never loses it (specs/continue-where-you-left-off).
-	// Two best-effort writes: a synchronous one now, so the user's message
-	// survives even if the stream dies immediately, and a deferred one that
+	// Two best-effort writes: an async one started now (off the SSE hot
+	// path), so the user's message survives even if the stream dies
+	// immediately, and a deferred one — ordered strictly after it — that
 	// appends whatever assistant text streamed — the same text the client
 	// commits, on both its success and error paths. When compaction ran this
 	// turn, the compacted history + new summary are stored instead of the raw
@@ -358,13 +359,34 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 			// the summary carried separately — store it the same way.
 			persistMsgs, persistSummary = req.Messages[1:], req.Summary
 		}
-		savePlanChatSession(ctx, uid, req.ChatID, persistSummary, persistMsgs)
+		// The start-of-turn save runs off the hot path: a whole-transcript
+		// JSONB upsert before the model call would delay time-to-first-token.
+		// It gets its own background context — a canceled stream (client
+		// abort, timeout) must not cancel this write, because the user's
+		// message surviving a dead stream is the entire point of it.
+		//
+		// Ordering contract (what a consumer observes after the turn): the
+		// deferred end-of-turn save below awaits startSaved before writing, so
+		// the two upserts always land start → final and the stored row after
+		// the handler returns is the final assistant-text-bearing transcript —
+		// a slow start upsert can never overwrite it. startSaved closes even
+		// if the save panics (the deferred close unwinds before safeGo's
+		// recover), so the final save can never deadlock; its wait is bounded
+		// by the start save's own 5 s timeout.
+		startSaved := make(chan struct{})
+		safeGo("savePlanChatSessionStart", func() {
+			defer close(startSaved)
+			sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			savePlanChatSession(sctx, uid, req.ChatID, persistSummary, persistMsgs)
+		})
 		defer func() {
 			msgs := persistMsgs
 			if t := turnText.String(); t != "" {
 				msgs = append(append([]PlanChatMessage{}, persistMsgs...),
 					PlanChatMessage{Role: "assistant", Content: t})
 			}
+			<-startSaved // start → final ordering; see contract above
 			// The request context is gone once the handler returns.
 			dctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
