@@ -15,6 +15,7 @@ import 'package:travel_route_planner/providers/preferences_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
+import 'support/chip_finders.dart';
 import 'support/l10n_test_app.dart';
 
 /// Returns a fixed trip without hitting the network, so we can exercise the
@@ -171,7 +172,10 @@ void main() {
 
     // Header shows the anchored range with its night count, not a bare
     // end date.
-    expect(find.text('Aug 24 – Aug 27 · 3 nights'), findsWidgets);
+    // Scoped to Prague's row: the count must sit in the SAME chip as the
+    // anchored range (nights from the same visibleLegRanges pair).
+    expect(chipTextIn('Prague', 'Aug 24 – Aug 27'), findsOneWidget);
+    expect(chipTextIn('Prague', '· 3 nights'), findsOneWidget);
     expect(find.text('Aug 27'), findsNothing);
 
     // The prefs load is async and can re-trigger the derivation — assert on
@@ -233,7 +237,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Aug 26 – Aug 28 · 2 nights'), findsWidgets);
+    // Scoped to Madrid's row — Gothenburg is ALSO 2 nights, so a global
+    // find would be satisfied by the wrong chip.
+    expect(chipTextIn('Madrid', 'Aug 26 – Aug 28'), findsOneWidget);
+    expect(chipTextIn('Madrid', '· 2 nights'), findsOneWidget);
     expect(find.text('Aug 28'), findsNothing);
   });
 }

@@ -404,7 +404,7 @@
   "tripDayTripTo": "Excursión · {town}",
   "tripDayTripFallback": "Excursión",
   "tripTonight": "Esta noche: {stays}",
-  "tripLegDatesWithNights": "{range} · {count, plural, one{1 noche} other{{count} noches}}",
+  "tripLegNights": "· {count, plural, one{1 noche} other{{count} noches}}",
   "tripTravelMinutes": "{minutes} min",
   "tripTravelHours": "{hours} h",
   "tripTravelHoursMinutes": "{hours} h {minutes} min",
