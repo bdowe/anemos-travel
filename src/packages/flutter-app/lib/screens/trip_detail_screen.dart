@@ -157,7 +157,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // Reset on every lens change so the lens always opens at All; clamped in
   // _bookingsLensBody against the current leg labels (edits can stale it).
   String? _bookingsLensDestination;
-  int? _selectedDay; // map day-chip selection; null = All (specs/today-mode)
+  // Map day-chip selection; null = All (specs/today-mode). A ValueNotifier
+  // so a day-chip tap rebuilds only the map card's ListenableBuilder, never
+  // the whole screen. May hold a stale out-of-range day after an edit
+  // shrinks the trip — readers clamp via _clampedDay (read-side, so build
+  // never mutates state).
+  final ValueNotifier<int?> _selectedDay = ValueNotifier<int?>(null);
   // Whether the map renders as the wide layout's pinned header (true) or the
   // phone layout's scroll-away tap-to-expand card (false). Assigned each
   // build from the body width; also feeds the Today-scroll chrome math.
@@ -182,8 +187,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // _expandedCities.
   final Map<String, GlobalKey> _dayHeaderKeys = {};
   final Map<String, GlobalKey> _cityHeaderKeys = {};
-  int?
-      _selectedPosition; // position of the place focused via a map pin / list tap
+  // Position of the place focused via a map pin / list tap. A ValueNotifier
+  // consumed by the map card's ListenableBuilder and each item tile, so
+  // selecting a place rebuilds the map subtree + visible tiles — never the
+  // whole screen, and (via TripMap's marker cache) never re-clusters.
+  final ValueNotifier<int?> _selectedPosition = ValueNotifier<int?>(null);
   List<BookingTodo> _bookingTodos = [];
   // Mutable copies of the trip's stays/segments, like _bookingTodos, so the
   // booked checkboxes can flip optimistically without rebuilding the
@@ -289,6 +297,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     WidgetsBinding.instance.removeObserver(this);
     _statusPoll?.cancel();
     _scroll.dispose();
+    _selectedDay.dispose();
+    _selectedPosition.dispose();
     super.dispose();
   }
 
@@ -585,7 +595,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       return;
     }
     _autoScrolledToday = true;
-    _selectedDay = today; // map day-chip preselect
+    _selectedDay.value = today; // map day-chip preselect
     // The scroll itself waits for the first build that actually shows the
     // scroll view: this setState still renders the loading spinner (the
     // loud path clears _loading later, in its finally), so a post-frame
@@ -3100,12 +3110,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   Widget _itemTile(ItineraryItem item, double indentLeft, ThemeData theme,
           {Widget? dragHandle}) =>
-      // Secondary controls (maps link, kebab, drag handle) reveal on hover:
-      // opacity-only, so layout never shifts, drag geometry stays stable for
-      // the reorderable list, and touch devices (no mouse) keep them
-      // permanently visible. The time-of-day chip is content, not a control
-      // — it stays.
-      HoverReveal(
+      // Selection is notifier-driven (see _selectedPosition): each tile
+      // listens itself, so selecting a place rebuilds only the visible
+      // tiles rather than the whole screen.
+      ValueListenableBuilder<int?>(
+        valueListenable: _selectedPosition,
+        builder: (context, selectedPos, _) =>
+            // Secondary controls (maps link, kebab, drag handle) reveal on
+            // hover: opacity-only, so layout never shifts, drag geometry
+            // stays stable for the reorderable list, and touch devices (no
+            // mouse) keep them permanently visible. The time-of-day chip is
+            // content, not a control — it stays.
+            HoverReveal(
         builder: (context, revealed) => Padding(
           padding: EdgeInsets.only(left: indentLeft),
           child: ListTile(
@@ -3174,12 +3190,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               ),
             ],
           ),
-          selected: _selectedPosition == item.position,
+          selected: selectedPos == item.position,
           selectedTileColor:
               theme.colorScheme.primary.withValues(alpha: 0.08),
           // The map is pinned and always on screen, so tapping an item only
-          // needs to update the selection; TripMap recenters on the new pin.
-          onTap: () => setState(() => _selectedPosition = item.position),
+          // needs to update the selection; the notifier rebuilds the map
+          // card (TripMap recenters) and the visible tiles — no setState.
+          onTap: () => _selectedPosition.value = item.position,
+        ),
         ),
         ),
       );
@@ -4247,100 +4265,134 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   }) {
     final derivation = _derive(trip);
     final endpoints = derivation.homeLegEndpoints;
-    final home = homeOverlayFor(
-      ref,
-      homeAirport: _homeAirport,
-      day: _selectedDay,
-      dayCount: mapDayCount,
-      firstCityPoint: endpoints.first,
-      lastCityPoint: endpoints.last,
-    );
-    Widget map = TripMap(
-      items: derivation.dayFilteredItems(_selectedDay),
-      accommodations: derivation.dayFilteredStays(_selectedDay),
-      destinations:
-          _selectedDay == null ? derivation.mapDestinations : null,
-      selectedPosition: _selectedPosition,
-      // Unfiltered by day: TripMap's position+1 adjacency guard drops labels
-      // across the gaps a day filter creates, and the category filter
-      // already empties this map.
-      segmentLabels: derivation.segmentLabels,
-      home: home,
-      fitSignature: _selectedDay,
-      // Keep fitted markers clear of the chip row overlaid below.
-      topOverlayInset: mapDayCount > 0 ? MapDayChips.mapTopInset : 0,
-      interactive: !expandable,
-      emptyLabel: _selectedDay == null
-          ? l10n.tripNoMappedPlaces
-          : l10n.tripNoPlacesOnDay(_selectedDay!),
-      emptyMessage: _isOffline ? null : l10n.tripAddPlaceMapHint,
-      // The preview absorbs pointers, so its empty-state CTA could never be
-      // tapped; the pinned "+ Add place" button sits right below anyway.
-      emptyAction: (expandable || _isOffline || _readOnly)
-          ? null
-          : FilledButton.tonalIcon(
-              onPressed: () => _addPlace(day: _selectedDay),
-              icon: const Icon(Icons.add, size: 18),
-              label: Text(l10n.tripAddPlace),
-            ),
-      onPinTap: expandable
-          ? null
-          : (pos) {
-              final it = trip.items!.firstWhere((i) => i.position == pos);
-              setState(() {
-                _selectedPosition = pos;
-                // The highlighted row can only be seen if its run renders:
-                // groups default collapsed, so open the tapped item's run.
-                for (final leg in _derive(trip).legs) {
-                  if (leg.items.any((i) => i.position == pos)) {
-                    _expandedCities.add(leg.key);
-                  }
-                }
-              });
-              _showSnack(it.name);
-            },
-      onExpand: expandable
-          ? null
-          : () => _openFullMap(trip, mapDayCount, mappedDays),
-    );
-    if (expandable) {
-      map = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _openFullMap(trip, mapDayCount, mappedDays),
-        child: AbsorbPointer(child: map),
-      );
-    }
-    return ClipRRect(
-      borderRadius: AppRadius.lgAll,
-      child: Stack(
-        children: [
-          Positioned.fill(child: map),
-          // Above the map's gesture layer, so chip taps and row scrolls
-          // never pan the map.
-          Positioned(
-            top: 8,
-            left: 8,
-            right: 8,
-            child: MapDayChips(
+    // Day + selection live in ValueNotifiers: this builder — not the whole
+    // screen — is what a day-chip tap or pin/row selection rebuilds. The
+    // day-filtered lists come from the derivation's lazy per-day caches, so
+    // a selection-only rebuild passes TripMap the identical lists and its
+    // marker cache skips re-clustering.
+    return ListenableBuilder(
+      listenable: Listenable.merge([_selectedDay, _selectedPosition]),
+      builder: (context, _) {
+        final day = _clampedDay(mapDayCount);
+        // Consumer, not the screen's ref: homeOverlayFor watches the
+        // home-airport resolution provider, and that watch belongs to the
+        // map subtree — resolution landing must not rebuild the screen.
+        Widget map = Consumer(
+          builder: (context, ref, _) {
+            final home = homeOverlayFor(
+              ref,
+              homeAirport: _homeAirport,
+              day: day,
               dayCount: mapDayCount,
-              selected: _selectedDay,
-              mappedDays: mappedDays,
-              onSelected: (d) => setState(() => _selectedDay = d),
-            ),
-          ),
-          if (expandable)
-            Positioned(
-              right: 8,
-              bottom: 8,
-              child: MapControlButton(
-                icon: Icons.fullscreen,
-                tooltip: l10n.tripExpandMap,
-                onTap: () => _openFullMap(trip, mapDayCount, mappedDays),
+              firstCityPoint: endpoints.first,
+              lastCityPoint: endpoints.last,
+            );
+            return TripMap(
+              items: derivation.dayFilteredItems(day),
+              accommodations: derivation.dayFilteredStays(day),
+              destinations: day == null ? derivation.mapDestinations : null,
+              selectedPosition: _selectedPosition.value,
+              // Unfiltered by day: TripMap's position+1 adjacency guard
+              // drops labels across the gaps a day filter creates, and the
+              // category filter already empties this map.
+              segmentLabels: derivation.segmentLabels,
+              home: home,
+              fitSignature: day,
+              // Keep fitted markers clear of the chip row overlaid below.
+              topOverlayInset: mapDayCount > 0 ? MapDayChips.mapTopInset : 0,
+              interactive: !expandable,
+              emptyLabel: day == null
+                  ? l10n.tripNoMappedPlaces
+                  : l10n.tripNoPlacesOnDay(day),
+              emptyMessage: _isOffline ? null : l10n.tripAddPlaceMapHint,
+              // The preview absorbs pointers, so its empty-state CTA could
+              // never be tapped; the pinned "+ Add place" button sits right
+              // below anyway.
+              emptyAction: (expandable || _isOffline || _readOnly)
+                  ? null
+                  : FilledButton.tonalIcon(
+                      onPressed: () => _addPlace(day: day),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: Text(l10n.tripAddPlace),
+                    ),
+              onPinTap: expandable
+                  ? null
+                  : (pos) {
+                      final it =
+                          trip.items!.firstWhere((i) => i.position == pos);
+                      _selectedPosition.value = pos;
+                      // The highlighted row can only be seen if its run
+                      // renders: groups default collapsed, so open the
+                      // tapped item's run. Selection itself is
+                      // notifier-driven; setState only when expansion
+                      // actually changed (the one thing the wider screen
+                      // must re-render).
+                      var expandedChanged = false;
+                      for (final leg in _derive(trip).legs) {
+                        if (leg.items.any((i) => i.position == pos)) {
+                          expandedChanged =
+                              _expandedCities.add(leg.key) || expandedChanged;
+                        }
+                      }
+                      if (expandedChanged) setState(() {});
+                      _showSnack(it.name);
+                    },
+              onExpand: expandable
+                  ? null
+                  : () => _openFullMap(trip, mapDayCount, mappedDays),
+            );
+          },
+        );
+        if (expandable) {
+          map = GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _openFullMap(trip, mapDayCount, mappedDays),
+            child: AbsorbPointer(child: map),
+          );
+        }
+        return ClipRRect(
+          borderRadius: AppRadius.lgAll,
+          child: Stack(
+            children: [
+              Positioned.fill(child: map),
+              // Above the map's gesture layer, so chip taps and row scrolls
+              // never pan the map.
+              Positioned(
+                top: 8,
+                left: 8,
+                right: 8,
+                child: MapDayChips(
+                  dayCount: mapDayCount,
+                  selected: day,
+                  mappedDays: mappedDays,
+                  onSelected: (d) => _selectedDay.value = d,
+                ),
               ),
-            ),
-        ],
-      ),
+              if (expandable)
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: MapControlButton(
+                    icon: Icons.fullscreen,
+                    tooltip: l10n.tripExpandMap,
+                    onTap: () => _openFullMap(trip, mapDayCount, mappedDays),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  /// Read-side clamp for [_selectedDay]: a refresh can shrink the trip below
+  /// a stale selection (fewer days after an edit); an out-of-range day reads
+  /// as All. Clamping at read — instead of writing the notifier during
+  /// build — keeps build pure; the stale value is harmless because every
+  /// consumer goes through here with the current day count.
+  int? _clampedDay(int mapDayCount) {
+    final day = _selectedDay.value;
+    return (day != null && day > mapDayCount) ? null : day;
   }
 
   // Home-leg endpoints live in [TripDerivation.homeLegEndpoints] — the
@@ -4378,8 +4430,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           segmentLabels: derivation.segmentLabels,
           dayCount: mapDayCount,
           mappedDays: mappedDays,
-          initialDay: _selectedDay,
-          onDaySelected: (d) => setState(() => _selectedDay = d),
+          initialDay: _clampedDay(mapDayCount),
+          // The embedded map card listens to the notifier, so the full-screen
+          // selection stays in sync with the card behind it — no setState.
+          onDaySelected: (d) => _selectedDay.value = d,
           onAddPlace: (_isOffline || _readOnly)
               ? null
               : (day) => _addPlace(day: day),
@@ -4569,13 +4623,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       // whole trip, not the category filter, so chips never
                       // come and go with the Attractions/Restaurants toggle.
                       final mapDayCount = derivation.mapDayCount;
-                      // A refresh can shrink the trip below a stale selection
-                      // (fewer days after an edit); fall back to All. Plain
-                      // assignment: we're already in build, so this frame
-                      // renders the clamped value.
-                      if (_selectedDay != null && _selectedDay! > mapDayCount) {
-                        _selectedDay = null;
-                      }
+                      // A stale out-of-range day selection (a refresh can
+                      // shrink the trip) is clamped read-side by every
+                      // consumer — see _clampedDay; build never writes it.
                       // Days that would plot something, so empty days (e.g.
                       // the fly-out day, all booking todos) get muted chips.
                       // Trip-wide like mapDayCount — the category filter never
@@ -4786,8 +4836,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                           // offline and while the refine
                                           // panel is open.
                                           onPressed: () {
-                                            setState(() =>
-                                                _selectedDay = todayDay);
+                                            _selectedDay.value = todayDay;
                                             _scrollToDay(todayDay);
                                           },
                                         ),
