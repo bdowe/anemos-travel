@@ -5,6 +5,22 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-11 — trip-detail dogfooding (overview show-more)
+
+- **[app] Friction → fixed (dead "Show more" toggle):** the header overview's
+  "Show more" appeared on wide windows even when the whole summary already fit
+  the 2-line clamp — clicking flipped it to "Show less" with zero visual
+  change. Root cause: the toggle was gated on `text.length > 140`, a
+  character-count proxy for "does the clamp clip", which false-positives on
+  wide layouts and false-negatives on short newline-heavy summaries (3 hard
+  lines, silent clipping, no toggle). Fix: `_OverviewText` now measures —
+  LayoutBuilder width + a TextPainter configured exactly as the rendered
+  Text's RenderParagraph (DefaultTextStyle merge, boldText, TextScaler
+  object, locale, ellipsis) against one shared `_collapsedMaxLines` constant,
+  so the toggle renders iff `didExceedMaxLines`. Lesson: **a proxy signal for
+  a layout question re-derives the renderer's decision and will drift from
+  it — ask the text engine the same question the renderer asks.**
+
 ## 2026-08-06 — trip-detail dogfooding (top-level clutter)
 
 - **[app] Friction → fixed (collapse default + All-bookings lens):** on a

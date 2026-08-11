@@ -6201,8 +6201,10 @@ class _ReorderSectionSheetState extends State<_ReorderSectionSheet> {
 
 /// The trip overview paragraph with its "Show more/less" toggle — a
 /// self-contained leaf so expanding it rebuilds this block, never the
-/// screen that hosts it. Collapsed = 2 lines; the toggle only renders for
-/// text long enough to plausibly clip (same 140-char heuristic as before).
+/// screen that hosts it. Collapsed = [_OverviewTextState._collapsedMaxLines]
+/// lines; the toggle renders only when that clamp actually clips at the
+/// laid-out width (a character-count heuristic misfired both ways: wide
+/// windows got a dead toggle, short newline-heavy text got none).
 class _OverviewText extends StatefulWidget {
   final String text;
   final TextStyle? style;
@@ -6214,34 +6216,80 @@ class _OverviewText extends StatefulWidget {
 }
 
 class _OverviewTextState extends State<_OverviewText> {
+  /// One constant read by BOTH the rendered Text.maxLines and the measuring
+  /// painter, so the render and the toggle decision cannot drift.
+  static const int _collapsedMaxLines = 2;
+
   bool _expanded = false;
+
+  /// Whether the collapsed clamp would clip the text at [maxWidth] — the
+  /// same verdict the collapsed Text's RenderParagraph reaches. Mirrors
+  /// Text.build: DefaultTextStyle merge for inherited styles, the boldText
+  /// accessibility merge (Text applies it internally; TextPainter does not),
+  /// the ambient TextScaler OBJECT (Android 14+ scaling is nonlinear),
+  /// directionality, locale, and the same ellipsis. Same measurement pattern
+  /// as [_dateChipWidth].
+  bool _collapsedClips(BuildContext context, double maxWidth) {
+    var style = widget.style;
+    if (style == null || style.inherit) {
+      style = DefaultTextStyle.of(context).style.merge(style);
+    }
+    if (MediaQuery.boldTextOf(context)) {
+      style = style.copyWith(fontWeight: FontWeight.bold);
+    }
+    final tp = TextPainter(
+      text: TextSpan(text: widget.text, style: style),
+      maxLines: _collapsedMaxLines,
+      ellipsis: '…',
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      locale: Localizations.maybeLocaleOf(context),
+    )..layout(maxWidth: maxWidth);
+    final clips = tp.didExceedMaxLines;
+    tp.dispose();
+    return clips;
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          widget.text,
-          style: widget.style,
-          maxLines: _expanded ? null : 2,
-          overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-        ),
-        if (widget.text.length > 140)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 32),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: () => setState(() => _expanded = !_expanded),
-              child: Text(_expanded ? l10n.tripShowLess : l10n.tripShowMore),
-            ),
+    // LayoutBuilder so the toggle decision sees the exact width the Text
+    // wraps at. Synchronous, one layout pass — no post-frame re-measure, so
+    // the header extent is settled the frame it builds (the today-mode
+    // auto-scroll in the hosting scroll view assumes settled extents).
+    return LayoutBuilder(builder: (context, constraints) {
+      // Unbounded width can't wrap, so it can't clip (and never occurs
+      // under this stretched header column).
+      final clips = constraints.maxWidth.isFinite &&
+          _collapsedClips(context, constraints.maxWidth);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            widget.text,
+            style: widget.style,
+            maxLines: _expanded ? null : _collapsedMaxLines,
+            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
           ),
-      ],
-    );
+          // _expanded is deliberately not reset when the toggle disappears
+          // (window grown until the text fits): expanded and collapsed
+          // renders of fitting text are pixel-identical, so the stale flag
+          // is unobservable.
+          if (clips)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () => setState(() => _expanded = !_expanded),
+                child: Text(_expanded ? l10n.tripShowLess : l10n.tripShowMore),
+              ),
+            ),
+        ],
+      );
+    });
   }
 }
