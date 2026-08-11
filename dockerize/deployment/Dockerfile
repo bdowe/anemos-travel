@@ -29,6 +29,7 @@ RUN flutter pub get
 COPY src/packages/flutter-app/lib/ lib/
 COPY src/packages/flutter-app/web/ web/
 COPY src/packages/flutter-app/assets/ assets/
+COPY src/packages/flutter-app/tool/ tool/
 COPY src/packages/flutter-app/analysis_options.yaml ./
 
 RUN mkdir -p web/icons
@@ -39,6 +40,19 @@ RUN flutter build web --release \
     --base-href /app/ \
     --dart-define=API_BASE_URL=/api/v1 \
     --dart-define=APP_BASE_PATH=/app/
+
+# Strip flutter_math_fork's 16 KaTeX font families (~597 KB, downloaded
+# before first frame) from the shipped bundle: the app excludes gpt_markdown's
+# LaTeX components (chat_panel.dart), so the fonts are unreachable. Guard
+# rails are deliberate — fail the build loudly rather than ship silent bloat:
+# the grep asserts the entries exist BEFORE stripping (if gpt_markdown's
+# layout changes, this goes red instead of quietly doing nothing), the tool
+# itself exits non-zero on any surprise, and the final greps assert the
+# post-state (no KaTeX left in manifest or on disk).
+RUN grep -q 'packages/flutter_math_fork/' build/web/assets/FontManifest.json \
+    && dart run tool/strip_katex_fonts.dart build/web \
+    && ! grep -q 'flutter_math_fork' build/web/assets/FontManifest.json \
+    && [ ! -d build/web/assets/packages/flutter_math_fork ]
 
 # Release identifier for the web build, mirroring the api image's
 # SENTRY_RELEASE: CI passes the git SHA so /app/version.json answers

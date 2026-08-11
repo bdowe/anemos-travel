@@ -1343,6 +1343,44 @@ const double _kBubbleMaxWidth = 720;
 double _bubbleMaxWidthFor(double panelWidth) =>
     min(panelWidth * 0.78, _kBubbleMaxWidth);
 
+/// gpt_markdown component lists with the LaTeX components removed. A travel
+/// chat never renders LaTeX, but the package's defaults include
+/// LatexMath/LatexMathMultiLine, which (a) add their regex alternations to
+/// every parse of every bubble and (b) are the only reachable path into
+/// flutter_math_fork's KaTeX rendering. Excluding them here keeps that path
+/// dead at runtime; the deployment Dockerfile separately strips the 16 KaTeX
+/// font families from the shipped web bundle (tool/strip_katex_fonts.dart).
+///
+/// These mirror `MarkdownComponent.globalComponents` / `.inlineComponents`
+/// in gpt_markdown 1.1.7 (lib/markdown_component.dart) minus the two LaTeX
+/// entries, in the SAME order — the list order is the combined-regex
+/// alternation order, so reordering would change parse precedence.
+final List<MarkdownComponent> _markdownComponents = [
+  CodeBlockMd(),
+  NewLines(),
+  BlockQuote(),
+  TableMd(),
+  HTag(),
+  UnOrderedList(),
+  OrderedList(),
+  RadioButtonMd(),
+  CheckBoxMd(),
+  HrLine(),
+  IndentMd(),
+];
+
+final List<MarkdownComponent> _markdownInlineComponents = [
+  ATagMd(),
+  ImageMd(),
+  TableMd(),
+  StrikeMd(),
+  BoldMd(),
+  ItalicMd(),
+  UnderLineMd(),
+  HighlightedText(),
+  SourceTag(),
+];
+
 class ChatMessageBubble extends StatelessWidget {
   final PlanMessage message;
   final bool isStreaming;
@@ -1415,11 +1453,25 @@ class ChatMessageBubble extends StatelessWidget {
                           ),
                       ],
                     )
-                  : GptMarkdown(
-                      message.content,
-                      style: TextStyle(color: theme.colorScheme.onSurface),
-                      onLinkTap: (url, title) => _openLink(context, url),
-                    ),
+                  // While streaming, the growing string is re-rendered every
+                  // token flush; a full markdown parse each time is O(n²)
+                  // over the reply. Plain Text keeps flushes O(n) — the
+                  // enclosing SelectionArea keeps it selectable — and the
+                  // bubble switches to GptMarkdown naturally when the message
+                  // commits into the messages list (so bold/lists appear on
+                  // commit rather than live: accepted trade).
+                  : isStreaming
+                      ? Text(
+                          message.content,
+                          style: TextStyle(color: theme.colorScheme.onSurface),
+                        )
+                      : GptMarkdown(
+                          message.content,
+                          style: TextStyle(color: theme.colorScheme.onSurface),
+                          components: _markdownComponents,
+                          inlineComponents: _markdownInlineComponents,
+                          onLinkTap: (url, title) => _openLink(context, url),
+                        ),
             ),
             if (isStreaming) ...[
               const SizedBox(width: 6),
