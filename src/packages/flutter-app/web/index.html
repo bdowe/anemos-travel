@@ -160,7 +160,20 @@
     // beneath, so a user click on a sibling still focuses the right
     // Flutter field.
     (function () {
-      console.info('[autofill] shim v3.2 active');
+      // Perf gate (v3.3): the shim's expensive work (forced-reflow
+      // getBoundingClientRect/getComputedStyle in sizeAutofillForm, the
+      // 200 ms relay poll) only matters while an auth screen's autofill
+      // form is in the DOM — those flt-text-editing-host form fields exist
+      // ONLY on auth screens. `active` flips on via the capture-phase
+      // focusin listener below and back off after ~25 consecutive relay
+      // ticks (~5 s) find no autofill form. While dormant, non-auth
+      // screens pay exactly one boolean read per mutation batch and run
+      // NO polling interval.
+      var active = false;
+      var relayTimer = null;
+      var idleTicks = 0;
+      var AUTOFILL_PROBE =
+          'flt-text-editing-host form input, flt-text-editing-host form textarea';
       var diagnosed = new WeakSet();
       var forwarded = new WeakSet();
       // Last value the engine is known to have ingested per input — kept in
@@ -170,6 +183,7 @@
         // Verbose-level breadcrumbs for debugging real password-manager
         // behavior (DevTools console, "Verbose" filter, search "autofill").
         lastSeen.set(e.target, e.target.value || '');
+        if (!active) return; // breadcrumbs only while an auth form is live
         console.debug('[autofill] ' + e.type +
             ' on ' + (e.target.getAttribute('autocomplete') || e.target.name) +
             ' len=' + (e.target.value || '').length +
@@ -183,10 +197,20 @@
       // input event for any value that changed with no event — the engine's
       // own listener then ingests it. Duplicate delivery for event-ful
       // writes is harmless: same-value updates are dropped app-side.
-      setInterval(function () {
-        var probe = document.querySelector(
-            'flt-text-editing-host form input, flt-text-editing-host form textarea');
-        if (!probe) return;
+      // The interval is NOT started at boot: focusin on an auth form starts
+      // it (see the activation listener at the bottom) and ~25 consecutive
+      // empty ticks (~5 s after the auth form leaves the DOM) stop it.
+      function relayTick() {
+        var probe = document.querySelector(AUTOFILL_PROBE);
+        if (!probe) {
+          if (++idleTicks >= 25) { // ~5 s with no auth form: go dormant
+            active = false;
+            clearInterval(relayTimer);
+            relayTimer = null;
+          }
+          return;
+        }
+        idleTicks = 0;
         var fields = probe.form.querySelectorAll('input, textarea');
         for (var i = 0; i < fields.length; i++) {
           var el = fields[i];
@@ -208,7 +232,7 @@
             data: value,
           }));
         }
-      }, 200);
+      }
       // A pointer event landed on a non-focused autofill input. Cancel it
       // (also suppresses the compatibility mouse events) and re-dispatch a
       // clone at whatever the engine has under that point, found by
@@ -240,6 +264,7 @@
         }));
       }
       function sizeAutofillForm() {
+        if (!active) return; // dormant off auth screens (perf gate above)
         var focused = document.querySelector(
             'form input.flt-text-editing, form textarea.flt-text-editing');
         if (!focused || !focused.form) return;
@@ -315,14 +340,35 @@
       // Run synchronously inside the observer callback: our observer is
       // registered before extension content scripts, so the fields are
       // already sized when the extension's own observer sees the same
-      // mutation batch and analyzes the form.
-      new MutationObserver(sizeAutofillForm).observe(document.body, {
+      // mutation batch and analyzes the form. The observer stays
+      // registered permanently to preserve that ordering guarantee — the
+      // `active` gate (not observer teardown) is what makes non-auth
+      // screens cheap.
+      new MutationObserver(function () {
+        if (!active) return; // dormant: one boolean read per mutation batch
+        sizeAutofillForm();
+      }).observe(document.body, {
         childList: true,
         subtree: true,
         attributes: true,
         attributeFilter: ['style', 'class'],
       });
-      document.addEventListener('focusin', sizeAutofillForm, true);
+      // Activation: permanent capture-phase focusin listener (event-driven,
+      // cheap). Auth-screen text fields are the only ones Flutter mounts
+      // inside a flt-text-editing-host <form> (AutofillGroup), so a focusin
+      // with that probe present means an auth screen is up: wake the shim
+      // and start the relay poll. Focus lands synchronously in the same
+      // task that inserts the form, so the fields are sized here before
+      // any observer (ours or an extension's) processes that mutation
+      // batch — the ordering guarantee above still holds while gated.
+      document.addEventListener('focusin', function () {
+        if (!active && document.querySelector(AUTOFILL_PROBE)) {
+          active = true;
+          idleTicks = 0;
+          if (relayTimer === null) relayTimer = setInterval(relayTick, 200);
+        }
+        sizeAutofillForm();
+      }, true);
     })();
   </script>
 

@@ -64,6 +64,19 @@ ARG GIT_SHA=
 RUN sed -i 's/}[[:space:]]*$/,"release":"'"${GIT_SHA}"'"}/' build/web/version.json \
     && grep -q '"release"' build/web/version.json
 
+# Flutter's stock service worker computes cache keys as
+# `url.substring(origin.length + 1)` — but with `--base-href /app/` the
+# cached request URLs are `<origin>/app/main.dart.js` while RESOURCES keys
+# are bare (`main.dart.js`), so `RESOURCES[key]` never matches: the cache
+# is populated on install but never READ, and every load re-fetches from
+# the network. Strip the 4-char `app/` prefix too (+1 -> +5) at all three
+# key-computation sites. Guarded to fail the build loudly if Flutter ever
+# changes the service-worker layout: at least one replacement must have
+# happened and none of the old pattern may remain.
+RUN sed -i 's/origin\.length + 1/origin.length + 5/g' build/web/flutter_service_worker.js \
+    && grep -q 'origin.length + 5' build/web/flutter_service_worker.js \
+    && ! grep -q 'origin\.length + 1' build/web/flutter_service_worker.js
+
 # Serve static files and proxy API via nginx
 FROM nginx:alpine
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -80,15 +81,29 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// On startup, restore the session from a stored token if one exists.
+  ///
+  /// Warm boots (token + cached user snapshot) are **optimistic**: the shell
+  /// mounts immediately on the snapshot while `/auth/me` revalidates in the
+  /// background (see [_revalidate] for the revalidate-on-boot semantics).
+  /// First-ever boots (no snapshot yet) keep the serial check-then-mount
+  /// path so a never-verified token can't flash the shell.
   Future<void> _restore() async {
     final token = await _storage.loadToken();
     if (token == null) {
       state = state.copyWith(initialized: true);
       return;
     }
+    final cached = await _loadUserSnapshot();
+    if (cached != null) {
+      _apiClient.authToken = token;
+      state = state.copyWith(user: cached, initialized: true);
+      unawaited(_revalidate(token));
+      return;
+    }
     try {
       final user = await _service.me(token).timeout(restoreTimeout);
       _apiClient.authToken = token;
+      unawaited(_saveUserSnapshot(user));
       state = state.copyWith(user: user, initialized: true);
     } on TimeoutException {
       // Backend slow/unreachable — fail open as signed out, but KEEP the
@@ -98,9 +113,67 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (_) {
       // Token invalid/expired — clear it and start signed out.
       await _storage.clearToken();
+      unawaited(_clearUserSnapshot());
       _apiClient.authToken = null;
       state = state.copyWith(initialized: true, clearUser: true);
     }
+  }
+
+  /// Background `/auth/me` check behind an optimistic warm boot
+  /// (revalidate-on-boot):
+  /// - success → refresh the in-memory user and the stored snapshot;
+  /// - auth rejection (401/403 — the token was revoked/expired server-side)
+  ///   → clear the stored session and flip to signed out;
+  /// - timeout / network error / server 5xx → KEEP the optimistic state.
+  ///   A valid cached session with a briefly unreachable backend beats the
+  ///   old behavior of bouncing the user to the landing screen; the next
+  ///   boot revalidates again.
+  Future<void> _revalidate(String token) async {
+    try {
+      final user = await _service.me(token).timeout(restoreTimeout);
+      unawaited(_saveUserSnapshot(user));
+      if (!mounted) return;
+      state = state.copyWith(user: user);
+    } on AuthException catch (e) {
+      if (e.statusCode == 401 || e.statusCode == 403) {
+        await _storage.clearToken();
+        unawaited(_clearUserSnapshot());
+        _apiClient.authToken = null;
+        if (mounted) state = state.copyWith(clearUser: true);
+      }
+      // Other statuses (5xx etc.): keep the optimistic session.
+    } catch (_) {
+      // Timeout or transport failure: keep the optimistic session.
+    }
+  }
+
+  /// Decodes the cached user snapshot; null (→ serial restore path) when
+  /// absent, unreadable, or corrupt. Best-effort by design: snapshot
+  /// failures must never break boot.
+  Future<UserModel?> _loadUserSnapshot() async {
+    try {
+      final raw = await _storage.loadUserSnapshot();
+      if (raw == null) return null;
+      return UserModel.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Persists the freshest server-provided user for the next warm boot.
+  /// Best-effort by design, so callers fire-and-forget it (`unawaited`):
+  /// a user-visible state transition must never block on — or hang with —
+  /// snapshot persistence; a failure only costs the next boot its warm path.
+  Future<void> _saveUserSnapshot(UserModel user) async {
+    try {
+      await _storage.saveUserSnapshot(jsonEncode(user.toJson()));
+    } catch (_) {/* best effort */}
+  }
+
+  Future<void> _clearUserSnapshot() async {
+    try {
+      await _storage.clearUserSnapshot();
+    } catch (_) {/* best effort */}
   }
 
   Future<bool> login(String email, String password) =>
@@ -115,6 +188,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final res = await call();
       await _storage.saveToken(res.token);
+      unawaited(_saveUserSnapshot(res.user));
       _apiClient.authToken = res.token;
       state = state.copyWith(user: res.user, loading: false);
       return true;
@@ -138,6 +212,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final token = await _storage.loadToken();
       if (token != null) {
         final user = await _service.completeOnboarding(token);
+        unawaited(_saveUserSnapshot(user));
         state = state.copyWith(user: user);
         return;
       }
@@ -172,6 +247,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> signOutLocally() async {
     final userId = state.user?.id;
     await _storage.clearToken();
+    unawaited(_clearUserSnapshot());
     _apiClient.authToken = null;
     state = state.copyWith(clearUser: true, clearError: true);
     // Privacy: drop the offline trip cache alongside the credentials so the
@@ -182,12 +258,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Replaces the in-memory user (e.g. after a profile edit).
   void setUser(UserModel user) {
     state = state.copyWith(user: user);
+    unawaited(_saveUserSnapshot(user)); // keep the warm-boot snapshot fresh
   }
 
   /// Adopts a fresh session minted by the server (e.g. after a password
   /// change revoked every other session).
   Future<void> adoptSession(String token, UserModel user) async {
     await _storage.saveToken(token);
+    unawaited(_saveUserSnapshot(user));
     _apiClient.authToken = token;
     state = state.copyWith(user: user, clearError: true);
   }

@@ -176,7 +176,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     // Fade between splash and destination so instant auth resolution isn't a
     // one-frame hard cut. Branches are distinct types, so no keys needed.
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 120),
       child: child,
     );
   }
