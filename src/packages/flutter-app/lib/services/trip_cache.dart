@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/scheduler.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -53,12 +52,12 @@ class TripCache {
   // On web shared_preferences is SYNCHRONOUS localStorage, and a cache write
   // jsonEncodes a full trip (items/accommodations/segments/todos/legs) — work
   // that used to run on the UI isolate at the exact moment a screen builds.
-  // Writes are therefore queued per prefs key and drained by one idle-time
-  // task (SchedulerBinding.scheduleTask at Priority.idle): N rapid writes to
-  // the same key collapse to the last value, and nothing encodes while a
-  // frame is pending. Callers were already fire-and-forget (`unawaited`), so
-  // the returned future now completing at "queued" rather than "stored"
-  // changes no caller-visible semantics.
+  // Writes are therefore queued per prefs key and drained by one deferred
+  // event-loop task (see [_queueWrite]): N rapid writes to the same key
+  // collapse to the last value, and the encode runs after the triggering
+  // frame's event has yielded, not during build. Callers were already
+  // fire-and-forget (`unawaited`), so the returned future now completing at
+  // "queued" rather than "stored" changes no caller-visible semantics.
   //
   // Read-after-write choice: reads DRAIN the whole pending queue first (not
   // "peek this key's pending slot"), because a queued [writeTrip] also
@@ -77,43 +76,51 @@ class TripCache {
   /// Whether an idle-time drain is already requested.
   static bool _drainScheduled = false;
 
-  /// Serializes drains: an idle-task drain and a read-triggered drain must
-  /// never interleave entry execution (that would scramble MRU ordering).
-  static Future<void> _drainChain = Future<void>.value();
-
   static void _queueWrite(String key, Future<void> Function() write) {
     _pendingWrites.remove(key); // Coalesce: last value wins, moves to tail.
     _pendingWrites[key] = write;
     if (_drainScheduled) return;
     _drainScheduled = true;
-    void drain() {
+    // A plain event-loop task, NOT SchedulerBinding.scheduleTask: the encode
+    // runs on the next event-loop turn, after the current frame's event has
+    // yielded — which is all the deferral the UI needs. scheduleTask's
+    // priority gate re-arms its internal zero-duration timer until the
+    // scheduler goes idle, and fake-async test pumps can spin on that
+    // re-arm loop forever (this hung CI).
+    Timer.run(() {
       _drainScheduled = false;
       _flushPendingWrites();
-    }
-
-    try {
-      SchedulerBinding.instance.scheduleTask<void>(drain, Priority.idle);
-    } catch (_) {
-      // No scheduler binding (pure Dart tests): plain event-loop task.
-      Timer.run(drain);
-    }
+    });
   }
 
   /// Executes every queued write in order. Entry failures are swallowed
   /// (best-effort — a failed cache write must never surface).
-  static Future<void> _flushPendingWrites() {
-    _drainChain = _drainChain.then((_) async {
-      while (_pendingWrites.isNotEmpty) {
-        final key = _pendingWrites.keys.first;
-        final write = _pendingWrites.remove(key)!;
-        try {
-          await write();
-        } catch (_) {
-          // Best-effort — a failed cache write must never surface.
-        }
+  ///
+  /// Deliberately NOT serialized through a shared chained Future: widget
+  /// tests run inside fake-async zones, and a static Future chained across
+  /// zones deadlocks the next test that awaits it (a queued write left
+  /// unpumped when a test ends can never complete, and `testWidgets` has no
+  /// timeout — the whole suite wedges). The queue itself is the
+  /// synchronization point instead: an entry is removed only AFTER its write
+  /// lands, so a flush cannot observe "empty" while the tail write is still
+  /// in flight (read-after-write holds), and each closure is a last-value
+  /// snapshot, so two racing drains executing the same entry write identical
+  /// bytes — harmless.
+  static Future<void> _flushPendingWrites() async {
+    while (_pendingWrites.isNotEmpty) {
+      final key = _pendingWrites.keys.first;
+      final write = _pendingWrites[key]!;
+      try {
+        await write();
+      } catch (_) {
+        // Best-effort — a failed cache write must never surface.
       }
-    });
-    return _drainChain;
+      // Drop the entry unless it was re-queued with a newer value while the
+      // write was in flight — the newer closure must still run.
+      if (identical(_pendingWrites[key], write)) {
+        _pendingWrites.remove(key);
+      }
+    }
   }
 
   /// Remembers the trips list. Deferred to an idle-time task and coalesced
@@ -232,9 +239,10 @@ class TripCache {
     final prefix = _prefix(userId);
     // Drop this user's queued writes first — a deferred write landing after
     // the clear would resurrect their data (privacy: shared devices) — then
-    // let any in-flight drain finish before clearing storage.
+    // flush the rest so an already-in-flight write (still in the map until it
+    // lands) settles before the storage sweep below.
     _pendingWrites.removeWhere((key, _) => key.startsWith(prefix));
-    await _drainChain;
+    await _flushPendingWrites();
     try {
       final prefs = await SharedPreferences.getInstance();
       for (final key in prefs.getKeys().toList()) {
