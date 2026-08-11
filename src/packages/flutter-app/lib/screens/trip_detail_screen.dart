@@ -1807,8 +1807,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   }
 
   /// A stored title is "long" when it's really the AI summary (multi-line or
-  /// lengthy); such trips get a computed display title instead.
-  bool _titleIsLong(String t) => t.contains('\n') || t.length > 60;
+  /// lengthy); such trips get a computed display title instead. The rule is
+  /// shared (utils/trip_format.dart) so the trips list agrees with this header.
+  bool _titleIsLong(String t) => tripTitleIsLong(t);
 
   /// What to show as the header title: the trip's own title when it's concise,
   /// otherwise a title computed from the itinerary's cities + dates.

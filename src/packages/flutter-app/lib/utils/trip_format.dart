@@ -26,6 +26,12 @@ String? shortDateLabel(String? iso) {
   return d == null ? null : _fmt(d);
 }
 
+/// A stored title is "long" when it's really the AI summary (multi-line or
+/// lengthy); such trips show a cities-derived display title instead. Shared by
+/// the trip-detail header, the trips list, and the home live-trip tile so the
+/// same trip never flips names between screens.
+bool tripTitleIsLong(String title) => title.contains('\n') || title.length > 60;
+
 /// A short destination summary from a trip's hub cities: "Paris",
 /// "Mexico City & Puerto Vallarta", or "Tokyo & Kyoto +2 more". Null when
 /// there is no city data (legacy trips), so callers fall back to the title.
