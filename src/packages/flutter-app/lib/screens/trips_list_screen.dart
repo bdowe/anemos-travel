@@ -282,13 +282,20 @@ class _TripCard extends ConsumerWidget {
     final hasHistory = isAdmin && versions > 1 && trip.chatId != null;
     final range = tripDateRange(trip.startDate, trip.endDate);
 
+    final cities = citiesLabel(
+      trip.cities,
+      two: (a, b) => l10n.citiesTwo(a, b),
+      more: (a, b, n) => l10n.citiesMore(a, b, n),
+    );
+    // Same rule as the trip-detail header (_displayTitle): the trip's own
+    // title unless it's really the AI summary, then the cities label. The
+    // cities line below is only shown when it isn't already the headline.
+    final usableTitle = trip.title.isNotEmpty && !tripTitleIsLong(trip.title);
+    final headline = usableTitle ? trip.title : (cities ?? trip.title);
+    final showCitiesLine = cities != null && headline != cities;
+
     final title = Text(
-      citiesLabel(
-            trip.cities,
-            two: (a, b) => l10n.citiesTwo(a, b),
-            more: (a, b, n) => l10n.citiesMore(a, b, n),
-          ) ??
-          trip.title,
+      headline,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: Theme.of(context)
@@ -299,23 +306,39 @@ class _TripCard extends ConsumerWidget {
 
     final subtitle = Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Wrap(
-        spacing: AppSpacing.sm,
-        runSpacing: AppSpacing.xs,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (range != null)
-            _DateChip(label: range)
-          else
-            Text(l10n.tripsListCreated(shortDate(trip.createdAt))),
-          StatusPill(status: trip.status),
-          if (!trip.isOwner && (trip.ownerName ?? '').isNotEmpty)
-            Text(
-              trip.canEdit
-                  ? l10n.tripsListPlannedWith(trip.ownerName!)
-                  : l10n.tripsListSharedBy(trip.ownerName!),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (range != null)
+                _DateChip(label: range)
+              else
+                Text(l10n.tripsListCreated(shortDate(trip.createdAt))),
+              StatusPill(status: trip.status),
+              if (!trip.isOwner && (trip.ownerName ?? '').isNotEmpty)
+                Text(
+                  trip.canEdit
+                      ? l10n.tripsListPlannedWith(trip.ownerName!)
+                      : l10n.tripsListSharedBy(trip.ownerName!),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+            ],
+          ),
+          if (showCitiesLine)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(
+                cities,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
             ),
         ],
       ),

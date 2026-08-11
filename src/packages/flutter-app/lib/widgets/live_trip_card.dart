@@ -78,12 +78,18 @@ class LiveTripCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        citiesLabel(
-                              trip.cities,
-                              two: (a, b) => l10n.citiesTwo(a, b),
-                              more: (a, b, n) => l10n.citiesMore(a, b, n),
-                            ) ??
-                            trip.title,
+                        // Real trip title, like the trips list and detail
+                        // header; cities label only for legacy AI-summary
+                        // titles (see tripTitleIsLong).
+                        trip.title.isNotEmpty && !tripTitleIsLong(trip.title)
+                            ? trip.title
+                            : citiesLabel(
+                                  trip.cities,
+                                  two: (a, b) => l10n.citiesTwo(a, b),
+                                  more: (a, b, n) =>
+                                      l10n.citiesMore(a, b, n),
+                                ) ??
+                                trip.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium?.copyWith(
