@@ -188,6 +188,35 @@ class _TripMapState extends State<TripMap> {
   /// LayoutBuilder (they never reach [didUpdateWidget]).
   double? _lastMapWidth;
 
+  /// [TripMap.selectedPosition], mirrored into a notifier (synced in
+  /// [initState]/[didUpdateWidget]) so pins can render their selected state
+  /// via [ValueListenableBuilder] WITHOUT the selection being baked into
+  /// marker construction. The cluster layer decides whether to re-run full
+  /// cluster-tree construction by an identity check on its marker list, so
+  /// selection must never force a fresh list — see [_clusterMarkers].
+  final ValueNotifier<int?> _selection = ValueNotifier<int?>(null);
+
+  /// Cluster marker cache: valid while [TripMap.items] keeps its identity and
+  /// the tappable flag is unchanged. `mapped` is a pure function of items, so
+  /// items identity covers it. Returning the identical list makes the cluster
+  /// package's `oldWidget.options.markers != widget.options.markers` check
+  /// pass and skip re-clustering (selection changes, parent setStates).
+  List<Marker>? _markerCache;
+  List<ItineraryItem>? _markerCacheItems;
+  bool _markerCacheTappable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selection.value = widget.selectedPosition;
+  }
+
+  @override
+  void dispose() {
+    _selection.dispose();
+    super.dispose();
+  }
+
   /// Fit padding shared by the initial fit and every re-fit; asymmetric so a
   /// top overlay (day chips) never covers the topmost fitted marker.
   EdgeInsets get _fitPadding =>
@@ -349,6 +378,9 @@ class _TripMapState extends State<TripMap> {
         _fitToTrip(_fitPoints());
       });
     }
+    // Keep the pins' selection notifier in sync (ValueNotifier drops
+    // same-value writes, so this is free when selection didn't change).
+    _selection.value = widget.selectedPosition;
     if (widget.selectedPosition != null &&
         widget.selectedPosition != oldWidget.selectedPosition) {
       final target = _selectedPoint();
@@ -365,6 +397,67 @@ class _TripMapState extends State<TripMap> {
       });
     }
   }
+
+  /// The per-item cluster markers, cached by [TripMap.items] identity (see
+  /// the cache fields above). Pin visuals read the selection from
+  /// [_selection] via [ValueListenableBuilder] and the tap closure derefs
+  /// `widget.onPinTap` lazily, so a cached marker never captures stale
+  /// state — the cache key is only (items identity, tappable-or-not).
+  ///
+  /// Labels count 1..N over what this map view shows (the whole trip on All,
+  /// one day on Day N) — not the item's trip-wide position, which reads as
+  /// arbitrary once the view filters or skips ungeocoded items.
+  List<Marker> _clusterMarkers(
+      List<({ItineraryItem item, LatLng point})> mapped) {
+    final tappable = widget.onPinTap != null;
+    if (_markerCache != null &&
+        identical(_markerCacheItems, widget.items) &&
+        _markerCacheTappable == tappable) {
+      return _markerCache!;
+    }
+    final markers = <Marker>[
+      for (final (k, m) in mapped.indexed)
+        Marker(
+          point: m.point,
+          // Transparent 44px halo around the 24/28px dot, tap handling on
+          // the whole box; centered so the dot stays anchored on its
+          // coordinate (see _pinHitBox).
+          width: _pinHitBox,
+          height: _pinHitBox,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: tappable ? () => widget.onPinTap!(m.item.position) : null,
+            child: Center(
+              child: ValueListenableBuilder<int?>(
+                valueListenable: _selection,
+                builder: (context, sel, _) {
+                  final selected = sel == m.item.position;
+                  return SizedBox.square(
+                    dimension: selected ? 28 : 24,
+                    child: _Pin(
+                      label: '${k + 1}',
+                      category: m.item.category,
+                      selected: selected,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+    ];
+    _markerCacheItems = widget.items;
+    _markerCacheTappable = tappable;
+    _markerCache = markers;
+    return markers;
+  }
+
+  /// Test hook: the current cluster marker list, or null before first build.
+  /// Lets tests assert selection changes and view-only parent rebuilds keep
+  /// the identical list (no re-cluster) while an items swap produces a new
+  /// one.
+  @visibleForTesting
+  List<Marker>? get debugClusterMarkerCache => _markerCache;
 
   @override
   Widget build(BuildContext context) {
@@ -682,42 +775,7 @@ class _TripMapState extends State<TripMap> {
                       maxClusterRadius: 45,
                       size: const Size(32, 32),
                       padding: const EdgeInsets.all(40),
-                      markers: [
-                        // Labels count 1..N over what this map view shows (the
-                        // whole trip on All, one day on Day N) — not the item's
-                        // trip-wide position, which reads as arbitrary once the
-                        // view filters or skips ungeocoded items.
-                        for (final (k, m) in mapped.indexed)
-                          Marker(
-                            point: m.point,
-                            // Transparent 44px halo around the 24/28px dot, tap
-                            // handling on the whole box; centered so the dot
-                            // stays anchored on its coordinate (see
-                            // _pinHitBox).
-                            width: _pinHitBox,
-                            height: _pinHitBox,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: widget.onPinTap == null
-                                  ? null
-                                  : () => widget.onPinTap!(m.item.position),
-                              child: Center(
-                                child: SizedBox.square(
-                                  dimension:
-                                      widget.selectedPosition == m.item.position
-                                          ? 28
-                                          : 24,
-                                  child: _Pin(
-                                    label: '${k + 1}',
-                                    category: m.item.category,
-                                    selected: widget.selectedPosition ==
-                                        m.item.position,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
+                      markers: _clusterMarkers(mapped),
                       builder: (context, clusterMarkers) =>
                           _ClusterBubble(count: clusterMarkers.length),
                     ),
