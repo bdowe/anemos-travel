@@ -165,8 +165,16 @@ class _GuideBody extends StatelessWidget {
                       CircleAvatar(
                         radius: 16,
                         backgroundColor: accent.withValues(alpha: 0.15),
+                        // Bound the decode to the 32px avatar slot
+                        // (DPR-scaled) — the source photo is full-size.
                         foregroundImage: sourcePhotoUrl.isNotEmpty
-                            ? NetworkImage(sourcePhotoUrl)
+                            ? ResizeImage(
+                                NetworkImage(sourcePhotoUrl),
+                                width: (32 *
+                                        MediaQuery.devicePixelRatioOf(
+                                            context))
+                                    .round(),
+                              )
                             : null,
                         child: Text(
                           sourceName.characters.first.toUpperCase(),
@@ -269,16 +277,26 @@ class _HeroImage extends StatelessWidget {
       child: SizedBox(
         height: 200,
         width: double.infinity,
-        child: Image.network(
-          url,
-          fit: BoxFit.cover,
-          errorBuilder: (context, _, __) => Container(
-            decoration: BoxDecoration(gradient: AppColors.brandGradient),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.photo_outlined,
-              size: 40,
-              color: Colors.white70,
+        // LayoutBuilder gives the actual slot width (full-width inside the
+        // 700px-capped PageContainer) so the decode is bounded to what is
+        // painted (DPR-scaled) rather than the photo's native resolution.
+        child: LayoutBuilder(
+          builder: (context, constraints) => Image.network(
+            url,
+            fit: BoxFit.cover,
+            cacheWidth: constraints.maxWidth.isFinite
+                ? (constraints.maxWidth *
+                        MediaQuery.devicePixelRatioOf(context))
+                    .round()
+                : null,
+            errorBuilder: (context, _, __) => Container(
+              decoration: BoxDecoration(gradient: AppColors.brandGradient),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.photo_outlined,
+                size: 40,
+                color: Colors.white70,
+              ),
             ),
           ),
         ),

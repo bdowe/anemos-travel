@@ -108,8 +108,14 @@ class _GuideListTile extends StatelessWidget {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: AppColors.toolLocal.withValues(alpha: 0.15),
+          // Bound the decode to the 40px avatar slot (default CircleAvatar
+          // radius 20, DPR-scaled) — the source photo is full-size.
           foregroundImage: guide.sourcePhotoUrl.isNotEmpty
-              ? NetworkImage(guide.sourcePhotoUrl)
+              ? ResizeImage(
+                  NetworkImage(guide.sourcePhotoUrl),
+                  width:
+                      (40 * MediaQuery.devicePixelRatioOf(context)).round(),
+                )
               : null,
           child: Icon(Icons.menu_book_outlined,
               size: 18, color: AppColors.toolLocal),

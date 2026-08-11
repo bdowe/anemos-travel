@@ -117,8 +117,15 @@ class LocalRecCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 14,
                   backgroundColor: accent.withValues(alpha: 0.15),
+                  // Bound the decode to the 28px avatar slot (DPR-scaled) —
+                  // the source photo is full-size and would otherwise decode
+                  // at native resolution for a 28px circle.
                   foregroundImage: rec.sourcePhotoUrl.isNotEmpty
-                      ? NetworkImage(rec.sourcePhotoUrl)
+                      ? ResizeImage(
+                          NetworkImage(rec.sourcePhotoUrl),
+                          width: (28 * MediaQuery.devicePixelRatioOf(context))
+                              .round(),
+                        )
                       : null,
                   child: Text(
                     rec.sourceName.isNotEmpty

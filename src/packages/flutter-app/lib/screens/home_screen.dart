@@ -58,19 +58,41 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authProvider).user;
-    final recentTrip = ref.watch(recentTripProvider);
+    // Narrow selects throughout: Home only decorates what other screens load
+    // (a background trips refresh emits several states), so every watch is
+    // scoped to the minimal shape this build actually renders — records
+    // compare structurally, so an unchanged shape means no rebuild of the
+    // hero/greeting/guides subtree.
+    final displayName =
+        ref.watch(authProvider.select((s) => s.user?.displayName));
+    final recentTrip = ref.watch(recentTripProvider.select((r) => r == null
+        ? null
+        : (
+            tripId: r.tripId,
+            title: r.title,
+            dateRange: r.dateRange,
+            status: r.status,
+          )));
     // Populated app-wide: AppShell's IndexedStack keeps TripsListScreen
     // mounted, and its loadTrips() feeds tripsProvider — no fetch from here.
-    final liveTrip = ref.watch(liveTripProvider);
+    //
+    // Every trips refresh rebuilds the Trip objects, so watching the derived
+    // Trip? directly would fire on identical data. Watch an identity-stable
+    // key instead — (id, updatedAt) is the server's change marker, so equal
+    // key means equal row — and read the full object (for LiveTripCard) only
+    // when the key says this build runs anyway.
+    final liveTripKey = ref.watch(liveTripProvider
+        .select((t) => t == null ? null : (id: t.id, updatedAt: t.updatedAt)));
+    final liveTrip = liveTripKey == null ? null : ref.read(liveTripProvider);
     // Returning users (anything to come back to) get the compact plan strip
     // instead of the 440px photo hero, so their trips sit above the fold.
     // While providers are still loading this reads false and the full hero
     // shows briefly — same async-appearance behavior as LiveTripCard.
     final returning = liveTrip != null ||
         recentTrip != null ||
-        ref.watch(tripsProvider).trips.isNotEmpty ||
-        (ref.watch(resumableChatsProvider).valueOrNull?.isNotEmpty ?? false);
+        ref.watch(tripsProvider.select((s) => s.trips.isNotEmpty)) ||
+        ref.watch(resumableChatsProvider
+            .select((a) => a.valueOrNull?.isNotEmpty ?? false));
 
     // The chat is a persistent tab, so "Let's go" / a suggestion switches to it
     // (and seeds the message) rather than pushing a one-off screen.
@@ -148,7 +170,7 @@ class HomeScreen extends ConsumerWidget {
               children: [
                 const SizedBox(height: AppSpacing.sm),
 
-                _GreetingHeader(displayName: user?.displayName),
+                _GreetingHeader(displayName: displayName),
 
                 const SizedBox(height: AppSpacing.lg),
 
@@ -648,6 +670,12 @@ class _GuideCard extends StatelessWidget {
                     ? Image.network(
                         guide.heroImageUrl,
                         fit: BoxFit.cover,
+                        // Bound the decode to the 230px card slot (DPR-scaled)
+                        // so a full-size hero photo never decodes at native
+                        // resolution for an 88px-tall tile.
+                        cacheWidth:
+                            (230 * MediaQuery.devicePixelRatioOf(context))
+                                .round(),
                         errorBuilder: (_, __, ___) =>
                             const _GuideImageFallback(),
                       )
