@@ -554,7 +554,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Pinned-header heights, shared by the build method and the Today scroll
   /// math so the two can never drift apart.
   static const double _mapHeaderHeight =
-      12 + 240 + 12; // top gap + map + bottom gap
+      12 + 340 + 12; // top gap + map + bottom gap
   /// Map card height on phones, where the map scrolls away instead of
   /// pinning (a preview — the full-screen map is one tap away).
   static const double _mapHeightNarrow = 180;
