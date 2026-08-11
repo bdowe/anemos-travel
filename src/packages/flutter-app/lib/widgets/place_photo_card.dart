@@ -196,6 +196,12 @@ class PlacePhotoCard extends StatelessWidget {
                           fit: BoxFit.cover,
                           gaplessPlayback: true,
                           excludeFromSemantics: true,
+                          // Bound the decode to the fixed card width
+                          // (DPR-scaled): /places/photo serves up to 800px
+                          // for a 200×96 slot.
+                          cacheWidth: (kPlaceCardWidth *
+                                  MediaQuery.devicePixelRatioOf(context))
+                              .round(),
                           errorBuilder: (_, __, ___) => fallbackBox,
                         )
                       else
