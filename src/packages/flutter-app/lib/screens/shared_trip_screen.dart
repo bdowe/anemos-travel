@@ -299,7 +299,12 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
                     ClipRRect(
                       borderRadius: AppRadius.lgAll,
                       child: SizedBox(
-                        height: 240,
+                        // Match the trip-detail map band: taller on wide
+                        // layouts so the auto-fit can show every pin.
+                        height:
+                            MediaQuery.sizeOf(context).width >= kRailBreakpoint
+                            ? 340
+                            : 240,
                         child: Stack(
                           children: [
                             Positioned.fill(

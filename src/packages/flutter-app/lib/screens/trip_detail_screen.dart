@@ -554,7 +554,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Pinned-header heights, shared by the build method and the Today scroll
   /// math so the two can never drift apart.
   static const double _mapHeaderHeight =
-      12 + 240 + 12; // top gap + map + bottom gap
+      12 + 340 + 12; // top gap + map + bottom gap
   /// Map card height on phones, where the map scrolls away instead of
   /// pinning (a preview — the full-screen map is one tap away).
   static const double _mapHeightNarrow = 180;
@@ -4470,6 +4470,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         fullscreenDialog: true,
+        // Escape closes the map when focus rests on the route's own scope
+        // (pin-less day: the empty state has no focusable map): the
+        // framework's Escape→DismissIntent handler pops any route with a
+        // dismissible barrier (PageRoute.barrierDismissible docs), and the
+        // barrier itself is never visible behind an opaque full-screen
+        // route. Escape from inside the Scaffold is handled by the
+        // CallbackShortcuts layer in TripMapScreen — see the comment there.
+        barrierDismissible: true,
         builder: (_) => TripMapScreen(
           title: _displayTitle(trip),
           destinations: derivation.mapDestinations,

@@ -34,7 +34,7 @@ double appMapMinZoomFor(double viewportWidth) {
 ///
 /// flutter_map's stock [Epsg3857] replicates longitude, so tiles, pins and
 /// route lines repeat sideways whenever the world is narrower than the
-/// viewport. Our maps are short, fixed-height bands (240px) that auto-fit a
+/// viewport. Our maps are short, fixed-height bands that auto-fit a
 /// trip's full extent: on a wide window a tall trip forces a zoom low enough
 /// that two or three copies of the planet sit side by side — visually a bug.
 /// Drawing a single world shows [appMapBackground] past the edges instead.
