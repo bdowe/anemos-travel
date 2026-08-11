@@ -199,7 +199,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // every consumer filters on !auto.
   List<Accommodation> _stays = [];
   List<TripSegment> _segments = [];
-  bool _overviewExpanded = false;
   // City groups the user opened, keyed by run key (group.key, `#2`-suffixed
   // on revisits): empty => all collapsed, the default view (place + dates
   // headers only). A sole group is seeded open once (_citySeedConsumed) so a
@@ -1884,19 +1883,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // for its date window — one API call per city per trip view, cached by the
     // family provider. Best-effort: valueOrNull stays null until it resolves
     // (and forever on failure), so nothing renders and the pinned-scroll math
-    // is untouched. 'Other places' has no real city to geocode.
-    WeatherReport? weatherReport;
-    if (cityKey != _kOtherPlaces &&
-        range?.start != null &&
-        range?.end != null) {
-      weatherReport = ref
-          .watch(weatherByCityProvider(WeatherQuery(
+    // is untouched. 'Other places' has no real city to geocode. The watch
+    // itself lives in each day's chip Consumer (see _weatherChipSliver) so a
+    // report resolving repaints those chips, never the whole screen.
+    final weatherQuery = (cityKey != _kOtherPlaces &&
+            range?.start != null &&
+            range?.end != null)
+        ? WeatherQuery(
             city: cityKey,
             startDate: _fmt(range!.start!),
             endDate: _fmt(range.end!),
-          )))
-          .valueOrNull;
-    }
+          )
+        : null;
     // Today mode: the header for today's trip day (if any) gets a visible
     // highlight; undated/past/future trips resolve to null and render as-is.
     final todayDay =
@@ -1949,15 +1947,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             ? _tonightCaption(theme, _derive(trip).staysOnNight(day))
             : null;
         // Weather chip for this day, if the report covers its date. Historical
-        // reports carry last year's month-day, so we match on month-day.
+        // reports carry last year's month-day, so we match on month-day. The
+        // sliver exists whenever a lookup is possible and renders zero-size
+        // until (unless) the report resolves and covers the day — a Consumer,
+        // so the resolution repaints only this chip.
         Widget? weatherChip;
-        if (weatherReport != null && tripStart != null) {
+        if (weatherQuery != null && tripStart != null) {
           final md = _fmt(tripStart.add(Duration(days: day - 1))).substring(5);
-          final wd = weatherReport.dayFor(md);
-          if (wd != null) {
-            weatherChip =
-                _weatherChip(theme, wd, weatherReport.isHistorical);
-          }
+          weatherChip = Consumer(
+            builder: (context, ref, _) {
+              final report = ref.watch(weatherByCityProvider(weatherQuery)
+                  .select((a) => a.valueOrNull));
+              final wd = report?.dayFor(md);
+              if (wd == null) return const SizedBox.shrink();
+              return _weatherChip(theme, wd, report!.isHistorical);
+            },
+          );
         }
         // A collapsed day pins nothing: pinning exists so a header stays
         // visible while its content scrolls beneath it, and a zero-body
@@ -3886,7 +3891,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// never build — one extra cached /weather call each, the accepted cost of
   /// per-visit rows. Loading or failed reports derive null and drop out;
   /// offline this is simply empty.
-  List<WearRegionRec> _legClothingRecs(Trip trip) {
+  List<WearRegionRec> _legClothingRecs(Trip trip, WidgetRef ref) {
+    // NOTE: [ref] is the packing row's Consumer ref, NOT the State's — the
+    // weather watches here must subscribe that row, never the whole screen
+    // (the screen-scope visibility gate is [_legClothingRecsVisible]).
     final derivation = _derive(trip);
     final raw = derivation.rawRanges;
     final visible = derivation.visibleRanges; // 1:1 by index with raw
@@ -3934,76 +3942,133 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // empty checklist); without weather the gate reduces exactly to the old
     // checklist-only rule, which mirrors ChecklistSection's own gates
     // (nothing until loaded; viewers with an empty list get no checklist).
-    final items = ref.watch(checklistProvider(trip.id)).valueOrNull;
-    final recs = _legClothingRecs(trip);
-    final showChecklist = items != null && !(items.isEmpty && _readOnly);
-    if (!showChecklist && recs.isEmpty) return null;
-    final checked = items?.where((i) => i.checked).length ?? 0;
-    // With recs in the summary slot, the checked-count stays glanceable via
-    // the pill (same chrome as ChecklistSection's standalone header).
-    final summary = recs.isNotEmpty
-        ? _wearSummary(recs)
-        : context.l10n.checklistSummary(checked, items!.length);
-    return CollapsibleSection(
-      title: context.l10n.wearSectionTitle,
-      icon: Icons.luggage_outlined,
-      summary: summary,
-      pill: (recs.isEmpty || items == null || items.isEmpty)
-          ? null
-          : StatusPill.custom(
-              label: '$checked/${items.length}',
-              background: theme.colorScheme.surfaceContainerHighest,
-              foreground: theme.colorScheme.onSurfaceVariant,
-            ),
-      expanded: _sectionExpanded('packing'),
-      onToggle: () => _toggleSection('packing'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (recs.isNotEmpty) WearRecsList(regions: recs),
-          if (recs.isNotEmpty && showChecklist) const Divider(height: 24),
-          ChecklistSection(
+    // The parent (whole-screen) watch is VISIBILITY only — narrow bool
+    // selects, so the screen rebuilds when the row appears or disappears
+    // (preserving _sectionCluster's null-counting divider contract) while
+    // content updates (checks ticked, weather details) rebuild only the
+    // Consumer below.
+    final showChecklistGate = ref.watch(checklistProvider(trip.id).select((a) {
+      final items = a.valueOrNull;
+      return items != null && !(items.isEmpty && _readOnly);
+    }));
+    if (!showChecklistGate && !_legClothingRecsVisible(trip)) return null;
+    return Consumer(
+      builder: (context, ref, _) {
+        final items = ref.watch(checklistProvider(trip.id)).valueOrNull;
+        final recs = _legClothingRecs(trip, ref);
+        final showChecklist = items != null && !(items.isEmpty && _readOnly);
+        // The parent gate and this content can disagree for one frame while
+        // a provider flips; render nothing rather than dereference a state
+        // the gate no longer justifies.
+        if (recs.isEmpty && !showChecklist) return const SizedBox.shrink();
+        final checked = items?.where((i) => i.checked).length ?? 0;
+        // With recs in the summary slot, the checked-count stays glanceable
+        // via the pill (same chrome as ChecklistSection's standalone header).
+        final summary = recs.isNotEmpty
+            ? _wearSummary(recs)
+            : context.l10n.checklistSummary(checked, items!.length);
+        return CollapsibleSection(
+          title: context.l10n.wearSectionTitle,
+          icon: Icons.luggage_outlined,
+          summary: summary,
+          pill: (recs.isEmpty || items == null || items.isEmpty)
+              ? null
+              : StatusPill.custom(
+                  label: '$checked/${items.length}',
+                  background: theme.colorScheme.surfaceContainerHighest,
+                  foreground: theme.colorScheme.onSurfaceVariant,
+                ),
+          expanded: _sectionExpanded('packing'),
+          onToggle: () => _toggleSection('packing'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (recs.isNotEmpty) WearRecsList(regions: recs),
+              if (recs.isNotEmpty && showChecklist) const Divider(height: 24),
+              ChecklistSection(
+                tripId: trip.id,
+                canEdit: !_readOnly,
+                isOffline: _isOffline,
+                showHeader: false,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Visibility half of [_legClothingRecs]: does ANY leg currently have a
+  /// clothing recommendation? Watched at screen scope with per-leg bool
+  /// selects, so a weather report resolving flips this at most once — the
+  /// full recommendation content is watched only inside the packing row's
+  /// Consumer. The early return is deliberate: once one leg says visible,
+  /// later legs don't need subscriptions to answer the question.
+  bool _legClothingRecsVisible(Trip trip) {
+    for (final r in _derive(trip).rawRanges) {
+      if (r.label == _kOtherPlaces || r.start == null || r.end == null) {
+        continue;
+      }
+      final has = ref.watch(weatherByCityProvider(WeatherQuery(
+        city: r.label,
+        startDate: _fmt(r.start!),
+        endDate: _fmt(r.end!),
+      )).select((a) {
+        final report = a.valueOrNull;
+        return report != null && clothingRec(report) != null;
+      }));
+      if (has) return true;
+    }
+    return false;
+  }
+
+  Widget? _budgetSectionRow(Trip trip, ThemeData theme) {
+    // Mirrors BudgetSection's own gates, like _packingSectionRow.
+    // Parent watch = VISIBILITY atoms only (loaded? target set? any
+    // expenses?) so spend/target edits rebuild the Consumer below, not the
+    // screen; null atoms mean not-loaded, which hides the row as before.
+    final hasTarget = ref.watch(budgetProvider(trip.id).select((a) {
+      final b = a.valueOrNull;
+      return b == null ? null : b.targetAmount != null;
+    }));
+    final expensesEmpty = ref.watch(
+        expensesProvider(trip.id).select((a) => a.valueOrNull?.isEmpty));
+    if (hasTarget == null || expensesEmpty == null) return null;
+    if (expensesEmpty && !hasTarget && _readOnly) return null;
+    return Consumer(
+      builder: (context, ref, _) {
+        final budget = ref.watch(budgetProvider(trip.id)).valueOrNull;
+        final expenses = ref.watch(expensesProvider(trip.id)).valueOrNull;
+        if (budget == null || expenses == null) {
+          return const SizedBox.shrink();
+        }
+        final hasTarget = budget.targetAmount != null;
+        final l10n = context.l10n;
+        final String summary;
+        if (hasTarget) {
+          summary = '${formatMoney(budget.spent, budget.currency)}'
+              ' / ${formatMoney(budget.targetAmount!, budget.currency)}';
+        } else if (expenses.isNotEmpty) {
+          summary =
+              '${l10n.budgetSummarySpent(formatMoney(budget.spent, budget.currency))}'
+              ' · ${l10n.budgetSummaryNoTarget}';
+        } else {
+          summary = l10n.budgetSummaryEmpty;
+        }
+        return CollapsibleSection(
+          title: l10n.budgetTitle,
+          icon: Icons.account_balance_wallet_outlined,
+          summary: summary,
+          expanded: _sectionExpanded('budget'),
+          onToggle: () => _toggleSection('budget'),
+          child: BudgetSection(
             tripId: trip.id,
             canEdit: !_readOnly,
             isOffline: _isOffline,
             showHeader: false,
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget? _budgetSectionRow(Trip trip, ThemeData theme) {
-    // Mirrors BudgetSection's own gates, like _packingSectionRow.
-    final budget = ref.watch(budgetProvider(trip.id)).valueOrNull;
-    final expenses = ref.watch(expensesProvider(trip.id)).valueOrNull;
-    if (budget == null || expenses == null) return null;
-    final hasTarget = budget.targetAmount != null;
-    if (expenses.isEmpty && !hasTarget && _readOnly) return null;
-    final l10n = context.l10n;
-    final String summary;
-    if (hasTarget) {
-      summary = '${formatMoney(budget.spent, budget.currency)}'
-          ' / ${formatMoney(budget.targetAmount!, budget.currency)}';
-    } else if (expenses.isNotEmpty) {
-      summary =
-          '${l10n.budgetSummarySpent(formatMoney(budget.spent, budget.currency))}'
-          ' · ${l10n.budgetSummaryNoTarget}';
-    } else {
-      summary = l10n.budgetSummaryEmpty;
-    }
-    return CollapsibleSection(
-      title: l10n.budgetTitle,
-      icon: Icons.account_balance_wallet_outlined,
-      summary: summary,
-      expanded: _sectionExpanded('budget'),
-      onToggle: () => _toggleSection('budget'),
-      child: BudgetSection(
-        tripId: trip.id,
-        canEdit: !_readOnly,
-        isOffline: _isOffline,
-        showHeader: false,
-      ),
+        );
+      },
     );
   }
 
@@ -4011,39 +4076,50 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // Base provider key (checkHours: false): the section's internal opt-in
     // hours check flips ITS key to the slower variant, so this collapsed
     // count can briefly lag while that toggle is on — accepted.
-    final findings =
-        ref.watch(tripReviewProvider(TripReviewKey(trip.id))).valueOrNull;
-    if (findings == null) return null;
-    final l10n = context.l10n;
-    final worst = TripReviewSection.worstSeverity(findings);
-    final colors =
-        worst == null ? null : TripReviewSection.severityColors(theme, worst);
-    return CollapsibleSection(
-      title: l10n.reviewSectionTitle,
-      icon: Icons.fact_check_outlined,
-      summary: findings.isEmpty ? l10n.reviewEmptyTitle : null,
-      pill: findings.isEmpty
-          ? null
-          : StatusPill.custom(
-              label: l10n.reviewCountToReview(findings.length),
-              background: colors!.bg,
-              foreground: colors.fg,
-            ),
-      expanded: _sectionExpanded('health'),
-      onToggle: () => _toggleSection('health'),
-      child: TripReviewSection(
-        tripId: trip.id,
-        isOffline: _isOffline,
-        onScrollToDay: _scrollToDay,
-        dayForItem: (itemId) {
-          for (final item in trip.items ?? const <ItineraryItem>[]) {
-            if (item.id == itemId) return item.day;
-          }
-          return null;
-        },
-        onApplyFix: _readOnly ? null : _applyFix,
-        showHeader: false,
-      ),
+    // Parent watch = loaded-or-not only; finding counts/severity render in
+    // the Consumer, so a background review refresh repaints the row alone.
+    final visible = ref.watch(tripReviewProvider(TripReviewKey(trip.id))
+        .select((a) => a.valueOrNull != null));
+    if (!visible) return null;
+    return Consumer(
+      builder: (context, ref, _) {
+        final findings = ref
+            .watch(tripReviewProvider(TripReviewKey(trip.id)))
+            .valueOrNull;
+        if (findings == null) return const SizedBox.shrink();
+        final l10n = context.l10n;
+        final worst = TripReviewSection.worstSeverity(findings);
+        final colors = worst == null
+            ? null
+            : TripReviewSection.severityColors(theme, worst);
+        return CollapsibleSection(
+          title: l10n.reviewSectionTitle,
+          icon: Icons.fact_check_outlined,
+          summary: findings.isEmpty ? l10n.reviewEmptyTitle : null,
+          pill: findings.isEmpty
+              ? null
+              : StatusPill.custom(
+                  label: l10n.reviewCountToReview(findings.length),
+                  background: colors!.bg,
+                  foreground: colors.fg,
+                ),
+          expanded: _sectionExpanded('health'),
+          onToggle: () => _toggleSection('health'),
+          child: TripReviewSection(
+            tripId: trip.id,
+            isOffline: _isOffline,
+            onScrollToDay: _scrollToDay,
+            dayForItem: (itemId) {
+              for (final item in trip.items ?? const <ItineraryItem>[]) {
+                if (item.id == itemId) return item.day;
+              }
+              return null;
+            },
+            onApplyFix: _readOnly ? null : _applyFix,
+            showHeader: false,
+          ),
+        );
+      },
     );
   }
 
@@ -4216,29 +4292,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         ],
         if (overview != null) ...[
           const SizedBox(height: 12),
-          Text(
-            overview,
+          // Self-contained show-more leaf: toggling it rebuilds this text
+          // block only, not the whole screen.
+          _OverviewText(
+            text: overview,
             style: theme.textTheme.bodyMedium
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            maxLines: _overviewExpanded ? null : 2,
-            overflow:
-                _overviewExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
           ),
-          if (overview.length > 140)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                onPressed: () =>
-                    setState(() => _overviewExpanded = !_overviewExpanded),
-                child: Text(
-                    _overviewExpanded ? l10n.tripShowLess : l10n.tripShowMore),
-              ),
-            ),
         ],
       ],
     );
@@ -6126,6 +6186,53 @@ class _ReorderSectionSheetState extends State<_ReorderSectionSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The trip overview paragraph with its "Show more/less" toggle — a
+/// self-contained leaf so expanding it rebuilds this block, never the
+/// screen that hosts it. Collapsed = 2 lines; the toggle only renders for
+/// text long enough to plausibly clip (same 140-char heuristic as before).
+class _OverviewText extends StatefulWidget {
+  final String text;
+  final TextStyle? style;
+
+  const _OverviewText({required this.text, this.style});
+
+  @override
+  State<_OverviewText> createState() => _OverviewTextState();
+}
+
+class _OverviewTextState extends State<_OverviewText> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          widget.text,
+          style: widget.style,
+          maxLines: _expanded ? null : 2,
+          overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+        ),
+        if (widget.text.length > 140)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: () => setState(() => _expanded = !_expanded),
+              child: Text(_expanded ? l10n.tripShowLess : l10n.tripShowMore),
+            ),
+          ),
+      ],
     );
   }
 }

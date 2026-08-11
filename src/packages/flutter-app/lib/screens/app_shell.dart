@@ -58,12 +58,21 @@ class AppShell extends ConsumerWidget {
         index: index,
         children: [
           for (var i = 0; i < navKeys.length; i++)
-            _TabNavigator(
-              navKey: navKeys[i],
-              // Fresh observer instances every build: an observer may only be
-              // attached to one navigator at a time (url_sync.dart).
-              observers: [TabUrlObserver(urlSync, i)],
-              child: _tabRoots[i],
+            // TickerMode freezes hidden tabs' animations/tickers (an open
+            // TripDetailScreen on a background tab otherwise keeps animating
+            // offscreen) while keeping their state, scroll positions, and
+            // GlobalKeys mounted — deliberately NOT unmounting or swapping
+            // placeholders, and NOT keyed off ModalRoute.isCurrent (a hidden
+            // tab's top route still reports current).
+            TickerMode(
+              enabled: i == index,
+              child: _TabNavigator(
+                navKey: navKeys[i],
+                // Fresh observer instances every build: an observer may only
+                // be attached to one navigator at a time (url_sync.dart).
+                observers: [TabUrlObserver(urlSync, i)],
+                child: _tabRoots[i],
+              ),
             ),
         ],
       ),
