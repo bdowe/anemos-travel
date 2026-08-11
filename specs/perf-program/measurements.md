@@ -83,3 +83,54 @@ Remaining follow-ups:
 - [ ] Authed TTFB medians (needs session token) — meaningful for Wave 2's
   before/after more than Wave 1's.
 - [ ] 429-count observation window (rate-limit retune evidence).
+
+## Waves 2–4 — post-deploy 2026-08-11 (prod 6ba9421)
+
+All merged + deploy-verified serially with prod SHA confirmation per merge:
+
+- **Wave 2** (#316 read-fanout, #317 batch-writes, #314 trip-open-parallel,
+  #315 plan-first-token) — prod 3a6e406.
+- **Wave 3** (#318 3C nav-tax, #319 3B chat-render-bundle, #320 3A web-boot)
+  — prod 27c5bfa.
+- **Wave 4** (#321 derivation memoization, #322 map isolation, #323 provider
+  scoping + shell TickerMode) — prod 6ba9421.
+
+Same-session relative measurements (the only kind this file trusts across
+days):
+
+| Metric | Value (2026-08-11) |
+|---|---|
+| `GET /api/v1/health` TTFB ×5 | 0.195/0.110/0.103/0.092/0.103 s — median **0.103 s** |
+| static `version.json` TTFB ×5 | 0.122/0.095/0.094/0.089/0.121 s — median **0.095 s** |
+| API − static delta | **~8 ms** — the API now sits at the nginx/network floor (Wave 1B session-DELETE removal + 1A upstream keepalive) |
+| FontManifest families | **5** (was mdi + 16 KaTeX + Inter + …); **0** flutter_math_fork entries — #319's Docker strip verified on prod |
+| Service worker cache keys | all 3 sites `origin.length + 5` on prod — #320's base-href fix live; warm reloads can now serve main.dart.js from SW cache |
+
+Interaction-path wins (structural, verified by tests rather than timers):
+
+- Trip-detail derivation runs **once per data change** (identity-keyed memo +
+  `_itemOrderEpoch` contract, #321) instead of ~5-6× per setState.
+- Map selection = ~2 pin rebuilds, zero re-clustering (marker-list identity
+  cache, #322); day-chip taps rebuild the map subtree only.
+- Weather/checklist/budget/review resolutions repaint their rows, not the
+  screen; hidden shell tabs freeze their tickers (#323).
+- Chat streaming renders plain Text until commit (#319) — the O(n²)
+  re-parse is gone; TripCache writes coalesce to idle event-loop tasks
+  (#318).
+
+Incident note (for the CI record): #318's first two CI runs died to what
+looked like runner infra (SIGTERM mid-suite). It was
+`SchedulerBinding.scheduleTask(Priority.idle)` wedging flutter_test's
+fake-async pumps — a real bug, reproduced locally and fixed by switching the
+drain to `Timer.run` + an idempotent queue. Lesson recorded: a "canceled"
+Flutter CI job with a silent 2-3 min gap is a hung test, not flaky infra.
+
+Remaining follow-ups (unchanged owners):
+- [ ] BRIAN: Zen-browser feel check of prod (boot, trip open, row/pin taps,
+  tab switches) + about:profiling captures — the program's real acceptance
+  test.
+- [ ] Authed TTFB medians (needs a session token) for the (authed − unauth)
+  delta.
+- [ ] 429-count observation window before any rate-limit retune.
+- [ ] Deferred list (unchanged): --wasm experiment, MultiSliver structural
+  rewrite (measure post-Wave-4 first), compaction's blocking Haiku call.
