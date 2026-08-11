@@ -7,9 +7,9 @@
 // flutter_localizations loads the date symbols for the active locale before
 // first paint; outside a Flutter app (unit tests) intl falls back to en_US.
 
-import 'package:intl/intl.dart';
+import 'date_formats.dart';
 
-String _fmt(DateTime d) => DateFormat.MMMd().format(d);
+String _fmt(DateTime d) => mmmd().format(d);
 
 /// "Mon d – Mon d" from ISO start/end (same day collapses to one); null when
 /// either date is missing or unparseable.
@@ -17,8 +17,7 @@ String? tripDateRange(String? startIso, String? endIso) {
   final a = DateTime.tryParse(startIso ?? '');
   final b = DateTime.tryParse(endIso ?? '');
   if (a == null || b == null) return null;
-  final sameDay = a.year == b.year && a.month == b.month && a.day == b.day;
-  return sameDay ? _fmt(a) : '${_fmt(a)} – ${_fmt(b)}';
+  return formatShortRange(a, b);
 }
 
 /// "Mon d" from a single ISO date; null when missing or unparseable.

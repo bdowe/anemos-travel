@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:sliver_tools/sliver_tools.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/gradient_app_bar.dart';
@@ -46,8 +44,8 @@ import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../utils/calendar_links.dart';
 import '../utils/clothing_recs.dart';
+import '../utils/date_formats.dart';
 import '../utils/leg_parity.dart';
-import '../utils/leg_ranges.dart';
 import '../utils/money_format.dart';
 import '../utils/share_link.dart';
 import '../utils/tracked_launch.dart';
@@ -78,6 +76,7 @@ import '../widgets/trip_refine_panel.dart';
 import '../widgets/wear_recs.dart';
 import 'flight_search_screen.dart';
 import 'local_guide_detail_screen.dart';
+import 'trip_detail_derivation.dart';
 import 'trip_map_screen.dart';
 import '../utils/snack.dart';
 
@@ -91,25 +90,9 @@ typedef _Coord = ({double lat, double lng});
 /// canonically defined next to the shared leg split (utils/trip_legs.dart).
 const _kOtherPlaces = kOtherPlacesLabel;
 
-/// Display text for a city-group label: the canonical [_kOtherPlaces] key gets
-/// a translated label, every real city keeps the name as-is.
-String _groupLabelText(AppLocalizations l10n, String label) =>
-    label == _kOtherPlaces ? l10n.tripOtherPlaces : label;
-
-/// City-header date-chip parts, kept separate so the header can align them as
-/// columns across rows: [range] renders left-aligned after the calendar icon,
-/// [nights] (the localized "· N nights" suffix) renders flush right. Null
-/// [nights] = zero-night squeezed leg — no nights widget renders at all.
-typedef _LegDateChip = ({String range, String? nights});
-
-/// One city group as built by [_TripDetailScreenState._buildGroups] and
-/// consumed by [_TripDetailScreenState._cityHeader].
-typedef _CityGroup = ({
-  String key,
-  String label,
-  _LegDateChip? dateRange,
-  List<ItineraryItem> items
-});
+// The city-group/date-chip/booking-slot shapes ([CityGroup], [LegDateChip],
+// [BookingSlot], [GroupedBookings]) and the label/filler helpers now live in
+// trip_detail_derivation.dart with the pipeline that builds them.
 
 // Canonical API values. These are sent to the server (or matched against
 // server data), so they are NEVER translated — only their display labels are.
@@ -198,12 +181,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // _collapsedDays; cities are keyed by run key (group.key) like
   // _expandedCities.
   final Map<String, GlobalKey> _dayHeaderKeys = {};
-  // Day keys of the CURRENT groups, collapsed ones included — recomputed each
-  // build. _dayHeaderKeys only gains entries when a group's slivers build, so
-  // on a cold all-collapsed screen it would be empty; day-jump resolution
-  // reads THIS set instead, so _scrollToDay can expand a group that has never
-  // rendered and still land (specs/today-mode).
-  Set<String> _liveDayKeys = const {};
   final Map<String, GlobalKey> _cityHeaderKeys = {};
   int?
       _selectedPosition; // position of the place focused via a map pin / list tap
@@ -253,72 +230,52 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // any failure — travel times are an enhancement and never block the itinerary.
   Map<int, LocationTiming> _travelByPos = {};
 
-  /// Itinerary items matching the active places lens, used by both the map
-  /// and the list so they stay in sync. 'unbooked' and 'bookings' are
-  /// bookings lenses, not places ones — the list swaps to booking rows while
-  /// the places set (and thus the maps) stays whole.
-  List<ItineraryItem> _filtered(Trip trip) {
-    final items = trip.items ?? const <ItineraryItem>[];
-    return switch (_itemFilter) {
-      'all' || 'unbooked' || 'bookings' => items.toList(),
-      'local' => items
-          .where((i) => (i.localSourceName ?? '').trim().isNotEmpty)
-          .toList(),
-      _ => items.where((i) => i.category == _itemFilter).toList(),
-    };
+  // ── Derivation memo (specs/perf-program, Wave 4 PR1) ──────────────────
+  // The whole per-build pipeline (filtered items, city groups, leg ranges,
+  // date chips, booking slots, map inputs) lives in TripDerivation
+  // (trip_detail_derivation.dart), computed once per input signature.
+
+  TripDerivation? _cachedDerivation;
+
+  /// Bumped by any IN-PLACE mutation of a derivation input, which
+  /// [_derive]'s identity checks cannot see. `_reorderBatchInline` is the
+  /// only such site; every other mutation path replaces its input objects
+  /// wholesale, so identity alone invalidates the memo.
+  int _itemOrderEpoch = 0;
+
+  /// THE access point for derived trip state — build and the non-build
+  /// readers (todo derivation, pin taps, scroll math, full-screen map) all
+  /// go through here, so they can never disagree. Returns the cached
+  /// derivation when the input signature still [TripDerivation.matches];
+  /// recomputes and caches otherwise. No explicit invalidation calls exist
+  /// anywhere — see [_itemOrderEpoch] for the one non-identity signal.
+  TripDerivation _derive(Trip trip) {
+    final l10n = context.l10n;
+    final cached = _cachedDerivation;
+    if (cached != null &&
+        cached.matches(
+          trip: trip,
+          bookingTodos: _bookingTodos,
+          stays: _stays,
+          segments: _segments,
+          travelByPos: _travelByPos,
+          itemFilter: _itemFilter,
+          l10n: l10n,
+          itemOrderEpoch: _itemOrderEpoch,
+        )) {
+      return cached;
+    }
+    return _cachedDerivation = TripDerivation.compute(
+      trip: trip,
+      bookingTodos: _bookingTodos,
+      stays: _stays,
+      segments: _segments,
+      travelByPos: _travelByPos,
+      itemFilter: _itemFilter,
+      l10n: l10n,
+      itemOrderEpoch: _itemOrderEpoch,
+    );
   }
-
-  /// [_filtered] further narrowed to a map day chip selection (null = All).
-  /// The maps are the only consumers — the itinerary list never day-filters.
-  /// Untagged items (day == null) show only under All.
-  List<ItineraryItem> _dayFiltered(Trip trip, int? day) {
-    return _filtered(trip).where((i) => day == null || i.day == day).toList();
-  }
-
-  /// The trip's user-confirmed stays. Suggested drafts (auto=true) are working
-  /// state for the bookings hub only — they must never feed the map, the
-  /// Tonight caption, or (crucially) [rawLegRanges]: seeded draft
-  /// dates flowing back into derivation would freeze the derived ranges.
-  List<Accommodation> _confirmedStays(Trip trip) =>
-      (trip.accommodations ?? const <Accommodation>[])
-          .where((a) => !a.auto)
-          .toList();
-
-  /// Stays the map should plot for a day chip selection: under All (null),
-  /// every stay; under Day N, only stays covering that night
-  /// (checkout-exclusive). A trip without a parseable start date can't map
-  /// Day N to a calendar date, so no stay matches (they all still show under
-  /// All).
-  List<Accommodation> _dayFilteredStays(Trip trip, int? day) {
-    if (day == null) return _confirmedStays(trip);
-    return _staysOnNight(trip, day);
-  }
-
-  /// Stays covering the night of trip day [day], checkout-exclusively — the
-  /// single home of the day→night math shared by the map's day filter and the
-  /// Tonight caption. A trip without a parseable start date can't map Day N
-  /// to a calendar date, so no stay matches.
-  List<Accommodation> _staysOnNight(Trip trip, int day) {
-    final all = _confirmedStays(trip);
-    final start = DateTime.tryParse(trip.startDate ?? '');
-    if (start == null) return const [];
-    // Calendar-day arithmetic (constructor normalizes overflow) rather than
-    // Duration, which drifts a date across a DST transition.
-    final night = DateTime(start.year, start.month, start.day + day - 1);
-    return all
-        .where((a) => stayCoversDate(a.checkIn, a.checkOut, night))
-        .toList();
-  }
-
-  /// Map-visibility gate: a filtered item with coordinates OR a geocoded stay
-  /// (TripMap renders stay pins on its own, so a stays-only trip still has a
-  /// map worth showing). Keyed to the unfiltered stay list — like the items,
-  /// day filtering only narrows what's plotted, never whether the map shows.
-  /// Shared by the build and the pinned-chrome scroll math so the two can
-  /// never drift apart.
-  bool _mapShown(Trip trip) =>
-      _filtered(trip).any((i) => i.latitude != 0 || i.longitude != 0) ||
-      _confirmedStays(trip).any(TripMap.stayHasCoords);
 
   @override
   void initState() {
@@ -602,7 +559,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// away, so it never rests above a target header) plus the itinerary
   /// title header.
   double _pinnedChrome(Trip trip) {
-    final mapShown = _mapShown(trip);
+    final mapShown = _derive(trip).mapShown;
     return ((_mapPinned && mapShown) ? _mapHeaderHeight : 0) +
         _listHeaderHeight;
   }
@@ -670,16 +627,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// The registry key of the day header [day] should scroll to: the first
   /// (build-order) header for that exact day, else the nearest prior day
-  /// with a header, else the nearest following. Candidates come from
-  /// [_liveDayKeys] — the current build's groups, collapsed ones included
-  /// (still reachable because [_scrollToDay] expands them first) — so days
-  /// removed by an edit can never linger as phantom targets.
+  /// with a header, else the nearest following. Candidates come from the
+  /// derivation's [TripDerivation.liveDayKeys] — the current groups,
+  /// collapsed ones included (still reachable because [_scrollToDay] expands
+  /// them first) — so days removed by an edit can never linger as phantom
+  /// targets.
   String? _resolveDayHeaderKey(int day) {
+    final trip = _trip;
+    if (trip == null) return null;
     String? prior;
     String? next;
     int? priorDay;
     int? nextDay;
-    for (final key in _liveDayKeys) {
+    for (final key in _derive(trip).liveDayKeys) {
       final hashAt = key.lastIndexOf('#');
       final d = int.tryParse(key.substring(hashAt + 1));
       if (d == null) continue;
@@ -846,7 +806,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// dates, and the header chips all agree — including squeezed legs, which
   /// read as a zero-night stop at their arrival.
   List<Map<String, dynamic>> _deriveTodos(Trip trip) {
-    final ranges = visibleLegRanges(trip);
+    final ranges = _derive(trip).visibleRanges;
     final todos = <Map<String, dynamic>>[];
     final legs = <String,
         ({
@@ -972,7 +932,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         'todo_key': 'stay:${label.toLowerCase()}',
         'title': 'Stay in $label',
         if (start != null && r.end != null)
-          'subtitle': _formatRange(start, r.end!),
+          'subtitle': formatShortRange(start, r.end!),
         'provider': 'airbnb',
         'position': pos++,
         'destination': label,
@@ -1001,127 +961,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return todos;
   }
 
-  /// Partitions [_bookingTodos] AND the confirmed stays/segments into
-  /// per-city embedded slots — the flight that arrives at the city, its stay,
-  /// and (for the last city) the return flight home — plus the residual lists
-  /// of everything that matched no city (user-added `custom:*` todos, stale
-  /// auto todos, confirmed records for legs no longer in the trip). Each todo
-  /// and record is claimed at most once, so repeated city labels still render
-  /// each booking exactly once.
-  ///
-  /// Confirmed records match their slot by the shared key grammar first
-  /// (`stay:<city>` / `transport:<a>>><b>` on auto_key, stamped when a draft
-  /// was confirmed) and fall back to the same fuzzy rules the old drafts
-  /// derivation used: stays by bidirectional name/address contains of the
-  /// city label, segments by destination (arrivals) or origin (departure)
-  /// equality — mirroring how the todo keys themselves are claimed.
-  ({
-    List<
-        ({
-          BookingTodo? arrival,
-          TripSegment? arrivalMatch,
-          BookingTodo? stay,
-          Accommodation? stayMatch,
-          BookingTodo? departure,
-          TripSegment? departureMatch,
-        })> slots,
-    List<BookingTodo> residual,
-    List<Accommodation> residualStays,
-    List<TripSegment> residualSegments,
-  }) _groupedBookings(List<String> groupLabels) {
-    final claimed = <String>{};
-    BookingTodo? claim(bool Function(BookingTodo) test) {
-      for (final t in _bookingTodos) {
-        if (!claimed.contains(t.id) && test(t)) {
-          claimed.add(t.id);
-          return t;
-        }
-      }
-      return null;
-    }
-
-    final confirmedStays = _stays.where((a) => !a.auto).toList();
-    final confirmedSegments = _segments.where((s) => !s.auto).toList();
-    final claimedStayIds = <String>{};
-    final claimedSegmentIds = <String>{};
-    Accommodation? claimStay(bool Function(Accommodation) test) {
-      for (final a in confirmedStays) {
-        if (!claimedStayIds.contains(a.id) && test(a)) {
-          claimedStayIds.add(a.id);
-          return a;
-        }
-      }
-      return null;
-    }
-
-    TripSegment? claimSegment(bool Function(TripSegment) test) {
-      for (final s in confirmedSegments) {
-        if (!claimedSegmentIds.contains(s.id) && test(s)) {
-          claimedSegmentIds.add(s.id);
-          return s;
-        }
-      }
-      return null;
-    }
-
-    final arrivals = <BookingTodo?>[];
-    final arrivalMatches = <TripSegment?>[];
-    final stays = <BookingTodo?>[];
-    final stayMatches = <Accommodation?>[];
-    for (final label in groupLabels) {
-      final l = label.toLowerCase();
-      arrivals.add(
-          claim((t) => t.kind == 'transport' && t.todoKey.endsWith('>>$l')));
-      arrivalMatches.add(claimSegment((s) =>
-          (s.autoKey?.endsWith('>>$l') ?? false) ||
-          s.destination?.toLowerCase() == l));
-      stays.add(claim((t) => t.todoKey == 'stay:$l'));
-      stayMatches.add(claimStay((a) {
-        if (a.autoKey == 'stay:$l') return true;
-        for (final field in [a.name, a.address]) {
-          final f = field?.toLowerCase();
-          if (f != null && f.isNotEmpty && (f.contains(l) || l.contains(f))) {
-            return true;
-          }
-        }
-        return false;
-      }));
-    }
-    // Claimed after all arrivals so an inter-city leg can't be taken as its
-    // origin's departure — only the final leg home remains unclaimed by then.
-    BookingTodo? departure;
-    TripSegment? departureMatch;
-    if (groupLabels.isNotEmpty) {
-      final last = groupLabels.last.toLowerCase();
-      departure = claim((t) =>
-          t.kind == 'transport' && t.todoKey.startsWith('transport:$last>>'));
-      departureMatch = claimSegment((s) =>
-          (s.autoKey?.startsWith('transport:$last>>') ?? false) ||
-          s.origin?.toLowerCase() == last);
-    }
-
-    return (
-      slots: [
-        for (var i = 0; i < groupLabels.length; i++)
-          (
-            arrival: arrivals[i],
-            arrivalMatch: arrivalMatches[i],
-            stay: stays[i],
-            stayMatch: stayMatches[i],
-            departure: i == groupLabels.length - 1 ? departure : null,
-            departureMatch:
-                i == groupLabels.length - 1 ? departureMatch : null,
-          ),
-      ],
-      residual: _bookingTodos.where((t) => !claimed.contains(t.id)).toList(),
-      residualStays: confirmedStays
-          .where((a) => !claimedStayIds.contains(a.id))
-          .toList(),
-      residualSegments: confirmedSegments
-          .where((s) => !claimedSegmentIds.contains(s.id))
-          .toList(),
-    );
-  }
+  // The per-city booking-slot partition lives in
+  // [TripDerivation.groupedBookings] (trip_detail_derivation.dart).
 
   /// The one "Booked" writer: flips the todo and (when the slot has one) the
   /// matched confirmed record in lockstep, so every reader of either flag —
@@ -1383,14 +1224,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// vanish with zero visible feedback — open the run(s) holding items that
   /// weren't in the trip before the add.
   void _expandRunsOfNewItems(Set<String> beforeIds) {
-    final items = _trip?.items ?? const <ItineraryItem>[];
+    final trip = _trip;
+    if (trip == null) return;
+    final items = trip.items ?? const <ItineraryItem>[];
     final fresh = {
       for (final i in items)
         if (!beforeIds.contains(i.id)) i.id
     };
     if (fresh.isEmpty) return;
     setState(() {
-      for (final leg in tripLegs(items)) {
+      for (final leg in _derive(trip).legs) {
         if (leg.items.any((i) => fresh.contains(i.id))) {
           _expandedCities.add(leg.key);
         }
@@ -1993,7 +1836,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final start = DateTime.tryParse(t.startDate ?? '');
     final end = DateTime.tryParse(t.endDate ?? '');
     if (start != null && end != null && !end.isBefore(start)) {
-      return '$label · ${_formatRange(start, end)}';
+      return '$label · ${formatShortRange(start, end)}';
     }
     return label;
   }
@@ -2007,44 +1850,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// utils/trip_legs.dart).
   String? _cityOf(ItineraryItem item) => cityOf(item);
 
-  /// True for the AI's "city filler" placeholder — an item whose name is just
-  /// the city it renders under (e.g. name 'Prague', city 'Prague'), emitted for
-  /// days with no specific activities. Its text duplicates the city/day-trip
-  /// header it sits below, so hiding the tile is lossless.
-  bool _isCityFiller(ItineraryItem item) {
-    final name = item.name.trim().toLowerCase();
-    if (name.isEmpty) return false;
-    bool eq(String? s) => s != null && s.trim().toLowerCase() == name;
-    return eq(_cityOf(item)) || eq(item.dayTripFrom);
-  }
-
-  /// Groups items into consecutive runs sharing the same locality (the shared
-  /// [tripLegs] split), labelling each run with the date range precomputed for
-  /// that location (keyed by the first item's position).
-  ///
-  /// [label] is the display city and stays shared across runs (it feeds the
-  /// per-city weather/events/local-intel lookups). [key] identifies the *run*:
-  /// a trip that revisits a city (Athens → Fira → Oia → Fira) yields two runs
-  /// with the same label, and everything keyed per-header — the header
-  /// [GlobalKey]s, the collapse sets, the `key#day` day keys — must tell them
-  /// apart or two live widgets share one GlobalKey and the itinerary fails to
-  /// build. Repeats get a `#2`, `#3`, … suffix; the scroll helpers parse day
-  /// keys with `lastIndexOf('#')`, so a suffixed key round-trips fine.
-  List<_CityGroup> _buildGroups(
-    List<ItineraryItem> items,
-    Map<int, _LegDateChip> locationDates,
-  ) {
-    return [
-      for (final leg in tripLegs(items))
-        (
-          key: leg.key,
-          label: leg.label,
-          dateRange: locationDates[leg.items.first.position],
-          items: leg.items,
-        ),
-    ];
-  }
-
   /// Renders a hub group's items as slivers, split into "Day N" sub-sections
   /// when items carry day numbers (day-trip batching applied within each day).
   /// Each day is a [MultiSliver] whose header pins below the city header while
@@ -2057,10 +1862,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   List<Widget> _buildGroupItemSlivers(String cityKey, String groupKey,
       List<ItineraryItem> items, ThemeData theme, DateTime? tripStart,
       {required bool showTonight, ({DateTime? start, DateTime? end})? range}) {
-    // City-filler suppression happens here — NOT in _filtered — so an
-    // all-filler city keeps its group (city header + embedded booking rows;
-    // the slot<->group mapping indexes over the full itinerary).
-    items = items.where((it) => !_isCityFiller(it)).toList();
+    // City-filler suppression happens here — NOT in the derivation's
+    // filtered list — so an all-filler city keeps its group (city header +
+    // embedded booking rows; the slot<->group mapping indexes over the full
+    // itinerary).
+    items = items.where((it) => !isCityFiller(it)).toList();
     if (!items.any((it) => it.day != null)) {
       return _dayTripSectionSlivers(items, theme);
     }
@@ -2130,7 +1936,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         // repeated day numbers across city groups can't duplicate it.
         final trip = _trip;
         final tonight = (showTonight && day == todayDay && trip != null)
-            ? _tonightCaption(theme, _staysOnNight(trip, day))
+            ? _tonightCaption(theme, _derive(trip).staysOnNight(day))
             : null;
         // Weather chip for this day, if the report covers its date. Historical
         // reports carry last year's month-day, so we match on month-day.
@@ -2189,7 +1995,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   TextStyle? _chipTextStyle(ThemeData theme) =>
       theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.primary);
 
-  double _dateChipWidth(List<_CityGroup> groups, ThemeData theme) {
+  double _dateChipWidth(List<CityGroup> groups, ThemeData theme) {
     var style = _chipTextStyle(theme);
     // Text applies the boldText accessibility flag internally; TextPainter
     // does not — merge it here or measurement undershoots the rendered width.
@@ -2225,7 +2031,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// at the top of the scroll area while its group scrolls past; the opaque
   /// Material keeps items from showing through while pinned.
   Widget _cityHeader(
-      Trip trip, _CityGroup group, ThemeData theme, double dateChipWidth) {
+      Trip trip, CityGroup group, ThemeData theme, double dateChipWidth) {
     final l10n = context.l10n;
     final cityCollapsed = !_expandedCities.contains(group.key);
     final chipStyle = _chipTextStyle(theme);
@@ -2252,7 +2058,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        _groupLabelText(l10n, group.label),
+                        groupLabelText(l10n, group.label),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleSmall
@@ -2638,14 +2444,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// todo's flag when a todo row drives the entry, the record's otherwise) —
   /// the "Not booked yet" lens.
   List<Widget> _bookingRowWidgets(
-    ({
-      BookingTodo? arrival,
-      TripSegment? arrivalMatch,
-      BookingTodo? stay,
-      Accommodation? stayMatch,
-      BookingTodo? departure,
-      TripSegment? departureMatch,
-    }) slot, {
+    BookingSlot slot, {
     required bool departureOnly,
     bool unbookedOnly = false,
   }) {
@@ -2695,22 +2494,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// records that matched no city. Reuses the same row widgets (and the
   /// _setRowBooked writer) as the inline city view, so checking a box here
   /// behaves identically and the row leaves the lens on the rebuild.
-  List<Widget> _unbookedRows(
-    ({
-      List<
-          ({
-            BookingTodo? arrival,
-            TripSegment? arrivalMatch,
-            BookingTodo? stay,
-            Accommodation? stayMatch,
-            BookingTodo? departure,
-            TripSegment? departureMatch,
-          })> slots,
-      List<BookingTodo> residual,
-      List<Accommodation> residualStays,
-      List<TripSegment> residualSegments,
-    }) grouped,
-  ) {
+  List<Widget> _unbookedRows(GroupedBookings grouped) {
     final l10n = context.l10n;
     return [
       for (final (i, slot) in grouped.slots.indexed) ...[
@@ -2748,25 +2532,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// [destination] narrows to one leg label (null = all): slot i is included
   /// when labels[i] matches; residuals only under All or the 'Other places'
   /// chip (they matched no destination by definition). This filters the
-  /// OUTPUT of the one full-label _groupedBookings call — never re-run
-  /// _groupedBookings on a label subset: its claim-once matching is
+  /// OUTPUT of the one full-label groupedBookings partition — never re-run
+  /// the partition on a label subset: its claim-once matching is
   /// order-dependent, so a subset call would assign rows differently than
   /// the inline city view (docs/zen.md).
   List<Widget> _allBookingRows(
-    ({
-      List<
-          ({
-            BookingTodo? arrival,
-            TripSegment? arrivalMatch,
-            BookingTodo? stay,
-            Accommodation? stayMatch,
-            BookingTodo? departure,
-            TripSegment? departureMatch,
-          })> slots,
-      List<BookingTodo> residual,
-      List<Accommodation> residualStays,
-      List<TripSegment> residualSegments,
-    }) grouped,
+    GroupedBookings grouped,
     List<String> labels, {
     String? destination,
   }) {
@@ -2831,20 +2602,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// already in build, so this frame renders the clamped value (the
   /// _selectedDay clamp idiom).
   List<Widget> _bookingsLensBody(
-    ({
-      List<
-          ({
-            BookingTodo? arrival,
-            TripSegment? arrivalMatch,
-            BookingTodo? stay,
-            Accommodation? stayMatch,
-            BookingTodo? departure,
-            TripSegment? departureMatch,
-          })> slots,
-      List<BookingTodo> residual,
-      List<Accommodation> residualStays,
-      List<TripSegment> residualSegments,
-    }) grouped,
+    GroupedBookings grouped,
     List<String> labels,
   ) {
     final l10n = context.l10n;
@@ -3006,7 +2764,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       for (final it in items)
         if (batchIds.contains(it.id)) newOrder[next++] else it,
     ];
-    setState(() => items.setAll(0, newItems));
+    setState(() {
+      items.setAll(0, newItems);
+      // CONTRACT: any in-place mutation of a derivation input MUST bump the
+      // epoch. This setAll is the screen's ONE in-place write — the trip's
+      // item List keeps its identity, so [_derive]'s identity checks can't
+      // see the new order; the epoch bump is what invalidates the memo and
+      // lets this optimistic frame render the dragged order.
+      _itemOrderEpoch++;
+    });
     try {
       await ref
           .read(tripsApiServiceProvider)
@@ -3066,24 +2832,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return total;
   }
 
-  /// Travel-time labels for the trip map, keyed by the source item's position:
-  /// one entry per within-city leg (same hub, adjacent in itinerary order).
-  /// Empty while a category filter is active (legs aren't globally adjacent).
-  Map<int, String> _segmentLabels() {
-    final trip = _trip;
-    if (_itemFilter != 'all' || trip == null) return const {};
-    final items = trip.items ?? const <ItineraryItem>[];
-    final byPos = {for (final it in items) it.position: it};
-    final out = <int, String>{};
-    for (final it in items) {
-      final next = byPos[it.position + 1];
-      if (next == null || _hubOf(it) != _hubOf(next)) continue;
-      final t = _travelByPos[it.position];
-      if (t == null || t.travelToNextMin <= 0) continue;
-      out[it.position] = _fmtTravel(t.travelToNextMin);
-    }
-    return out;
-  }
+  // The map's travel-time labels live in [TripDerivation.segmentLabels].
 
   /// Travel time from the hub city to a day trip, e.g. "45 min from Paris",
   /// taken from the already-computed leg into the day trip's first stop. Null
@@ -3108,16 +2857,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         .tripTravelFromHub(_fmtTravel(timing.travelToNextMin), hub);
   }
 
-  /// Formats a travel duration: "45 min", "1h", or "1h 20m".
-  String _fmtTravel(int min) {
-    final l10n = context.l10n;
-    if (min < 60) return l10n.tripTravelMinutes(min);
-    final h = min ~/ 60;
-    final m = min % 60;
-    return m == 0
-        ? l10n.tripTravelHours(h)
-        : l10n.tripTravelHoursMinutes(h, m);
-  }
+  /// Formats a travel duration: "45 min", "1h", or "1h 20m" (the shared
+  /// [fmtTravel], which the derivation's map labels also use).
+  String _fmtTravel(int min) => fmtTravel(context.l10n, min);
 
   /// Day section header: shows the calendar date (day N -> startDate + (N-1))
   /// when the trip start is known, otherwise falls back to "Day N". The opaque
@@ -3448,9 +3190,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// section boundary — cross-day moves go through the edit sheet instead.
   Widget _itemMenu(ItineraryItem item) {
     final l10n = context.l10n;
-    final canUp = _moveNeighbor(item, -1) != null;
-    final canDown = _moveNeighbor(item, 1) != null;
-    final calendarRange = itemCalendarRange(_trip?.startDate, item.day);
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert),
       tooltip: l10n.tripPlaceActions,
@@ -3474,7 +3213,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             _deleteItem(item);
         }
       },
-      itemBuilder: (context) => [
+      itemBuilder: (context) {
+        // Computed lazily — only when the menu actually opens. At the old
+        // call-time spot these three ran O(items) work per rendered tile per
+        // build (specs/perf-program, Wave 4 PR1).
+        final canUp = _moveNeighbor(item, -1) != null;
+        final canDown = _moveNeighbor(item, 1) != null;
+        final calendarRange = itemCalendarRange(_trip?.startDate, item.day);
+        return [
         PopupMenuItem(
           value: 'edit',
           child: ListTile(
@@ -3548,7 +3294,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             contentPadding: EdgeInsets.zero,
           ),
         ),
-      ],
+        ];
+      },
     );
   }
 
@@ -3986,56 +3733,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return '$base&query=${Uri.encodeComponent('${it.name} ${it.address ?? ''}'.trim())}';
   }
 
-  /// Maps each itinerary item's position to its location's date-chip parts.
-  /// Delegates to [visibleLegRanges] so the itinerary labels and the booking
-  /// checklist derive dates the same way. The two derivations index-align by
-  /// construction: both run the same [tripLegs] split over the same items. The
-  /// visible ranges are arrival-adjusted, matching the stay todos — a leg whose
-  /// items collapse onto one day reads "Sep 24 – Sep 27", not a bare "Sep 27"
-  /// contradicting the stay row beneath it, and a squeezed leg collapses to a
-  /// zero-night stop at its arrival. Multi-night legs carry a localized nights
-  /// suffix ("· 3 nights") computed from the same range pair; squeezed
-  /// zero-night legs get `nights: null` and render the bare single date. Both
-  /// strings are final display text — [_dateChipWidth] measures these exact
-  /// strings, never re-formatted copies (the range follows
-  /// Intl.defaultLocale via DateFormat while nights follows the widget
-  /// locale, so re-deriving could measure different text than renders).
-  Map<int, _LegDateChip> _locationDates(Trip trip) {
-    final l10n = context.l10n;
-    final items = trip.items ?? const <ItineraryItem>[];
-    if (items.isEmpty) return const {};
-    final ranges = visibleLegRanges(trip);
-    final legs = tripLegs(items);
-    final result = <int, _LegDateChip>{};
-    for (var gi = 0; gi < legs.length; gi++) {
-      final start = ranges[gi].start;
-      final end = ranges[gi].end;
-      if (start == null || end == null) continue;
-      final nights = nightsBetween(start, end);
-      final chip = (
-        range: _formatRange(start, end),
-        nights: nights > 0 ? l10n.tripLegNights(nights) : null,
-      );
-      for (final item in legs[gi].items) {
-        result[item.position] = chip;
-      }
-    }
-    return result;
-  }
-
-  // The leg date-range derivation (raw + visible) lives in
+  // The per-position date chips live in [TripDerivation.locationDates]; the
+  // leg date-range derivation itself (raw + visible) stays in
   // utils/leg_ranges.dart (specs/trip-dates-truth stage 0a) — one testable
-  // definition shared with the booking-todo derivation and, soon, the Go
-  // twin behind the server legs payload.
+  // definition shared with the booking-todo derivation and the Go twin
+  // behind the server legs payload.
 
-  String _formatRange(DateTime a, DateTime b) {
-    final sameDay = a.year == b.year && a.month == b.month && a.day == b.day;
-    return sameDay ? _fmtShortDt(a) : '${_fmtShortDt(a)} – ${_fmtShortDt(b)}';
-  }
-
-  /// "Jul 15" in English, "15 jul" in Spanish — DateFormat reads
+  /// "Jul 15" in English, "15 jul" in Spanish — the cached DateFormat reads
   /// Intl.defaultLocale, which the locale provider sets (specs/i18n-spanish).
-  String _fmtShortDt(DateTime d) => DateFormat.MMMd().format(d);
+  String _fmtShortDt(DateTime d) => mmmd().format(d);
 
   /// Coarse relative timestamp for the "Updated by X" line.
   String _relativeTime(String iso) {
@@ -4051,7 +3757,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Day-header date, e.g. "Wed, Jul 15" (weekday + month + day); Spanish
   /// reorders to "mié, 15 jul" on its own.
-  String _fmtDayHeader(DateTime d) => DateFormat.MMMEd().format(d);
+  String _fmtDayHeader(DateTime d) => mmmed().format(d);
 
   // ── Trailing collapsed sections ─────────────────────────────────────────
   // Trip health / Packing / Budget end the page as one-line summary rows,
@@ -4163,8 +3869,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// per-visit rows. Loading or failed reports derive null and drop out;
   /// offline this is simply empty.
   List<WearRegionRec> _legClothingRecs(Trip trip) {
-    final raw = rawLegRanges(trip);
-    final visible = visibleLegRanges(trip); // 1:1 by index with raw
+    final derivation = _derive(trip);
+    final raw = derivation.rawRanges;
+    final visible = derivation.visibleRanges; // 1:1 by index with raw
     final recs = <WearRegionRec>[];
     for (var i = 0; i < raw.length; i++) {
       final r = raw[i];
@@ -4519,27 +4226,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  /// Destination pins for the trip-overview map (the All chip): one per
-  /// location group with a real coordinate, in visit order, derived from the
-  /// FULL itinerary — never the day/category-filtered view, which would shift
-  /// the numbering (the home-leg doctrine in [_openFullMap]). Ungeocoded
-  /// groups are skipped so the visible numbering stays contiguous; TripMap
-  /// falls back to per-item pins below two entries, keeping single-city trips
-  /// on place-level detail.
-  List<TripMapDestination> _mapDestinations(Trip trip) {
-    final l10n = context.l10n;
-    return [
-      for (final r in rawLegRanges(trip))
-        if (r.coord != null)
-          TripMapDestination(
-            label: _groupLabelText(l10n, r.label),
-            point: LatLng(r.coord!.lat, r.coord!.lng),
-            dates: r.start != null && r.end != null
-                ? _formatRange(r.start!, r.end!)
-                : null,
-          ),
-    ];
-  }
+  // Destination pins live in [TripDerivation.mapDestinations]: one per
+  // location group with a real coordinate, in visit order, derived from the
+  // FULL itinerary — never the day/category-filtered view, which would shift
+  // the numbering (the home-leg doctrine in [_openFullMap]).
 
   /// The rounded map card shared by the wide (pinned header) and phone
   /// (scroll-away) layouts. When [expandable], the map is a static preview:
@@ -4555,7 +4245,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     Set<int> mappedDays, {
     required bool expandable,
   }) {
-    final endpoints = _homeLegEndpoints(trip);
+    final derivation = _derive(trip);
+    final endpoints = derivation.homeLegEndpoints;
     final home = homeOverlayFor(
       ref,
       homeAirport: _homeAirport,
@@ -4565,14 +4256,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       lastCityPoint: endpoints.last,
     );
     Widget map = TripMap(
-      items: _dayFiltered(trip, _selectedDay),
-      accommodations: _dayFilteredStays(trip, _selectedDay),
-      destinations: _selectedDay == null ? _mapDestinations(trip) : null,
+      items: derivation.dayFilteredItems(_selectedDay),
+      accommodations: derivation.dayFilteredStays(_selectedDay),
+      destinations:
+          _selectedDay == null ? derivation.mapDestinations : null,
       selectedPosition: _selectedPosition,
       // Unfiltered by day: TripMap's position+1 adjacency guard drops labels
       // across the gaps a day filter creates, and the category filter
       // already empties this map.
-      segmentLabels: _segmentLabels(),
+      segmentLabels: derivation.segmentLabels,
       home: home,
       fitSignature: _selectedDay,
       // Keep fitted markers clear of the chip row overlaid below.
@@ -4599,7 +4291,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 _selectedPosition = pos;
                 // The highlighted row can only be seen if its run renders:
                 // groups default collapsed, so open the tapped item's run.
-                for (final leg in tripLegs(trip.items!)) {
+                for (final leg in _derive(trip).legs) {
                   if (leg.items.any((i) => i.position == pos)) {
                     _expandedCities.add(leg.key);
                   }
@@ -4651,45 +4343,39 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  /// Home-leg endpoints are the trip's first/last location groups — the same
-  /// derivation the outbound/return booking todos trust — never the first/
-  /// last mapped pin, which shifts under day/category filters.
-  ({LatLng? first, LatLng? last}) _homeLegEndpoints(Trip trip) {
-    final ranges = rawLegRanges(trip);
-    final firstCoord = ranges.isEmpty ? null : ranges.first.coord;
-    final lastCoord = ranges.isEmpty ? null : ranges.last.coord;
-    return (
-      first:
-          firstCoord == null ? null : LatLng(firstCoord.lat, firstCoord.lng),
-      last: lastCoord == null ? null : LatLng(lastCoord.lat, lastCoord.lng),
-    );
-  }
+  // Home-leg endpoints live in [TripDerivation.homeLegEndpoints] — the
+  // trip's first/last location groups, the same derivation the
+  // outbound/return booking todos trust — never the first/last mapped pin,
+  // which shifts under day/category filters.
 
   /// Pushes the full-screen interactive map. Root navigator so the map
   /// covers the bottom navigation bar; the closures read the live [_trip] so
   /// a silent refresh propagates on the next chip tap.
   void _openFullMap(Trip trip, int mapDayCount, Set<int> mappedDays) {
-    final endpoints = _homeLegEndpoints(trip);
+    final derivation = _derive(trip);
+    final endpoints = derivation.homeLegEndpoints;
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => TripMapScreen(
           title: _displayTitle(trip),
-          destinations: _mapDestinations(trip),
+          destinations: derivation.mapDestinations,
           homeAirport: _homeAirport,
           firstCityPoint: endpoints.first,
           lastCityPoint: endpoints.last,
           itemsForDay: (d) {
             final t = _trip;
-            return t == null ? const <ItineraryItem>[] : _dayFiltered(t, d);
+            return t == null
+                ? const <ItineraryItem>[]
+                : _derive(t).dayFilteredItems(d);
           },
           staysForDay: (d) {
             final t = _trip;
             return t == null
                 ? const <Accommodation>[]
-                : _dayFilteredStays(t, d);
+                : _derive(t).dayFilteredStays(d);
           },
-          segmentLabels: _segmentLabels(),
+          segmentLabels: derivation.segmentLabels,
           dayCount: mapDayCount,
           mappedDays: mappedDays,
           initialDay: _selectedDay,
@@ -4841,16 +4527,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       final gutter = bodyWidth > _contentMaxWidth + 32
                           ? (bodyWidth - _contentMaxWidth) / 2
                           : 16.0;
+                      // One derivation per input signature — a view-only
+                      // setState (row select, expand/collapse, day chip…)
+                      // rebuilds against the cached object instead of
+                      // re-running the pipeline (Wave 4 PR1).
+                      final derivation = _derive(trip);
                       // City-matched bookings render inside their city group;
                       // the rest fall through to the Bookings section's
                       // "Other" sub-group.
-                      final legLabels = [
-                        for (final r in rawLegRanges(trip)) r.label
-                      ];
-                      final grouped = _groupedBookings(legLabels);
-                      final filtered = _filtered(trip);
-                      final groups =
-                          _buildGroups(filtered, _locationDates(trip));
+                      final legLabels = derivation.legLabels;
+                      final grouped = derivation.groupedBookings;
+                      final filtered = derivation.filtered;
+                      final groups = derivation.groups;
                       // Shared per-build chip width — see _dateChipWidth's
                       // doc for why this must stay a build-local.
                       final dateChipWidth = _dateChipWidth(groups, theme);
@@ -4865,37 +4553,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                           _expandedCities.add(groups.first.key);
                         }
                       }
-                      // Day-key registry from the CURRENT groups, not from
-                      // whatever happens to be built: a collapsed group's day
-                      // headers don't exist yet, but their keys must still
-                      // resolve so _scrollToDay can expand the group and land
-                      // (specs/today-mode). Mirrors _buildGroupItemSlivers'
-                      // day-header rule: non-filler items carrying a day tag.
-                      _liveDayKeys = {
-                        for (final g in groups)
-                          for (final it in g.items)
-                            if (!_isCityFiller(it) && it.day != null)
-                              '${g.key}#${it.day}',
-                      };
-                      for (final key in _liveDayKeys) {
+                      // Day-header GlobalKeys for the CURRENT groups' day
+                      // keys, not just whatever happens to be built: a
+                      // collapsed group's day headers don't exist yet, but
+                      // their keys must still resolve so _scrollToDay can
+                      // expand the group and land (specs/today-mode).
+                      for (final key in derivation.liveDayKeys) {
                         _dayHeaderKeys.putIfAbsent(key, GlobalKey.new);
                       }
                       // Date window per city group, for the embedded events
-                      // lookup (keyed by the same label _buildGroups uses).
-                      final groupRanges = {
-                        for (final r in rawLegRanges(trip))
-                          r.label: (start: r.start, end: r.end)
-                      };
+                      // lookup (keyed by the same label the groups use).
+                      final groupRanges = derivation.groupRanges;
                       final tripStart = DateTime.tryParse(trip.startDate ?? '');
                       // Map day chips (specs/today-mode). Day count spans the
                       // whole trip, not the category filter, so chips never
                       // come and go with the Attractions/Restaurants toggle.
-                      final mapDayCount = dayCount(
-                        trip.startDate,
-                        trip.endDate,
-                        (trip.items ?? const <ItineraryItem>[])
-                            .map((i) => i.day),
-                      );
+                      final mapDayCount = derivation.mapDayCount;
                       // A refresh can shrink the trip below a stale selection
                       // (fewer days after an edit); fall back to All. Plain
                       // assignment: we're already in build, so this frame
@@ -4907,20 +4580,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       // the fly-out day, all booking todos) get muted chips.
                       // Trip-wide like mapDayCount — the category filter never
                       // flickers the chip treatment.
-                      final mappedDays = daysWithMappedContent(
-                        trip.startDate,
-                        mapDayCount,
-                        [
-                          for (final i
-                              in trip.items ?? const <ItineraryItem>[])
-                            if (i.latitude != 0 || i.longitude != 0) i.day,
-                        ],
-                        [
-                          for (final a in _confirmedStays(trip))
-                            if (TripMap.stayHasCoords(a))
-                              (checkIn: a.checkIn, checkOut: a.checkOut),
-                        ],
-                      );
+                      final mappedDays = derivation.mappedDays;
                       // Today mode: the jump chip renders only when today
                       // falls inside the trip's dates AND some item carries a
                       // day tag (the same gate as the auto-scroll, so the
@@ -4935,16 +4595,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       // so resolve the FIRST group containing today's day
                       // once, here — exactly one caption can ever render.
                       // Matched on the run key, not the label: a revisited
-                      // city has two runs sharing a label.
-                      String? firstTodayGroupKey;
-                      if (todayDay != null) {
-                        for (final group in groups) {
-                          if (group.items.any((it) => it.day == todayDay)) {
-                            firstTodayGroupKey = group.key;
-                            break;
-                          }
-                        }
-                      }
+                      // city has two runs sharing a label. todayDay is
+                      // clock-derived, so it stays a build-local and queries
+                      // the derivation.
+                      final firstTodayGroupKey =
+                          derivation.firstGroupKeyForDay(todayDay);
                       // A loud load queued the one-shot auto-scroll; this is
                       // the first frame that actually mounts the scroll view
                       // (and registers the day-header keys), so kick it off
@@ -4982,7 +4637,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                           // to pin — a shorter static preview scrolls away
                           // with the page, and tapping it opens the
                           // full-screen map (TripMapScreen).
-                          if (_mapShown(trip))
+                          if (derivation.mapShown)
                             if (_mapPinned)
                               SliverPersistentHeader(
                                 pinned: true,

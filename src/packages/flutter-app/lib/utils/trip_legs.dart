@@ -50,6 +50,12 @@ String? cityOf(ItineraryItem item) {
   return cityFromAddress(item.address);
 }
 
+// Hoisted out of [cityFromAddress]: it runs per item per legs split, and a
+// RegExp compile per call was measurable on the trip-detail hot path
+// (specs/perf-program, Wave 4 PR1).
+final RegExp _whitespaceRe = RegExp(r'\s+');
+final RegExp _postalTokenRe = RegExp(r'^[0-9][0-9\-]*$');
+
 /// Fallback city from a formatted address. Drops the country (last segment)
 /// and strips postal-code tokens from the segment before it, e.g.
 /// "Av. ..., 1400-206 Lisboa, Portugal" -> "Lisboa"; a bare "Paris" stays as is.
@@ -64,9 +70,8 @@ String? cityFromAddress(String? address) {
   if (parts.length == 1) return parts.first;
   final candidate = parts[parts.length - 2]; // segment before the country
   final tokens = candidate
-      .split(RegExp(r'\s+'))
-      .where(
-          (t) => !RegExp(r'^[0-9][0-9\-]*$').hasMatch(t)) // drop postal tokens
+      .split(_whitespaceRe)
+      .where((t) => !_postalTokenRe.hasMatch(t)) // drop postal tokens
       .toList();
   final city = tokens.join(' ').trim();
   return city.isEmpty ? candidate : city;
