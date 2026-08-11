@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -182,5 +183,53 @@ void main() {
     expect(find.byType(TripMapScreen), findsNothing);
     final inlineChips = tester.widget<MapDayChips>(find.byType(MapDayChips));
     expect(inlineChips.selected, 2);
+  });
+
+  testWidgets(
+      'escape key closes the full-screen map; a day picked '
+      'there survives closing', (WidgetTester tester) async {
+    await pumpScreen(tester, surface: phone);
+
+    await tester.tap(find.byType(TripMap), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TripMapScreen), findsOneWidget);
+
+    final chips = find.byType(MapDayChips);
+    await tester.tap(find.descendant(of: chips, matching: find.text('Day 2')));
+    await tester.pump();
+    await tester.pump(); // post-frame camera re-fit
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    // Same pop path as the close button: screen gone, selection kept.
+    expect(find.byType(TripMapScreen), findsNothing);
+    final inlineChips = tester.widget<MapDayChips>(find.byType(MapDayChips));
+    expect(inlineChips.selected, 2);
+  });
+
+  testWidgets("escape closes the map from a pin-less day's empty state",
+      (WidgetTester tester) async {
+    // Wide surface: the phone-size inline preview behind the route has a
+    // pre-existing EmptyState overflow on pin-less days that would fail this
+    // test before Escape is ever pressed.
+    await pumpScreen(tester, surface: const Size(1200, 800));
+
+    await tester.tap(inMap(find.byIcon(Icons.fullscreen)));
+    await tester.pumpAndSettle();
+
+    // Day 3 has no pins: TripMap drops the FlutterMap (and its focused
+    // node) for the empty state, so Escape must work from the bare route
+    // scope — the case an in-screen shortcut wrapper would miss.
+    final chips = find.byType(MapDayChips);
+    await tester.tap(find.descendant(of: chips, matching: find.text('Day 3')));
+    await tester.pumpAndSettle();
+    expect(find.text('No places pinned on Day 3'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TripMapScreen), findsNothing);
   });
 }

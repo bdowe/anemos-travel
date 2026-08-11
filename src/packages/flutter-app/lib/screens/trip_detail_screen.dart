@@ -4469,6 +4469,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         fullscreenDialog: true,
+        // Escape closes the map when focus rests on the route's own scope
+        // (pin-less day: the empty state has no focusable map): the
+        // framework's Escape→DismissIntent handler pops any route with a
+        // dismissible barrier (PageRoute.barrierDismissible docs), and the
+        // barrier itself is never visible behind an opaque full-screen
+        // route. Escape from inside the Scaffold is handled by the
+        // CallbackShortcuts layer in TripMapScreen — see the comment there.
+        barrierDismissible: true,
         builder: (_) => TripMapScreen(
           title: _displayTitle(trip),
           destinations: derivation.mapDestinations,
