@@ -78,6 +78,7 @@ type BookingTodo struct {
 	Position   int32       `json:"position"`
 	CreatedAt  time.Time   `json:"created_at"`
 	UpdatedAt  time.Time   `json:"updated_at"`
+	Mode       *string     `json:"mode"`
 }
 
 type EmailToken struct {

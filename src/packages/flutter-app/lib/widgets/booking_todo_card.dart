@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
 import '../models/booking_todo.dart';
+import 'booking_sheets.dart' show transportModeIcon, transportModeLabel;
 
 IconData _kindIcon(BookingTodo todo) {
   switch (todo.kind) {
     case 'transport':
+      // A per-leg mode override names the icon exactly; otherwise the
+      // provider the leg was derived with implies it.
+      if (todo.mode case final mode?) return transportModeIcon(mode);
       switch (todo.provider) {
         case 'ferry':
           return Icons.directions_boat;
@@ -169,6 +173,12 @@ class BookingTodoRow extends StatelessWidget {
   /// keeps the width. The caller pairs this with short label overrides.
   final bool compact;
 
+  /// Per-leg transport-mode picker: when set on a transport row, the leading
+  /// kind icon becomes a small menu (fly/drive/train/bus/ferry) and picking a
+  /// mode calls back with the canonical value. Null (viewers, offline, slots
+  /// whose mode truth is a confirmed segment) keeps the plain icon.
+  final ValueChanged<String>? onModeChanged;
+
   const BookingTodoRow({
     super.key,
     required this.todo,
@@ -177,6 +187,7 @@ class BookingTodoRow extends StatelessWidget {
     this.openLabelOverride,
     this.onAddDetails,
     this.compact = false,
+    this.onModeChanged,
   });
 
   @override
@@ -187,7 +198,10 @@ class BookingTodoRow extends StatelessWidget {
       padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
       child: Row(
         children: [
-          Icon(_kindIcon(todo), size: 18, color: theme.colorScheme.primary),
+          if (todo.kind == 'transport' && onModeChanged != null)
+            _ModeMenu(todo: todo, onModeChanged: onModeChanged!)
+          else
+            Icon(_kindIcon(todo), size: 18, color: theme.colorScheme.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -245,6 +259,65 @@ class BookingTodoRow extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The row's per-leg mode picker: the kind icon plus a dropdown caret, opening
+/// a menu of the five leg modes. The current mode (the override when set, else
+/// the one the provider implies) is checkmarked; 'rome2rio' alone can't name a
+/// ground mode, so such rows simply show no checkmark until overridden.
+class _ModeMenu extends StatelessWidget {
+  static const _legModes = ['flight', 'car', 'train', 'bus', 'ferry'];
+
+  final BookingTodo todo;
+  final ValueChanged<String> onModeChanged;
+
+  const _ModeMenu({required this.todo, required this.onModeChanged});
+
+  String? get _currentMode =>
+      todo.mode ??
+      switch (todo.provider) {
+        'ferry' => 'ferry',
+        'google_flights' => 'flight',
+        _ => null,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final current = _currentMode;
+    return PopupMenuButton<String>(
+      tooltip: context.l10n.bookingRowModeTooltip,
+      onSelected: onModeChanged,
+      itemBuilder: (context) => [
+        for (final m in _legModes)
+          PopupMenuItem(
+            value: m,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(transportModeIcon(m),
+                    size: 18, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 12),
+                Text(transportModeLabel(context.l10n, m)),
+                if (m == current) ...[
+                  const SizedBox(width: 8),
+                  Icon(Icons.check,
+                      size: 18, color: theme.colorScheme.primary),
+                ],
+              ],
+            ),
+          ),
+      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_kindIcon(todo), size: 18, color: theme.colorScheme.primary),
+          Icon(Icons.arrow_drop_down,
+              size: 16, color: theme.colorScheme.onSurfaceVariant),
         ],
       ),
     );

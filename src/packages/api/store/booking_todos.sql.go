@@ -15,7 +15,7 @@ import (
 const createBookingTodo = `-- name: CreateBookingTodo :one
 INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
-RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at
+RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode
 `
 
 type CreateBookingTodoParams struct {
@@ -61,6 +61,7 @@ func (q *Queries) CreateBookingTodo(ctx context.Context, arg CreateBookingTodoPa
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Mode,
 	)
 	return i, err
 }
@@ -118,7 +119,7 @@ func (q *Queries) DeleteStaleAutoBookingTodos(ctx context.Context, arg DeleteSta
 }
 
 const listBookingTodosByTrip = `-- name: ListBookingTodosByTrip :many
-SELECT id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at FROM booking_todos WHERE trip_id = $1 ORDER BY position ASC, created_at ASC
+SELECT id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode FROM booking_todos WHERE trip_id = $1 ORDER BY position ASC, created_at ASC
 `
 
 func (q *Queries) ListBookingTodosByTrip(ctx context.Context, tripID uuid.UUID) ([]BookingTodo, error) {
@@ -146,6 +147,7 @@ func (q *Queries) ListBookingTodosByTrip(ctx context.Context, tripID uuid.UUID) 
 			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Mode,
 		); err != nil {
 			return nil, err
 		}
@@ -158,7 +160,7 @@ func (q *Queries) ListBookingTodosByTrip(ctx context.Context, tripID uuid.UUID) 
 }
 
 const setBookingTodoBooked = `-- name: SetBookingTodoBooked :one
-UPDATE booking_todos SET booked = $3 WHERE id = $1 AND trip_id = $2 RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at
+UPDATE booking_todos SET booked = $3 WHERE id = $1 AND trip_id = $2 RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode
 `
 
 type SetBookingTodoBookedParams struct {
@@ -186,6 +188,56 @@ func (q *Queries) SetBookingTodoBooked(ctx context.Context, arg SetBookingTodoBo
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Mode,
+	)
+	return i, err
+}
+
+const setBookingTodoMode = `-- name: SetBookingTodoMode :one
+UPDATE booking_todos
+SET mode = $3, provider = $4, search_url = $5
+WHERE id = $1 AND trip_id = $2 AND kind = 'transport'
+RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode
+`
+
+type SetBookingTodoModeParams struct {
+	ID        uuid.UUID `json:"id"`
+	TripID    uuid.UUID `json:"trip_id"`
+	Mode      *string   `json:"mode"`
+	Provider  *string   `json:"provider"`
+	SearchUrl *string   `json:"search_url"`
+}
+
+// Per-leg transport-mode override. Works on auto rows (like SetBookingTodoBooked
+// and unlike UpdateBookingTodo) and never touches booked/auto; provider and
+// search_url are rebuilt by the handler to match the new mode. transport-only
+// by design — a stay/other row 404s.
+func (q *Queries) SetBookingTodoMode(ctx context.Context, arg SetBookingTodoModeParams) (BookingTodo, error) {
+	row := q.db.QueryRow(ctx, setBookingTodoMode,
+		arg.ID,
+		arg.TripID,
+		arg.Mode,
+		arg.Provider,
+		arg.SearchUrl,
+	)
+	var i BookingTodo
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Kind,
+		&i.TodoKey,
+		&i.Title,
+		&i.Subtitle,
+		&i.Provider,
+		&i.SearchUrl,
+		&i.DepartDate,
+		&i.ReturnDate,
+		&i.Booked,
+		&i.Auto,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Mode,
 	)
 	return i, err
 }
@@ -262,7 +314,7 @@ SET kind        = COALESCE($1, kind),
     provider    = COALESCE($7, provider),
     booked      = COALESCE($8, booked)
 WHERE id = $9 AND trip_id = $10 AND auto = false
-RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at
+RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode
 `
 
 type UpdateBookingTodoParams struct {
@@ -312,6 +364,7 @@ func (q *Queries) UpdateBookingTodo(ctx context.Context, arg UpdateBookingTodoPa
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Mode,
 	)
 	return i, err
 }
@@ -328,7 +381,7 @@ ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     depart_date = EXCLUDED.depart_date,
     return_date = EXCLUDED.return_date,
     position = EXCLUDED.position
-RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at
+RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode
 `
 
 type UpsertBookingTodoParams struct {
@@ -374,6 +427,7 @@ func (q *Queries) UpsertBookingTodo(ctx context.Context, arg UpsertBookingTodoPa
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Mode,
 	)
 	return i, err
 }
@@ -427,9 +481,10 @@ type UpsertBookingTodosBatchParams struct {
 }
 
 // Batch twin of UpsertBookingTodo: one round trip for the whole derived set.
-// Same column list and the same ON CONFLICT update set — booked and auto are
-// deliberately absent from DO UPDATE, so a re-sync preserves the booked flag
-// (and never flips a row's auto marker). Nullable date columns ride as
+// Same column list and the same ON CONFLICT update set — booked, auto, and
+// mode are deliberately absent from DO UPDATE, so a re-sync preserves the
+// booked flag and the per-leg mode override (and never flips a row's auto
+// marker). Nullable date columns ride as
 // date[] with NULL elements; the nullable text columns ride as text[] plus a
 // parallel bool[] null mask, because sqlc maps text[] to []string, which
 // cannot carry NULL elements. The caller must dedupe todo_keys (last

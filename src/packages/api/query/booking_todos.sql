@@ -17,9 +17,10 @@ RETURNING *;
 
 -- name: UpsertBookingTodosBatch :exec
 -- Batch twin of UpsertBookingTodo: one round trip for the whole derived set.
--- Same column list and the same ON CONFLICT update set — booked and auto are
--- deliberately absent from DO UPDATE, so a re-sync preserves the booked flag
--- (and never flips a row's auto marker). Nullable date columns ride as
+-- Same column list and the same ON CONFLICT update set — booked, auto, and
+-- mode are deliberately absent from DO UPDATE, so a re-sync preserves the
+-- booked flag and the per-leg mode override (and never flips a row's auto
+-- marker). Nullable date columns ride as
 -- date[] with NULL elements; the nullable text columns ride as text[] plus a
 -- parallel bool[] null mask, because sqlc maps text[] to []string, which
 -- cannot carry NULL elements. The caller must dedupe todo_keys (last
@@ -68,6 +69,16 @@ RETURNING *;
 
 -- name: SetBookingTodoBooked :one
 UPDATE booking_todos SET booked = $3 WHERE id = $1 AND trip_id = $2 RETURNING *;
+
+-- name: SetBookingTodoMode :one
+-- Per-leg transport-mode override. Works on auto rows (like SetBookingTodoBooked
+-- and unlike UpdateBookingTodo) and never touches booked/auto; provider and
+-- search_url are rebuilt by the handler to match the new mode. transport-only
+-- by design — a stay/other row 404s.
+UPDATE booking_todos
+SET mode = $3, provider = $4, search_url = $5
+WHERE id = $1 AND trip_id = $2 AND kind = 'transport'
+RETURNING *;
 
 -- name: UpdateBookingTodo :one
 -- Partial update (COALESCE sqlc.narg idiom, see query/trips.sql UpdateTrip).

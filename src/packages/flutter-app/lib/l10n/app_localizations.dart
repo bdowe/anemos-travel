@@ -1178,6 +1178,12 @@ abstract class AppLocalizations {
   /// **'Booking options'**
   String get bookingRowOptions;
 
+  /// No description provided for @bookingRowModeTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Change transport mode'**
+  String get bookingRowModeTooltip;
+
   /// No description provided for @bookingsSummaryProgress.
   ///
   /// In en, this message translates to:
@@ -1777,72 +1783,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You\'re offline — reconnect to make changes.'**
   String get tripOfflineGuard;
-
-  /// No description provided for @tripTravelModeDriving.
-  ///
-  /// In en, this message translates to:
-  /// **'Driving'**
-  String get tripTravelModeDriving;
-
-  /// No description provided for @tripTravelModeByTrain.
-  ///
-  /// In en, this message translates to:
-  /// **'By train'**
-  String get tripTravelModeByTrain;
-
-  /// No description provided for @tripTravelModeByBus.
-  ///
-  /// In en, this message translates to:
-  /// **'By bus'**
-  String get tripTravelModeByBus;
-
-  /// No description provided for @tripTravelModeByFerry.
-  ///
-  /// In en, this message translates to:
-  /// **'By ferry'**
-  String get tripTravelModeByFerry;
-
-  /// No description provided for @tripTravelModeMixed.
-  ///
-  /// In en, this message translates to:
-  /// **'Mixed modes'**
-  String get tripTravelModeMixed;
-
-  /// No description provided for @tripTravelModeFlying.
-  ///
-  /// In en, this message translates to:
-  /// **'Flying'**
-  String get tripTravelModeFlying;
-
-  /// No description provided for @tripTravelModeUnset.
-  ///
-  /// In en, this message translates to:
-  /// **'Travel mode'**
-  String get tripTravelModeUnset;
-
-  /// No description provided for @tripTravelModeTooltip.
-  ///
-  /// In en, this message translates to:
-  /// **'Travel mode'**
-  String get tripTravelModeTooltip;
-
-  /// No description provided for @tripModeTrain.
-  ///
-  /// In en, this message translates to:
-  /// **'Train'**
-  String get tripModeTrain;
-
-  /// No description provided for @tripModeBus.
-  ///
-  /// In en, this message translates to:
-  /// **'Bus'**
-  String get tripModeBus;
-
-  /// No description provided for @tripModeFerry.
-  ///
-  /// In en, this message translates to:
-  /// **'Ferry'**
-  String get tripModeFerry;
 
   /// No description provided for @tripUpdateFailed.
   ///

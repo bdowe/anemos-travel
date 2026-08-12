@@ -18,6 +18,16 @@ String transportModeLabel(AppLocalizations l10n, String value) =>
       _ => value,
     };
 
+/// Icon for a canonical transport mode, paired with [transportModeLabel].
+IconData transportModeIcon(String value) => switch (value) {
+      'train' => Icons.train,
+      'bus' => Icons.directions_bus,
+      'car' => Icons.directions_car,
+      'ferry' => Icons.directions_boat,
+      'other' => Icons.commute,
+      _ => Icons.flight,
+    };
+
 /// Bottom-sheet form for adding or editing a stay. Pops with the POST/PATCH
 /// body map or null. With [initial] set the fields prefill and the labels flip
 /// to editing.

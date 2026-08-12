@@ -592,6 +592,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get bookingRowOptions => 'Opciones de la reserva';
 
   @override
+  String get bookingRowModeTooltip => 'Cambiar el modo de transporte';
+
+  @override
   String bookingsSummaryProgress(int booked, int total) {
     return '$booked de $total reservadas';
   }
@@ -917,39 +920,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get tripOfflineGuard =>
       'Estás sin conexión — vuelve a conectarte para hacer cambios.';
-
-  @override
-  String get tripTravelModeDriving => 'En coche';
-
-  @override
-  String get tripTravelModeByTrain => 'En tren';
-
-  @override
-  String get tripTravelModeByBus => 'En autobús';
-
-  @override
-  String get tripTravelModeByFerry => 'En ferry';
-
-  @override
-  String get tripTravelModeMixed => 'Modos combinados';
-
-  @override
-  String get tripTravelModeFlying => 'En avión';
-
-  @override
-  String get tripTravelModeUnset => 'Modo de viaje';
-
-  @override
-  String get tripTravelModeTooltip => 'Modo de viaje';
-
-  @override
-  String get tripModeTrain => 'Tren';
-
-  @override
-  String get tripModeBus => 'Autobús';
-
-  @override
-  String get tripModeFerry => 'Ferri';
 
   @override
   String tripUpdateFailed(String error) {

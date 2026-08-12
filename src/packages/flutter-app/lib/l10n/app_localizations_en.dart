@@ -584,6 +584,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookingRowOptions => 'Booking options';
 
   @override
+  String get bookingRowModeTooltip => 'Change transport mode';
+
+  @override
   String bookingsSummaryProgress(int booked, int total) {
     return '$booked of $total booked';
   }
@@ -907,39 +910,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tripOfflineGuard => 'You\'re offline — reconnect to make changes.';
-
-  @override
-  String get tripTravelModeDriving => 'Driving';
-
-  @override
-  String get tripTravelModeByTrain => 'By train';
-
-  @override
-  String get tripTravelModeByBus => 'By bus';
-
-  @override
-  String get tripTravelModeByFerry => 'By ferry';
-
-  @override
-  String get tripTravelModeMixed => 'Mixed modes';
-
-  @override
-  String get tripTravelModeFlying => 'Flying';
-
-  @override
-  String get tripTravelModeUnset => 'Travel mode';
-
-  @override
-  String get tripTravelModeTooltip => 'Travel mode';
-
-  @override
-  String get tripModeTrain => 'Train';
-
-  @override
-  String get tripModeBus => 'Bus';
-
-  @override
-  String get tripModeFerry => 'Ferry';
 
   @override
   String tripUpdateFailed(String error) {
