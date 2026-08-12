@@ -20,12 +20,18 @@ import 'package:travel_route_planner/widgets/booking_todo_card.dart';
 import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
-// Leading-edge alignment contract for the itinerary's booking surface: every
-// BookingTodoRow reserves the same fixed leading slot (kBookingRowLeadingSlot),
-// so titles share one x whether the row leads with the bare kind icon (stays,
-// menu-suppressed transport rows — same code branch) or with the wider
-// icon+caret mode menu. BookingDetailRow and the section headers align to the
-// same grid.
+// Alignment contracts for the itinerary's booking surface.
+//
+// Leading edge: every BookingTodoRow reserves the same fixed leading slot
+// (kBookingRowLeadingSlot), so titles share one x whether the row leads with
+// the bare kind icon (stays, menu-suppressed transport rows — same code
+// branch) or with the wider icon+caret mode menu. BookingDetailRow and the
+// section headers align to the same grid.
+//
+// Trailing edge: the open button renders its open_in_new glyph after the
+// label (iconAlignment.end), so with the fixed-width kebab + checkbox
+// packing the cluster right, every row's glyph lands on one column despite
+// varying label widths ("Open in Airbnb" vs "Find flights").
 
 class _FakeTripsApiService extends TripsApiService {
   final Trip trip;
@@ -182,5 +188,27 @@ void main() {
     // ...and its title still starts at the same x as the stay title.
     expect(dx(find.text('Paris → Rome')),
         moreOrLessEquals(stayTitleDx, epsilon: 0.1));
+  });
+
+  testWidgets('open buttons share one trailing column', (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, _twoCityTrip());
+
+    double dx(Finder f) => tester.getTopLeft(f).dx;
+
+    // The _inRow scoping is load-bearing: the Paris group also renders an
+    // EventCard with its own bare open_in_new, and the matched stay's
+    // BookingDetailRow carries trailing IconButtons.
+    await expandCity(tester, 'Paris');
+    // Differing label widths are what make the dx equality meaningful.
+    expect(_inRow('Stay in Paris', find.text('Open in Airbnb')),
+        findsOneWidget);
+    final iconDx =
+        dx(_inRow('Stay in Paris', find.byIcon(Icons.open_in_new)));
+
+    await expandCity(tester, 'Rome');
+    expect(_inRow('Paris → Rome', find.text('Find flights')), findsOneWidget);
+    expect(dx(_inRow('Paris → Rome', find.byIcon(Icons.open_in_new))),
+        moreOrLessEquals(iconDx, epsilon: 0.1));
   });
 }
