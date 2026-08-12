@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:travel_route_planner/main.dart';
+import 'package:travel_route_planner/navigation/app_nav.dart';
 import 'package:travel_route_planner/navigation/url_sync.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/live_trip_provider.dart';
@@ -13,18 +14,18 @@ import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
 import 'support/url_sync_fakes.dart';
 
-/// Nav buttons always land on the page they name (selectTab): selecting a tab
-/// resets that tab's stack to its root, so a trip detail left open on the
-/// Trips tab can never greet the user on the next Trips tap. The default
-/// 800x600 test surface is at kRailBreakpoint, so the NavigationRail renders
-/// and taps go through the real nav-button path.
+/// Nav-button contract (selectTab): Home always lands on its root, while
+/// Trips keeps your place — the first tap returns to the trip you were
+/// viewing, a second tap pops to the list. The default 800x600 test surface
+/// is at kRailBreakpoint, so the NavigationRail renders and taps go through
+/// the real nav-button path.
 void main() {
   late List<String> reports;
 
   Finder railDestination(String label) => find.descendant(
       of: find.byType(NavigationRail), matching: find.text(label));
 
-  Future<void> pumpApp(WidgetTester tester) async {
+  Future<ProviderContainer> pumpApp(WidgetTester tester) async {
     tester.binding.platformDispatcher.defaultRouteNameTestValue = '/';
     reports = <String>[];
     await tester.pumpWidget(
@@ -41,11 +42,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    return ProviderScope.containerOf(
+        tester.element(find.byType(TravelRoutePlannerApp)));
   }
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('switching tabs via nav buttons resets the destination to root',
+  testWidgets(
+      'Trips keeps your place: first tap returns to the trip, second pops to the list',
       (tester) async {
     await pumpApp(tester);
 
@@ -59,19 +63,53 @@ void main() {
     await tester.tap(railDestination('Home'));
     await tester.pumpAndSettle();
     expect(reports.last, '/');
-    final reportsAfterHome = reports.length;
 
+    // First Trips tap restores the trip that was open (and its URL).
+    await tester.tap(railDestination('Trips'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TripDetailScreen), findsOneWidget);
+    expect(reports.last, '/trips/t1');
+
+    // Second tap pops the tab to the list.
     await tester.tap(railDestination('Trips'));
     await tester.pumpAndSettle();
     expect(find.byType(TripDetailScreen), findsNothing);
     expect(find.text('Lisbon long weekend'), findsOneWidget);
     expect(reports.last, '/trips');
-    // Pop-before-switch: the detail's didPop drains while Home is still the
-    // active tab, so the stale '/trips/t1' never reaches the address bar.
-    expect(reports.sublist(reportsAfterHome), isNot(contains('/trips/t1')));
   });
 
-  testWidgets('re-tapping the active tab still pops it to root',
+  testWidgets('the Home button always lands on the Home root',
+      (tester) async {
+    // Home is not a stack-keeping tab: a page left on its stack (utility
+    // pushes via pushOnActiveTab land there) must not greet the user on the
+    // next Home tap. Pop-before-switch also keeps the stale page's URL out
+    // of the address bar.
+    final container = await pumpApp(tester);
+
+    container
+        .read(tabNavKeysProvider)[AppTab.home.index]
+        .currentState!
+        .push(locatedRoute(
+            const Scaffold(body: Text('stacked on home')), '/preferences'));
+    await tester.pumpAndSettle();
+    expect(find.text('stacked on home'), findsOneWidget);
+    expect(reports.last, '/preferences');
+
+    await tester.tap(railDestination('Trips'));
+    await tester.pumpAndSettle();
+    expect(reports.last, '/trips');
+    final reportsAfterTrips = reports.length;
+
+    await tester.tap(railDestination('Home'));
+    await tester.pumpAndSettle();
+    expect(find.text('stacked on home'), findsNothing);
+    expect(reports.last, '/');
+    // Pop-before-switch: the stacked page's didPop drains while Trips is
+    // still the active tab, so '/preferences' never reaches the address bar.
+    expect(reports.sublist(reportsAfterTrips), isNot(contains('/preferences')));
+  });
+
+  testWidgets('re-tapping the active Trips tab pops it to root',
       (tester) async {
     await pumpApp(tester);
 
