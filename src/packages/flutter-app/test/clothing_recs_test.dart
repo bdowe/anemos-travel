@@ -167,4 +167,197 @@ void main() {
       expect(s.rainLikely, isFalse);
     });
   });
+
+  group('effectiveAdvisories (the displayed set after band suppression)', () {
+    test('rain always survives, any band', () {
+      expect(effectiveAdvisories(rec(band: TempBand.hot, rainLikely: true)),
+          contains(WearAdvisory.rainLikely));
+      expect(effectiveAdvisories(rec(band: TempBand.freezing, rainLikely: true)),
+          contains(WearAdvisory.rainLikely));
+    });
+
+    test('extremeHeat suppressed only when the band already says hot', () {
+      expect(effectiveAdvisories(rec(band: TempBand.hot, extremeHeat: true)),
+          isNot(contains(WearAdvisory.extremeHeat)));
+      expect(effectiveAdvisories(rec(band: TempBand.warm, extremeHeat: true)),
+          contains(WearAdvisory.extremeHeat));
+    });
+
+    test('freezingNights suppressed for freezing/cold, kept for cool', () {
+      expect(
+          effectiveAdvisories(rec(band: TempBand.cold, freezingNights: true)),
+          isNot(contains(WearAdvisory.freezingNights)));
+      expect(
+          effectiveAdvisories(
+              rec(band: TempBand.freezing, freezingNights: true)),
+          isNot(contains(WearAdvisory.freezingNights)));
+      expect(
+          effectiveAdvisories(rec(band: TempBand.cool, freezingNights: true)),
+          contains(WearAdvisory.freezingNights));
+    });
+
+    test('bigSwing suppressed for cool and below, kept for mild', () {
+      expect(effectiveAdvisories(rec(band: TempBand.cool, bigSwing: true)),
+          isNot(contains(WearAdvisory.bigSwing)));
+      expect(effectiveAdvisories(rec(band: TempBand.cold, bigSwing: true)),
+          isNot(contains(WearAdvisory.bigSwing)));
+      expect(effectiveAdvisories(rec(band: TempBand.mild, bigSwing: true)),
+          contains(WearAdvisory.bigSwing));
+    });
+
+    test('no flags means no advisories', () {
+      expect(effectiveAdvisories(rec()), isEmpty);
+    });
+  });
+
+  group('groupWearRegions', () {
+    test('consecutive same-guidance legs fold into one row', () {
+      final groups = groupWearRegions([
+        region('Prague', '2026-08-24', '2026-08-27', rec(lo: 15, hi: 26)),
+        region('Kraków', '2026-08-27', '2026-09-01', rec(lo: 16, hi: 27)),
+        region('Berlin', '2026-09-01', '2026-09-04', rec(lo: 17, hi: 25)),
+      ]);
+      expect(groups, hasLength(1));
+      final g = groups.single;
+      expect(g.labels, ['Prague', 'Kraków', 'Berlin']);
+      expect(g.start, DateTime.parse('2026-08-24'));
+      expect(g.end, DateTime.parse('2026-09-04'));
+      expect(g.band, TempBand.warm);
+      expect(g.loC, 15);
+      expect(g.hiC, 27);
+    });
+
+    test('a different band splits', () {
+      final groups = groupWearRegions([
+        region('Prague', '2026-08-24', '2026-08-27', rec(band: TempBand.warm)),
+        region('Gothenburg', '2026-08-27', '2026-08-29',
+            rec(band: TempBand.mild, lo: 14, hi: 18)),
+      ]);
+      expect(groups, hasLength(2));
+    });
+
+    test('same band but rain-vs-dry splits (advisory set is the key)', () {
+      final groups = groupWearRegions([
+        region('Prague', '2026-08-24', '2026-08-27', rec(rainLikely: true)),
+        region('Kraków', '2026-08-27', '2026-09-01', rec()),
+      ]);
+      expect(groups, hasLength(2));
+    });
+
+    test('a suppressed-flag mismatch still merges (displayed content rule)', () {
+      // Both display just "Hot — …": extremeHeat is suppressed for the hot
+      // band, so the raw-flag difference must not block the merge.
+      final groups = groupWearRegions([
+        region('Athens', '2026-08-24', '2026-08-27',
+            rec(band: TempBand.hot, extremeHeat: true, lo: 25, hi: 36)),
+        region('Santorini', '2026-08-27', '2026-08-30',
+            rec(band: TempBand.hot, lo: 24, hi: 31)),
+      ]);
+      expect(groups, hasLength(1));
+      expect(groups.single.advisories, isEmpty);
+      expect(groups.single.loC, 24);
+      expect(groups.single.hiC, 36);
+    });
+
+    test('gap rule: one day apart merges, two days apart splits', () {
+      final oneDay = groupWearRegions([
+        region('Prague', '2026-08-24', '2026-08-27', rec()),
+        region('Kraków', '2026-08-28', '2026-08-31', rec()),
+      ]);
+      expect(oneDay, hasLength(1));
+
+      final twoDays = groupWearRegions([
+        region('Prague', '2026-08-24', '2026-08-27', rec()),
+        region('Kraków', '2026-08-29', '2026-09-01', rec()),
+      ]);
+      expect(twoDays, hasLength(2));
+    });
+
+    test('forecast-vs-historical kind never blocks; group ORs historical', () {
+      final groups = groupWearRegions([
+        region('Prague', '2026-08-24', '2026-08-27', rec()),
+        region('Kraków', '2026-08-27', '2026-09-01', rec(historical: true)),
+      ]);
+      expect(groups, hasLength(1));
+      expect(groups.single.historical, isTrue);
+    });
+
+    test('an adjacent revisit dedupes the label', () {
+      final groups = groupWearRegions([
+        region('Paris', '2026-09-15', '2026-09-16', rec()),
+        region('Paris', '2026-09-17', '2026-09-18', rec()),
+      ]);
+      expect(groups, hasLength(1));
+      expect(groups.single.labels, ['Paris']);
+    });
+
+    test('group envelope agrees with clothingSummary over the input', () {
+      final recs = [
+        rec(lo: 15, hi: 26, rainLikely: true),
+        rec(band: TempBand.mild, lo: 10, hi: 18),
+        rec(lo: 12, hi: 30),
+      ];
+      final groups = groupWearRegions([
+        region('Prague', '2026-08-24', '2026-08-27', recs[0]),
+        region('Gothenburg', '2026-08-27', '2026-08-30', recs[1]),
+        region('Lisbon', '2026-08-30', '2026-09-02', recs[2]),
+      ]);
+      var lo = groups.first.loC;
+      var hi = groups.first.hiC;
+      var rainy = false;
+      for (final g in groups) {
+        if (g.loC < lo) lo = g.loC;
+        if (g.hiC > hi) hi = g.hiC;
+        if (g.advisories.contains(WearAdvisory.rainLikely)) rainy = true;
+      }
+      final s = clothingSummary(recs);
+      expect(lo, s.loC);
+      expect(hi, s.hiC);
+      expect(rainy, s.rainLikely);
+    });
+
+    test('empty in, empty out; a single region passes through', () {
+      expect(groupWearRegions([]), isEmpty);
+      final groups = groupWearRegions([
+        region('Prague', '2026-08-24', '2026-08-27',
+            rec(rainLikely: true, historical: true)),
+      ]);
+      expect(groups, hasLength(1));
+      final g = groups.single;
+      expect(g.labels, ['Prague']);
+      expect(g.advisories, {WearAdvisory.rainLikely});
+      expect(g.historical, isTrue);
+      expect((g.loC, g.hiC), (15, 26));
+    });
+  });
 }
+
+/// Direct [ClothingRec] builder for grouping tests — grouping consumes the
+/// derived rec, so these bypass the day-level derivation pinned above.
+ClothingRec rec({
+  TempBand band = TempBand.warm,
+  bool rainLikely = false,
+  bool bigSwing = false,
+  bool extremeHeat = false,
+  bool freezingNights = false,
+  bool historical = false,
+  int lo = 15,
+  int hi = 26,
+}) =>
+    ClothingRec(
+      band: band,
+      rainLikely: rainLikely,
+      bigSwing: bigSwing,
+      extremeHeat: extremeHeat,
+      freezingNights: freezingNights,
+      historical: historical,
+      loC: lo,
+      hiC: hi,
+    );
+
+WearRegionRec region(String label, String start, String end, ClothingRec r) => (
+      label: label,
+      start: DateTime.parse(start),
+      end: DateTime.parse(end),
+      rec: r,
+    );

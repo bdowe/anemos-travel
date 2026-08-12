@@ -5401,6 +5401,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'rain likely'**
   String get wearSummaryRain;
+
+  /// No description provided for @wearHistoricalFootnote.
+  ///
+  /// In en, this message translates to:
+  /// **'Beyond the 16-day forecast, ranges show typical weather for these dates.'**
+  String get wearHistoricalFootnote;
 }
 
 class _AppLocalizationsDelegate

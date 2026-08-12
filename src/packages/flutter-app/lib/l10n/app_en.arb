@@ -2064,5 +2064,6 @@
   "wearBigSwing": "big day–night range, bring layers",
   "wearExtremeHeat": "very hot days, extra sun protection",
   "wearFreezingNights": "freezing nights, warm layers",
-  "wearSummaryRain": "rain likely"
+  "wearSummaryRain": "rain likely",
+  "wearHistoricalFootnote": "Beyond the 16-day forecast, ranges show typical weather for these dates."
 }

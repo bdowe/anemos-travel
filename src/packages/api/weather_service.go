@@ -152,7 +152,11 @@ func (s *WeatherService) GetTripWeather(ctx context.Context, city, startDate, en
 	// Real forecast whenever the range's REMAINING days fit the horizon —
 	// including mid-trip queries whose start date is already past (clamp the
 	// fetch to today). Only ranges ending beyond the horizon (or entirely in
-	// the past) fall back to last year's observations as "typical".
+	// the past) fall back to last year's observations as "typical". A range
+	// ending exactly at today+16 requests one day past Open-Meteo's modeled
+	// coverage (today..today+15); that day comes back null-valued and
+	// fetchDaily drops it — forecast for 15 of 16 days beats flipping the
+	// whole window to climatology.
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	fcStart := start
 	if fcStart.Before(today) {
@@ -176,13 +180,18 @@ func (s *WeatherService) GetTripWeather(ctx context.Context, city, startDate, en
 // the same daily-series shape, except the archive carries no precipitation
 // probability — and maps the response onto a WeatherReport.
 func (s *WeatherService) fetchDaily(ctx context.Context, geo geoResult, start, end time.Time, forecast bool) (WeatherReport, error) {
+	// Open-Meteo keeps every requested date in time[] but emits null metric
+	// values for days it cannot model (e.g. the day past the forecast
+	// horizon). Decoding null into a []float64 element silently leaves 0.0 —
+	// a phantom 0°C. Pointer slices keep absence explicit; the loop below
+	// drops any day missing either temperature.
 	var out struct {
 		Daily struct {
-			Time         []string  `json:"time"`
-			TempMax      []float64 `json:"temperature_2m_max"`
-			TempMin      []float64 `json:"temperature_2m_min"`
-			PrecipSum    []float64 `json:"precipitation_sum"`
-			PrecipChance []int     `json:"precipitation_probability_mean"`
+			Time         []string   `json:"time"`
+			TempMax      []*float64 `json:"temperature_2m_max"`
+			TempMin      []*float64 `json:"temperature_2m_min"`
+			PrecipSum    []*float64 `json:"precipitation_sum"`
+			PrecipChance []*int     `json:"precipitation_probability_mean"`
 		} `json:"daily"`
 	}
 	base, endpoint, daily, kind := s.ArchiveBaseURL, "archive",
@@ -196,20 +205,27 @@ func (s *WeatherService) fetchDaily(ctx context.Context, geo geoResult, start, e
 	if err := s.getJSON(ctx, u, &out); err != nil {
 		return WeatherReport{}, err
 	}
-	report := WeatherReport{Kind: kind}
+	report := WeatherReport{Kind: kind, Days: []WeatherDay{}}
 	for i, d := range out.Daily.Time {
-		day := WeatherDay{Date: d}
-		if i < len(out.Daily.TempMax) {
-			day.TempMaxC = out.Daily.TempMax[i]
-		}
+		var lo, hi *float64
 		if i < len(out.Daily.TempMin) {
-			day.TempMinC = out.Daily.TempMin[i]
+			lo = out.Daily.TempMin[i]
 		}
-		if i < len(out.Daily.PrecipSum) {
-			day.PrecipMM = out.Daily.PrecipSum[i]
+		if i < len(out.Daily.TempMax) {
+			hi = out.Daily.TempMax[i]
 		}
-		if forecast && i < len(out.Daily.PrecipChance) {
-			p := out.Daily.PrecipChance[i]
+		if lo == nil || hi == nil {
+			// A day without both temps is no data, not 0°C — drop it.
+			continue
+		}
+		day := WeatherDay{Date: d, TempMinC: *lo, TempMaxC: *hi}
+		// Missing precip keeps the day: 0mm already means "no rain signal",
+		// and a nil probability stays nil rather than shipping a false "0%".
+		if i < len(out.Daily.PrecipSum) && out.Daily.PrecipSum[i] != nil {
+			day.PrecipMM = *out.Daily.PrecipSum[i]
+		}
+		if forecast && i < len(out.Daily.PrecipChance) && out.Daily.PrecipChance[i] != nil {
+			p := *out.Daily.PrecipChance[i]
 			day.PrecipPct = &p
 		}
 		report.Days = append(report.Days, day)

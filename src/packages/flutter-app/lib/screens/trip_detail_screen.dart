@@ -3891,7 +3891,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// a revisited city's earlier visits query per-visit windows the chips
   /// never build — one extra cached /weather call each, the accepted cost of
   /// per-visit rows. Loading or failed reports derive null and drop out;
-  /// offline this is simply empty.
+  /// offline this is simply empty. Consecutive same-guidance recs fold into
+  /// one displayed row inside [WearRecsList] ([groupWearRegions]) — a
+  /// display-layer concern only, so the watches and [_wearSummary] stay
+  /// per-leg here.
   List<WearRegionRec> _legClothingRecs(Trip trip, WidgetRef ref) {
     // NOTE: [ref] is the packing row's Consumer ref, NOT the State's — the
     // weather watches here must subscribe that row, never the whole screen
@@ -3927,7 +3930,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Collapsed one-liner for the merged row: the cross-region temperature
   /// envelope plus the rain signal. Kind-neutral by design — the "typical"
-  /// qualifier stays on the expanded per-region rows.
+  /// qualifier lives in the expanded block's single footnote.
   String _wearSummary(List<WearRegionRec> recs) {
     final s = clothingSummary([for (final r in recs) r.rec]);
     // Spaced dash like the date ranges ("Sep 15 – Sep 20"), so a negative low

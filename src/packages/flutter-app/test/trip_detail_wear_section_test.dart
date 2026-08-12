@@ -23,12 +23,13 @@ import 'support/l10n_test_app.dart';
 
 /// The merged "What to wear & pack" section (specs/what-to-wear): collapsed
 /// summary = cross-region temperature envelope + rain signal; expanded =
-/// per-region deterministic phrases above the intact checklist; historical
-/// reports carry the "typical" qualifier ON THE WEAR ROW; a revisited city
-/// gets one row per visit with per-visit weather queries; a leg whose report
-/// is empty drops out without hiding the section; recommendations alone show
-/// the row for read-only viewers; without weather the old checklist gating
-/// holds.
+/// deterministic phrase rows above the intact checklist, with consecutive
+/// same-guidance legs folded into ONE grouped row (groupWearRegions);
+/// historical data yields a single trailing footnote, never a per-row
+/// qualifier; a revisited city keeps per-visit weather queries (distinct
+/// guidance keeps its rows separate); a leg whose report is empty drops out
+/// without hiding the section; recommendations alone show the row for
+/// read-only viewers; without weather the old checklist gating holds.
 
 class _FakeTripsApiService extends TripsApiService {
   final Trip trip;
@@ -217,6 +218,8 @@ void main() {
     expect(_inRecs('rain likely, pack an umbrella'), findsOneWidget);
     expect(_inRecs('typical for these dates'), findsNothing);
     expect(_inRecs('big day–night range'), findsNothing);
+    // All-forecast trip: no historical footnote either.
+    expect(_inRecs('Beyond the 16-day forecast'), findsNothing);
     // Recs and checklist both present → exactly one separating divider.
     expect(_wearSectionDividers(), findsOneWidget);
     // The checklist renders below, still editable: item row + add field.
@@ -225,7 +228,7 @@ void main() {
     expect(find.byType(TextField), findsWidgets);
   });
 
-  testWidgets('historical report carries the typical qualifier on its row',
+  testWidgets('historical: no per-row qualifier, one footnote after the rows',
       (tester) async {
     await _pump(
       tester,
@@ -238,22 +241,27 @@ void main() {
     await _expand(tester);
 
     expect(_inRecs('Warm — summer clothes'), findsOneWidget);
-    // Scoped to the wear block: the day chips also render this string, so an
-    // unscoped find would pass even if the wear row dropped it.
-    expect(_inRecs('typical for these dates'), findsOneWidget);
+    // The old per-row tail is gone. Scoped to the wear block: the day chips
+    // still render the shared qualifier string elsewhere on the screen, and
+    // wearHistoricalFootnote says "typical weather for these dates" so the
+    // footnote can never satisfy this substring by accident.
+    expect(_inRecs('typical for these dates'), findsNothing);
+    expect(_inRecs('Beyond the 16-day forecast'), findsOneWidget);
     // Dry historical days: no rain phrase, summary has no rain suffix.
     expect(find.textContaining('rain likely'), findsNothing);
     expect(find.text('17° – 27°'), findsOneWidget);
   });
 
-  testWidgets('a revisited city gets one row per visit, queried per window',
+  testWidgets('a revisited city queries per visit; distinct guidance keeps rows',
       (tester) async {
     // Paris (day 1) → Nice (day 2) → Paris (day 3): the wear rows must come
     // from the leg LIST, not a label-keyed map (which would collapse the two
-    // Paris visits into the last window).
+    // Paris visits into the last window). Bands differ on purpose — cool /
+    // mild / warm — so same-guidance grouping cannot merge them and the
+    // per-visit contract stays observable.
     final weather = _MapWeatherApiService({
       'Paris|2026-09-15': const WeatherReport(kind: 'forecast', days: [
-        WeatherDay(date: '2026-09-15', tempMinC: 10, tempMaxC: 18),
+        WeatherDay(date: '2026-09-15', tempMinC: 8, tempMaxC: 15),
       ]),
       'Nice|2026-09-16': const WeatherReport(kind: 'forecast', days: [
         WeatherDay(date: '2026-09-16', tempMinC: 14, tempMaxC: 22),
@@ -276,14 +284,80 @@ void main() {
     // Two Paris rows with their own visit windows and temps, Nice between.
     // Displayed dates are the VISIBLE ranges (arrival-inclusive, matching the
     // city headers); the weather queries below stay on the raw windows.
-    expect(_inRecs('Paris · Sep 15 · 10° – 18°'), findsOneWidget);
+    expect(_inRecs('Paris · Sep 15 · 8° – 15°'), findsOneWidget);
     expect(_inRecs('Nice · Sep 15 – Sep 16 · 14° – 22°'), findsOneWidget);
     expect(_inRecs('Paris · Sep 16 – Sep 17 · 16° – 25°'), findsOneWidget);
     // Both Paris visit windows were genuinely queried (per-visit keys).
     expect(weather.calls, contains('Paris|2026-09-15'));
     expect(weather.calls, contains('Paris|2026-09-17'));
-    // Collapsed summary spans all three legs: 10..25, no rain.
-    expect(find.text('10° – 25°'), findsOneWidget);
+    // Collapsed summary spans all three legs: 8..25, no rain.
+    expect(find.text('8° – 25°'), findsOneWidget);
+  });
+
+  testWidgets('consecutive same-guidance legs merge into one grouped row',
+      (tester) async {
+    // Paris and Nice both derive warm with no advisories → one row with the
+    // joined labels and the merged envelope. Exactly one band phrase pins the
+    // fold (a regression to per-leg rows would find two). The collapsed
+    // summary is computed from the UNGROUPED per-leg recs and must agree.
+    final weather = _MapWeatherApiService({
+      'Paris|2026-09-15': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-15', tempMinC: 16, tempMaxC: 24),
+      ]),
+      'Nice|2026-09-16': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-16', tempMinC: 15, tempMaxC: 23),
+      ]),
+    });
+    await _pump(
+      tester,
+      trip: _trip(items: [
+        _item(0, 'Louvre', 1),
+        _item(1, 'Promenade', 2, city: 'Nice'),
+      ]),
+      weather: weather,
+    );
+
+    expect(find.text('15° – 24°'), findsOneWidget);
+    await _expand(tester);
+    expect(
+        _inRecs('Paris, Nice · Sep 15 – Sep 16 · 15° – 24°'), findsOneWidget);
+    expect(_inRecs('Warm — summer clothes, a light evening layer'),
+        findsOneWidget);
+    expect(_inRecs('Beyond the 16-day forecast'), findsNothing);
+    // The display merged, but weather stayed per-leg.
+    expect(weather.calls, contains('Paris|2026-09-15'));
+    expect(weather.calls, contains('Nice|2026-09-16'));
+  });
+
+  testWidgets('forecast + historical legs still merge; one footnote total',
+      (tester) async {
+    // Kind must not block the fold — the nuance moves into the single
+    // footnote, which renders once for the whole block.
+    final weather = _MapWeatherApiService({
+      'Paris|2026-09-15': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-15', tempMinC: 16, tempMaxC: 24),
+      ]),
+      'Nice|2026-09-16': const WeatherReport(kind: 'historical', days: [
+        WeatherDay(date: '2025-09-16', tempMinC: 15, tempMaxC: 23),
+      ]),
+    });
+    await _pump(
+      tester,
+      trip: _trip(items: [
+        _item(0, 'Louvre', 1),
+        _item(1, 'Promenade', 2, city: 'Nice'),
+      ]),
+      weather: weather,
+    );
+    await _expand(tester);
+
+    expect(
+        _inRecs('Paris, Nice · Sep 15 – Sep 16 · 15° – 24°'), findsOneWidget);
+    expect(
+        _inRecs('Beyond the 16-day forecast, ranges show typical weather'
+            ' for these dates.'),
+        findsOneWidget);
+    expect(_inRecs('typical for these dates'), findsNothing);
   });
 
   testWidgets('a leg with an empty report drops out; the rest still render',
@@ -383,6 +457,28 @@ void main() {
         find.descendant(
             of: find.byType(WearRecsList),
             matching: find.textContaining('Cálido — ropa de verano')),
+        findsOneWidget);
+  });
+
+  testWidgets('renders the Spanish footnote for historical data',
+      (tester) async {
+    await initializeDateFormatting('es');
+    Intl.defaultLocale = 'es';
+    addTearDown(() => Intl.defaultLocale = null);
+
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: _dryHistorical,
+      locale: const Locale('es'),
+    );
+    await _expand(tester, title: 'Qué ponerte y qué llevar');
+
+    expect(
+        find.descendant(
+            of: find.byType(WearRecsList),
+            matching:
+                find.textContaining('el tiempo habitual en estas fechas')),
         findsOneWidget);
   });
 }

@@ -3161,4 +3161,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get wearSummaryRain => 'rain likely';
+
+  @override
+  String get wearHistoricalFootnote =>
+      'Beyond the 16-day forecast, ranges show typical weather for these dates.';
 }
