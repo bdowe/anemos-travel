@@ -7,6 +7,25 @@ actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 
 ## 2026-08-12 — trip-detail dogfooding (bookings view exit)
 
+- **[dev] Friction → watch (two in-flight lanes touched the hub file
+  `trip_detail_screen.dart`):** the parallel-dev rule is "at most one
+  in-flight lane may touch `trip_detail_screen.dart`" (docs/parallel-dev.md
+  §Parallel Development), but the accordion-focus lane (#339) and the
+  retire-trip-status lane (#338) were both open against it at once. It
+  integrated cleanly *this time* — #339 merged first, then #338 rebased onto
+  it with **zero git conflicts** because the two changed disjoint regions
+  (focus state machine vs. the status pill/field). But "no conflict" hid a
+  real trap: the rebase silently left two `Trip(status: …)` fixtures that
+  #339 *added* after #338 branched — #338's field-removal diff couldn't have
+  known about them — and only `flutter analyze` caught it (a clean rebase is
+  not a correct one). Lessons: (1) hold the one-lane-per-hub rule at wave
+  planning, not just hope the diffs miss each other; (2) when two lanes do
+  overlap a hub, the integrator must run the analyzer/tests after the rebase
+  even when git reports no conflicts — the dangerous case is the clean-but-
+  wrong merge, where one lane's *new* code uses a symbol the other lane
+  *removed*. No product impact; recorded so the next wave schedules
+  `trip_detail_screen.dart` lanes serially.
+
 - **[app] Friction → fixed (accordion city focus, supersedes the 08-11
   two-way rules):** the 08-11 city-focus feel didn't hold up in use —
   expanding one city didn't close the previously focused one; collapsing a
