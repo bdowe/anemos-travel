@@ -1160,6 +1160,24 @@ abstract class AppLocalizations {
   /// **'Add booking'**
   String get bookingsAddBooking;
 
+  /// No description provided for @bookingsMenuStay.
+  ///
+  /// In en, this message translates to:
+  /// **'Stay'**
+  String get bookingsMenuStay;
+
+  /// No description provided for @bookingsMenuTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport'**
+  String get bookingsMenuTransport;
+
+  /// No description provided for @bookingsMenuOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get bookingsMenuOther;
+
   /// No description provided for @tripOtherBookings.
   ///
   /// In en, this message translates to:

@@ -141,4 +141,18 @@ void main() {
     expect(find.text('Add place'), findsOneWidget);
     expect(find.byTooltip('Add place'), findsNothing);
   });
+
+  testWidgets('narrow Bookings view: icon-only Add booking replaces Add place',
+      (tester) async {
+    await _pump(tester, _trip(todos: oneTodo), surface: phone);
+
+    await tester.tap(find.text('Bookings · 0/1'));
+    await tester.pumpAndSettle();
+
+    // Same icon-only rule as Add place, same row-must-fit reason; the swap
+    // means the two add CTAs never share the header.
+    expect(find.text('Add booking'), findsNothing);
+    expect(find.byTooltip('Add booking'), findsOneWidget);
+    expect(find.byTooltip('Add place'), findsNothing);
+  });
 }

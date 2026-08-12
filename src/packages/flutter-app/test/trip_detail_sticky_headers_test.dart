@@ -79,8 +79,10 @@ void main() {
     // Scroll into the middle of Paris day 2, far enough that both the city
     // and day headers have reached their pinned slots. jumpTo keeps offsets
     // exact (drag gestures fling unpredictably past the target). Offsets
-    // retuned for the accordion: with Rome collapsed, only Paris's items
-    // contribute extent (max ~626), so 450/600 replace the old 550/700.
+    // retuned for the accordion (only the open Paris group contributes
+    // extent), then again when the add-button trio left the itinerary tail
+    // for the Bookings view's header menu: max extent is now ~570, so a
+    // 600 target would clamp — 450/570 replace the old 450/600.
     final position =
         tester.state<ScrollableState>(find.byType(Scrollable).first).position;
     position.jumpTo(450);
@@ -92,14 +94,14 @@ void main() {
 
     // Scroll a bit further, still within Paris day 2: the pinned city and
     // day headers hold their position while the items keep moving.
-    position.jumpTo(600);
+    position.jumpTo(570);
     await tester.pumpAndSettle();
 
     expect(
         tester.getTopLeft(find.text('Paris')).dy, moreOrLessEquals(parisDyA));
     expect(tester.getTopLeft(find.text('Day 2')).dy, moreOrLessEquals(day2DyA));
     expect(tester.getTopLeft(find.text('Paris stop 4')).dy,
-        moreOrLessEquals(stopDyA - 150));
+        moreOrLessEquals(stopDyA - 120));
     // Pinned headers sit on screen, day header below the city header.
     expect(parisDyA, greaterThan(0));
     expect(day2DyA, greaterThan(parisDyA));

@@ -583,6 +583,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get bookingsAddBooking => 'Añadir reserva';
 
   @override
+  String get bookingsMenuStay => 'Alojamiento';
+
+  @override
+  String get bookingsMenuTransport => 'Transporte';
+
+  @override
+  String get bookingsMenuOther => 'Otro';
+
+  @override
   String get tripOtherBookings => 'Otras reservas';
 
   @override
