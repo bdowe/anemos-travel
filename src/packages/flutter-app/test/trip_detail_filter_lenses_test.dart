@@ -150,6 +150,15 @@ Future<void> _selectFilter(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
+/// Taps the Bookings header tab by its exact label — callers pass the
+/// counted form ('Bookings · 1/2') so every use also pins the label the
+/// booked-progress count renders as (or the plain 'Bookings' when the
+/// trip has no todos).
+Future<void> _openBookingsTab(WidgetTester tester, String label) async {
+  await tester.tap(find.text(label));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets("Locals' picks lens shows only credited items", (tester) async {
     _useTallViewport(tester);
@@ -209,7 +218,9 @@ void main() {
           ],
         ));
 
-    await _selectFilter(tester, 'Not booked yet');
+    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
+    await tester.pumpAndSettle();
 
     // Places are swapped out for the left-to-book rows.
     expect(find.text('Louvre'), findsNothing);
@@ -235,8 +246,9 @@ void main() {
     expect(find.text("Everything's booked"), findsOneWidget);
   });
 
-  testWidgets('unbooked lens with nothing left to book celebrates',
-      (tester) async {
+  testWidgets(
+      'unbooked scope with nothing left to book celebrates; the selected '
+      'chip is the way back to every booking', (tester) async {
     _useTallViewport(tester);
     await _pump(
         tester,
@@ -249,14 +261,33 @@ void main() {
               booked: true),
         ]));
 
-    await _selectFilter(tester, 'Not booked yet');
+    await _openBookingsTab(tester, 'Bookings · 1/1');
+    expect(find.widgetWithText(BookingTodoRow, 'Stay in Paris'),
+        findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
+    await tester.pumpAndSettle();
 
     expect(find.text("Everything's booked"), findsOneWidget);
     expect(find.byType(BookingTodoRow), findsNothing);
+    // The scope chip renders selected above the celebration — the explicit
+    // why, and the one-tap path back to the full bookings list.
+    expect(
+        tester
+            .widget<FilterChip>(
+                find.widgetWithText(FilterChip, 'Not booked yet'))
+            .selected,
+        isTrue);
+    await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(BookingTodoRow, 'Stay in Paris'),
+        findsOneWidget);
+    expect(find.text("Everything's booked"), findsNothing);
   });
 
-  // ——— The 'All bookings' lens: trip-wide, booked and unbooked, filterable
-  // by destination, entered from the filter menu or the tappable counter.
+  // ——— The Bookings view: trip-wide, booked and unbooked, filterable by
+  // destination, entered from the Bookings header tab; the 'Not booked yet'
+  // scope chip inside it narrows to the left-to-book list.
 
   /// The unbooked-lens fixture: an unbooked stay todo with a matched
   /// confirmed stay, a BOOKED custom todo, and a BOOKED matched arrival
@@ -329,12 +360,12 @@ void main() {
             ],
       );
 
-  testWidgets('all-bookings lens shows booked and unbooked, no item tiles',
+  testWidgets('the Bookings tab shows booked and unbooked, no item tiles',
       (tester) async {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    await _selectFilter(tester, 'All bookings');
+    await _openBookingsTab(tester, 'Bookings · 1/2');
 
     expect(find.text('Louvre'), findsNothing);
     expect(find.text('Café de Flore'), findsNothing);
@@ -355,7 +386,7 @@ void main() {
     _useTallViewport(tester);
     final (todosApi, accApi) = await _pump(tester, mixedTrip());
 
-    await _selectFilter(tester, 'All bookings');
+    await _openBookingsTab(tester, 'Bookings · 1/2');
     await tester.tap(find.descendant(
         of: find.widgetWithText(BookingTodoRow, 'Stay in Paris'),
         matching: find.byType(Checkbox)));
@@ -375,7 +406,7 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, twoCityTrip());
 
-    await _selectFilter(tester, 'All bookings');
+    await _openBookingsTab(tester, 'Bookings · 0/2');
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
     expect(
@@ -415,7 +446,7 @@ void main() {
               auto: false),
         ]));
 
-    await _selectFilter(tester, 'All bookings');
+    await _openBookingsTab(tester, 'Bookings · 0/2');
     expect(
         find.widgetWithText(BookingTodoCard, 'Museum tickets'), findsOneWidget);
 
@@ -435,18 +466,31 @@ void main() {
     expect(find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsNothing);
   });
 
-  testWidgets('tapping the booked counter jumps into the all-bookings lens',
-      (tester) async {
+  testWidgets(
+      'the counted Bookings tab opens the bookings view; the Itinerary tab '
+      'is the way back', (tester) async {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    // '1 of 2 booked' — one booked custom todo of two todos.
-    await tester.tap(find.text('1 of 2 booked'));
-    await tester.pumpAndSettle();
+    // 'Bookings · 1/2' — one booked custom todo of two todos. The count
+    // rides the tab label (this tab replaced the old one-way counter).
+    await _openBookingsTab(tester, 'Bookings · 1/2');
 
     expect(find.text('Louvre'), findsNothing);
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
+    // The selected tab is bold; the unselected one isn't.
+    expect(tester.widget<Text>(find.text('Bookings · 1/2')).style?.fontWeight,
+        FontWeight.w700);
+    expect(tester.widget<Text>(find.text('Itinerary')).style?.fontWeight,
+        FontWeight.w500);
+
+    // The friction this feature fixes: leaving is one visible tap.
+    await tester.tap(find.text('Itinerary'));
+    await tester.pumpAndSettle();
+    expect(find.text('Louvre'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('Itinerary')).style?.fontWeight,
+        FontWeight.w700);
   });
 
   testWidgets('a revisited city gets one destination chip covering its runs',
@@ -488,7 +532,7 @@ void main() {
           ],
         ));
 
-    await _selectFilter(tester, 'All bookings');
+    await _openBookingsTab(tester, 'Bookings · 0/2');
     expect(find.widgetWithText(ChoiceChip, 'Paris'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Paris'));
@@ -498,7 +542,8 @@ void main() {
     expect(find.widgetWithText(BookingTodoRow, 'Stay in Rome'), findsNothing);
   });
 
-  testWidgets('viewers reach the lens from the menu; no counter, detail rows',
+  testWidgets(
+      'viewers get an un-counted Bookings tab that opens detail rows',
       (tester) async {
     _useTallViewport(tester);
     await _pump(
@@ -516,22 +561,115 @@ void main() {
           ],
         ));
 
-    // No todos (the server withholds them from viewers) — no counter.
+    // No todos (the server withholds them from viewers) — the tab label
+    // carries no count.
     expect(find.textContaining('booked'), findsNothing);
 
-    await _selectFilter(tester, 'All bookings');
+    await _openBookingsTab(tester, 'Bookings');
     expect(
         find.widgetWithText(BookingDetailRow, 'Hotel Lutetia'), findsOneWidget);
     expect(find.text('Louvre'), findsNothing);
   });
 
-  testWidgets('all-bookings lens with no bookings shows its empty state',
-      (tester) async {
+  testWidgets(
+      'Bookings tab with no bookings shows its empty state; the tabs stay '
+      'and lead back out', (tester) async {
     _useTallViewport(tester);
     await _pump(tester, _trip());
 
-    await _selectFilter(tester, 'All bookings');
+    await _openBookingsTab(tester, 'Bookings');
     expect(find.text('No bookings yet'), findsOneWidget);
     expect(find.byType(ChoiceChip), findsNothing);
+    // No scope chip in the nothing-at-all state — scoping an empty list is
+    // meaningless; the tabs are the escape.
+    expect(find.byType(FilterChip), findsNothing);
+
+    // The trap regression this feature exists to prevent: the way out stays
+    // visible even when the view is empty.
+    await tester.tap(find.text('Itinerary'));
+    await tester.pumpAndSettle();
+    expect(find.text('Louvre'), findsOneWidget);
+  });
+
+  testWidgets('the filter menu is places-only — no lens entries, no divider',
+      (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, mixedTrip());
+
+    await tester.tap(find.byIcon(Icons.filter_list));
+    await tester.pumpAndSettle();
+
+    expect(find.byWidgetPredicate((w) => w is CheckedPopupMenuItem),
+        findsNWidgets(4));
+    for (final label in ['All', 'Attractions', 'Restaurants', "Locals' picks"]) {
+      expect(find.text(label), findsOneWidget);
+    }
+    expect(find.text('All bookings'), findsNothing);
+    expect(find.text('Not booked yet'), findsNothing);
+    expect(find.byType(PopupMenuDivider), findsNothing);
+  });
+
+  testWidgets(
+      'a places filter round-trips through the Bookings tab back to All',
+      (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, mixedTrip());
+
+    await _selectFilter(tester, 'Restaurants');
+    expect(find.text('Café de Flore'), findsOneWidget);
+    expect(find.text('Louvre'), findsNothing);
+
+    // Entering the Bookings view drops the places filter (as the menu and
+    // counter always did)...
+    await _openBookingsTab(tester, 'Bookings · 1/2');
+    expect(
+        find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
+
+    // ...so returning lands on the full itinerary, not the stale filter.
+    await tester.tap(find.text('Itinerary'));
+    await tester.pumpAndSettle();
+    expect(find.text('Louvre'), findsOneWidget);
+    expect(find.text('Café de Flore'), findsOneWidget);
+  });
+
+  testWidgets(
+      're-tapping the selected Itinerary tab is a no-op that preserves an '
+      'active places filter', (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, mixedTrip());
+
+    await _selectFilter(tester, "Locals' picks");
+    expect(find.text('Café de Flore'), findsOneWidget);
+    expect(find.text('Louvre'), findsNothing);
+    // A places filter is an Itinerary-view state: the tab stays selected...
+    expect(tester.widget<Text>(find.text('Itinerary')).style?.fontWeight,
+        FontWeight.w700);
+
+    // ...and an idle tap on it doesn't clear the filter.
+    await tester.tap(find.text('Itinerary'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(find.text('Café de Flore'), findsOneWidget);
+    expect(find.text('Louvre'), findsNothing);
+  });
+
+  testWidgets(
+      "the 'Not booked yet' scope keeps the Bookings tab selected",
+      (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, mixedTrip());
+
+    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(BookingTodoRow, 'Stay in Paris'),
+        findsOneWidget);
+    expect(tester.widget<Text>(find.text('Bookings · 1/2')).style?.fontWeight,
+        FontWeight.w700);
+
+    // Itinerary exits the whole Bookings view, scope included.
+    await tester.tap(find.text('Itinerary'));
+    await tester.pumpAndSettle();
+    expect(find.text('Louvre'), findsOneWidget);
   });
 }

@@ -1184,12 +1184,6 @@ abstract class AppLocalizations {
   /// **'Change transport mode'**
   String get bookingRowModeTooltip;
 
-  /// No description provided for @bookingsSummaryProgress.
-  ///
-  /// In en, this message translates to:
-  /// **'{booked} of {total} booked'**
-  String bookingsSummaryProgress(int booked, int total);
-
   /// No description provided for @bookingsOpenListing.
   ///
   /// In en, this message translates to:
@@ -2366,11 +2360,17 @@ abstract class AppLocalizations {
   /// **'Nothing left to book on this trip — you\'re all set.'**
   String get tripFilterAllBookedMessage;
 
-  /// No description provided for @tripBookingsLensFilterLabel.
+  /// No description provided for @tripTabBookings.
   ///
   /// In en, this message translates to:
-  /// **'All bookings'**
-  String get tripBookingsLensFilterLabel;
+  /// **'Bookings'**
+  String get tripTabBookings;
+
+  /// No description provided for @tripTabBookingsCounted.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookings · {booked}/{total}'**
+  String tripTabBookingsCounted(int booked, int total);
 
   /// No description provided for @tripBookingsLensEmptyTitle.
   ///
@@ -2389,12 +2389,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No bookings for this destination.'**
   String get tripBookingsLensNoneForDestination;
-
-  /// No description provided for @tripBookingsLensCounterHint.
-  ///
-  /// In en, this message translates to:
-  /// **'View all bookings'**
-  String get tripBookingsLensCounterHint;
 
   /// No description provided for @tripFilterNoMatch.
   ///

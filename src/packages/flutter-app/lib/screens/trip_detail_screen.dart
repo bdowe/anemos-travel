@@ -96,16 +96,15 @@ const _kOtherPlaces = kOtherPlacesLabel;
 
 // Canonical API values. These are sent to the server (or matched against
 // server data), so they are NEVER translated — only their display labels are.
-// 'local', 'unbooked', and 'bookings' are client-only lenses: locals' picks
-// (items with a local_source_name credit), left-to-book booking rows, and the
-// trip-wide all-bookings list (destination-filterable).
-const _itemFilters = [
+// This is the "Filter places" popup menu: 'local' is a client-only lens
+// (items with a local_source_name credit). The Bookings-view states
+// ('bookings'/'unbooked') are NOT menu entries — the header view tabs and
+// the in-view scope chip own them; see _itemFilter for the full state space.
+const _menuFilters = [
   'all',
   'attraction',
   'restaurant',
   'local',
-  'unbooked',
-  'bookings',
 ];
 
 String _filterLabel(AppLocalizations l10n, String value) => switch (value) {
@@ -113,8 +112,6 @@ String _filterLabel(AppLocalizations l10n, String value) => switch (value) {
       'attraction' => l10n.tripFilterAttractions,
       'restaurant' => l10n.tripFilterRestaurants,
       'local' => l10n.tripFilterLocalPicks,
-      'unbooked' => l10n.tripFilterUnbooked,
-      'bookings' => l10n.tripBookingsLensFilterLabel,
       _ => value,
     };
 
@@ -152,11 +149,21 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // narrow ones); null target while closed.
   bool _panelOpen = false;
   RefineTarget? _refineTarget;
-  String _itemFilter = 'all'; // one of _itemFilters
+  // The active view/filter state. 'all' plus the _menuFilters place kinds
+  // render the grouped itinerary; 'bookings' and 'unbooked' are the Bookings
+  // view (entered from the header tab) and its left-to-book scope (the chip
+  // inside that view) — both replace the city groups with flat booking rows.
+  String _itemFilter = 'all';
   // Destination chip selection inside the 'bookings' lens (null = All).
   // Reset on every lens change so the lens always opens at All; clamped in
   // _bookingsLensBody against the current leg labels (edits can stale it).
   String? _bookingsLensDestination;
+
+  /// Whether the Bookings view (header tab) is active. Either lens state
+  /// replaces the grouped itinerary with flat booking rows, so the tab
+  /// highlight and the Today-scroll force-exit treat them as one view.
+  bool get _inBookingsView =>
+      _itemFilter == 'unbooked' || _itemFilter == 'bookings';
   // Focused leg on the map (specs/map-city-focus); null = All. Keyed by the
   // FULL-itinerary run key (leg.key, `#2`-suffixed on revisits) — never the
   // lens-dependent group key. A ValueNotifier so a chip tap rebuilds only
@@ -559,10 +566,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Map card height on phones, where the map scrolls away instead of
   /// pinning (a preview — the full-screen map is one tap away).
   static const double _mapHeightNarrow = 180;
-  // Itinerary title row (36) + bottom padding (8) + breathing room (4); the
-  // category filter lives in a popup menu inside the title row, so the
-  // header is one fixed-height row whether or not the trip has items.
-  static const double _listHeaderHeight = 48;
+  // Itinerary/Bookings tab row (44 — real touch targets for the view tabs)
+  // + bottom padding (8) + breathing room (4); the category filter lives in
+  // a popup menu inside the tab row, so the header is one fixed-height row
+  // whether or not the trip has items.
+  static const double _listHeaderHeight = 56;
 
   /// Combined height of the chrome pinned above the itinerary slivers: the
   /// map header (when it renders AND is pinned — on phones the map scrolls
@@ -620,8 +628,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final dayKey = _resolveDayHeaderKey(day);
     if (dayKey == null) return;
     final cityKey = dayKey.substring(0, dayKey.lastIndexOf('#'));
-    final inBookingsLens =
-        _itemFilter == 'unbooked' || _itemFilter == 'bookings';
+    final inBookingsLens = _inBookingsView;
     if (inBookingsLens ||
         !_expandedCities.contains(cityKey) ||
         _collapsedDays.contains(dayKey)) {
@@ -2742,6 +2749,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         : _allBookingRows(grouped, labels,
             destination: _bookingsLensDestination);
     return [
+      _bookingsScopeChip(),
       Padding(
         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
         child: ChoiceChipRow(
@@ -2764,6 +2772,73 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       else
         ...rows,
     ];
+  }
+
+  /// Booked-state scope for the Bookings view: off = every booking, on = the
+  /// left-to-book list. A moved entry point, not new behavior — it toggles
+  /// the same 'unbooked' state the filter menu used to own before the view
+  /// tabs landed.
+  Widget _bookingsScopeChip() => Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: FilterChip(
+            label: Text(context.l10n.tripFilterUnbooked),
+            selected: _itemFilter == 'unbooked',
+            onSelected: (v) => setState(() {
+              _itemFilter = v ? 'unbooked' : 'bookings';
+              _bookingsLensDestination = null;
+            }),
+          ),
+        ),
+      );
+
+  /// One header view tab ("Itinerary" / "Bookings · 2/21"). The selected tab
+  /// doesn't take taps — re-tap is a no-op, which also keeps an idle tap on
+  /// the already-selected Itinerary tab from clearing an active places
+  /// filter. The 2px underline is reserved (transparent) when unselected so
+  /// selection never shifts layout; Center(widthFactor: 1) hugs the label's
+  /// width while filling the header row's height for a real touch target.
+  Widget _headerTab(ThemeData theme,
+      {required String label,
+      required bool selected,
+      required VoidCallback onTap}) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        borderRadius: AppRadius.smAll,
+        onTap: selected ? null : onTap,
+        child: Center(
+          widthFactor: 1,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xs, 0, AppSpacing.xs, 4),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  width: 2,
+                  color: selected
+                      ? theme.colorScheme.primary
+                      : Colors.transparent,
+                ),
+              ),
+            ),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected
+                    ? theme.colorScheme.onSurface
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Batches consecutive day-trip places (by town) under an indented
@@ -4885,12 +4960,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                   ),
                                 ),
                               ),
-                          // Itinerary title row; pins beneath the map so the
-                          // Today jump, category filter, and Add place stay
-                          // reachable while scrolling. The filter is a popup
-                          // menu, not a chip row — one fixed-height row keeps
-                          // the pinned chrome (and the Today scroll math)
-                          // constant.
+                          // Itinerary/Bookings tab row; pins beneath the map
+                          // so the view tabs, Today jump, category filter,
+                          // and Add place stay reachable while scrolling.
+                          // The filter is a popup menu, not a chip row — one
+                          // fixed-height row keeps the pinned chrome (and
+                          // the Today scroll math) constant.
                           SliverPersistentHeader(
                             pinned: true,
                             delegate: _PinnedHeaderDelegate(
@@ -4904,90 +4979,81 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                               child: Align(
                                 alignment: Alignment.topLeft,
                                 child: SizedBox(
-                                  height: 36,
+                                  height: 44,
                                   child: Row(
                                     children: [
                                       Expanded(
-                                        child: Row(
-                                          children: [
-                                            Flexible(
-                                              child: Text(l10n.tripItinerary,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: theme
-                                                      .textTheme.titleMedium),
-                                            ),
-                                            // Booking progress, relocated from
-                                            // the retired Bookings section's
-                                            // header. Flexible so it gives way
-                                            // (ellipsis) before the row can
-                                            // overflow on narrow widths.
-                                            if (_bookingTodos.isNotEmpty) ...[
-                                              const SizedBox(width: 8),
-                                              // Tappable shortcut into the
-                                              // all-bookings lens; idempotent
-                                              // (the filter menu is the way
-                                              // back out). Pure view work, so
-                                              // not offline-gated. Padded so
-                                              // the hit target fills the 36px
-                                              // header row. Disabled on a
-                                              // place-less trip: the
-                                              // items-empty branch shadows
-                                              // the lens there and the filter
-                                              // menu (the only exit) is
-                                              // hidden — the tap would trap
-                                              // an invisible sticky lens.
-                                              Flexible(
-                                                child: Semantics(
-                                                  button: true,
-                                                  label: l10n
-                                                      .tripBookingsLensCounterHint,
-                                                  child: InkWell(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8),
-                                                    onTap: (trip.items ??
-                                                                const <
-                                                                    ItineraryItem>[])
-                                                            .isEmpty
-                                                        ? null
-                                                        : () => setState(() {
-                                                              _itemFilter =
-                                                                  'bookings';
-                                                              _bookingsLensDestination =
-                                                                  null;
-                                                            }),
-                                                    child: Padding(
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 4,
-                                                          vertical: 8),
-                                                      child: Text(
-                                                        l10n.bookingsSummaryProgress(
-                                                            _bookingTodos
-                                                                .where((t) =>
-                                                                    t.booked)
-                                                                .length,
-                                                            _bookingTodos
-                                                                .length),
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                        style: theme.textTheme
-                                                            .bodySmall
-                                                            ?.copyWith(
-                                                                color: theme
-                                                                    .colorScheme
-                                                                    .onSurfaceVariant),
-                                                      ),
+                                        // View tabs (pure view work, so not
+                                        // offline-gated). Hidden on a
+                                        // place-less trip: the items-empty
+                                        // branch shadows every lens there,
+                                        // so a Bookings tab would open a
+                                        // view that can never render — the
+                                        // plain title keeps the same gate
+                                        // as the filter menu.
+                                        child: (trip.items ??
+                                                    const <ItineraryItem>[])
+                                                .isEmpty
+                                            ? Text(l10n.tripItinerary,
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                                style: theme
+                                                    .textTheme.titleMedium)
+                                            : Row(
+                                                children: [
+                                                  Flexible(
+                                                    child: _headerTab(
+                                                      theme,
+                                                      label:
+                                                          l10n.tripItinerary,
+                                                      selected:
+                                                          !_inBookingsView,
+                                                      onTap: () =>
+                                                          setState(() {
+                                                        _itemFilter = 'all';
+                                                        _bookingsLensDestination =
+                                                            null;
+                                                      }),
                                                     ),
                                                   ),
-                                                ),
+                                                  const SizedBox(
+                                                      width: AppSpacing.md),
+                                                  // The booking progress
+                                                  // count rides the tab
+                                                  // label — this tab
+                                                  // replaced the counter
+                                                  // that was the old
+                                                  // (one-way) door into
+                                                  // this view.
+                                                  Flexible(
+                                                    child: _headerTab(
+                                                      theme,
+                                                      label: _bookingTodos
+                                                              .isEmpty
+                                                          ? l10n
+                                                              .tripTabBookings
+                                                          : l10n
+                                                              .tripTabBookingsCounted(
+                                                                  _bookingTodos
+                                                                      .where((t) =>
+                                                                          t.booked)
+                                                                      .length,
+                                                                  _bookingTodos
+                                                                      .length),
+                                                      selected:
+                                                          _inBookingsView,
+                                                      onTap: () =>
+                                                          setState(() {
+                                                        _itemFilter =
+                                                            'bookings';
+                                                        _bookingsLensDestination =
+                                                            null;
+                                                      }),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                            ],
-                                          ],
-                                        ),
                                       ),
                                       if (hasTodayTarget) ...[
                                         ActionChip(
@@ -5023,8 +5089,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                       ],
                                       // Category filter (pure view work, so
                                       // never offline-gated). Tinted when a
-                                      // filter is active — the only signal
-                                      // the menu is narrowing the list.
+                                      // places filter is narrowing the
+                                      // list — the bookings states signal
+                                      // through the view tabs instead.
                                       if ((trip.items ?? const [])
                                           .isNotEmpty)
                                         SizedBox(
@@ -5035,7 +5102,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                             padding: EdgeInsets.zero,
                                             icon: Icon(Icons.filter_list,
                                                 size: 20,
-                                                color: _itemFilter != 'all'
+                                                color: const {
+                                                  'attraction',
+                                                  'restaurant',
+                                                  'local'
+                                                }.contains(_itemFilter)
                                                     ? theme
                                                         .colorScheme.primary
                                                     : theme.colorScheme
@@ -5045,24 +5116,34 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                               _bookingsLensDestination = null;
                                             }),
                                             itemBuilder: (_) => [
-                                              for (final f
-                                                  in _itemFilters) ...[
-                                                // The bookings lens sits
-                                                // apart from the places
-                                                // lenses above it.
-                                                if (f == 'unbooked')
-                                                  const PopupMenuDivider(),
+                                              for (final f in _menuFilters)
                                                 CheckedPopupMenuItem(
                                                   value: f,
                                                   checked: _itemFilter == f,
                                                   child: Text(
                                                       _filterLabel(l10n, f)),
                                                 ),
-                                              ],
                                             ],
                                           ),
                                         ),
-                                      if (!_readOnly)
+                                      // Icon-only on phones: the tab pair +
+                                      // Today + filter + a labeled button
+                                      // can't all fit a 390px row with
+                                      // Spanish labels (precedent: the
+                                      // header Refine button becomes the
+                                      // app-bar sparkle on narrow).
+                                      if (!_readOnly && _narrow)
+                                        IconButton(
+                                          onPressed: _isOffline
+                                              ? null
+                                              : _addPlace,
+                                          tooltip: l10n.tripAddPlace,
+                                          visualDensity:
+                                              VisualDensity.compact,
+                                          icon:
+                                              const Icon(Icons.add, size: 20),
+                                        )
+                                      else if (!_readOnly)
                                         TextButton.icon(
                                           onPressed: _isOffline
                                               ? null
@@ -5097,15 +5178,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                               ),
                             )
                           else if (_itemFilter == 'unbooked')
-                            // Bookings lens: a flat left-to-book list in
-                            // place of the city groups (whose == 'all'
-                            // guards would hide the booking rows).
+                            // Bookings view, left-to-book scope: a flat list
+                            // in place of the city groups (whose == 'all'
+                            // guards would hide the booking rows). The scope
+                            // chip renders above BOTH arms — selected atop
+                            // the celebration it says why the list is empty
+                            // and is the one-tap way back to every booking.
                             SliverPadding(
                               padding:
                                   EdgeInsets.fromLTRB(gutter, 4, gutter, 0),
                               sliver: switch (_unbookedRows(grouped)) {
-                                [] => SliverToBoxAdapter(
-                                    child: SizedBox(
+                                [] => _boxSliver([
+                                    _bookingsScopeChip(),
+                                    SizedBox(
                                       height: 260,
                                       child: EmptyState(
                                         icon: Icons.celebration_outlined,
@@ -5114,8 +5199,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                             l10n.tripFilterAllBookedMessage,
                                       ),
                                     ),
-                                  ),
-                                final rows => _boxSliver(rows),
+                                  ]),
+                                final rows => _boxSliver(
+                                    [_bookingsScopeChip(), ...rows]),
                               },
                             )
                           else if (_itemFilter == 'bookings')

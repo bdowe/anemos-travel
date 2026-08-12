@@ -139,10 +139,9 @@ void main() {
     expect(tester.getTopLeft(find.text('Rome → JFK')).dy,
         greaterThan(tester.getTopLeft(find.text('Trastevere')).dy));
 
-    // The separate Bookings section is retired; the itinerary header carries
-    // the booking progress instead.
-    expect(find.text('Bookings'), findsNothing);
-    expect(find.text('0 of 6 booked'), findsOneWidget);
+    // The separate Bookings section is retired; the header's Bookings tab
+    // carries the booking progress in its label instead.
+    expect(find.text('Bookings · 0/6'), findsOneWidget);
 
     // Only the unmatched custom todo lands in the "Other bookings" area at
     // the itinerary's tail, as a card — directly visible, no expand step.

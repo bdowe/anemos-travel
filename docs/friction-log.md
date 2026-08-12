@@ -5,6 +5,29 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-12 — trip-detail dogfooding (bookings view exit)
+
+- **[app] Friction → fixed (Itinerary | Bookings header tabs):** clicking
+  "0 of 21 booked" opened the all-bookings view — "interesting view,
+  actually" — but there was no visible way back; the only exit was buried
+  in the "Filter places" menu (the code comment even admitted "the filter
+  menu is the way back out"). The counter was a one-way invisible door.
+  Fixed by making the view switch first-class: the header title is now two
+  underline tabs, **Itinerary | Bookings · 0/21** — the booked count rides
+  the Bookings tab label (the counter it replaced WAS the old door, so the
+  thing you tapped before is the thing you tap now), selection is derived
+  from `_itemFilter` every build (never stored), and either view is one
+  visible tap from the other, including from the lens's empty state. The
+  filter menu slimmed to what its tooltip claims — places only — and "Not
+  booked yet" moved inside the Bookings view as a scope FilterChip (same
+  'unbooked' state, moved entry point; it renders selected above the
+  "Everything's booked" celebration as the explicit why + way back). Header
+  row grew 36→44px (real tab touch targets, `_listHeaderHeight` 48→56);
+  "Add place" is icon-only below 800px — the tab pair + Today + filter +
+  a labeled button can't share a 390px Spanish row. Open debt unchanged
+  from 08-06: counter counts todos only; lens usage still has zero
+  telemetry (`clientEventTypes` whitelist = a Go change).
+
 ## 2026-08-11 — trip-detail dogfooding (map day chips)
 
 - **[app] Friction → fixed (day chips → city focus, specs/map-city-focus):**
