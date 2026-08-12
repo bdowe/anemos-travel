@@ -221,7 +221,7 @@ func listSharedWithMeHandler(w http.ResponseWriter, r *http.Request) {
 		resp := toTripResponse(store.Trip{
 			ID: t.ID, UserID: t.UserID, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 			Title: t.Title, StartDate: t.StartDate, EndDate: t.EndDate,
-			Status: t.Status, ChatID: t.ChatID,
+			ChatID: t.ChatID,
 		}, nil, nil, nil, nil)
 		resp.VersionCount = int(t.VersionCount)
 		resp.Cities = t.Cities

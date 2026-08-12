@@ -39,7 +39,8 @@ lineage single-writer.
       create membership (idempotent; owner self-join is a no-op success);
       viewer tokens 403; revoked/unknown tokens 404.
 - [x] Editors can create/edit/delete itinerary items, stays, segments,
-      booking todos, and PATCH trip title/dates/status. All mutations return
+      booking todos, and PATCH trip title/dates (originally also status,
+      retired by specs/retire-trip-status). All mutations return
       the same shapes as for owners.
 - [x] Editors cannot delete the trip, mint/revoke links, manage
       collaborators, or refine — uniform 404s.

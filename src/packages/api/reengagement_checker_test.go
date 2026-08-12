@@ -63,23 +63,22 @@ func TestBuildWeeklyNudgeEmail(t *testing.T) {
 
 // --- stub-clock runOnce integration tests ---
 
-// seedPlannedTrip inserts a planned trip departing on start (a date) for owner.
-func seedPlannedTrip(t *testing.T, owner uuid.UUID, title string, start time.Time) store.Trip {
+// seedDepartingTrip inserts a trip departing on start (a date) for owner.
+func seedDepartingTrip(t *testing.T, owner uuid.UUID, title string, start time.Time) store.Trip {
 	t.Helper()
 	q := store.New(dbPool)
 	chat := uuid.NewString()
 	trip, err := q.CreateTrip(context.Background(), store.CreateTripParams{
-		UserID: owner, Title: title, Status: "draft", ChatID: &chat,
+		UserID: owner, Title: title, ChatID: &chat,
 	})
 	if err != nil {
-		t.Fatalf("seedPlannedTrip create: %v", err)
+		t.Fatalf("seedDepartingTrip create: %v", err)
 	}
 	if _, err := q.UpdateTrip(context.Background(), store.UpdateTripParams{
 		ID: trip.ID, UserID: owner,
-		Status:    strp("planned"),
 		StartDate: pgtype.Date{Time: start, Valid: true},
 	}); err != nil {
-		t.Fatalf("seedPlannedTrip update: %v", err)
+		t.Fatalf("seedDepartingTrip update: %v", err)
 	}
 	return trip
 }
@@ -123,7 +122,7 @@ func reminderSendCount(t *testing.T, u uuid.UUID) int {
 	return n
 }
 
-// A planned trip departing in 3 days yields exactly one trip_soon notification
+// A dated trip departing in 3 days yields exactly one trip_soon notification
 // and a reminder_sends row; a second runOnce at the same clock re-sends nothing
 // (dedup). An opted-out user still gets the in-app notification.
 func TestReengagementTripSoon(t *testing.T) {
@@ -131,7 +130,7 @@ func TestReengagementTripSoon(t *testing.T) {
 	now := time.Date(2026, 9, 1, 9, 0, 0, 0, time.UTC)
 
 	user, _ := createTestUser(t, "soon@example.com")
-	seedPlannedTrip(t, user.ID, "Kyoto Loop", now.AddDate(0, 0, reminderDaysSoon))
+	seedDepartingTrip(t, user.ID, "Kyoto Loop", now.AddDate(0, 0, reminderDaysSoon))
 
 	// An opted-out user with a trip departing in 3 days: notification, no email.
 	optOut, _ := createTestUser(t, "optout@example.com")
@@ -139,7 +138,7 @@ func TestReengagementTripSoon(t *testing.T) {
 		`UPDATE users SET reminders_opt_out = true WHERE id = $1`, optOut.ID); err != nil {
 		t.Fatalf("set opt-out: %v", err)
 	}
-	seedPlannedTrip(t, optOut.ID, "Lisbon Weekend", now.AddDate(0, 0, reminderDaysSoon))
+	seedDepartingTrip(t, optOut.ID, "Lisbon Weekend", now.AddDate(0, 0, reminderDaysSoon))
 
 	c := &reengagementChecker{batchSize: 200}
 	c.runOnce(context.Background(), now)
@@ -174,14 +173,14 @@ func TestReengagementTripSoon(t *testing.T) {
 	}
 }
 
-// A planned trip departing today yields a trip_today notification (distinct kind
+// A dated trip departing today yields a trip_today notification (distinct kind
 // from trip_soon), so a trip reminded 3-days-out reminds again on the day.
 func TestReengagementTripToday(t *testing.T) {
 	resetDB(t)
 	now := time.Date(2026, 9, 4, 9, 0, 0, 0, time.UTC)
 
 	user, _ := createTestUser(t, "today@example.com")
-	seedPlannedTrip(t, user.ID, "Rome Today", now)
+	seedDepartingTrip(t, user.ID, "Rome Today", now)
 
 	c := &reengagementChecker{batchSize: 200}
 	c.runOnce(context.Background(), now)
@@ -197,14 +196,14 @@ func TestReengagementTripToday(t *testing.T) {
 	}
 }
 
-// An idle user with a draft trip gets one weekly_nudge notification and a
+// An idle user with an undated trip gets one weekly_nudge notification and a
 // last_weekly_nudge_at stamp; a re-run within the week sends nothing.
 func TestReengagementWeeklyNudge(t *testing.T) {
 	resetDB(t)
 	now := time.Now()
 
 	user, _ := createTestUser(t, "idle@example.com")
-	// A draft trip whose updated_at is well older than the 7-day idle cutoff.
+	// An undated trip whose updated_at is well older than the 7-day idle cutoff.
 	createTestTrip(t, user.ID, 0)
 	ageTrips(t, user.ID, 30)
 
@@ -231,13 +230,13 @@ func TestReengagementWeeklyNudge(t *testing.T) {
 	}
 }
 
-// A recently-active user with a draft trip is NOT nudged (idle guard), and a
-// user with no unfinished work is never nudged.
+// A recently-active user with an undated trip is NOT nudged (idle guard), and
+// a user with no unfinished work is never nudged.
 func TestReengagementWeeklyNudgeSkips(t *testing.T) {
 	resetDB(t)
 	now := time.Now()
 
-	// Active: draft trip touched just now (default updated_at = now).
+	// Active: undated trip touched just now (default updated_at = now).
 	active, _ := createTestUser(t, "active@example.com")
 	createTestTrip(t, active.ID, 0)
 
@@ -252,5 +251,76 @@ func TestReengagementWeeklyNudgeSkips(t *testing.T) {
 	}
 	if n := len(notificationsFor(t, empty.ID)); n != 0 {
 		t.Fatalf("user with no work nudged: %d notifications, want 0", n)
+	}
+}
+
+// --- derived unfinished-work predicate (specs/retire-trip-status) ---
+
+// seedBookingTodo inserts one booking todo for the trip, booked or not.
+func seedBookingTodo(t *testing.T, tripID uuid.UUID, booked bool) {
+	t.Helper()
+	if _, err := dbPool.Exec(context.Background(),
+		`INSERT INTO booking_todos (trip_id, kind, todo_key, title, booked)
+		 VALUES ($1, 'transport', 'transport:test', 'Test leg', $2)`, tripID, booked); err != nil {
+		t.Fatalf("seed booking todo: %v", err)
+	}
+}
+
+// An idle user whose only trip is dated and upcoming still qualifies for the
+// weekly nudge through the trip's unbooked booking todo.
+func TestReengagementWeeklyNudgeUnbookedTodo(t *testing.T) {
+	resetDB(t)
+	now := time.Now()
+
+	user, _ := createTestUser(t, "todo@example.com")
+	trip := seedDepartingTrip(t, user.ID, "Oslo Later", now.AddDate(0, 0, 30))
+	seedBookingTodo(t, trip.ID, false)
+	ageTrips(t, user.ID, 30)
+
+	c := &reengagementChecker{batchSize: 200}
+	c.runOnce(context.Background(), now)
+
+	got := notificationsFor(t, user.ID)
+	if len(got) != 1 || got[0].Type != notificationTypeWeeklyNudge {
+		t.Fatalf("unbooked-todo user notifications = %+v, want 1 weekly_nudge", got)
+	}
+}
+
+// The same shape with the todo already booked is finished work: dated trip,
+// nothing left to book — no nudge.
+func TestReengagementWeeklyNudgeBookedTodoSkips(t *testing.T) {
+	resetDB(t)
+	now := time.Now()
+
+	user, _ := createTestUser(t, "booked@example.com")
+	trip := seedDepartingTrip(t, user.ID, "Oslo Sorted", now.AddDate(0, 0, 30))
+	seedBookingTodo(t, trip.ID, true)
+	ageTrips(t, user.ID, 30)
+
+	c := &reengagementChecker{batchSize: 200}
+	c.runOnce(context.Background(), now)
+
+	if n := len(notificationsFor(t, user.ID)); n != 0 {
+		t.Fatalf("booked-todo user nudged: %d notifications, want 0", n)
+	}
+}
+
+// A user whose only trip is in the past is done, not stuck — never nudged,
+// even with an unbooked todo left on the old trip (pins the narrowing from
+// the status-era predicate, which kept such users nudge-eligible forever).
+func TestReengagementWeeklyNudgePastTripSkips(t *testing.T) {
+	resetDB(t)
+	now := time.Now()
+
+	user, _ := createTestUser(t, "past@example.com")
+	trip := seedDepartingTrip(t, user.ID, "Rome Was", now.AddDate(0, 0, -30))
+	seedBookingTodo(t, trip.ID, false)
+	ageTrips(t, user.ID, 30)
+
+	c := &reengagementChecker{batchSize: 200}
+	c.runOnce(context.Background(), now)
+
+	if n := len(notificationsFor(t, user.ID)); n != 0 {
+		t.Fatalf("past-trip-only user nudged: %d notifications, want 0", n)
 	}
 }

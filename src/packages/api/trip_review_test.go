@@ -31,7 +31,7 @@ func dateVal(t *testing.T, s string) pgtype.Date {
 func i32p(v int32) *int32 { return &v }
 
 func TestCheckDates_Undated(t *testing.T) {
-	d := exportData{Trip: store.Trip{ID: uuid.New(), Status: "draft"}}
+	d := exportData{Trip: store.Trip{ID: uuid.New()}}
 	fs := checkDates("en", d)
 	if len(fs) != 1 || fs[0].Category != "dates" || fs[0].Severity != "info" {
 		t.Fatalf("undated trip = %+v", fs)
@@ -39,7 +39,7 @@ func TestCheckDates_Undated(t *testing.T) {
 }
 
 func TestCheckDates_ItemPastSpan(t *testing.T) {
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-03")} // 3-day span
 	items := []store.ItineraryItem{
 		{ID: uuid.New(), Name: "Louvre", Day: i32p(2)},
@@ -108,10 +108,10 @@ func TestCheckDensity_EmptyDayRuns(t *testing.T) {
 }
 
 func TestCheckLodging_GateAndCoverage(t *testing.T) {
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-04")} // 3 nights: 1,2,3
 
-	// No accommodations, planned → one finding covering the whole 3-night run.
+	// Dated trip, no accommodations → one finding covering the whole 3-night run.
 	fs := checkLodging("en", exportData{Trip: trip})
 	if len(fs) != 1 {
 		t.Fatalf("planned no-lodging = %d findings, want 1 grouped run: %+v", len(fs), fs)
@@ -146,17 +146,16 @@ func TestCheckLodging_GateAndCoverage(t *testing.T) {
 		t.Fatalf("auto draft masked the lodging gap: %+v", fs)
 	}
 
-	// Empty draft (draft status, no accommodations) is not nagged.
-	draft := trip
-	draft.Status = "draft"
-	if fs := checkLodging("en", exportData{Trip: draft}); len(fs) != 0 {
-		t.Fatalf("empty draft should be silent, got %+v", fs)
+	// An undated trip is silent — the dates guard is the only gate
+	// (specs/retire-trip-status).
+	if fs := checkLodging("en", exportData{Trip: store.Trip{ID: uuid.New()}}); len(fs) != 0 {
+		t.Fatalf("undated trip should be silent, got %+v", fs)
 	}
 }
 
 func TestCheckLodging_GroupsRuns(t *testing.T) {
 	// gap–covered–gap: 5 nights, a stay covers only night 3 → two range runs.
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-06")} // nights 1-5
 	acc := []store.Accommodation{{ID: uuid.New(), Name: "Hotel",
 		CheckIn: dateVal(t, "2026-08-03"), CheckOut: dateVal(t, "2026-08-04")}} // covers night 3
@@ -172,7 +171,7 @@ func TestCheckLodging_GroupsRuns(t *testing.T) {
 	}
 
 	// A city change splits the run so each fix prefills a single place.
-	twoCity := store.Trip{ID: uuid.New(), Status: "planned",
+	twoCity := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-05")} // nights 1-4
 	items := []store.ItineraryItem{
 		{ID: uuid.New(), Name: "Colosseum", City: strp("Rome"), Day: i32p(1)},
@@ -192,7 +191,7 @@ func TestCheckLodging_GroupsRuns(t *testing.T) {
 	}
 
 	// Unknown-city nights never split a run; the run adopts the first known city.
-	adopt := store.Trip{ID: uuid.New(), Status: "planned",
+	adopt := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-04")} // nights 1-3
 	fs = checkLodging("en", exportData{Trip: adopt, Items: []store.ItineraryItem{
 		{ID: uuid.New(), Name: "Vatican", City: strp("Rome"), Day: i32p(2)}, // days 1 and 3 have no items
@@ -203,7 +202,7 @@ func TestCheckLodging_GroupsRuns(t *testing.T) {
 }
 
 func TestCheckLodging_RangeSpanish(t *testing.T) {
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-04")} // 3 nights
 	fs := checkLodging("es", exportData{Trip: trip})
 	if len(fs) != 1 {
@@ -328,7 +327,7 @@ func TestCheckWeather_RainyOutdoorDay(t *testing.T) {
 	// A dated future trip so the forecast path is used; day 1 has an outdoor
 	// attraction in Paris.
 	start := time.Now().AddDate(0, 0, 3)
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: pgtype.Date{Time: start.Truncate(24 * time.Hour), Valid: true},
 		EndDate:   pgtype.Date{Time: start.AddDate(0, 0, 1).Truncate(24 * time.Hour), Valid: true}}
 	items := []store.ItineraryItem{
@@ -369,7 +368,7 @@ func TestCheckWeather_RainyOutdoorDay(t *testing.T) {
 
 func TestCheckWeather_HotDay(t *testing.T) {
 	start := time.Now().AddDate(0, 0, 3)
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: pgtype.Date{Time: start.Truncate(24 * time.Hour), Valid: true},
 		EndDate:   pgtype.Date{Time: start.Truncate(24 * time.Hour), Valid: true}}
 	d := exportData{Trip: trip, Items: []store.ItineraryItem{
@@ -408,7 +407,7 @@ func TestCheckHours_ClosedOnScheduledWeekday(t *testing.T) {
 	if monday.Time.Weekday() != time.Monday {
 		t.Fatalf("fixture date is %s, expected Monday", monday.Time.Weekday())
 	}
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: monday, EndDate: dateVal(t, "2026-08-04")}
 	items := []store.ItineraryItem{
 		{ID: uuid.New(), Name: "Musée Rodin", PlaceID: strp("p1"), Day: i32p(1)},
@@ -436,7 +435,7 @@ func TestCheckHours_ClosedOnScheduledWeekday(t *testing.T) {
 
 func TestReviewTrip_CheckHoursGate(t *testing.T) {
 	monday := dateVal(t, "2026-08-03")
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: monday, EndDate: dateVal(t, "2026-08-04")}
 	d := exportData{Trip: trip, Items: []store.ItineraryItem{
 		{ID: uuid.New(), Name: "Musée Rodin", PlaceID: strp("p1"), Day: i32p(1)},
@@ -469,7 +468,7 @@ func TestReviewTrip_CheckHoursGate(t *testing.T) {
 // --- structured fix descriptors (Wave 19 PR1) --------------------------------
 
 func TestFix_Lodging(t *testing.T) {
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-04")} // nights 1,2,3
 	// One stay covering nights 1-2 → only night 3 (Day 3 = 2026-08-03) flagged.
 	acc := []store.Accommodation{{ID: uuid.New(), Name: "Hotel",
@@ -500,7 +499,7 @@ func TestFix_Lodging(t *testing.T) {
 }
 
 func TestFix_LodgingRange(t *testing.T) {
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-05")} // nights 1-4
 	fs := checkLodging("en", exportData{Trip: trip})
 	if len(fs) != 1 || fs[0].Fix == nil {
@@ -619,7 +618,7 @@ func TestFix_BookingsEntityType(t *testing.T) {
 }
 
 func TestFix_DatesBeyondSpan(t *testing.T) {
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-03")} // 3-day span
 	id := uuid.New()
 	items := []store.ItineraryItem{{ID: id, Name: "Way Out", Day: i32p(9)}}
@@ -680,7 +679,7 @@ func TestFix_OverPacked_LighterDayAndNone(t *testing.T) {
 
 func TestFix_WeatherRainAddPacking(t *testing.T) {
 	start := time.Now().AddDate(0, 0, 3)
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: pgtype.Date{Time: start.Truncate(24 * time.Hour), Valid: true},
 		EndDate:   pgtype.Date{Time: start.AddDate(0, 0, 1).Truncate(24 * time.Hour), Valid: true}}
 	d := exportData{Trip: trip, Items: []store.ItineraryItem{
@@ -705,7 +704,7 @@ func TestFix_WeatherRainAddPacking(t *testing.T) {
 func TestReviewTrip_CleanTripNoFindings(t *testing.T) {
 	// A fully-covered, transport-connected, single-city dated trip with a booked
 	// stay and no over-packing → zero findings (and a JSON "[]", not null).
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-02")} // 1 night
 	d := exportData{
 		Trip: trip,
@@ -725,7 +724,7 @@ func TestReviewTrip_CleanTripNoFindings(t *testing.T) {
 }
 
 func TestReviewTrip_DeterministicOrder(t *testing.T) {
-	trip := store.Trip{ID: uuid.New(), Status: "planned",
+	trip := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-03")}
 	d := exportData{Trip: trip, Items: []store.ItineraryItem{
 		{ID: uuid.New(), Name: "A"}, // unscheduled

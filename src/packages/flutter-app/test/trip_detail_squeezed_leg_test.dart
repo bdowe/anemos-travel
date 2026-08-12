@@ -58,7 +58,6 @@ ItineraryItem _item(int pos, String name, String city, {int? day}) =>
 Trip _trip(List<ItineraryItem> items, {List<Accommodation>? stays}) => Trip(
       id: 't1',
       title: 'Squeeze',
-      status: 'planned',
       startDate: '2026-09-01',
       endDate: '2026-09-07',
       createdAt: '2026-08-01',

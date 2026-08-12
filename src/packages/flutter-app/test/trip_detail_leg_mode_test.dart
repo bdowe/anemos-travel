@@ -111,7 +111,6 @@ Trip _twoCityTrip({String? access, String? travelMode, String? legMode}) =>
     Trip(
       id: 't1',
       title: 'Europe',
-      status: 'draft',
       startDate: '2026-06-10',
       endDate: '2026-06-13',
       createdAt: '2026-06-01',
@@ -170,8 +169,9 @@ void main() {
 
     expect(find.text('Mixed modes'), findsNothing);
     expect(find.byTooltip('Travel mode'), findsNothing);
-    // The neighbouring status pill is still there.
-    expect(find.text('Draft'), findsOneWidget);
+    // The status pill is retired too (specs/retire-trip-status) — the date
+    // chip is the only meta chip left beside Refine.
+    expect(find.text('Draft'), findsNothing);
   });
 
   testWidgets('row mode menu PATCHes the override and the row link flips',

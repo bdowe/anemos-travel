@@ -9,18 +9,16 @@ import 'trip_cache_provider.dart';
 
 /// The trip detail screen the user last opened, remembered on-device so the
 /// home screen can offer a one-tap way back into it. Carries a snapshot of the
-/// date range and status so the tile can surface state, not just a name.
+/// date range so the tile can surface state, not just a name.
 class RecentTrip {
   final String tripId;
   final String title;
   final String? dateRange;
-  final String status;
 
   const RecentTrip({
     required this.tripId,
     required this.title,
     this.dateRange,
-    this.status = '',
   });
 }
 
@@ -33,7 +31,9 @@ class RecentTripNotifier extends StateNotifier<RecentTrip?> {
 
   String get _key => 'recent_trip.$_userId';
 
-  /// Restore the last viewed trip for this user from device storage.
+  /// Restore the last viewed trip for this user from device storage. Older
+  /// snapshots may carry extra keys (e.g. the retired trip status) — they are
+  /// simply ignored.
   Future<void> load() async {
     if (_userId == null) return;
     final prefs = await SharedPreferences.getInstance();
@@ -48,7 +48,6 @@ class RecentTripNotifier extends StateNotifier<RecentTrip?> {
           tripId: id,
           title: title,
           dateRange: m['dateRange'] as String?,
-          status: (m['status'] as String?) ?? '',
         );
       }
     } catch (_) {
@@ -57,20 +56,18 @@ class RecentTripNotifier extends StateNotifier<RecentTrip?> {
   }
 
   /// Remember [tripId] as the most recently viewed trip. Call after a trip
-  /// detail screen successfully loads. [dateRange] and [status] are a snapshot
-  /// for the home tile.
+  /// detail screen successfully loads. [dateRange] is a snapshot for the home
+  /// tile.
   Future<void> record(
     String tripId,
     String title, {
     String? dateRange,
-    String status = '',
   }) async {
     if (_userId == null) return;
     state = RecentTrip(
       tripId: tripId,
       title: title,
       dateRange: dateRange,
-      status: status,
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -79,7 +76,6 @@ class RecentTripNotifier extends StateNotifier<RecentTrip?> {
         'id': tripId,
         'title': title,
         if (dateRange != null) 'dateRange': dateRange,
-        'status': status,
       }),
     );
   }

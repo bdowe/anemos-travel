@@ -25,7 +25,7 @@ func mustChatID(t *testing.T, trip store.Trip) *string {
 func createTestTripInLineage(t *testing.T, owner uuid.UUID, chatID, title string) store.Trip {
 	t.Helper()
 	trip, err := store.New(dbPool).CreateTrip(context.Background(), store.CreateTripParams{
-		UserID: owner, Title: title, Status: "draft", ChatID: &chatID,
+		UserID: owner, Title: title, ChatID: &chatID,
 	})
 	if err != nil {
 		t.Fatalf("createTestTripInLineage: %v", err)

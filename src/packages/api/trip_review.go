@@ -344,13 +344,11 @@ func lastItemInSlot(items []store.ItineraryItem, tod string) (string, bool) {
 // finding whose fix prefills the whole range. Runs split when the hub city
 // changes so every "add a stay" spans a single place; a night with no known
 // city never forces a split (the run adopts the first known city it sees).
-// Gated so an empty draft isn't nagged: only runs when the trip is `planned`
-// OR already has at least one accommodation.
+// The dates guard is the only gate (specs/retire-trip-status): an undated
+// trip is skipped, and a dated trip without lodging is exactly what this
+// check exists to flag.
 func checkLodging(locale string, d exportData) []Finding {
 	if !d.Trip.StartDate.Valid || !d.Trip.EndDate.Valid {
-		return nil
-	}
-	if d.Trip.Status != "planned" && len(d.Accommodations) == 0 {
 		return nil
 	}
 	tripID := d.Trip.ID.String()

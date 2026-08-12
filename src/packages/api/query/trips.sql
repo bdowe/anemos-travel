@@ -1,6 +1,6 @@
 -- name: CreateTrip :one
-INSERT INTO trips (user_id, title, status, chat_id, summary, travel_mode, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $1)
+INSERT INTO trips (user_id, title, chat_id, summary, travel_mode, updated_by)
+VALUES ($1, $2, $3, $4, $5, $1)
 RETURNING *;
 
 -- name: CreateItineraryItem :one
@@ -16,12 +16,12 @@ SELECT * FROM trips WHERE user_id = $1 ORDER BY created_at DESC;
 -- trip's distinct hub cities (day_trip_from ?? city) in first-appearance order
 -- for a location summary. Legacy trips with NULL chat_id stand alone.
 SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
-       latest.title, latest.start_date, latest.end_date, latest.status,
+       latest.title, latest.start_date, latest.end_date,
        latest.chat_id, latest.version_count,
        COALESCE(c.cities, ARRAY[]::text[])::text[] AS cities
 FROM (
   SELECT DISTINCT ON (COALESCE(chat_id, id::text))
-         id, user_id, created_at, updated_at, title, start_date, end_date, status, chat_id,
+         id, user_id, created_at, updated_at, title, start_date, end_date, chat_id,
          count(*) OVER (PARTITION BY COALESCE(chat_id, id::text)) AS version_count
   FROM trips WHERE user_id = $1
   ORDER BY COALESCE(chat_id, id::text), created_at DESC
@@ -146,7 +146,6 @@ UPDATE trips
 SET title      = COALESCE(sqlc.narg('title'), title),
     start_date = COALESCE(sqlc.narg('start_date'), start_date),
     end_date   = COALESCE(sqlc.narg('end_date'), end_date),
-    status     = COALESCE(sqlc.narg('status'), status),
     chat_id    = COALESCE(sqlc.narg('chat_id'), chat_id),
     travel_mode = COALESCE(sqlc.narg('travel_mode'), travel_mode)
 WHERE id = sqlc.arg('id') AND user_id = sqlc.arg('user_id')

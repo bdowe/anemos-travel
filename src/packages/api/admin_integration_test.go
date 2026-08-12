@@ -136,7 +136,7 @@ func insertTripCreated(t *testing.T, userID, tripID uuid.UUID, at time.Time) {
 func createTripInLineage(t *testing.T, owner uuid.UUID, chatID string) uuid.UUID {
 	t.Helper()
 	trip, err := store.New(dbPool).CreateTrip(context.Background(), store.CreateTripParams{
-		UserID: owner, Title: "Lineage Trip", Status: "draft", ChatID: &chatID,
+		UserID: owner, Title: "Lineage Trip", ChatID: &chatID,
 	})
 	if err != nil {
 		t.Fatalf("createTripInLineage(%s): %v", chatID, err)

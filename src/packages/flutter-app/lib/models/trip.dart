@@ -16,7 +16,6 @@ class Trip {
   final String? startDate;
   @JsonKey(name: 'end_date')
   final String? endDate;
-  final String status;
   @JsonKey(name: 'chat_id')
   final String? chatId;
 
@@ -65,7 +64,6 @@ class Trip {
     this.summary,
     this.startDate,
     this.endDate,
-    required this.status,
     this.chatId,
     this.travelMode,
     this.versionCount,

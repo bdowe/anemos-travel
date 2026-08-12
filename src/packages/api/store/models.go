@@ -262,7 +262,6 @@ type Trip struct {
 	Title      string      `json:"title"`
 	StartDate  pgtype.Date `json:"start_date"`
 	EndDate    pgtype.Date `json:"end_date"`
-	Status     string      `json:"status"`
 	ChatID     *string     `json:"chat_id"`
 	Summary    *string     `json:"summary"`
 	UpdatedBy  pgtype.UUID `json:"updated_by"`

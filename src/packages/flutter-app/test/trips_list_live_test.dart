@@ -62,7 +62,6 @@ String _rel(int days) => _iso(DateTime.now().add(Duration(days: days)));
 Trip _trip(String id, String title, {String? start, String? end}) => Trip(
       id: id,
       title: title,
-      status: 'planned',
       startDate: start,
       endDate: end,
       createdAt: '2026-06-01',

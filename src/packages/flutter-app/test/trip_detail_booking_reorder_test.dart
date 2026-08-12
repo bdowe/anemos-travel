@@ -50,7 +50,6 @@ BookingTodo _customTodo(String id, String title) => BookingTodo(
 Trip _tripWith(List<BookingTodo> todos) => Trip(
       id: 't1',
       title: 'Errands',
-      status: 'planned',
       startDate: '2026-06-10',
       endDate: '2026-06-13',
       createdAt: '2026-06-01',

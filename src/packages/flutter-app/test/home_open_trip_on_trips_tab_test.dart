@@ -31,7 +31,6 @@ void main() {
   Trip liveTrip(String id) => Trip(
         id: id,
         title: 'Athens Trip',
-        status: 'planned',
         startDate: iso(DateTime.now().subtract(const Duration(days: 1))),
         endDate: iso(DateTime.now().add(const Duration(days: 1))),
         createdAt: '2026-06-01',

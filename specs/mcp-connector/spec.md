@@ -87,7 +87,8 @@ integration available, and it is fully supported by both vendors.
     resolved, dropped[]}`.
   - `search_local_recommendations` (`recs:read`) — same contract as the
     in-app agent tool.
-  - `list_trips` (`trips:write`) — id/title/dates/status/url.
+  - `list_trips` (`trips:write`) — id/title/dates/url. (Originally also
+    status, retired by specs/retire-trip-status.)
 - `GET /api/v1/mcp/availability` — `{available: bool}` gate.
 
 ### Connected apps

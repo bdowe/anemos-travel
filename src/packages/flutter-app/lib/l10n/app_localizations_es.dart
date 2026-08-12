@@ -1449,15 +1449,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripAddDates => 'Añadir fechas';
 
   @override
-  String get tripChangeStatus => 'Cambiar estado';
-
-  @override
-  String get tripStatusDraft => 'Borrador';
-
-  @override
-  String get tripStatusPlanned => 'Planificado';
-
-  @override
   String tripCoPlanningWith(String name) {
     return 'Planificando con $name — tus cambios se guardan para todos.';
   }
@@ -1811,12 +1802,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get homeSuggestionTokyo => 'Fin de semana en Tokio';
-
-  @override
-  String get homeStatusDraft => 'Borrador';
-
-  @override
-  String get homeStatusPlanned => 'Planeado';
 
   @override
   String get homeLocalGuidesTitle => 'Guías locales';

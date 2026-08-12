@@ -74,7 +74,6 @@ void main() {
   Trip twoCityTrip() => Trip(
         id: 't1',
         title: 'Europe',
-        status: 'planned',
         startDate: '2026-06-10',
         endDate: '2026-06-12',
         createdAt: '2026-06-01',
@@ -135,7 +134,6 @@ void main() {
         Trip(
           id: 't1',
           title: 'Getaway',
-          status: 'planned',
           createdAt: '2026-06-01',
           updatedAt: '2026-06-01',
           items: [
@@ -159,7 +157,6 @@ void main() {
         Trip(
           id: 't1',
           title: 'Mystery',
-          status: 'planned',
           createdAt: '2026-06-01',
           updatedAt: '2026-06-01',
           items: [
@@ -181,7 +178,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Grand Tour',
-      status: 'planned',
       startDate: '2026-06-10',
       endDate: '2026-06-18',
       createdAt: '2026-06-01',
@@ -213,7 +209,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Getaway',
-      status: 'planned',
       startDate: '2026-06-10',
       endDate: '2026-06-12',
       createdAt: '2026-06-01',
@@ -283,7 +278,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Live Trip',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       startDate: _iso(now.subtract(const Duration(days: 1))),

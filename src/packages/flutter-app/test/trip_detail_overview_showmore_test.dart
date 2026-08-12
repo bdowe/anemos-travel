@@ -41,7 +41,6 @@ Trip _trip(String summary) => Trip(
       id: 't1',
       title: 'Sevilla week',
       summary: summary,
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       startDate: '2026-09-01',

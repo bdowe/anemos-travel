@@ -77,7 +77,6 @@ class _NoopAnalytics extends AnalyticsApiService {
 Trip _trip({String? access}) => Trip(
       id: 't1',
       title: 'Athens Trip',
-      status: 'planned',
       access: access,
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',

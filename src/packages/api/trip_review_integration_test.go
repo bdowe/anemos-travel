@@ -34,13 +34,13 @@ func reviewCategories(t *testing.T, id, token string) map[string]bool {
 func TestTripReview_BrokenTrip(t *testing.T) {
 	resetDB(t)
 	owner, ownerToken := createTestUser(t, "owner@example.com")
-	// Two items, both day=nil (unscheduled), draft status.
+	// Two items, both day=nil (unscheduled).
 	trip := createTestTrip(t, owner.ID, 2)
 	id := trip.ID.String()
 
-	// Make it a planned, dated trip (unlocks lodging night-walk).
+	// Date the trip (dates alone unlock the lodging night-walk).
 	rec := doJSON(t, "PATCH", "/api/v1/trips/"+id, ownerToken, map[string]any{
-		"start_date": "2026-08-01", "end_date": "2026-08-04", "status": "planned",
+		"start_date": "2026-08-01", "end_date": "2026-08-04",
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("patch trip = %d: %s", rec.Code, rec.Body.String())
@@ -82,7 +82,7 @@ func TestTripReview_CleanTrip(t *testing.T) {
 	id := trip.ID.String()
 
 	rec := doJSON(t, "PATCH", "/api/v1/trips/"+id, ownerToken, map[string]any{
-		"start_date": "2026-08-01", "end_date": "2026-08-04", "status": "planned",
+		"start_date": "2026-08-01", "end_date": "2026-08-04",
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("patch trip = %d: %s", rec.Code, rec.Body.String())
@@ -141,7 +141,7 @@ func TestTripReview_HoursFindings(t *testing.T) {
 
 	// 2026-08-03 is a Monday; the place is "Closed" on Mondays in the double.
 	rec := doJSON(t, "PATCH", "/api/v1/trips/"+id, ownerToken, map[string]any{
-		"start_date": "2026-08-03", "end_date": "2026-08-05", "status": "planned",
+		"start_date": "2026-08-03", "end_date": "2026-08-05",
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("patch trip = %d: %s", rec.Code, rec.Body.String())
@@ -199,7 +199,6 @@ func TestTripReview_WeatherFindings(t *testing.T) {
 	rec := doJSON(t, "PATCH", "/api/v1/trips/"+id, ownerToken, map[string]any{
 		"start_date": start.Format(dateLayout),
 		"end_date":   start.AddDate(0, 0, 1).Format(dateLayout),
-		"status":     "planned",
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("patch trip = %d: %s", rec.Code, rec.Body.String())

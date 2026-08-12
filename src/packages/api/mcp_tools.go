@@ -68,7 +68,6 @@ type listTripsInput struct{}
 type mcpTripSummary struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
-	Status    string `json:"status"`
 	StartDate string `json:"start_date,omitempty"`
 	EndDate   string `json:"end_date,omitempty"`
 	URL       string `json:"url"`
@@ -245,10 +244,9 @@ func mcpListTrips(ctx context.Context, caller mcpCaller) (*mcp.CallToolResult, l
 	}
 	for _, t := range rows {
 		s := mcpTripSummary{
-			ID:     t.ID.String(),
-			Title:  t.Title,
-			Status: t.Status,
-			URL:    publicAppURL("trip/", t.ID.String()),
+			ID:    t.ID.String(),
+			Title: t.Title,
+			URL:   publicAppURL("trip/", t.ID.String()),
 		}
 		if t.StartDate.Valid {
 			s.StartDate = t.StartDate.Time.Format("2006-01-02")

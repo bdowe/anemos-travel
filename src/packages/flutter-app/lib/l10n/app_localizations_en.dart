@@ -1437,15 +1437,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripAddDates => 'Add dates';
 
   @override
-  String get tripChangeStatus => 'Change status';
-
-  @override
-  String get tripStatusDraft => 'Draft';
-
-  @override
-  String get tripStatusPlanned => 'Planned';
-
-  @override
   String tripCoPlanningWith(String name) {
     return 'Co-planning with $name — your changes save for everyone.';
   }
@@ -1796,12 +1787,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeSuggestionTokyo => 'Weekend in Tokyo';
-
-  @override
-  String get homeStatusDraft => 'Draft';
-
-  @override
-  String get homeStatusPlanned => 'Planned';
 
   @override
   String get homeLocalGuidesTitle => 'Local guides';

@@ -87,7 +87,6 @@ ChatSessionSummary _chat(String id, String title) => ChatSessionSummary(
 Trip _mappableTrip(String id, String title) => Trip(
       id: id,
       title: title,
-      status: 'planned',
       startDate: '2026-09-01',
       endDate: '2026-09-06',
       createdAt: '2026-06-01',
@@ -119,7 +118,6 @@ Trip _mappableTrip(String id, String title) => Trip(
 Trip _unmappableTrip(String id, String title) => Trip(
       id: id,
       title: title,
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       items: [
@@ -139,7 +137,7 @@ Trip _unmappableTrip(String id, String title) => Trip(
 MapEntry<String, Object> _recentTripEntry(String tripId, String title) =>
     MapEntry(
       'recent_trip.user-1',
-      jsonEncode({'id': tripId, 'title': title, 'status': 'planned'}),
+      jsonEncode({'id': tripId, 'title': title}),
     );
 
 /// A TripCache detail entry, as writeTrip persists it (trip_cache.dart).

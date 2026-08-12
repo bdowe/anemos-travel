@@ -61,7 +61,6 @@ Trip _liveTrip(
     Trip(
       id: 't1',
       title: 'Live Trip',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       startDate: startDate,
@@ -201,7 +200,6 @@ void main() {
     final undated = Trip(
       id: 't1',
       title: 'Undated Trip',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       items: [
@@ -225,7 +223,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Live Mapped Trip',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       startDate: start,
@@ -322,7 +319,6 @@ void main() {
       final undated = Trip(
         id: 't1',
         title: 'Undated Trip',
-        status: 'planned',
         createdAt: '2026-06-01',
         updatedAt: '2026-06-01',
         accommodations: [
@@ -404,7 +400,6 @@ void main() {
       final trip = Trip(
         id: 't1',
         title: 'Two Cities',
-        status: 'planned',
         createdAt: '2026-06-01',
         updatedAt: '2026-06-01',
         startDate: start,

@@ -420,7 +420,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               trip.id,
               trip.title,
               dateRange: tripDateRange(trip.startDate, trip.endDate),
-              status: trip.status,
             );
       }
       // The travel-time computation needs only the trip, while the booking-todo
@@ -1438,10 +1437,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   }
 
   Future<void> _patch(
-      {String? title,
-      String? startDate,
-      String? endDate,
-      String? status}) async {
+      {String? title, String? startDate, String? endDate}) async {
     if (_guardOffline()) return;
     final l10n = context.l10n;
     try {
@@ -1450,7 +1446,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             title: title,
             startDate: startDate,
             endDate: endDate,
-            status: status,
           );
       if (mounted) setState(() => _trip = updated);
       ref.read(tripsProvider.notifier).loadTrips(); // keep list in sync
@@ -4452,24 +4447,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   : l10n.tripAddDates),
               onPressed: (_isOffline || !trip.canEdit) ? null : _editDates,
             ),
-            if (trip.canEdit)
-              PopupMenuButton<String>(
-                tooltip: l10n.tripChangeStatus,
-                enabled: !_isOffline,
-                onSelected: (v) => _patch(status: v),
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                      value: 'draft', child: Text(l10n.tripStatusDraft)),
-                  PopupMenuItem(
-                      value: 'planned', child: Text(l10n.tripStatusPlanned)),
-                ],
-                child: StatusPill(
-                  status: trip.status,
-                  trailing: const Icon(Icons.arrow_drop_down),
-                ),
-              )
-            else
-              StatusPill(status: trip.status),
+            // The draft/planned status pill is gone with the status concept
+            // itself (specs/retire-trip-status) — dates carry the state.
             // The trip-wide travel-mode pill is gone: transport mode is
             // per-leg now, picked directly on each transport row (the
             // _ModeMenu in BookingTodoRow). trips.travel_mode remains the

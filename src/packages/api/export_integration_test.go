@@ -20,7 +20,7 @@ func exportFixtureTrip(t *testing.T, owner uuid.UUID, title string) store.Trip {
 	q := store.New(dbPool)
 	chat := title + "-chat"
 	trip, err := q.CreateTrip(ctx, store.CreateTripParams{
-		UserID: owner, Title: title, Status: "draft", ChatID: &chat,
+		UserID: owner, Title: title, ChatID: &chat,
 	})
 	if err != nil {
 		t.Fatalf("CreateTrip: %v", err)
@@ -148,7 +148,7 @@ func TestExportPrintView_DayPacket(t *testing.T) {
 	summary := "A slow loop through Athens with a Delphi day trip."
 	chat := "packet-chat"
 	trip, err := q.CreateTrip(ctx, store.CreateTripParams{
-		UserID: owner.ID, Title: "Packet Trip", Status: "draft", ChatID: &chat, Summary: &summary,
+		UserID: owner.ID, Title: "Packet Trip", ChatID: &chat, Summary: &summary,
 	})
 	if err != nil {
 		t.Fatalf("CreateTrip: %v", err)
