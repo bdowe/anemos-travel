@@ -2883,6 +2883,54 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         ),
       );
 
+  /// "+ Add booking" — the Bookings view's one add CTA (its "Add place").
+  /// A single menu fans out to the three record kinds so the itinerary tail
+  /// no longer needs a button trio. One MenuAnchor for both widths; only the
+  /// anchor swaps (labeled wide, icon-only narrow — same precedent and
+  /// reason as Add place below). Offline disables the anchor; each handler
+  /// re-guards via _guardOffline() for a menu left open across the flip.
+  Widget _addBookingMenu() {
+    final l10n = context.l10n;
+    return MenuAnchor(
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.hotel_outlined, size: 18),
+          onPressed: _addStay,
+          child: Text(l10n.bookingsMenuStay),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.route_outlined, size: 18),
+          onPressed: _addSegment,
+          child: Text(l10n.bookingsMenuTransport),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.check_circle_outline, size: 18),
+          onPressed: _addBooking,
+          child: Text(l10n.bookingsMenuOther),
+        ),
+      ],
+      builder: (context, controller, _) {
+        void toggle() =>
+            controller.isOpen ? controller.close() : controller.open();
+        return _narrow
+            ? IconButton(
+                onPressed: _isOffline ? null : toggle,
+                tooltip: l10n.bookingsAddBooking,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.add, size: 20),
+              )
+            : TextButton.icon(
+                onPressed: _isOffline ? null : toggle,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(l10n.bookingsAddBooking),
+              );
+      },
+    );
+  }
+
   /// One header view tab ("Itinerary" / "Bookings · 2/21"). The selected tab
   /// doesn't take taps — re-tap is a no-op, which also keeps an idle tap on
   /// the already-selected Itinerary tab from clearing an active places
@@ -4085,11 +4133,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  /// The itinerary's trailing "Other bookings" area — the new home for
+  /// The itinerary's trailing "Other bookings" area — the home for
   /// everything the retired Bookings section held that has no city slot:
-  /// residual todos (custom bookings, stale autos), confirmed records that
-  /// matched no city, and the add actions. Editors always get the add
-  /// buttons; the sub-header renders only over actual content.
+  /// residual todos (custom bookings, stale autos) and confirmed records
+  /// that matched no city. Content-only — the add actions live in the
+  /// Bookings view's header button (_addBookingMenu).
   Widget? _otherBookingsArea(
       ThemeData theme,
       ({
@@ -4101,49 +4149,25 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final hasContent = other.residual.isNotEmpty ||
         other.residualStays.isNotEmpty ||
         other.residualSegments.isNotEmpty;
-    if (_readOnly && !hasContent) return null;
+    if (!hasContent) return null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (hasContent)
-          Padding(
-            padding:
-                const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
-            child: Text(
-              l10n.tripOtherBookings,
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
+        Padding(
+          padding:
+              const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
+          child: Text(
+            l10n.tripOtherBookings,
+            style: theme.textTheme.titleSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
+        ),
         if (other.residual.isNotEmpty)
           _residualBookingsList(other.residual, theme),
         for (final a in other.residualStays)
           _detailRowFor(stay: a, segment: null, detailOnly: true),
         for (final s in other.residualSegments)
           _detailRowFor(stay: null, segment: s, detailOnly: true),
-        if (!_readOnly)
-          // The button trio can outgrow a small phone's width, so it must be
-          // able to break into two lines itself (Wrap, not Row).
-          Wrap(
-            alignment: WrapAlignment.end,
-            children: [
-              TextButton.icon(
-                onPressed: _isOffline ? null : _addStay,
-                icon: const Icon(Icons.hotel_outlined, size: 18),
-                label: Text(l10n.bookingsAddStay),
-              ),
-              TextButton.icon(
-                onPressed: _isOffline ? null : _addSegment,
-                icon: const Icon(Icons.route_outlined, size: 18),
-                label: Text(l10n.bookingsAddTransport),
-              ),
-              TextButton.icon(
-                onPressed: _isOffline ? null : _addBooking,
-                icon: const Icon(Icons.add, size: 18),
-                label: Text(l10n.bookingsAddBooking),
-              ),
-            ],
-          ),
       ],
     );
   }
@@ -5045,7 +5069,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                               ),
                           // Itinerary/Bookings tab row; pins beneath the map
                           // so the view tabs, Today jump, category filter,
-                          // and Add place stay reachable while scrolling.
+                          // and the view's add button stay reachable while
+                          // scrolling.
                           // The filter is a popup menu, not a chip row — one
                           // fixed-height row keeps the pinned chrome (and
                           // the Today scroll math) constant.
@@ -5201,13 +5226,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                             ],
                                           ),
                                         ),
-                                      // Icon-only on phones: the tab pair +
-                                      // Today + filter + a labeled button
-                                      // can't all fit a 390px row with
-                                      // Spanish labels (precedent: the
-                                      // header Refine button becomes the
+                                      // One add CTA per view: Add place on
+                                      // the itinerary, the Add-booking menu
+                                      // in the Bookings view (a swap, not an
+                                      // addition). Icon-only on phones: the
+                                      // tab pair + Today + filter + a
+                                      // labeled button can't all fit a 390px
+                                      // row with Spanish labels (precedent:
+                                      // the header Refine button becomes the
                                       // app-bar sparkle on narrow).
-                                      if (!_readOnly && _narrow)
+                                      if (!_readOnly && _inBookingsView)
+                                        _addBookingMenu()
+                                      else if (!_readOnly && _narrow)
                                         IconButton(
                                           onPressed: _isOffline
                                               ? null
@@ -5404,8 +5434,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                     ),
                               ]),
                             ),
-                          // Residual bookings + add actions, at the tail of
-                          // the itinerary. Only in the unfiltered view, like
+                          // Residual bookings, at the tail of the
+                          // itinerary. Only in the unfiltered view, like
                           // the embedded booking rows above — a category
                           // filter is a places lens, not a bookings one.
                           if (_itemFilter == 'all')

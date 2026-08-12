@@ -18,6 +18,7 @@ import 'package:travel_route_planner/providers/transport_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/booking_detail_row.dart';
+import 'package:travel_route_planner/widgets/booking_sheets.dart';
 import 'package:travel_route_planner/widgets/booking_todo_card.dart';
 
 import 'support/l10n_test_app.dart';
@@ -605,6 +606,74 @@ void main() {
     expect(find.text('All bookings'), findsNothing);
     expect(find.text('Not booked yet'), findsNothing);
     expect(find.byType(PopupMenuDivider), findsNothing);
+  });
+
+  // ——— The Bookings view's single add CTA: one "+ Add booking" menu in the
+  // header (the view's "Add place"), which replaced the itinerary-tail
+  // Add stay / Add transport / Add booking trio.
+
+  testWidgets(
+      'the header add CTA swaps per view: Add place on the itinerary, the '
+      'Add-booking menu in the Bookings view', (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, mixedTrip());
+
+    // Itinerary: Add place only — the old tail trio is gone.
+    expect(find.text('Add place'), findsOneWidget);
+    expect(find.text('Add booking'), findsNothing);
+    expect(find.text('Add stay'), findsNothing);
+    expect(find.text('Add transport'), findsNothing);
+
+    // Bookings view: the swap, not an addition.
+    await _openBookingsTab(tester, 'Bookings · 1/2');
+    expect(find.text('Add booking'), findsOneWidget);
+    expect(find.text('Add place'), findsNothing);
+
+    await tester.tap(find.text('Add booking'));
+    await tester.pumpAndSettle();
+    expect(find.text('Stay'), findsOneWidget);
+    expect(find.text('Transport'), findsOneWidget);
+    expect(find.text('Other'), findsOneWidget);
+  });
+
+  testWidgets(
+      'the add menu routes to the stay sheet, the segment sheet, and the '
+      'custom-booking dialog', (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, mixedTrip());
+    await _openBookingsTab(tester, 'Bookings · 1/2');
+
+    Future<void> pick(String item) async {
+      await tester.tap(find.text('Add booking'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(item));
+      await tester.pumpAndSettle();
+    }
+
+    await pick('Stay');
+    expect(find.byType(AddStaySheet), findsOneWidget);
+    await tester.tapAt(const Offset(20, 20)); // barrier-dismiss the sheet
+    await tester.pumpAndSettle();
+
+    await pick('Transport');
+    expect(find.byType(AddSegmentSheet), findsOneWidget);
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+
+    // The custom-booking dialog class is private; its title is the marker.
+    await pick('Other');
+    expect(find.text('Add a booking'), findsOneWidget);
+  });
+
+  testWidgets("the 'Not booked yet' scope keeps the add menu",
+      (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, mixedTrip());
+
+    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
+    await tester.pumpAndSettle();
+    expect(find.text('Add booking'), findsOneWidget);
   });
 
   testWidgets(

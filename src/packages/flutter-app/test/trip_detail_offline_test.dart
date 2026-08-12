@@ -149,6 +149,14 @@ void main() {
     expect(rename.onPressed, isNull);
     expect(find.byTooltip('Share trip'), findsNothing);
     expect(find.byTooltip('Delete trip'), findsNothing);
+
+    // The Bookings view's add menu is likewise disabled, not hidden. The
+    // tab tap itself stays allowed offline — switching views is pure view
+    // work on the cached copy.
+    await tester.tap(find.text('Bookings'));
+    await tester.pumpAndSettle();
+    final addBooking = _labeledButton<TextButton>(tester, 'Add booking');
+    expect(addBooking.onPressed, isNull);
   });
 
   testWidgets('Retry re-fetches live and exits offline mode',

@@ -250,7 +250,14 @@ void main() {
         find.descendant(
             of: stayDetail, matching: find.byIcon(Icons.edit_outlined)),
         findsNothing);
-    // No add actions for viewers either.
+    // No add actions for viewers either...
     expect(find.text('Add booking'), findsNothing);
+
+    // ...including in the Bookings view, where the add menu lives now
+    // (readOnly hides the header CTA in both its forms).
+    await tester.tap(find.text('Bookings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Add booking'), findsNothing);
+    expect(find.byTooltip('Add booking'), findsNothing);
   });
 }

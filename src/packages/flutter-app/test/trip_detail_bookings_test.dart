@@ -187,10 +187,10 @@ void main() {
 
     expect(find.byType(BookingTodoRow), findsNWidgets(2));
 
-    // No unmatched bookings -> no "Other bookings" sub-header, just the
-    // always-available add actions at the itinerary's tail.
+    // No unmatched bookings -> no "Other bookings" sub-header, and no add
+    // actions either — those live in the Bookings view's header menu now.
     expect(find.text('Other bookings'), findsNothing);
-    expect(find.text('Add booking'), findsOneWidget);
+    expect(find.text('Add booking'), findsNothing);
 
     await tester.ensureVisible(find.text('Paris'));
     await tester.tap(find.text('Paris'));

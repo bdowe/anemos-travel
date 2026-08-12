@@ -575,6 +575,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookingsAddBooking => 'Add booking';
 
   @override
+  String get bookingsMenuStay => 'Stay';
+
+  @override
+  String get bookingsMenuTransport => 'Transport';
+
+  @override
+  String get bookingsMenuOther => 'Other';
+
+  @override
   String get tripOtherBookings => 'Other bookings';
 
   @override

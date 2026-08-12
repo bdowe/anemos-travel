@@ -5,6 +5,25 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-12 — trip-detail dogfooding (add-CTA declutter)
+
+- **[app] Friction → fixed (one add CTA per view):** the itinerary tail
+  carried three CTAs — Add stay / Add transport / Add booking — "seems
+  like a lot - no need for 3 ctas here." The row was never designed into
+  that spot: it's where the retired Bookings section's buttons landed when
+  the section died (fad88e3), and meanwhile the new Bookings tab (#335)
+  shipped with no add affordance at all. Fixed with a swap that gives each
+  tab exactly one add CTA: the Itinerary keeps **Add place**, the Bookings
+  view's header slot gets **+ Add booking** — a MenuAnchor fanning out to
+  Stay / Transport / Other, wired to the unchanged `_addStay` /
+  `_addSegment` / `_addBooking` handlers (icon-only below 800px, same rule
+  and reason as Add place). The itinerary tail now shows only residual
+  "Other bookings" content. Removing the row entirely was rejected: every
+  other creation path is conditional (health fixes need a finding, row
+  "Add details…" needs an existing todo, chat is NL-only), so the menu is
+  the one unconditional path — now living where a user hunting for
+  bookings actually is.
+
 ## 2026-08-12 — trip-detail dogfooding (bookings view exit)
 
 - **[dev] Friction → watch (two in-flight lanes touched the hub file
