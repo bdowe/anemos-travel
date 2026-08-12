@@ -1308,8 +1308,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripNoMappedPlaces => 'No mapped places';
 
   @override
-  String tripNoPlacesOnDay(int day) {
-    return 'No places pinned on Day $day';
+  String tripNoPlacesInLeg(String city) {
+    return 'No places pinned in $city';
   }
 
   @override
@@ -2259,8 +2259,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sharedNoMappedPlaces => 'No mapped places';
 
   @override
-  String sharedNoPlacesOnDay(int day) {
-    return 'No places pinned on Day $day';
+  String sharedNoPlacesIn(String city) {
+    return 'No places pinned in $city';
   }
 
   @override

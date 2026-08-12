@@ -60,36 +60,24 @@ int dayCount(String? startDate, String? endDate, Iterable<int?> itemDays) {
   return max;
 }
 
-/// The set of 1-based days in `1..dayCount` that would plot something on the
-/// trip map: days carried by a coordinate-bearing itinerary item, plus days
-/// whose night is covered by a geocoded stay (checkout-exclusive, via
-/// [stayCoversDate]). Callers pre-filter to mapped entries — pass only the
-/// day tags of items with real coordinates and the date ranges of stays with
-/// real coordinates. Lets day chips mute days that would show an empty map.
-Set<int> daysWithMappedContent(
-  String? startDate,
-  int dayCount,
-  Iterable<int?> mappedItemDays,
-  Iterable<({String? checkIn, String? checkOut})> mappedStayDates,
-) {
-  final days = <int>{
-    for (final d in mappedItemDays)
-      if (d != null && d >= 1 && d <= dayCount) d,
-  };
-  final start = DateTime.tryParse(startDate ?? '');
-  if (start != null) {
-    for (var d = 1; d <= dayCount; d++) {
-      if (days.contains(d)) continue;
-      // Calendar-day arithmetic (constructor normalizes overflow) rather than
-      // Duration, which drifts a date across a DST transition.
-      final night = DateTime(start.year, start.month, start.day + d - 1);
-      if (mappedStayDates
-          .any((s) => stayCoversDate(s.checkIn, s.checkOut, night))) {
-        days.add(d);
-      }
-    }
+/// Whether a stay covers ANY night in `[start, end)` — the leg-focus stay
+/// rule (specs/map-city-focus), shared by the trip-detail derivation and the
+/// read-only shared view so the two surfaces can't drift. Checkout-exclusive
+/// on both sides via [stayCoversDate]; a zero-night range matches nothing.
+bool stayCoversAnyNight(
+    String? checkIn, String? checkOut, DateTime start, DateTime end) {
+  // UTC-normalized night count so a DST transition inside the range can't
+  // skew it (the nightsBetween rule).
+  final nights = DateTime.utc(end.year, end.month, end.day)
+      .difference(DateTime.utc(start.year, start.month, start.day))
+      .inDays;
+  for (var k = 0; k < nights; k++) {
+    // Calendar-day arithmetic (constructor normalizes overflow) rather than
+    // Duration, which drifts a date across a DST transition.
+    final night = DateTime(start.year, start.month, start.day + k);
+    if (stayCoversDate(checkIn, checkOut, night)) return true;
   }
-  return days;
+  return false;
 }
 
 /// Whether a stay covers the night of [date] (device-local calendar date):

@@ -14,6 +14,7 @@ import '../providers/shared_with_me_provider.dart';
 import '../providers/trips_provider.dart';
 import '../theme/spacing.dart';
 import '../utils/errors.dart';
+import '../utils/leg_ranges.dart';
 import '../utils/trip_days.dart';
 import '../utils/trip_format.dart';
 import '../utils/trip_legs.dart';
@@ -21,7 +22,7 @@ import '../widgets/empty_state.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
 import '../widgets/gradient_app_bar.dart';
-import '../widgets/map_day_chips.dart';
+import '../widgets/map_leg_chips.dart';
 import '../widgets/trip_map.dart';
 import 'auth_screen.dart';
 import 'trip_detail_screen.dart';
@@ -99,9 +100,11 @@ class _SharedTripBody extends ConsumerStatefulWidget {
 class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
   bool _saving = false;
   int? _selectedPosition;
-  // Map day-chip selection; null = All. Shared views always default to All
-  // and get none of the Today behaviors (specs/today-mode).
-  int? _selectedDay;
+  // Focused leg on the map (specs/map-city-focus); null = All, keyed by the
+  // tripLegs run key. Shared views always default to All and get none of the
+  // Today behaviors (specs/today-mode). Chips drive the MAP only — the
+  // read-only list below has plain section headers, no expansion to sync.
+  String? _focusedLegKey;
 
   Trip get _trip => widget.shared.trip;
 
@@ -197,56 +200,68 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
     final dates = tripDateRange(trip.startDate, trip.endDate);
     final stays = trip.accommodations ?? const <Accommodation>[];
     // The map-visibility gate stays keyed to the unfiltered items/stays so the
-    // chip row never disappears when the selected day has nothing mappable. A
+    // chip row never disappears when the focused leg has nothing mappable. A
     // geocoded stay counts on its own: TripMap renders stay pins, so a
     // stays-only trip still has a map worth showing.
     final hasCoords = items.any((i) => i.latitude != 0 || i.longitude != 0) ||
         stays.any(TripMap.stayHasCoords);
-    final mapDayCount =
-        dayCount(trip.startDate, trip.endDate, items.map((i) => i.day));
-    if (_selectedDay != null && _selectedDay! > mapDayCount) {
-      _selectedDay = null; // trip shrank under a stale selection
+    // The canonical locality runs (shared tripLegs split) drive the chips,
+    // the per-leg map filter, and — index-aligned by construction — the
+    // rawLegRanges the stay filter reads.
+    final legs = tripLegs(items);
+    final rawRanges = rawLegRanges(trip);
+    if (_focusedLegKey != null &&
+        (legs.length < 2 || !legs.any((l) => l.key == _focusedLegKey))) {
+      _focusedLegKey = null; // trip changed under a stale focus
     }
-    // Days that would plot something, so empty days get muted chips.
-    final mappedDays = daysWithMappedContent(
-      trip.startDate,
-      mapDayCount,
-      [
-        for (final i in items)
-          if (i.latitude != 0 || i.longitude != 0) i.day,
-      ],
-      [
-        for (final a in stays)
-          if (TripMap.stayHasCoords(a))
-            (checkIn: a.checkIn, checkOut: a.checkOut),
-      ],
-    );
-    final dayItems = _selectedDay == null
-        ? items
-        : items.where((i) => i.day == _selectedDay).toList();
-    // Under Day N, only the stay(s) covering that night (checkout-exclusive);
-    // without a parseable start date no stay can match a day.
-    final tripStart = DateTime.tryParse(trip.startDate ?? '');
-    final dayStays = _selectedDay == null
+    final legChips = <({String key, String label})>[
+      for (final leg in legs)
+        (
+          key: leg.key,
+          label: leg.label == kOtherPlacesLabel
+              ? l10n.sharedPlacesGroup
+              : leg.label,
+        ),
+    ];
+    // Legs that would plot something, so unmappable legs get muted chips: a
+    // geocoded item in the run, or a geocoded stay on one of its nights —
+    // the same rule as the owner's mappedLegKeys.
+    final mappedLegKeys = <String>{
+      for (var i = 0; i < legs.length; i++)
+        if (legs[i].coord != null ||
+            (rawRanges[i].start != null &&
+                rawRanges[i].end != null &&
+                stays.any((a) =>
+                    TripMap.stayHasCoords(a) &&
+                    stayCoversAnyNight(a.checkIn, a.checkOut,
+                        rawRanges[i].start!, rawRanges[i].end!))))
+          legs[i].key,
+    };
+    final focusIndex = _focusedLegKey == null
+        ? -1
+        : legs.indexWhere((l) => l.key == _focusedLegKey);
+    final legItems = focusIndex < 0 ? items : legs[focusIndex].items;
+    // Under a focused leg, only the stay(s) covering one of its raw-range
+    // nights (checkout-exclusive both sides); an undated leg plots none.
+    final legStays = focusIndex < 0
         ? stays
-        : tripStart == null
+        : (rawRanges[focusIndex].start == null ||
+                rawRanges[focusIndex].end == null)
             ? const <Accommodation>[]
             : stays
-                .where((a) => stayCoversDate(
+                .where((a) => stayCoversAnyNight(
                     a.checkIn,
                     a.checkOut,
-                    // Calendar-day arithmetic (constructor normalizes
-                    // overflow) so a DST transition can't drift the date.
-                    DateTime(tripStart.year, tripStart.month,
-                        tripStart.day + _selectedDay! - 1)))
+                    rawRanges[focusIndex].start!,
+                    rawRanges[focusIndex].end!))
                 .toList();
     // Trip-overview destination pins (All chip only): one numbered pin per
     // city leg, from the unfiltered itinerary. Label-only tooltips — the
     // owner-side date allocation doesn't exist on this read-only view.
-    final destinations = _selectedDay != null
+    final destinations = _focusedLegKey != null
         ? null
         : <TripMapDestination>[
-            for (final leg in tripLegs(items))
+            for (final leg in legs)
               if (leg.coord != null)
                 TripMapDestination(
                   label: leg.label == kOtherPlacesLabel
@@ -304,19 +319,20 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
                           children: [
                             Positioned.fill(
                               child: TripMap(
-                                items: dayItems,
-                                accommodations: dayStays,
+                                items: legItems,
+                                accommodations: legStays,
                                 destinations: destinations,
                                 selectedPosition: _selectedPosition,
-                                fitSignature: _selectedDay,
+                                fitSignature: _focusedLegKey,
                                 // Keep fitted markers clear of the chip row
                                 // overlaid below.
-                                topOverlayInset: mapDayCount > 0
-                                    ? MapDayChips.mapTopInset
+                                topOverlayInset: legChips.length >= 2
+                                    ? MapLegChips.mapTopInset
                                     : 0,
-                                emptyLabel: _selectedDay == null
+                                emptyLabel: focusIndex < 0
                                     ? l10n.sharedNoMappedPlaces
-                                    : l10n.sharedNoPlacesOnDay(_selectedDay!),
+                                    : l10n.sharedNoPlacesIn(
+                                        legChips[focusIndex].label),
                                 onPinTap: (pos) =>
                                     setState(() => _selectedPosition = pos),
                               ),
@@ -327,12 +343,16 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
                               top: 8,
                               left: 8,
                               right: 8,
-                              child: MapDayChips(
-                                dayCount: mapDayCount,
-                                selected: _selectedDay,
-                                mappedDays: mappedDays,
-                                onSelected: (d) =>
-                                    setState(() => _selectedDay = d),
+                              child: MapLegChips(
+                                legs: legChips,
+                                selected: _focusedLegKey,
+                                mappedLegKeys: mappedLegKeys,
+                                // Clear the pin selection with the focus
+                                // change, same rule as the owner surfaces.
+                                onSelected: (k) => setState(() {
+                                  _focusedLegKey = k;
+                                  _selectedPosition = null;
+                                }),
                               ),
                             ),
                           ],

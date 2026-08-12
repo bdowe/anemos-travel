@@ -781,11 +781,11 @@
   "tripNoPlacesYet": "No places yet",
   "tripNoPlacesYetMessage": "Refine with AI or add a place to start your itinerary.",
   "tripNoMappedPlaces": "No mapped places",
-  "tripNoPlacesOnDay": "No places pinned on Day {day}",
-  "@tripNoPlacesOnDay": {
+  "tripNoPlacesInLeg": "No places pinned in {city}",
+  "@tripNoPlacesInLeg": {
     "placeholders": {
-      "day": {
-        "type": "int"
+      "city": {
+        "type": "String"
       }
     }
   },
@@ -1494,11 +1494,11 @@
     }
   },
   "sharedNoMappedPlaces": "No mapped places",
-  "sharedNoPlacesOnDay": "No places pinned on Day {day}",
-  "@sharedNoPlacesOnDay": {
+  "sharedNoPlacesIn": "No places pinned in {city}",
+  "@sharedNoPlacesIn": {
     "placeholders": {
-      "day": {
-        "type": "int"
+      "city": {
+        "type": "String"
       }
     }
   },

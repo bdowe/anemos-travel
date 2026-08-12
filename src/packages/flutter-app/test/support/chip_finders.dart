@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'city_groups.dart';
+
 /// Finders that scope city-header date-chip assertions to ONE city's row.
 ///
 /// The chip renders its range and nights suffix as two separate Text widgets
@@ -11,11 +13,12 @@ import 'package:flutter_test/flutter_test.dart';
 /// visibleLegRanges pair.
 
 /// The header Row for a city group — the nearest Row ancestor of its label
-/// text. Reliable while the label text is unique on screen (it is for
-/// collapsed groups, where item rows aren't built; expanded fixtures must
-/// not name an item exactly like a city).
-Finder headerRowOf(String cityLabel) =>
-    find.ancestor(of: find.text(cityLabel), matching: find.byType(Row)).first;
+/// text, resolved via [cityHeaderLabel] so the map strip's same-name leg
+/// chip can never alias it. Expanded fixtures must still not name an item
+/// exactly like a city.
+Finder headerRowOf(String cityLabel) => find
+    .ancestor(of: cityHeaderLabel(cityLabel), matching: find.byType(Row))
+    .first;
 
 /// A chip text inside one city's header row.
 Finder chipTextIn(String cityLabel, String text) =>

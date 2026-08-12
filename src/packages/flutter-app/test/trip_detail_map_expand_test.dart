@@ -11,7 +11,7 @@ import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/screens/trip_map_screen.dart';
-import 'package:travel_route_planner/widgets/map_day_chips.dart';
+import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
 import 'support/l10n_test_app.dart';
@@ -24,9 +24,16 @@ class _FakeTripsApiService extends TripsApiService {
   Future<Trip> getTrip(String id) async => trip;
 }
 
-/// Real (tight Paris-cluster) coordinates so the trip detail screen mounts a
-/// live TripMap instead of skipping it.
-ItineraryItem _item(int pos, String name, double lat, double lng, int day) =>
+/// Real coordinates so the trip detail screen mounts a live TripMap instead
+/// of skipping it.
+ItineraryItem _item(
+  int pos,
+  String name,
+  String city,
+  double lat,
+  double lng,
+  int day,
+) =>
     ItineraryItem(
       id: 'i$pos',
       position: pos,
@@ -35,22 +42,25 @@ ItineraryItem _item(int pos, String name, double lat, double lng, int day) =>
       longitude: lng,
       category: 'attraction',
       day: day,
-      city: 'Paris',
+      city: city,
     );
 
 void main() {
+  // Paris (geocoded) → Rome (geocoded) → Berlin (UNgeocoded: the pin-less
+  // leg the empty-state cases select). Multi-city so the leg strip renders.
   final trip = Trip(
     id: 't1',
-    title: 'Paris',
+    title: 'Paris & Rome',
     status: 'planned',
     createdAt: '2026-06-01',
     updatedAt: '2026-06-01',
     startDate: '2026-09-01',
     endDate: '2026-09-03',
     items: [
-      _item(0, 'Louvre', 48.8606, 2.3376, 1),
-      _item(1, 'Orsay', 48.8600, 2.3266, 1),
-      _item(2, 'Pantheon', 48.8462, 2.3464, 2),
+      _item(0, 'Louvre', 'Paris', 48.8606, 2.3376, 1),
+      _item(1, 'Orsay', 'Paris', 48.8600, 2.3266, 1),
+      _item(2, 'Colosseum', 'Rome', 41.8902, 12.4922, 2),
+      _item(3, 'Berlin Walk', 'Berlin', 0, 0, 3),
     ],
     accommodations: const [
       Accommodation(
@@ -87,6 +97,16 @@ void main() {
   Finder inMap(Finder matching) =>
       find.descendant(of: find.byType(TripMap), matching: matching);
 
+  Future<void> tapChip(WidgetTester tester, String label) async {
+    await tester.tap(find.descendant(
+      of: find.byType(MapLegChips),
+      matching: find.text(label),
+    ));
+    // Settles the camera re-fit and any focus-driven page scroll behind a
+    // full-screen map.
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('phone: map is a static preview and scrolls away with the page',
       (WidgetTester tester) async {
     await pumpScreen(tester, surface: phone);
@@ -110,7 +130,7 @@ void main() {
   });
 
   testWidgets(
-      'phone: tapping the map opens the full-screen map; a day picked '
+      'phone: tapping the map opens the full-screen map; a leg picked '
       'there survives closing', (WidgetTester tester) async {
     await pumpScreen(tester, surface: phone);
 
@@ -118,28 +138,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(TripMapScreen), findsOneWidget);
-    // Full interaction restored: zoom controls and day chips.
+    // Full interaction restored: zoom controls and leg chips.
     expect(inMap(find.byIcon(Icons.add)), findsOneWidget);
-    final chips = find.byType(MapDayChips);
-    expect(chips, findsOneWidget);
+    expect(find.byType(MapLegChips), findsOneWidget);
 
-    await tester.tap(find.descendant(of: chips, matching: find.text('Day 2')));
-    await tester.pump();
-    await tester.pump(); // post-frame camera re-fit
+    await tapChip(tester, 'Rome');
 
-    // Day filter applies inside the full-screen map.
+    // Leg focus applies inside the full-screen map.
     final fullMap = tester.widget<TripMap>(find.byType(TripMap));
-    expect(fullMap.items.map((i) => i.name), ['Pantheon']);
+    expect(fullMap.items.map((i) => i.name), ['Colosseum']);
 
     await tester.tap(find.byType(CloseButton));
     await tester.pumpAndSettle();
 
-    // Back on the trip screen, the inline chips kept the selection.
+    // Back on the trip screen, the inline chips kept the focus.
     expect(find.byType(TripMapScreen), findsNothing);
-    final inlineChips = tester.widget<MapDayChips>(find.byType(MapDayChips));
-    expect(inlineChips.selected, 2);
+    final inlineChips = tester.widget<MapLegChips>(find.byType(MapLegChips));
+    expect(inlineChips.selected, 'Rome');
     final inlineMap = tester.widget<TripMap>(find.byType(TripMap));
-    expect(inlineMap.items.map((i) => i.name), ['Pantheon']);
+    expect(inlineMap.items.map((i) => i.name), ['Colosseum']);
   });
 
   testWidgets('wide: map keeps the pinned interactive treatment',
@@ -159,7 +176,7 @@ void main() {
   });
 
   testWidgets(
-      'wide: the fullscreen control opens the full-screen map; a day picked '
+      'wide: the fullscreen control opens the full-screen map; a leg picked '
       'there survives closing', (WidgetTester tester) async {
     await pumpScreen(tester, surface: const Size(1200, 800));
 
@@ -168,43 +185,38 @@ void main() {
 
     expect(find.byType(TripMapScreen), findsOneWidget);
 
-    final chips = find.byType(MapDayChips);
-    await tester.tap(find.descendant(of: chips, matching: find.text('Day 2')));
-    await tester.pump();
-    await tester.pump(); // post-frame camera re-fit
+    await tapChip(tester, 'Rome');
 
     final fullMap = tester.widget<TripMap>(find.byType(TripMap));
-    expect(fullMap.items.map((i) => i.name), ['Pantheon']);
+    expect(fullMap.items.map((i) => i.name), ['Colosseum']);
 
     await tester.tap(find.byType(CloseButton));
     await tester.pumpAndSettle();
 
-    // Back on the trip screen, the inline chips kept the selection.
+    // Back on the trip screen, the inline chips kept the focus.
     expect(find.byType(TripMapScreen), findsNothing);
-    final inlineChips = tester.widget<MapDayChips>(find.byType(MapDayChips));
-    expect(inlineChips.selected, 2);
+    final inlineChips = tester.widget<MapLegChips>(find.byType(MapLegChips));
+    expect(inlineChips.selected, 'Rome');
   });
 
   testWidgets(
-      'phone: a pin-less day keeps the inline preview inside its card '
+      'phone: a pin-less leg keeps the inline preview inside its card '
       '(no hint, no overflow)', (WidgetTester tester) async {
     await pumpScreen(tester, surface: phone);
 
-    final chips = find.byType(MapDayChips);
-    await tester.tap(find.descendant(of: chips, matching: find.text('Day 3')));
-    await tester.pumpAndSettle();
+    await tapChip(tester, 'Berlin');
 
     // The preview shows only the label: the add-place hint invites an action
     // the pointer-absorbing preview can't take, and it's what overflowed the
     // 180px card. Widget tests rethrow RenderFlex overflows at test end —
     // settling cleanly here IS the no-overflow assertion.
-    expect(find.text('No places pinned on Day 3'), findsOneWidget);
+    expect(find.text('No places pinned in Berlin'), findsOneWidget);
     expect(find.text('Add a place to see it on the map.'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
-      'escape key closes the full-screen map; a day picked '
+      'escape key closes the full-screen map; a leg picked '
       'there survives closing', (WidgetTester tester) async {
     await pumpScreen(tester, surface: phone);
 
@@ -213,34 +225,29 @@ void main() {
 
     expect(find.byType(TripMapScreen), findsOneWidget);
 
-    final chips = find.byType(MapDayChips);
-    await tester.tap(find.descendant(of: chips, matching: find.text('Day 2')));
-    await tester.pump();
-    await tester.pump(); // post-frame camera re-fit
+    await tapChip(tester, 'Rome');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
-    // Same pop path as the close button: screen gone, selection kept.
+    // Same pop path as the close button: screen gone, focus kept.
     expect(find.byType(TripMapScreen), findsNothing);
-    final inlineChips = tester.widget<MapDayChips>(find.byType(MapDayChips));
-    expect(inlineChips.selected, 2);
+    final inlineChips = tester.widget<MapLegChips>(find.byType(MapLegChips));
+    expect(inlineChips.selected, 'Rome');
   });
 
-  testWidgets("escape closes the map from a pin-less day's empty state",
+  testWidgets("escape closes the map from a pin-less leg's empty state",
       (WidgetTester tester) async {
     await pumpScreen(tester, surface: phone);
 
     await tester.tap(find.byType(TripMap), warnIfMissed: false);
     await tester.pumpAndSettle();
 
-    // Day 3 has no pins: TripMap drops the FlutterMap (and its focused
+    // Berlin has no pins: TripMap drops the FlutterMap (and its focused
     // node) for the empty state, so Escape must work from the bare route
     // scope — the case an in-screen shortcut wrapper would miss.
-    final chips = find.byType(MapDayChips);
-    await tester.tap(find.descendant(of: chips, matching: find.text('Day 3')));
-    await tester.pumpAndSettle();
-    expect(find.text('No places pinned on Day 3'), findsOneWidget);
+    await tapChip(tester, 'Berlin');
+    expect(find.text('No places pinned in Berlin'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();

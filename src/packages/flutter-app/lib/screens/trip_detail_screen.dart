@@ -67,7 +67,7 @@ import '../widgets/choice_chip_row.dart';
 import '../widgets/event_card.dart';
 import '../widgets/hover_reveal.dart';
 import '../widgets/local_rec_card.dart';
-import '../widgets/map_day_chips.dart';
+import '../widgets/map_leg_chips.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/source_links_card.dart';
 import '../widgets/status_pill.dart';
@@ -157,12 +157,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // Reset on every lens change so the lens always opens at All; clamped in
   // _bookingsLensBody against the current leg labels (edits can stale it).
   String? _bookingsLensDestination;
-  // Map day-chip selection; null = All (specs/today-mode). A ValueNotifier
-  // so a day-chip tap rebuilds only the map card's ListenableBuilder, never
-  // the whole screen. May hold a stale out-of-range day after an edit
-  // shrinks the trip — readers clamp via _clampedDay (read-side, so build
-  // never mutates state).
-  final ValueNotifier<int?> _selectedDay = ValueNotifier<int?>(null);
+  // Focused leg on the map (specs/map-city-focus); null = All. Keyed by the
+  // FULL-itinerary run key (leg.key, `#2`-suffixed on revisits) — never the
+  // lens-dependent group key. A ValueNotifier so a chip tap rebuilds only
+  // the map card's ListenableBuilder, never the whole screen. May hold a
+  // stale key after an edit removes the leg — readers clamp via
+  // _clampedLegKey (read-side, so build never mutates state).
+  final ValueNotifier<String?> _focusedLegKey = ValueNotifier<String?>(null);
   // Whether the map renders as the wide layout's pinned header (true) or the
   // phone layout's scroll-away tap-to-expand card (false). Assigned each
   // build from the body width; also feeds the Today-scroll chrome math.
@@ -296,7 +297,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     WidgetsBinding.instance.removeObserver(this);
     _statusPoll?.cancel();
     _scroll.dispose();
-    _selectedDay.dispose();
+    _focusedLegKey.dispose();
     _selectedPosition.dispose();
     super.dispose();
   }
@@ -583,7 +584,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// One-shot Today trigger, called inside the setState of the loud load
   /// paths (live success and cached-offline fallback) so the map's today
-  /// chip preselection lands in the same frame as the trip. Never called
+  /// focus preselection lands in the same frame as the trip. Never called
   /// from silent refreshes; a no-op once fired, while the refine panel is
   /// open, or when the trip is undated/past/future or has no day tags.
   void _maybeAutoScrollToday(Trip trip) {
@@ -594,7 +595,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       return;
     }
     _autoScrolledToday = true;
-    _selectedDay.value = today; // map day-chip preselect
+    // Map focus preselect: the leg holding today's items. Exact-day match
+    // only — a day with nothing tagged reads as All (the whole-trip
+    // overview), never an empty map. Single-leg trips have no focus.
+    final d = _derive(trip);
+    if (d.legs.length >= 2) {
+      _focusedLegKey.value = d.legKeyForDay(today);
+    }
     // The scroll itself waits for the first build that actually shows the
     // scroll view: this setState still renders the loading spinner (the
     // loud path clears _loading later, in its finally), so a post-frame
@@ -696,6 +703,68 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // pinned chrome.
     final actual = box.localToGlobal(Offset.zero, ancestor: vp).dy;
     final delta = actual - (_pinnedChrome(trip) + _cityHeaderHeight(dayKey));
+    if (delta.abs() > 2) {
+      _scroll.jumpTo((_scroll.offset + delta)
+          .clamp(0.0, _scroll.position.maxScrollExtent));
+    }
+  }
+
+  /// THE focus write for a chip tap (inline strip and full-screen map's
+  /// report-back): focus the leg, expand its section, and on the wide layout
+  /// rest that section under the pinned map (specs/map-city-focus). Header
+  /// taps write focus themselves — the user is already at the header, so
+  /// they expand/collapse without scrolling.
+  ///
+  /// Under a places lens the expanded key may match no group (a lens can
+  /// merge adjacent runs) — the set entry is inert and the MAP stays right,
+  /// because content comes from the full leg's position set. Under a
+  /// bookings lens no city headers exist at all: the chip drives the map
+  /// only and the lens is NOT exited (unlike _scrollToDay, whose whole job
+  /// is list navigation).
+  void _setFocusedLeg(TripDerivation d, String? key) {
+    if (d.legs.length < 2) return; // single-leg trips have no focus
+    // Clear the pin selection with the focus change: a lingering selection
+    // would suppress later content refits and keep a ghost highlight from
+    // another leg.
+    _selectedPosition.value = null;
+    _focusedLegKey.value = key;
+    if (key == null) return; // "All": list expansion untouched
+    final expanded = _expandedCities.add(key);
+    if (expanded) setState(() {});
+    if (_mapPinned) {
+      // Post-frame so a freshly expanded section has laid out first (the
+      // _scrollToDay pattern); on phones the chips ride the scroll-away
+      // preview card, so scrolling the list would hide the very map being
+      // focused — desktop only.
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _scrollToCityHeader(key));
+    }
+  }
+
+  /// Offset-reveal scroll resting [cityKey]'s header just below the pinned
+  /// chrome — [_scrollToDayHeader] minus the city-header term (this header
+  /// IS the target). Same one-correction contract.
+  Future<void> _scrollToCityHeader(String cityKey) async {
+    final trip = _trip;
+    if (!mounted || trip == null || !_scroll.hasClients) return;
+    final target =
+        _cityHeaderKeys[cityKey]?.currentContext?.findRenderObject();
+    if (target == null || !target.attached) return;
+    final viewport = RenderAbstractViewport.maybeOf(target);
+    if (viewport == null) return;
+    final resting = _pinnedChrome(trip);
+    final reveal = viewport.getOffsetToReveal(target, 0).offset - resting;
+    final offset = reveal.clamp(0.0, _scroll.position.maxScrollExtent);
+    await _scroll.animateTo(offset,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic);
+    if (!mounted || !_scroll.hasClients) return;
+    final box = _cityHeaderKeys[cityKey]?.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached) return;
+    final vp = RenderAbstractViewport.maybeOf(box);
+    if (vp == null) return;
+    final actual = box.localToGlobal(Offset.zero, ancestor: vp).dy;
+    final delta = actual - _pinnedChrome(trip);
     if (delta.abs() > 2) {
       _scroll.jumpTo((_scroll.offset + delta)
           .clamp(0.0, _scroll.position.maxScrollExtent));
@@ -2063,13 +2132,33 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       builder: (context, revealed) => Material(
         color: theme.scaffoldBackgroundColor,
         child: InkWell(
-          onTap: () => setState(() {
+          onTap: () {
+            setState(() {
+              if (cityCollapsed) {
+                _expandedCities.add(group.key);
+              } else {
+                _expandedCities.remove(group.key);
+              }
+            });
+            // Two-way focus (specs/map-city-focus): expanding a section
+            // focuses its LEG on the map (focus = last expanded); collapsing
+            // the focused section returns the map to All; collapsing any
+            // other section leaves the map alone. Resolved through the item
+            // position because under a places lens the group key may name a
+            // merged run that isn't a full-itinerary leg. No scroll here —
+            // the user is already at the header.
+            final d = _derive(trip);
+            if (d.legs.length < 2 || group.items.isEmpty) return;
+            final legKey = d.legKeyOfPosition(group.items.first.position);
+            if (legKey == null) return;
             if (cityCollapsed) {
-              _expandedCities.add(group.key);
-            } else {
-              _expandedCities.remove(group.key);
+              _selectedPosition.value = null;
+              _focusedLegKey.value = legKey;
+            } else if (_focusedLegKey.value == legKey) {
+              _selectedPosition.value = null;
+              _focusedLegKey.value = null;
             }
-          }),
+          },
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: Column(
@@ -2632,7 +2721,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// build can swap in the lens empty state. A stale chip selection (leg
   /// labels change when the itinerary is edited) is clamped here — we're
   /// already in build, so this frame renders the clamped value (the
-  /// _selectedDay clamp idiom).
+  /// _focusedLegKey clamp idiom).
   List<Widget> _bookingsLensBody(
     GroupedBookings grouped,
     List<String> labels,
@@ -4307,26 +4396,36 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// an [AbsorbPointer] swallows the pin/stay gesture detectors so the whole
   /// card is one tap target opening [TripMapScreen], and — because the tap
   /// [GestureDetector] claims only taps — vertical drags fall through to the
-  /// page scroll. The day chips sit above the gesture layer either way, so
+  /// page scroll. The leg chips sit above the gesture layer either way, so
   /// they stay tappable inline.
   Widget _mapCard(
     Trip trip,
-    AppLocalizations l10n,
-    int mapDayCount,
-    Set<int> mappedDays, {
+    AppLocalizations l10n, {
     required bool expandable,
   }) {
     final derivation = _derive(trip);
     final endpoints = derivation.homeLegEndpoints;
-    // Day + selection live in ValueNotifiers: this builder — not the whole
-    // screen — is what a day-chip tap or pin/row selection rebuilds. The
-    // day-filtered lists come from the derivation's lazy per-day caches, so
+    final legChips = derivation.legChips;
+    // The strip and focus exist only with ≥2 legs — below that the
+    // destination-overview mode never engages, so "All" and "the one leg"
+    // would draw the identical map.
+    final hasChips = legChips.length >= 2;
+    String labelFor(String key) {
+      for (final c in legChips) {
+        if (c.key == key) return c.label;
+      }
+      return key;
+    }
+
+    // Focus + selection live in ValueNotifiers: this builder — not the whole
+    // screen — is what a leg-chip tap or pin/row selection rebuilds. The
+    // leg-filtered lists come from the derivation's lazy per-leg caches, so
     // a selection-only rebuild passes TripMap the identical lists and its
     // marker cache skips re-clustering.
     return ListenableBuilder(
-      listenable: Listenable.merge([_selectedDay, _selectedPosition]),
+      listenable: Listenable.merge([_focusedLegKey, _selectedPosition]),
       builder: (context, _) {
-        final day = _clampedDay(mapDayCount);
+        final focusKey = _clampedLegKey(derivation);
         // Consumer, not the screen's ref: homeOverlayFor watches the
         // home-airport resolution provider, and that watch belongs to the
         // map subtree — resolution landing must not rebuild the screen.
@@ -4335,28 +4434,30 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             final home = homeOverlayFor(
               ref,
               homeAirport: _homeAirport,
-              day: day,
-              dayCount: mapDayCount,
+              focusedLegIndex:
+                  focusKey == null ? null : derivation.legIndexOf(focusKey),
+              legCount: derivation.legs.length,
               firstCityPoint: endpoints.first,
               lastCityPoint: endpoints.last,
             );
             return TripMap(
-              items: derivation.dayFilteredItems(day),
-              accommodations: derivation.dayFilteredStays(day),
-              destinations: day == null ? derivation.mapDestinations : null,
+              items: derivation.legFilteredItems(focusKey),
+              accommodations: derivation.legFilteredStays(focusKey),
+              destinations:
+                  focusKey == null ? derivation.mapDestinations : null,
               selectedPosition: _selectedPosition.value,
-              // Unfiltered by day: TripMap's position+1 adjacency guard
-              // drops labels across the gaps a day filter creates, and the
-              // category filter already empties this map.
+              // Unfiltered by leg: TripMap's position+1 adjacency guard
+              // already keeps labels within a city, and the category filter
+              // empties this map.
               segmentLabels: derivation.segmentLabels,
               home: home,
-              fitSignature: day,
+              fitSignature: focusKey,
               // Keep fitted markers clear of the chip row overlaid below.
-              topOverlayInset: mapDayCount > 0 ? MapDayChips.mapTopInset : 0,
+              topOverlayInset: hasChips ? MapLegChips.mapTopInset : 0,
               interactive: !expandable,
-              emptyLabel: day == null
+              emptyLabel: focusKey == null
                   ? l10n.tripNoMappedPlaces
-                  : l10n.tripNoPlacesOnDay(day),
+                  : l10n.tripNoPlacesInLeg(labelFor(focusKey)),
               // The preview absorbs pointers, so its empty-state add-place
               // hint and CTA would invite an action it can't take (tapping
               // opens the full-screen map, which has both); dropping them
@@ -4367,7 +4468,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               emptyAction: (expandable || _isOffline || _readOnly)
                   ? null
                   : FilledButton.tonalIcon(
-                      onPressed: () => _addPlace(day: day),
+                      onPressed: () =>
+                          _addPlace(day: derivation.dayForLeg(focusKey)),
                       icon: const Icon(Icons.add, size: 18),
                       label: Text(l10n.tripAddPlace),
                     ),
@@ -4379,7 +4481,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       _selectedPosition.value = pos;
                       // The highlighted row can only be seen if its run
                       // renders: groups default collapsed, so open the
-                      // tapped item's run. Selection itself is
+                      // tapped item's run — expansion only, never a focus
+                      // write, which would refit the camera out from under
+                      // the zoom-to-pin move. Selection itself is
                       // notifier-driven; setState only when expansion
                       // actually changed (the one thing the wider screen
                       // must re-render).
@@ -4393,16 +4497,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       if (expandedChanged) setState(() {});
                       _showSnack(it.name);
                     },
-              onExpand: expandable
-                  ? null
-                  : () => _openFullMap(trip, mapDayCount, mappedDays),
+              onExpand: expandable ? null : () => _openFullMap(trip),
             );
           },
         );
         if (expandable) {
           map = GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => _openFullMap(trip, mapDayCount, mappedDays),
+            onTap: () => _openFullMap(trip),
             child: AbsorbPointer(child: map),
           );
         }
@@ -4417,11 +4519,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 top: 8,
                 left: 8,
                 right: 8,
-                child: MapDayChips(
-                  dayCount: mapDayCount,
-                  selected: day,
-                  mappedDays: mappedDays,
-                  onSelected: (d) => _selectedDay.value = d,
+                child: MapLegChips(
+                  legs: legChips,
+                  selected: focusKey,
+                  mappedLegKeys: derivation.mappedLegKeys,
+                  onSelected: (k) => _setFocusedLeg(derivation, k),
                 ),
               ),
               if (expandable)
@@ -4431,7 +4533,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   child: MapControlButton(
                     icon: Icons.fullscreen,
                     tooltip: l10n.tripExpandMap,
-                    onTap: () => _openFullMap(trip, mapDayCount, mappedDays),
+                    onTap: () => _openFullMap(trip),
                   ),
                 ),
             ],
@@ -4441,32 +4543,35 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  /// Read-side clamp for [_selectedDay]: a refresh can shrink the trip below
-  /// a stale selection (fewer days after an edit); an out-of-range day reads
-  /// as All. Clamping at read — instead of writing the notifier during
-  /// build — keeps build pure; the stale value is harmless because every
-  /// consumer goes through here with the current day count.
-  int? _clampedDay(int mapDayCount) {
-    final day = _selectedDay.value;
-    return (day != null && day > mapDayCount) ? null : day;
+  /// Read-side clamp for [_focusedLegKey]: a refresh can remove the focused
+  /// leg (or shrink the trip below two legs, where focus is disabled); a key
+  /// with no current leg reads as All. Clamping at read — instead of writing
+  /// the notifier during build — keeps build pure; the stale value is
+  /// harmless because every consumer goes through here with the current
+  /// derivation.
+  String? _clampedLegKey(TripDerivation d) {
+    final key = _focusedLegKey.value;
+    if (key == null) return null;
+    if (d.legs.length < 2 || d.legIndexOf(key) == null) return null;
+    return key;
   }
 
   // Home-leg endpoints live in [TripDerivation.homeLegEndpoints] — the
   // trip's first/last location groups, the same derivation the
   // outbound/return booking todos trust — never the first/last mapped pin,
-  // which shifts under day/category filters.
+  // which shifts under leg/category filters.
 
   /// Pushes the full-screen interactive map. Root navigator so the map
   /// covers the bottom navigation bar; the closures read the live [_trip] so
   /// a silent refresh propagates on the next chip tap.
-  void _openFullMap(Trip trip, int mapDayCount, Set<int> mappedDays) {
+  void _openFullMap(Trip trip) {
     final derivation = _derive(trip);
     final endpoints = derivation.homeLegEndpoints;
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         fullscreenDialog: true,
         // Escape closes the map when focus rests on the route's own scope
-        // (pin-less day: the empty state has no focusable map): the
+        // (pin-less leg: the empty state has no focusable map): the
         // framework's Escape→DismissIntent handler pops any route with a
         // dismissible barrier (PageRoute.barrierDismissible docs), and the
         // barrier itself is never visible behind an opaque full-screen
@@ -4479,28 +4584,36 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           homeAirport: _homeAirport,
           firstCityPoint: endpoints.first,
           lastCityPoint: endpoints.last,
-          itemsForDay: (d) {
+          itemsForLeg: (k) {
             final t = _trip;
             return t == null
                 ? const <ItineraryItem>[]
-                : _derive(t).dayFilteredItems(d);
+                : _derive(t).legFilteredItems(k);
           },
-          staysForDay: (d) {
+          staysForLeg: (k) {
             final t = _trip;
             return t == null
                 ? const <Accommodation>[]
-                : _derive(t).dayFilteredStays(d);
+                : _derive(t).legFilteredStays(k);
           },
           segmentLabels: derivation.segmentLabels,
-          dayCount: mapDayCount,
-          mappedDays: mappedDays,
-          initialDay: _clampedDay(mapDayCount),
-          // The embedded map card listens to the notifier, so the full-screen
-          // selection stays in sync with the card behind it — no setState.
-          onDaySelected: (d) => _selectedDay.value = d,
+          legChips: derivation.legChips,
+          mappedLegKeys: derivation.mappedLegKeys,
+          initialLegKey: _clampedLegKey(derivation),
+          // The full-screen chip tap reports here: the embedded card's
+          // ListenableBuilder keeps its own chips in sync live, and
+          // _setFocusedLeg pre-expands (and on desktop pre-scrolls) the
+          // section behind the modal, so focus survives close.
+          onLegSelected: (k) {
+            final t = _trip;
+            if (t != null) _setFocusedLeg(_derive(t), k);
+          },
           onAddPlace: (_isOffline || _readOnly)
               ? null
-              : (day) => _addPlace(day: day),
+              : (k) {
+                  final t = _trip;
+                  _addPlace(day: t == null ? null : _derive(t).dayForLeg(k));
+                },
         ),
       ),
     );
@@ -4683,18 +4796,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       // lookup (keyed by the same label the groups use).
                       final groupRanges = derivation.groupRanges;
                       final tripStart = DateTime.tryParse(trip.startDate ?? '');
-                      // Map day chips (specs/today-mode). Day count spans the
-                      // whole trip, not the category filter, so chips never
-                      // come and go with the Attractions/Restaurants toggle.
-                      final mapDayCount = derivation.mapDayCount;
-                      // A stale out-of-range day selection (a refresh can
-                      // shrink the trip) is clamped read-side by every
-                      // consumer — see _clampedDay; build never writes it.
-                      // Days that would plot something, so empty days (e.g.
-                      // the fly-out day, all booking todos) get muted chips.
-                      // Trip-wide like mapDayCount — the category filter never
-                      // flickers the chip treatment.
-                      final mappedDays = derivation.mappedDays;
+                      // Map leg chips (specs/map-city-focus) read straight
+                      // off the derivation inside _mapCard: legChips and
+                      // mappedLegKeys are trip-wide — the category filter
+                      // never flickers the strip — and a stale focused key
+                      // (a refresh can drop a leg) is clamped read-side by
+                      // every consumer via _clampedLegKey; build never
+                      // writes it.
                       // Today mode: the jump chip renders only when today
                       // falls inside the trip's dates AND some item carries a
                       // day tag (the same gate as the auto-scroll, so the
@@ -4761,8 +4869,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                       theme.scaffoldBackgroundColor,
                                   padding: EdgeInsets.fromLTRB(
                                       gutter, 12, gutter, 12),
-                                  child: _mapCard(
-                                      trip, l10n, mapDayCount, mappedDays,
+                                  child: _mapCard(trip, l10n,
                                       expandable: false),
                                 ),
                               )
@@ -4773,8 +4880,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                       gutter, 12, gutter, 12),
                                   child: SizedBox(
                                     height: _mapHeightNarrow,
-                                    child: _mapCard(
-                                        trip, l10n, mapDayCount, mappedDays,
+                                    child: _mapCard(trip, l10n,
                                         expandable: true),
                                   ),
                                 ),
@@ -4895,12 +5001,21 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                           materialTapTargetSize:
                                               MaterialTapTargetSize
                                                   .shrinkWrap,
-                                          // Pure view work (select +
+                                          // Pure view work (focus +
                                           // expand + scroll): allowed
                                           // offline and while the refine
-                                          // panel is open.
+                                          // panel is open. Map focus is
+                                          // exact-day (null → All); the
+                                          // scroll keeps its own
+                                          // nearest-day fallback.
                                           onPressed: () {
-                                            _selectedDay.value = todayDay;
+                                            if (derivation.legs.length >=
+                                                2) {
+                                              _selectedPosition.value = null;
+                                              _focusedLegKey.value =
+                                                  derivation
+                                                      .legKeyForDay(todayDay);
+                                            }
                                             _scrollToDay(todayDay);
                                           },
                                         ),

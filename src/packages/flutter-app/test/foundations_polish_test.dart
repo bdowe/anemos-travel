@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:travel_route_planner/widgets/map_day_chips.dart';
+import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/status_pill.dart';
 
 import 'support/l10n_test_app.dart';
 
 /// Wave-2 foundations (polish/wave2-foundations): the shared StatusPill and
-/// MapDayChips widgets must resolve their labels through AppLocalizations —
+/// map chip widgets must resolve their labels through AppLocalizations —
 /// they previously shipped hardcoded English onto the trips list, the
-/// trip-detail header, and all three map surfaces.
+/// trip-detail header, and all three map surfaces. (MapLegChips' city labels
+/// are data; only its "All" chip localizes.)
 void main() {
   Widget pill(String status, {Locale? locale}) => localizedTestApp(
         home: Scaffold(body: StatusPill(status: status)),
@@ -18,9 +19,12 @@ void main() {
 
   Widget chips({Locale? locale}) => localizedTestApp(
         home: Scaffold(
-          body: MapDayChips(
-            dayCount: 2,
-            selected: 1,
+          body: MapLegChips(
+            legs: const [
+              (key: 'Praga', label: 'Praga'),
+              (key: 'Roma', label: 'Roma'),
+            ],
+            selected: 'Praga',
             onSelected: (_) {},
           ),
         ),
@@ -54,19 +58,21 @@ void main() {
     });
   });
 
-  group('MapDayChips localization', () {
-    testWidgets('renders English labels under en', (tester) async {
+  group('MapLegChips localization', () {
+    testWidgets('renders the English All chip under en', (tester) async {
       await tester.pumpWidget(chips());
       expect(find.text('All'), findsOneWidget);
-      expect(find.text('Day 1'), findsOneWidget);
-      expect(find.text('Day 2'), findsOneWidget);
+      expect(find.text('Praga'), findsOneWidget);
+      expect(find.text('Roma'), findsOneWidget);
     });
 
-    testWidgets('renders Spanish labels under es', (tester) async {
+    testWidgets('renders the Spanish All chip under es; city labels pass '
+        'through verbatim', (tester) async {
       await tester.pumpWidget(chips(locale: const Locale('es')));
       expect(find.text('Todos'), findsOneWidget);
-      expect(find.text('Día 1'), findsOneWidget);
-      expect(find.text('Day 1'), findsNothing);
+      expect(find.text('All'), findsNothing);
+      expect(find.text('Praga'), findsOneWidget);
+      expect(find.text('Roma'), findsOneWidget);
     });
   });
 }

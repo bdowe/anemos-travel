@@ -2420,11 +2420,11 @@ abstract class AppLocalizations {
   /// **'No mapped places'**
   String get tripNoMappedPlaces;
 
-  /// No description provided for @tripNoPlacesOnDay.
+  /// No description provided for @tripNoPlacesInLeg.
   ///
   /// In en, this message translates to:
-  /// **'No places pinned on Day {day}'**
-  String tripNoPlacesOnDay(int day);
+  /// **'No places pinned in {city}'**
+  String tripNoPlacesInLeg(String city);
 
   /// No description provided for @tripAddPlaceMapHint.
   ///
@@ -3998,11 +3998,11 @@ abstract class AppLocalizations {
   /// **'No mapped places'**
   String get sharedNoMappedPlaces;
 
-  /// No description provided for @sharedNoPlacesOnDay.
+  /// No description provided for @sharedNoPlacesIn.
   ///
   /// In en, this message translates to:
-  /// **'No places pinned on Day {day}'**
-  String sharedNoPlacesOnDay(int day);
+  /// **'No places pinned in {city}'**
+  String sharedNoPlacesIn(String city);
 
   /// No description provided for @sharedEmptyTitle.
   ///

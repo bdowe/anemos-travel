@@ -4,22 +4,27 @@ import '../l10n/l10n.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 
-/// Day-filter chips overlaid on a trip map: `All · Day 1 · … · Day N`
-/// (specs/today-mode). [selected] is the 1-based day, null meaning All;
-/// tapping a chip reports the new value through [onSelected] (tapping the
-/// already-selected chip re-reports it — harmless for a filter).
+/// Destination chips overlaid on a trip map: `All · Prague · Kraków · …`
+/// (specs/map-city-focus, successor to the day chips of specs/today-mode).
+/// One chip per full-itinerary leg, in visit order; [selected] is the leg's
+/// run KEY (`'Prague'`, `'Prague#2'`), null meaning All. Tapping a chip
+/// reports the new value through [onSelected] (tapping the already-selected
+/// chip re-reports it — harmless for a filter). [legs] labels are
+/// display-ready — the caller localizes the 'Other places' run; a revisited
+/// city renders two same-label chips whose distinct keys select
+/// independently.
 ///
-/// Renders nothing when [dayCount] is 0 (undated trip with no day-tagged
-/// items). Untagged items are an All-only affair, so there is deliberately
-/// no "Unscheduled" chip.
+/// Renders nothing with fewer than 2 legs: below that the map's
+/// destination-overview mode never engages, so "All" and "the one leg"
+/// would draw the identical map — a two-chip strip that does nothing.
 ///
 /// The chips sit over satellite imagery, so they use the same translucent
 /// dark scrim treatment ([AppColors.mapScrim]) as the map's segment labels
 /// and control buttons. The strip keeps the selected chip in view: the
-/// full-screen map can open with a late day preselected (inherited from the
+/// full-screen map can open with a late leg preselected (inherited from the
 /// inline card), which would otherwise rest off-screen with no cue that the
 /// row scrolls.
-class MapDayChips extends StatefulWidget {
+class MapLegChips extends StatefulWidget {
   /// Vertical band (px) the chip row occupies over the map's top edge when
   /// overlaid at `top: 8`, including breathing room: 8 offset + the 48px
   /// chip hit box (padded tap target) + 8 clearance. Callers pass this as
@@ -27,29 +32,32 @@ class MapDayChips extends StatefulWidget {
   /// under the chips.
   static const double mapTopInset = 64;
 
-  final int dayCount;
-  final int? selected;
-  final ValueChanged<int?> onSelected;
+  /// One entry per full-itinerary leg, visit order, labels display-ready.
+  final List<({String key, String label})> legs;
 
-  /// Days that have something plottable (a coordinate-bearing item tagged to
-  /// the day, or a stay covering its night — see `daysWithMappedContent`).
-  /// Chips for other days stay tappable but render muted, signalling "nothing
-  /// on the map here" before the tap. Null (the default) mutes nothing.
-  final Set<int>? mappedDays;
+  final String? selected;
+  final ValueChanged<String?> onSelected;
 
-  const MapDayChips({
+  /// Legs that have something plottable (a geocoded item in the run, or a
+  /// confirmed geocoded stay on one of its nights — see `mappedLegKeys`).
+  /// Chips for other legs stay tappable but render muted, signalling
+  /// "nothing on the map here" before the tap. Null (the default) mutes
+  /// nothing.
+  final Set<String>? mappedLegKeys;
+
+  const MapLegChips({
     super.key,
-    required this.dayCount,
+    required this.legs,
     required this.selected,
     required this.onSelected,
-    this.mappedDays,
+    this.mappedLegKeys,
   });
 
   @override
-  State<MapDayChips> createState() => _MapDayChipsState();
+  State<MapLegChips> createState() => _MapLegChipsState();
 }
 
-class _MapDayChipsState extends State<MapDayChips> {
+class _MapLegChipsState extends State<MapLegChips> {
   final ScrollController _controller = ScrollController();
 
   /// Rides whichever chip is currently selected so [_revealSelected] can
@@ -65,7 +73,7 @@ class _MapDayChipsState extends State<MapDayChips> {
   }
 
   @override
-  void didUpdateWidget(covariant MapDayChips oldWidget) {
+  void didUpdateWidget(covariant MapLegChips oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selected != oldWidget.selected) {
       WidgetsBinding.instance.addPostFrameCallback(
@@ -98,11 +106,11 @@ class _MapDayChipsState extends State<MapDayChips> {
 
   Widget _chip({
     required String label,
-    required int? value,
+    required String? value,
     bool muted = false,
   }) {
     final isSelected = widget.selected == value;
-    // A selected chip keeps the full treatment even when its day is empty —
+    // A selected chip keeps the full treatment even when its leg is empty —
     // the ring is what says "you are here"; the map's empty state says empty.
     final dim = muted && !isSelected;
     final chip = ChoiceChip(
@@ -122,8 +130,8 @@ class _MapDayChipsState extends State<MapDayChips> {
       // (AppColors.mapScrim — shared with TripMap's segment labels and the
       // map control buttons); selection is a solid white ring + brighter
       // fill rather than a theme tint, which would vanish against imagery.
-      // Muted (nothing mapped that day) fades the scrim, border, and label
-      // together.
+      // Muted (nothing mapped in that leg) fades the scrim, border, and
+      // label together.
       backgroundColor:
           dim ? Colors.black.withValues(alpha: 0.35) : AppColors.mapScrim,
       selectedColor: Colors.black.withValues(alpha: 0.8),
@@ -142,9 +150,9 @@ class _MapDayChipsState extends State<MapDayChips> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.dayCount == 0) return const SizedBox.shrink();
-    // Same keys the trip-detail filter menu uses, so the chip row and the
-    // list agree in every language (specs/i18n-spanish).
+    if (widget.legs.length < 2) return const SizedBox.shrink();
+    // Same key the trip-detail filter menu uses for All, so the chip row and
+    // the list agree in every language (specs/i18n-spanish).
     final l10n = context.l10n;
     return SingleChildScrollView(
       controller: _controller,
@@ -156,13 +164,13 @@ class _MapDayChipsState extends State<MapDayChips> {
       child: Row(
         children: [
           _chip(label: l10n.tripFilterAll, value: null),
-          for (var d = 1; d <= widget.dayCount; d++) ...[
+          for (final leg in widget.legs) ...[
             const SizedBox(width: 6),
             _chip(
-              label: l10n.tripDayN(d),
-              value: d,
-              muted:
-                  widget.mappedDays != null && !widget.mappedDays!.contains(d),
+              label: leg.label,
+              value: leg.key,
+              muted: widget.mappedLegKeys != null &&
+                  !widget.mappedLegKeys!.contains(leg.key),
             ),
           ],
         ],
