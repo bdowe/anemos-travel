@@ -260,6 +260,11 @@ class BookingTodoRow extends StatelessWidget {
             TextButton.icon(
               onPressed: onOpen,
               icon: const Icon(Icons.open_in_new, size: 18),
+              // Trailing glyph: the kebab + checkbox after the button are
+              // fixed-width and the cluster packs right, so with the icon
+              // after the label every row's open_in_new lands on one column
+              // no matter how wide the label is.
+              iconAlignment: IconAlignment.end,
               // Booked rows recede: the link stays usable (re-check a price,
               // find the confirmation email's provider) but stops competing
               // with unbooked rows for attention.
