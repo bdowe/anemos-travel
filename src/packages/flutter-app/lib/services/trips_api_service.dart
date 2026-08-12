@@ -80,14 +80,12 @@ class TripsApiService {
     String? startDate,
     String? endDate,
     String? status,
-    String? travelMode,
   }) async {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
     if (startDate != null) body['start_date'] = startDate;
     if (endDate != null) body['end_date'] = endDate;
     if (status != null) body['status'] = status;
-    if (travelMode != null) body['travel_mode'] = travelMode;
 
     final res = await apiClient.httpClient.patch(
       Uri.parse('${apiClient.baseUrl}/trips/$id'),

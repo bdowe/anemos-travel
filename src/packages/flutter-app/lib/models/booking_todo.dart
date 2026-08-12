@@ -17,6 +17,11 @@ class BookingTodo {
   final String? departDate;
   @JsonKey(name: 'return_date')
   final String? returnDate;
+
+  /// Per-leg transport-mode override (flight|car|train|bus|ferry) for
+  /// transport rows. Null = derived default; the server preserves it across
+  /// syncs like [booked].
+  final String? mode;
   final bool booked;
   final bool auto;
   final int position;
@@ -31,6 +36,7 @@ class BookingTodo {
     this.searchUrl,
     this.departDate,
     this.returnDate,
+    this.mode,
     this.booked = false,
     this.auto = true,
     this.position = 0,
@@ -46,6 +52,7 @@ class BookingTodo {
         searchUrl: searchUrl,
         departDate: departDate,
         returnDate: returnDate,
+        mode: mode,
         booked: booked ?? this.booked,
         auto: auto,
         position: position,

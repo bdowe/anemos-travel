@@ -52,6 +52,36 @@ class BookingTodosApiService {
     throw Exception('Failed to update booking todo (${res.statusCode})');
   }
 
+  /// Sets the per-leg transport-mode override on a transport todo (auto rows
+  /// included). Origin/destination/depart_date/passengers are never persisted —
+  /// the server uses them to rebuild the row's provider + search link for the
+  /// new mode.
+  Future<BookingTodo> setMode(
+    String tripId,
+    String todoId, {
+    required String mode,
+    required String origin,
+    required String destination,
+    String? departDate,
+    int passengers = 1,
+  }) async {
+    final res = await apiClient.httpClient.patch(
+      Uri.parse('${apiClient.baseUrl}/trips/$tripId/booking-todos/$todoId'),
+      headers: apiClient.jsonHeaders(json: true),
+      body: jsonEncode({
+        'mode': mode,
+        'origin': origin,
+        'destination': destination,
+        if (departDate != null) 'depart_date': departDate,
+        'passengers': passengers,
+      }),
+    );
+    if (res.statusCode == 200) {
+      return BookingTodo.fromJson(jsonDecode(res.body));
+    }
+    throw Exception('Failed to update booking todo (${res.statusCode})');
+  }
+
   /// Partial content update of a custom (non-auto) todo. Same body shape as
   /// [addTodo]; a destination with no explicit search_url makes the server
   /// rebuild the search link.

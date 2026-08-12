@@ -262,6 +262,7 @@
   "tripOtherBookings": "Other bookings",
   "bookingRowAddDetails": "Add details…",
   "bookingRowOptions": "Booking options",
+  "bookingRowModeTooltip": "Change transport mode",
   "bookingsSummaryProgress": "{booked} of {total} booked",
   "@bookingsSummaryProgress": {
     "placeholders": {
@@ -420,17 +421,6 @@
   "tripTitleFallback": "Trip",
   "tripOtherPlaces": "Other places",
   "tripOfflineGuard": "You're offline — reconnect to make changes.",
-  "tripTravelModeDriving": "Driving",
-  "tripTravelModeByTrain": "By train",
-  "tripTravelModeByBus": "By bus",
-  "tripTravelModeByFerry": "By ferry",
-  "tripTravelModeMixed": "Mixed modes",
-  "tripTravelModeFlying": "Flying",
-  "tripTravelModeUnset": "Travel mode",
-  "tripTravelModeTooltip": "Travel mode",
-  "tripModeTrain": "Train",
-  "tripModeBus": "Bus",
-  "tripModeFerry": "Ferry",
   "tripUpdateFailed": "Update failed: {error}",
   "@tripUpdateFailed": {
     "placeholders": {

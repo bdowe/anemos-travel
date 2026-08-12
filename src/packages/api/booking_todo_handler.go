@@ -15,6 +15,32 @@ import (
 
 var allowedBookingKinds = map[string]bool{"stay": true, "transport": true, "other": true}
 
+// allowedLegModes are the per-leg transport-mode overrides a transport todo
+// accepts. Deliberately narrower than allowedSegmentModes: no "other" (a leg
+// always has a concrete way to travel) and no "mixed" (mixed is the absence of
+// a trip-wide mode, not a leg-level choice).
+var allowedLegModes = map[string]bool{"flight": true, "car": true, "train": true, "bus": true, "ferry": true}
+
+// transportModeLink maps a per-leg mode to its preferred provider and builds
+// the matching search link. Ferry legs get a Ferryhopper deep link — the
+// transport provider list has no ferry entry, so bookingSearchURL's fallback
+// would silently store google_flights; ground modes prefer rome2rio; flight
+// keeps the google_flights default. Returns ("", provider) when the link
+// cannot be built (blank origin/destination).
+func transportModeLink(mode, destination string, origin, departDate *string, passengers int) (string, string) {
+	if strings.TrimSpace(strPtrVal(origin)) == "" || strings.TrimSpace(destination) == "" {
+		return "", ""
+	}
+	if mode == "ferry" {
+		return ferryService.ferryhopperURL(strPtrVal(origin), destination, strPtrVal(departDate)), "ferry"
+	}
+	preferred := "google_flights"
+	if mode == "car" || mode == "train" || mode == "bus" {
+		preferred = "rome2rio"
+	}
+	return bookingSearchURL("transport", destination, origin, departDate, nil, 0, passengers, &preferred)
+}
+
 type BookingTodoResponse struct {
 	ID         string  `json:"id"`
 	Kind       string  `json:"kind"`
@@ -25,6 +51,7 @@ type BookingTodoResponse struct {
 	SearchURL  *string `json:"search_url,omitempty"`
 	DepartDate *string `json:"depart_date,omitempty"`
 	ReturnDate *string `json:"return_date,omitempty"`
+	Mode       *string `json:"mode,omitempty"`
 	Booked     bool    `json:"booked"`
 	Auto       bool    `json:"auto"`
 	Position   int     `json:"position"`
@@ -41,6 +68,7 @@ func toBookingTodoResponse(t store.BookingTodo) BookingTodoResponse {
 		SearchURL:  t.SearchUrl,
 		DepartDate: dateToPtr(t.DepartDate),
 		ReturnDate: dateToPtr(t.ReturnDate),
+		Mode:       t.Mode,
 		Booked:     t.Booked,
 		Auto:       t.Auto,
 		Position:   int(t.Position),
@@ -178,6 +206,14 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		url, provider := bookingSearchURL(kind, d.Destination, d.Origin, d.DepartDate, d.ReturnDate, d.Guests, d.Passengers, d.Provider)
+		if kind == "transport" && strPtrVal(d.Provider) == "ferry" {
+			// pickProviderLink has no ferry candidate, so the fallback would
+			// store google_flights for a derived ferry leg; keep the ferry
+			// provider and its Ferryhopper deep link instead.
+			if u, p := transportModeLink("ferry", d.Destination, d.Origin, d.DepartDate, d.Passengers); u != "" {
+				url, provider = u, p
+			}
+		}
 		providerPtr := strPtrOrNil(provider)
 		if providerPtr == nil {
 			providerPtr = d.Provider
@@ -370,7 +406,11 @@ func addBookingTodoHandler(w http.ResponseWriter, r *http.Request) {
 // apply to custom (auto = false) rows only. destination/origin are never
 // persisted — when a destination is present and no explicit search_url, the
 // search link + provider are rebuilt via bookingSearchURL, like the add path.
+// Mode is a third, standalone lane (transport rows only, auto included): it
+// stores the per-leg override and rebuilds provider + search_url to match,
+// without ever touching booked/auto — it cannot be combined with other fields.
 type PatchBookingTodoRequest struct {
+	Mode        *string `json:"mode"`
 	Booked      *bool   `json:"booked"`
 	Kind        *string `json:"kind"`
 	Title       *string `json:"title"`
@@ -409,7 +449,35 @@ func patchBookingTodoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var todo store.BookingTodo
-	if !req.hasContentEdit() {
+	if req.Mode != nil {
+		// origin/destination/depart_date/passengers are the link-rebuild
+		// inputs (never persisted, as everywhere else); everything that would
+		// actually edit content — or flip booked — is rejected alongside mode.
+		if req.Kind != nil || req.Title != nil || req.Subtitle != nil ||
+			req.ReturnDate != nil || req.SearchURL != nil || req.Booked != nil {
+			writeJSONError(w, http.StatusBadRequest, "mode cannot be combined with other fields")
+			return
+		}
+		mode := strings.TrimSpace(*req.Mode)
+		if !allowedLegModes[mode] {
+			writeJSONError(w, http.StatusBadRequest, "mode must be one of: flight, car, train, bus, ferry")
+			return
+		}
+		url, provider := transportModeLink(mode, strPtrVal(req.Destination), req.Origin, req.DepartDate, req.Passengers)
+		if url == "" {
+			writeJSONError(w, http.StatusBadRequest, "origin and destination are required to set mode")
+			return
+		}
+		// kind = 'transport' is enforced in the query's WHERE; a stay/other
+		// row (or a foreign id) falls through to the shared 404 below.
+		todo, err = store.New(dbPool).SetBookingTodoMode(r.Context(), store.SetBookingTodoModeParams{
+			ID:        todoID,
+			TripID:    tripID,
+			Mode:      &mode,
+			Provider:  strPtrOrNil(provider),
+			SearchUrl: strPtrOrNil(url),
+		})
+	} else if !req.hasContentEdit() {
 		// Booked-only: must stay on SetBookingTodoBooked — UpdateBookingTodo
 		// excludes auto rows, but the checkbox works on itinerary-derived
 		// todos too.

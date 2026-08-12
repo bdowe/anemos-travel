@@ -726,44 +726,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         : null;
   }
 
-  static IconData _travelModeIcon(String? mode) {
-    switch (mode) {
-      case 'car':
-        return Icons.directions_car;
-      case 'train':
-        return Icons.train;
-      case 'bus':
-        return Icons.directions_bus;
-      case 'ferry':
-        return Icons.directions_boat;
-      case 'mixed':
-        return Icons.alt_route;
-      case 'flight':
-        return Icons.flight;
-      default:
-        return Icons.explore_outlined; // unset: "how are you traveling?"
-    }
-  }
-
-  static String _travelModeLabel(AppLocalizations l10n, String? mode) {
-    switch (mode) {
-      case 'car':
-        return l10n.tripTravelModeDriving;
-      case 'train':
-        return l10n.tripTravelModeByTrain;
-      case 'bus':
-        return l10n.tripTravelModeByBus;
-      case 'ferry':
-        return l10n.tripTravelModeByFerry;
-      case 'mixed':
-        return l10n.tripTravelModeMixed;
-      case 'flight':
-        return l10n.tripTravelModeFlying;
-      default:
-        return l10n.tripTravelModeUnset;
-    }
-  }
-
   /// Computes per-leg travel times for the itinerary in its existing display
   /// order by calling /optimize-route in preserve-order mode (no reordering).
   /// Results are keyed by the source item's position; failures leave the map
@@ -831,6 +793,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final home = _homeAirport;
     final hasHome = home != null && home.isNotEmpty && ranges.isNotEmpty;
     final ground = _groundModeOf(trip);
+
+    // Per-leg overrides: a transport row whose server-preserved [BookingTodo.mode]
+    // is set wins over every derived default (incl. the Greek-ferry rule) for
+    // its leg key. The override lives on the row, so it dies with the leg.
+    final modeByKey = <String, String>{
+      for (final t in _bookingTodos)
+        if (t.kind == 'transport' && t.mode != null) t.todoKey: t.mode!,
+    };
+    String effectiveMode(String origin, String destination, String def) {
+      final key =
+          'transport:${origin.toLowerCase()}>>${destination.toLowerCase()}';
+      return modeByKey[key] ?? def;
+    }
 
     // Adds a transport (flight) todo and records its leg so the booking item can
     // open Find Flights prefilled. Coords (when known) resolve an endpoint to its
@@ -903,31 +878,41 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       });
     }
 
-    // A leg between two Greek ports/islands (incl. Athens/Piraeus) is a ferry;
-    // a stated ground travel mode makes every other leg ground; otherwise the
-    // long-haul default is a flight.
+    // Dispatches one leg by a concrete mode (a per-leg override or a derived
+    // default): ferry and flight register their leg for the in-app search
+    // override; car/train/bus ride the server-built Rome2Rio link.
+    void addLegAs(String mode, String origin, String destination, DateTime? when,
+        {_Coord? originCoord, _Coord? destCoord}) {
+      switch (mode) {
+        case 'ferry':
+          addFerry(origin, destination, when);
+        case 'car' || 'train' || 'bus':
+          addGround(origin, destination, when);
+        default:
+          addFlight(origin, destination, when,
+              originCoord: originCoord, destCoord: destCoord);
+      }
+    }
+
+    // Default per leg: two Greek ports/islands (incl. Athens/Piraeus) is a
+    // ferry; a stated ground travel mode makes every other leg ground;
+    // otherwise the long-haul default is a flight. A per-leg override beats
+    // all of it.
     void addLeg(String origin, String destination, DateTime? when,
         {_Coord? originCoord, _Coord? destCoord}) {
-      if (_isGreekIsland(origin) && _isGreekIsland(destination)) {
-        addFerry(origin, destination, when);
-      } else if (ground != null) {
-        addGround(origin, destination, when);
-      } else {
-        addFlight(origin, destination, when,
-            originCoord: originCoord, destCoord: destCoord);
-      }
+      final greek = _isGreekIsland(origin) && _isGreekIsland(destination);
+      final def = greek ? 'ferry' : (ground ?? 'flight');
+      addLegAs(effectiveMode(origin, destination, def), origin, destination,
+          when, originCoord: originCoord, destCoord: destCoord);
     }
 
     // Outbound: home airport -> first city, on the first group's start (the
     // trip's start date via the first-leg anchor, unless a confirmed stay
-    // overrides it).
+    // overrides it). Home legs never get the Greek-ferry default.
     if (hasHome) {
-      if (ground != null) {
-        addGround(home, ranges.first.label, ranges.first.start);
-      } else {
-        addFlight(home, ranges.first.label, ranges.first.start,
-            destCoord: ranges.first.coord);
-      }
+      addLegAs(effectiveMode(home, ranges.first.label, ground ?? 'flight'),
+          home, ranges.first.label, ranges.first.start,
+          destCoord: ranges.first.coord);
     }
 
     for (var i = 0; i < ranges.length; i++) {
@@ -957,12 +942,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
     // Return: last city -> home airport, on the trip's end date.
     if (hasHome) {
-      if (ground != null) {
-        addGround(ranges.last.label, home, ranges.last.end);
-      } else {
-        addFlight(ranges.last.label, home, ranges.last.end,
-            originCoord: ranges.last.coord);
-      }
+      addLegAs(effectiveMode(ranges.last.label, home, ground ?? 'flight'),
+          ranges.last.label, home, ranges.last.end,
+          originCoord: ranges.last.coord);
     }
 
     _flightLegs = legs;
@@ -1144,7 +1126,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
     // Transport: the todo model carries no origin/destination fields, but
     // _deriveTodos always titles a leg 'A → B' — split it back apart. Mode
-    // follows the provider the leg was derived with.
+    // prefers the row's per-leg override, else follows the provider the leg
+    // was derived with.
     final parts = todo.title.split(' → ');
     final trip = _trip;
     final body = await showModalBottomSheet<Map<String, dynamic>>(
@@ -1153,11 +1136,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       builder: (_) => AddSegmentSheet(
         initialOrigin: parts.isNotEmpty ? parts.first : null,
         initialDestination: parts.length > 1 ? parts[1] : null,
-        initialMode: switch (todo.provider) {
-          'ferry' => 'ferry',
-          'rome2rio' => trip == null ? null : _groundModeOf(trip),
-          _ => 'flight',
-        },
+        initialMode: todo.mode ??
+            switch (todo.provider) {
+              'ferry' => 'ferry',
+              'rome2rio' => trip == null ? null : _groundModeOf(trip),
+              _ => 'flight',
+            },
         initialDepartDate: todo.departDate,
       ),
     );
@@ -1169,6 +1153,37 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       await _load();
     } catch (e) {
       _showSnack(l10n.tripAddTransportFailed(friendlyError(l10n, e)));
+    }
+  }
+
+  /// The per-leg mode writer: PATCHes the transport row's override (the
+  /// server stores it and rebuilds the row's provider + search link to
+  /// match), then re-derives the checklist so [_flightLegs]/[_ferryLegs] and
+  /// the row's open action agree with the new mode. Origin/destination come
+  /// from the derived 'A → B' title, exactly like [_addDetailsFromTodo].
+  Future<void> _setRowMode(BookingTodo todo, String mode) async {
+    if (_guardOffline()) return;
+    if (mode == todo.mode) return;
+    final l10n = context.l10n;
+    final parts = todo.title.split(' → ');
+    if (parts.length < 2) return;
+    try {
+      final updated = await ref.read(bookingTodosApiServiceProvider).setMode(
+            widget.tripId,
+            todo.id,
+            mode: mode,
+            origin: parts.first,
+            destination: parts[1],
+            departDate: todo.departDate,
+          );
+      if (!mounted) return;
+      setState(() => _bookingTodos = [
+            for (final t in _bookingTodos) t.id == updated.id ? updated : t
+          ]);
+      final trip = _trip;
+      if (trip != null) await _syncBookingTodos(trip);
+    } catch (e) {
+      _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -1254,8 +1269,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       {String? title,
       String? startDate,
       String? endDate,
-      String? status,
-      String? travelMode}) async {
+      String? status}) async {
     if (_guardOffline()) return;
     final l10n = context.l10n;
     try {
@@ -1265,15 +1279,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             startDate: startDate,
             endDate: endDate,
             status: status,
-            travelMode: travelMode,
           );
       if (mounted) setState(() => _trip = updated);
       ref.read(tripsProvider.notifier).loadTrips(); // keep list in sync
-      // A mode change re-derives the auto-seeded transport rows immediately,
-      // so e.g. suggested flight legs heal to car without a reload.
-      if (travelMode != null) {
-        await _syncBookingTodos(updated);
-      }
     } catch (e) {
       _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
     }
@@ -2497,6 +2505,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 (_readOnly || _isOffline || todo.kind == 'other')
                     ? null
                     : () => _addDetailsFromTodo(todo),
+            // No picker when a confirmed segment fills the slot — that row's
+            // mode truth is the segment, edited via its own sheet.
+            onModeChanged: (_readOnly ||
+                    _isOffline ||
+                    e.segment != null ||
+                    todo.kind != 'transport')
+                ? null
+                : (m) => _setRowMode(todo, m),
           ),
         if (e.stay != null || e.segment != null)
           _detailRowFor(
@@ -4195,37 +4211,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               )
             else
               StatusPill(status: trip.status),
-            if (trip.canEdit)
-              PopupMenuButton<String>(
-                tooltip: l10n.tripTravelModeTooltip,
-                enabled: !_isOffline,
-                onSelected: (v) => _patch(travelMode: v),
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                      value: 'flight', child: Text(l10n.tripTravelModeFlying)),
-                  PopupMenuItem(
-                      value: 'car', child: Text(l10n.tripTravelModeDriving)),
-                  PopupMenuItem(
-                      value: 'train', child: Text(l10n.tripModeTrain)),
-                  PopupMenuItem(value: 'bus', child: Text(l10n.tripModeBus)),
-                  PopupMenuItem(
-                      value: 'ferry', child: Text(l10n.tripModeFerry)),
-                  PopupMenuItem(
-                      value: 'mixed', child: Text(l10n.tripTravelModeMixed)),
-                ],
-                child: Chip(
-                  avatar: Icon(_travelModeIcon(trip.travelMode), size: 16),
-                  label: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(_travelModeLabel(l10n, trip.travelMode)),
-                    const Icon(Icons.arrow_drop_down, size: 18),
-                  ]),
-                ),
-              )
-            else if (trip.travelMode != null)
-              Chip(
-                avatar: Icon(_travelModeIcon(trip.travelMode), size: 16),
-                label: Text(_travelModeLabel(l10n, trip.travelMode)),
-              ),
+            // The trip-wide travel-mode pill is gone: transport mode is
+            // per-leg now, picked directly on each transport row (the
+            // _ModeMenu in BookingTodoRow). trips.travel_mode remains the
+            // AI-facing trip default behind _groundModeOf.
             // Refine entry, demoted from a full-width banner to a peer of the
             // meta chips. Same canEdit gate as before, so editor
             // collaborators keep their spec-mandated entry point

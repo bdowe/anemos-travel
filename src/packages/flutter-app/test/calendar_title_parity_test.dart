@@ -62,11 +62,11 @@ void main() {
 
   // The app had shipped both "ferri" (lowercase, inline) and "Ferry"
   // (capitalized, standalone) as the Spanish for the same mode. They should be
-  // the same word in either casing.
+  // the same word in either casing. (The trip-pill label set is gone — mode is
+  // per-leg now — leaving these two sets.)
   test('the Spanish ferry term is consistent across mode label sets', () async {
     final es = await load('es');
     expect(es.bookingsModeFerry.toLowerCase(), 'ferri');
-    expect(es.tripModeFerry.toLowerCase(), 'ferri');
     expect(es.calendarModeFerry.toLowerCase(), 'ferri');
   });
 }
