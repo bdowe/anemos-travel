@@ -4,7 +4,10 @@
 //
 // This file is the client's ONE definition of weather thresholds: the
 // trip-detail condition glyph consumes [rainLevel] and the recommendation
-// bands live here, so the chip and the recs can never disagree. The Go trip
+// bands live here, so the chip and the recs can never disagree. The wear
+// rows' advisory suppression and same-guidance grouping live here too
+// ([effectiveAdvisories]/[groupWearRegions]), so the fold compares exactly
+// what the widget renders. The Go trip
 // review keeps its own advisory constants (trip_review.go: rainProbPct,
 // rainHistoricMM, hotThresholdC, coldThresholdC) for a different job —
 // exception findings, not banded phrasing. They are deliberately NOT twinned,
@@ -19,6 +22,7 @@
 // WeatherReport.dayFor is irrelevant here.
 
 import '../models/weather.dart';
+import 'leg_ranges.dart' show nightsBetween;
 
 /// Rain banding shared by the day-chip glyph and the recommendations.
 /// Forecast days key off the rain probability (%), historical days off
@@ -156,4 +160,105 @@ ClothingRec? clothingRec(WeatherReport report) {
     if (r.rainLikely) rainy = true;
   }
   return (loC: lo, hiC: hi, rainLikely: rainy);
+}
+
+/// Advisory phrases that survive band suppression — the DISPLAYED set, in
+/// render order (the widget iterates [WearAdvisory.values]). Flag phrases that
+/// would restate the band's own advice are dropped: freezing/cold bands
+/// already say coat (no "freezing nights"), cool and below already say layers
+/// (no "big day–night range"), and the hot band already says sun protection
+/// (no "very hot days"). Lives here rather than in the widget so the grouping
+/// fold below compares exactly what gets rendered.
+enum WearAdvisory { rainLikely, extremeHeat, freezingNights, bigSwing }
+
+Set<WearAdvisory> effectiveAdvisories(ClothingRec rec) {
+  final coldish = rec.band == TempBand.freezing || rec.band == TempBand.cold;
+  return {
+    if (rec.rainLikely) WearAdvisory.rainLikely,
+    if (rec.extremeHeat && rec.band != TempBand.hot) WearAdvisory.extremeHeat,
+    if (rec.freezingNights && !coldish) WearAdvisory.freezingNights,
+    if (rec.bigSwing && !coldish && rec.band != TempBand.cool)
+      WearAdvisory.bigSwing,
+  };
+}
+
+/// One region's precomputed guidance: the leg label, its date window, and the
+/// derived [ClothingRec]. The trip screen builds these from its own weather
+/// watches (collapsed-row summaries must be fed by the parent), so the wear
+/// widget stays display-only.
+typedef WearRegionRec = ({
+  String label,
+  DateTime start,
+  DateTime end,
+  ClothingRec rec,
+});
+
+/// One DISPLAYED wear row: a run of date-adjacent regions whose displayed
+/// guidance (band + effective advisories) is identical.
+typedef WearGroup = ({
+  List<String> labels,
+  DateTime start,
+  DateTime end,
+  TempBand band,
+  Set<WearAdvisory> advisories,
+  bool historical,
+  int loC,
+  int hiC,
+});
+
+/// Days between one group's end and the next region's start that still count
+/// as consecutive: adjacent legs share a boundary date under visible ranges
+/// (distance 0), and a single skipped/undated day between two legs shouldn't
+/// split otherwise-identical guidance. Gaps of two or more days (home between
+/// legs) keep their own rows so a merged span never swallows a real gap.
+const int wearMergeMaxGapDays = 1;
+
+/// Folds per-leg regions into displayed rows: a region merges into the
+/// previous group when the band and effective advisory set match AND the
+/// dates are adjacent (see [wearMergeMaxGapDays]). Forecast-vs-historical
+/// kind never blocks a merge — a group is historical if any member is, which
+/// drives only the single footnote. The group envelope is min-of-los /
+/// max-of-highs, so summing groups equals [clothingSummary] over the input
+/// (the collapsed header and the expanded rows can't disagree). Display-layer
+/// fold only: per-leg weather queries stay per-leg.
+List<WearGroup> groupWearRegions(List<WearRegionRec> regions) {
+  final groups = <WearGroup>[];
+  for (final r in regions) {
+    final adv = effectiveAdvisories(r.rec);
+    if (groups.isNotEmpty) {
+      final last = groups.last;
+      final sameDisplay = last.band == r.rec.band &&
+          last.advisories.length == adv.length &&
+          last.advisories.containsAll(adv);
+      if (sameDisplay &&
+          nightsBetween(last.end, r.start) <= wearMergeMaxGapDays) {
+        groups[groups.length - 1] = (
+          // Dedupe revisits ("Paris, Paris") — labels repeat the locality.
+          labels: [
+            ...last.labels,
+            if (!last.labels.contains(r.label)) r.label,
+          ],
+          start: last.start,
+          end: r.end.isAfter(last.end) ? r.end : last.end,
+          band: last.band,
+          advisories: last.advisories,
+          historical: last.historical || r.rec.historical,
+          loC: r.rec.loC < last.loC ? r.rec.loC : last.loC,
+          hiC: r.rec.hiC > last.hiC ? r.rec.hiC : last.hiC,
+        );
+        continue;
+      }
+    }
+    groups.add((
+      labels: [r.label],
+      start: r.start,
+      end: r.end,
+      band: r.rec.band,
+      advisories: adv,
+      historical: r.rec.historical,
+      loC: r.rec.loC,
+      hiC: r.rec.hiC,
+    ));
+  }
+  return groups;
 }

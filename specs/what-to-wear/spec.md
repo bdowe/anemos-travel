@@ -12,6 +12,12 @@ one-line summary while collapsed. Direction settled with Brian (2026-08-07):
 merge into ONE section (nothing about the checklist retires), render in the
 trailing cluster (no inline per-city chrome), deterministic rules — no AI.
 
+Amended 2026-08-11 (friction log, direction picked by Brian): consecutive
+same-guidance legs fold into one displayed row, and the per-row "typical for
+these dates" qualifier became a single trailing footnote — on real trips the
+repetition read as noise, and three near-identical "Warm — …" rows said
+nothing the fold doesn't.
+
 ## User Stories
 
 - As a **traveler planning a trip**, I want **to see what kind of clothes suit
@@ -28,15 +34,21 @@ trailing cluster (no inline per-city chrome), deterministic rules — no AI.
 - [ ] The trailing-cluster row is titled "What to wear & pack" and, when
       weather is available, its collapsed summary shows the cross-region
       temperature envelope and rain signal (e.g. "21°–31° · rain likely").
-- [ ] Expanded, the section lists one row per leg visit (a revisited city gets
-      one row per visit, disambiguated by date range): region label, date
-      range, per-region temperature envelope, and a deterministic phrase built
-      from the temperature band plus condition flags (rain, day–night swing,
-      extreme heat, freezing nights). The dates shown are the same visible
-      ranges the city headers display, so the two never disagree.
-- [ ] Legs beyond the forecast horizon show the existing italic "typical for
-      these dates" qualifier on their row; the collapsed summary stays
-      kind-neutral (no qualifier).
+- [ ] Expanded, the section lists one row per run of consecutive same-guidance
+      legs: legs merge when the temperature band and the surviving advisory
+      phrases match AND the date ranges are adjacent (≤1 day apart). A row
+      shows the joined region labels, the merged date span, the merged
+      temperature envelope, and the deterministic phrase built from the
+      temperature band plus condition flags (rain, day–night swing, extreme
+      heat, freezing nights). Different guidance or a ≥2-day gap keeps
+      separate rows; per-visit weather queries are unchanged either way. The
+      dates shown are the same visible ranges the city headers display, so
+      the two never disagree.
+- [ ] When any displayed leg is beyond the forecast horizon, ONE italic
+      footnote after the rows says ranges beyond the 16-day forecast show
+      typical weather for the dates; there is no per-row qualifier, and
+      forecast-vs-typical kind never splits a row. The collapsed summary
+      stays kind-neutral.
 - [ ] The editable packing checklist renders below the recommendations, fully
       intact: add/edit/check/delete, AI-seeded items, Trip-health one-tap
       fixes, export and print packet are all unchanged.
@@ -81,9 +93,12 @@ is client display only and not part of any server contract).
 - "Other places" (items with no real city) → skipped; nothing to geocode.
 - A region stayed in longer than two weeks → guidance covers the served
   window silently (same accepted limitation as the day chips).
-- Mixed near/far regions in one trip (forecast + typical) → per-row
-  qualifiers carry the nuance; the collapsed summary makes no forecast claim.
-- Revisited city → one row per visit with its own dates.
+- Mixed near/far regions in one trip (forecast + typical) → the single
+  footnote carries the nuance (rows merge regardless of kind); the collapsed
+  summary makes no forecast claim.
+- Revisited city → per-visit weather queries always; a visit shares a row
+  only under the same-guidance + adjacency rule (labels dedupe, so never
+  "Paris, Paris").
 - Weather provider outage → empty reports by server contract; recommendations
   absent, no error surfaced.
 
