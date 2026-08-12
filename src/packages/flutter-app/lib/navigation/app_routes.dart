@@ -12,7 +12,6 @@ import 'app_nav.dart';
 /// Zero-argument screens that are pushed inside the shell and can be
 /// reconstructed from their path alone.
 enum BootUtility {
-  alerts,
   preferences,
   account,
   adminMetrics,
@@ -57,7 +56,6 @@ String tripDetailLocation(String tripId) => '$kTripsLocation/$tripId';
 String planChatLocation(String chatId) => '$kPlanLocation/$chatId';
 
 String utilityLocation(BootUtility utility) => switch (utility) {
-      BootUtility.alerts => '/alerts',
       BootUtility.preferences => '/preferences',
       BootUtility.account => '/account',
       BootUtility.adminMetrics => '/admin/metrics',
@@ -111,7 +109,6 @@ BootTarget? parseBootTarget(Uri uri) {
     default:
       if (segments.length == 1) {
         final utility = switch (segments[0]) {
-          'alerts' => BootUtility.alerts,
           'preferences' => BootUtility.preferences,
           'account' => BootUtility.account,
           'import' => BootUtility.importTrip,

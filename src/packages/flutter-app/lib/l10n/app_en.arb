@@ -196,7 +196,7 @@
   "settingsDangerZoneSection": "Danger zone",
   "settingsDeleteAccount": "Delete account",
   "settingsDeleteAccountTitle": "Delete account?",
-  "settingsDeleteAccountBody": "This permanently deletes your account, trips, preferences and alerts. There is no undo.",
+  "settingsDeleteAccountBody": "This permanently deletes your account, trips and preferences. There is no undo.",
   "settingsConfirmPassword": "Confirm your password",
   "settingsDeleteForever": "Delete forever",
   "quizTitle": "Set up your travel profile",
@@ -1305,114 +1305,16 @@
   },
   "accountMenuTooltip": "Account",
   "accountMenuTravelProfile": "Travel profile",
-  "accountMenuPriceAlerts": "Price alerts",
+  "accountMenuNotifications": "Notifications",
   "accountMenuRetakeQuiz": "Retake travel quiz",
   "accountMenuAccountSettings": "Account settings",
   "accountMenuLocalIntelAdmin": "Local intel admin",
   "accountMenuMetrics": "Metrics",
   "accountMenuSignOut": "Sign out",
-  "alertsTitle": "Price alerts",
-  "alertsSignInTitle": "Sign in to watch fares",
-  "alertsSignInMessage": "Price alerts email you when a flight you care about drops.",
-  "alertsSignIn": "Sign in",
-  "alertsLoadErrorTitle": "Could not load alerts",
-  "alertsEmptyTitle": "No alerts yet",
-  "alertsEmptyMessage": "Search a flight and tap \"Watch this route\" — we'll email you when the price drops.",
-  "alertsEmptyCta": "Search flights",
-  "alertsLastSeen": "Last seen {price}",
-  "@alertsLastSeen": {
-    "placeholders": {
-      "price": {
-        "type": "String"
-      }
-    }
-  },
-  "alertsTargetPrice": "target {price}",
-  "@alertsTargetPrice": {
-    "placeholders": {
-      "price": {
-        "type": "String"
-      }
-    }
-  },
-  "alertsWatchingAnyDrop": "watching for any drop",
-  "alertsAdults": "{count} adults",
-  "@alertsAdults": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "alertsFlexDays": "±{count, plural, one{1 day} other{{count} days}}",
-  "@alertsFlexDays": {
-    "description": "Flexible-dates suffix on an alert card, e.g. \"±3 days\"",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "alertsBaselineDelta": "Down {amount} from when you started watching",
-  "@alertsBaselineDelta": {
-    "placeholders": {
-      "amount": {
-        "type": "String"
-      }
-    }
-  },
-  "alertsChecked": "Checked {when}",
-  "@alertsChecked": {
-    "placeholders": {
-      "when": {
-        "type": "String"
-      }
-    }
-  },
-  "alertsSetTargetTitle": "Set target price",
-  "alertsSetTargetBody": "Get notified when the fare hits or drops below this price.",
-  "alertsNotifyAtOrBelow": "Notify me at or below",
-  "alertsWatchAnyDropInstead": "Watch for any drop instead",
-  "alertsInvalidTarget": "Enter a valid target price",
-  "alertsActionsTooltip": "Alert actions",
-  "alertsEditTarget": "Edit target price",
-  "alertsPause": "Pause",
-  "alertsResume": "Resume",
-  "alertsStatusExpired": "Expired",
-  "alertsStatusPaused": "Paused",
-  "alertsStatusDropped": "Price dropped",
-  "alertsStatusWatching": "Watching",
-  "alertSheetTitle": "Watch this route",
-  "alertSheetBestPriceNow": "Best price now: {price}",
-  "@alertSheetBestPriceNow": {
-    "placeholders": {
-      "price": {
-        "type": "String"
-      }
-    }
-  },
-  "alertSheetAnyDropTitle": "Notify me on any real price drop",
-  "alertSheetAnyDropSubtitle": "At least 5% and $5 below the last price",
-  "alertSheetFlexTitle": "Date flexibility",
-  "alertSheetFlexHelp": "Watch a few days around your departure and we'll flag the cheapest one.",
-  "alertSheetFlexExact": "Exact",
-  "alertSheetCreating": "Creating…",
-  "alertSheetCreate": "Create alert",
-  "alertSheetWatchingSnack": "Watching {origin} → {destination} — we'll email you on a drop",
-  "@alertSheetWatchingSnack": {
-    "placeholders": {
-      "origin": {
-        "type": "String"
-      },
-      "destination": {
-        "type": "String"
-      }
-    }
-  },
   "notifTitle": "Notifications",
   "notifLoadErrorTitle": "Could not load notifications",
   "notifEmptyTitle": "No notifications yet",
-  "notifEmptyMessage": "Price drops on routes you watch will show up here.",
+  "notifEmptyMessage": "Trip reminders and co-planning updates will show up here.",
   "notifUnreadSemantic": "Unread",
   "notifDownFrom": "{price}, down from {previous}",
   "@notifDownFrom": {
@@ -1785,7 +1687,6 @@
   "flightSearchPresetBalanced": "Balanced",
   "flightSearchSearching": "Searching…",
   "flightSearchSubmit": "Search Flights",
-  "flightSearchWatchRoute": "Watch this route — email me on a drop",
   "flightSearchErrorTitle": "Could not load flights",
   "flightSearchHintInitial": "Choose an origin, destination, and date to find flights.",
   "flightSearchHintEmpty": "No flights found for this route and date.",

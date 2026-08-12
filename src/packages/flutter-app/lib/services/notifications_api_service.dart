@@ -3,8 +3,7 @@ import '../models/notification.dart';
 import 'api_client.dart';
 
 /// Client for the generalized notifications feed (Wave 16): `/notifications`,
-/// `/notifications/read`, `/notifications/unread-count`. The type-agnostic
-/// successor to the price-alert-only `/alerts/events` surface.
+/// `/notifications/read`, `/notifications/unread-count`.
 class NotificationsApiService {
   final ApiClient apiClient;
 

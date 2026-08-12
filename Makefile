@@ -201,7 +201,7 @@ seed-local: ## Bulk-ingest local content via admin API (CONTENT_DIR=./content/lo
 		./scripts/seed_local_content.sh
 
 # End-to-end smoke test — registers a throwaway user, walks the traveler journey
-# (auth, trip, item, share/OG, export, alerts, notifications), then tears down.
+# (auth, trip, item, share/OG, export, notifications), then tears down.
 # Rehearse against the dev stack; run against prod the moment DNS flips. Env vars
 # pass through: SMOKE_SEED_MODE=sql|plan|existing, SMOKE_TRIP_ID, SMOKE_TOKEN,
 # SMOKE_SIGNING_SECRET, SMOKE_DB_CONTAINER (see scripts/smoke.sh header).

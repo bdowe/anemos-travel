@@ -14,10 +14,9 @@ import (
 	"travel-route-planner/store"
 )
 
-// Re-engagement checkers (Wave 16): two background jobs that mirror the
-// price-alert checker's shape (own goroutine, env-cadence ticker, jittered
-// first run, dbPool-nil guard, pure email builders + fire-and-forget sends) but
-// run on their own loop, not the alert loop.
+// Re-engagement checkers (Wave 16): two background jobs sharing the repo's
+// background-checker shape (own goroutine, env-cadence ticker, jittered
+// first run, dbPool-nil guard, pure email builders + fire-and-forget sends).
 //
 //   - Trip reminders fire 3 days before departure ('trip_soon') and on the
 //     departure day ('trip_today') for planned, dated trips.
@@ -28,8 +27,8 @@ import (
 // notification is ALWAYS written regardless of the email opt-out — only the
 // email is gated. Idempotency lives in the DB: reminder_sends (per user,
 // lineage, kind) and users.last_weekly_nudge_at, both written BEFORE the send
-// so a crashed/retried tick can never double-notify (the alert checker's "mark
-// before send" rule).
+// so a crashed/retried tick can never double-notify (the "mark before send"
+// rule).
 
 const (
 	reminderKindSoon  = "trip_soon"
@@ -52,8 +51,8 @@ type reengagementChecker struct {
 }
 
 // startReengagementChecker launches the background loop. No-ops (with a log
-// line) when persistence is unavailable, exactly like startAlertChecker; the
-// jobs resume on next boot once a database is configured.
+// line) when persistence is unavailable; the jobs resume on next boot once a
+// database is configured.
 func startReengagementChecker(ctx context.Context) {
 	if dbPool == nil {
 		log.Printf("re-engagement: checker disabled (no database)")
@@ -131,7 +130,7 @@ func (c *reengagementChecker) runTripReminders(ctx context.Context, q *store.Que
 
 // sendTripReminder records the send (the idempotency guard) BEFORE any email,
 // then ALWAYS writes the in-app notification, and only emails opted-in users.
-// Recording first mirrors the alert checker's mark-before-send: a tick that
+// Recording first is the mark-before-send rule: a tick that
 // crashes after the record is set never re-fires this (user, lineage, kind);
 // the worst case is a lost notification, never a duplicate.
 func (c *reengagementChecker) sendTripReminder(ctx context.Context, q *store.Queries, row store.ListTripsForReminderRow, kind string, daysUntil int) {
@@ -200,7 +199,7 @@ func (c *reengagementChecker) sendWeeklyNudge(ctx context.Context, q *store.Quer
 // --- payload builders (in-app notification render bags) ---
 
 // tripReminderPayload carries everything the notification tile needs to render
-// without a join, the same self-describing convention as priceDropPayload.
+// without a join — payloads are self-describing by convention.
 func tripReminderPayload(row store.ListTripsForReminderRow, kind string, daysUntil int) []byte {
 	m := map[string]any{
 		"kind":       kind,

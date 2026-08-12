@@ -340,10 +340,6 @@ func TestSearchWithBaggageKeepsEffectiveCheaperOnSharedSchedule(t *testing.T) {
 	if offers[0].ID != "off_q" || offers[0].EffectivePrice != 150 {
 		t.Fatalf("survivor = %s @ %v, want off_q @ 150 (not off_p @ 180)", offers[0].ID, offers[0].EffectivePrice)
 	}
-	best, ok := lowestOffer(offers)
-	if !ok || best.EffectivePrice != 150 {
-		t.Fatalf("lowestOffer = %+v ok=%v, want effective 150 not 180", best, ok)
-	}
 }
 
 func TestSearchNoBaggageSharedScheduleStillCollapses(t *testing.T) {
@@ -450,41 +446,6 @@ func TestRankUnknownSinksBelowWorseScore(t *testing.T) {
 	ranked := RankFlightOffers([]FlightOffer{unknown, paid}, "cost")
 	if ranked[0].ID != "paid" {
 		t.Fatalf("unknown-fee offer outranked a priced one: %+v", ranked)
-	}
-}
-
-// --- price-alert integration points ---
-
-func TestLowestOfferUsesEffectivePriceAndSkipsUnknown(t *testing.T) {
-	unknown := FlightOffer{ID: "u", Price: 50, BaggageStatus: baggageStatusUnknown}
-	paid := FlightOffer{ID: "p", Price: 100, BagFee: 60, EffectivePrice: 160, BaggageStatus: baggageStatusPaid}
-	included := FlightOffer{ID: "i", Price: 150, EffectivePrice: 150, BaggageStatus: baggageStatusIncluded}
-
-	best, ok := lowestOffer([]FlightOffer{unknown, paid, included})
-	if !ok || best.ID != "i" {
-		t.Fatalf("lowestOffer = %+v ok=%v, want included offer at effective 150", best, ok)
-	}
-	if _, ok := lowestOffer([]FlightOffer{unknown}); ok {
-		t.Fatal("all-unknown search must report no usable price")
-	}
-	// Personal-item searches (no statuses) keep bare-fare behavior.
-	plain, ok := lowestOffer([]FlightOffer{{ID: "a", Price: 90}, {ID: "b", Price: 80}})
-	if !ok || plain.ID != "b" {
-		t.Fatalf("plain lowestOffer = %+v, want b", plain)
-	}
-}
-
-func TestFlexSearchKeySeparatesBaggageTiers(t *testing.T) {
-	base := FlightSearchRequest{Origin: "JFK", Destination: "LHR", DepartDate: "2026-09-01", Adults: 1, CabinClass: "economy"}
-	withBag := base
-	withBag.Baggage = baggageChecked
-	if flexSearchKey(base) == flexSearchKey(withBag) {
-		t.Fatal("baggage tiers must not share a cached search")
-	}
-	explicit := base
-	explicit.Baggage = baggagePersonalItem
-	if flexSearchKey(base) != flexSearchKey(explicit) {
-		t.Fatal("empty and explicit personal_item must share a search")
 	}
 }
 

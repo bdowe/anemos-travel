@@ -188,7 +188,7 @@ type RecordReminderSentParams struct {
 }
 
 // Dedup guard for the trip-reminder checker. Written BEFORE the email so a
-// crashed/retried tick can never double-send (mirrors MarkPriceAlertNotified).
+// crashed/retried tick can never double-send.
 // ON CONFLICT is belt-and-suspenders — ListTripsForReminder already excludes
 // recorded rows, but two overlapping ticks must not error on the unique index.
 func (q *Queries) RecordReminderSent(ctx context.Context, arg RecordReminderSentParams) error {

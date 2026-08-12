@@ -96,7 +96,7 @@ mapped, and editable — not pasted into your Notes app.
   while you watch.
 - **Real data, not AI guesses.** Places come from Google, flights from live
   airline inventory, and local picks from actual locals — credited by name.
-- **Your trip, in one place.** Map view, price alerts, shareable links, a
+- **Your trip, in one place.** Map view, shareable links, a
   printable travel packet, and calendar export. Even import a trip you already
   planned in ChatGPT or Claude.
 - **It learns how you travel.** Budget, pace, interests, home airport — set
@@ -135,7 +135,7 @@ travelers is what shapes what this becomes.
 **The differentiation**
 - "ChatGPT gives you advice; Golden Tempo gives you a trip."
 - Everything is grounded in real data: Google Places for venues, live airline
-  inventory for flights, price alerts on fares, recommendations from actual
+  inventory for flights, recommendations from actual
   locals credited by name — not hallucinated restaurant names.
 - The conversation produces an artifact: a saved, editable, shareable itinerary
   with a map, a print packet, and calendar export — not a wall of text.
@@ -166,8 +166,8 @@ travelers is what shapes what this becomes.
 
 ## 5. Claims guardrails (keep the copy honest)
 
-Verified against the shipped app as of 2026-08-01. Safe to claim: AI chat →
-day-by-day itineraries; live flight search + price alerts (Duffel); real places
+Verified against the shipped app as of 2026-08-12. Safe to claim: AI chat →
+day-by-day itineraries; live flight search; real places
 (Google Places); locally-sourced recommendations with named attribution; trip
 map; sharing & collaboration; print packet; calendar export; import from
 ChatGPT/Claude; traveler preferences; Google/Apple/email sign-in; English +

@@ -28,8 +28,8 @@ const (
 var bagFeeTimeout = 15 * time.Second
 
 // searchFlightsWithBaggage is the one entry point for baggage-aware search:
-// the /flights/search handler, the plan agent's search_flights tool, and the
-// price-alert checker all go through it. For the personal_item tier (Duffel
+// the /flights/search handler and the plan agent's search_flights tool both
+// go through it. For the personal_item tier (Duffel
 // always allows a personal item) it is exactly search + rank — zero extra
 // calls, no baggage fields emitted.
 func searchFlightsWithBaggage(ctx context.Context, d *DuffelService, req FlightSearchRequest) ([]FlightOffer, error) {

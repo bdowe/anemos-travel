@@ -580,10 +580,6 @@ func main() {
 	// outstanding unsubscribe/export link on restart. Non-fatal by design.
 	warnIfSigningSecretsUnset()
 
-	// Background price-alert checker (specs/price-alerts); no-ops in
-	// degraded mode or without a Duffel token.
-	startAlertChecker(ctx)
-
 	// Background re-engagement checkers (Wave 16): trip reminders + weekly
 	// planning nudge; no-op in degraded mode.
 	startReengagementChecker(ctx)
@@ -830,23 +826,13 @@ func buildRouter() *mux.Router {
 	api.Handle("/events", authMiddleware(http.HandlerFunc(recordClientEventHandler))).
 		Methods("POST").HeadersRegexp("Authorization", ".+")
 	api.Handle("/events", anonEvents(http.HandlerFunc(recordAnonymousClientEventHandler))).Methods("POST")
-	// Price alerts (specs/price-alerts): creation is strict-tier (each alert
-	// commits the server to recurring provider searches).
-	api.Handle("/alerts", strict(authMiddleware(http.HandlerFunc(createPriceAlertHandler)))).Methods("POST")
-	api.Handle("/alerts", authMiddleware(http.HandlerFunc(listPriceAlertsHandler))).Methods("GET")
-	// Alert events (specs/price-alerts-v2): the notification-center feed.
-	// Registered before /alerts/{id} so "events" is never captured as an id.
-	api.Handle("/alerts/events", authMiddleware(http.HandlerFunc(listAlertEventsHandler))).Methods("GET")
-	api.Handle("/alerts/events/read", authMiddleware(http.HandlerFunc(markAlertEventsReadHandler))).Methods("POST")
-	api.Handle("/alerts/events/unread-count", authMiddleware(http.HandlerFunc(unreadAlertEventsCountHandler))).Methods("GET")
-	// Generalized notifications feed (Wave 16): the type-agnostic successor to
-	// /alerts/events. The Flutter notification center + badge read these; the
-	// price-alert checker writes 'price_drop' rows here.
+	// Generalized notifications feed (Wave 16): the Flutter notification
+	// center + badge read these. Writers: the re-engagement checkers (trip
+	// reminders, weekly nudge), collab/share activity (notifications_writer.go),
+	// and the ops self-check monitor (admin-only rows).
 	api.Handle("/notifications", authMiddleware(http.HandlerFunc(listNotificationsHandler))).Methods("GET")
 	api.Handle("/notifications/read", authMiddleware(http.HandlerFunc(markNotificationsReadHandler))).Methods("POST")
 	api.Handle("/notifications/unread-count", authMiddleware(http.HandlerFunc(unreadNotificationsCountHandler))).Methods("GET")
-	api.Handle("/alerts/{id}", authMiddleware(http.HandlerFunc(patchPriceAlertHandler))).Methods("PATCH")
-	api.Handle("/alerts/{id}", authMiddleware(http.HandlerFunc(deletePriceAlertHandler))).Methods("DELETE")
 	api.Handle("/preferences", authMiddleware(http.HandlerFunc(getPreferencesHandler))).Methods("GET")
 	api.Handle("/preferences", authMiddleware(http.HandlerFunc(putPreferencesHandler))).Methods("PUT")
 	api.HandleFunc("/accommodation-links", accommodationLinksHandler).Methods("GET")

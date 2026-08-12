@@ -384,8 +384,6 @@ type MetricsResponse struct {
 	EstCostModel         string  `json:"est_cost_model"`
 	EstClaudeCostUSD     float64 `json:"est_claude_cost_usd"`
 	EstCogsPerActiveUser float64 `json:"est_cogs_per_active_user"`
-	AlertsCreated        int64   `json:"alerts_created"`
-	AlertsTriggered      int64   `json:"alerts_triggered"`
 	// FreeCapWouldHits / FreeCapUsersAffected are the §8 cap-hit rate — the
 	// Phase-3 demand signal, keyed by cap_kind (plan_runs / active_trips).
 	// Would-hits counts crossing events (only-on-crossing, so one per user
@@ -445,8 +443,6 @@ func adminMetricsHandler(w http.ResponseWriter, r *http.Request) {
 		BookingClicks:             counts["booking_link_clicked"],
 		BookingClicksAnonymous:    anonCounts["booking_link_clicked"],
 		TodosMarkedBooked:         counts["booking_marked_booked"],
-		AlertsCreated:             counts["alert_created"],
-		AlertsTriggered:           counts["alert_triggered"],
 		ClicksByProvider:          map[string]int64{},
 		ClicksByProviderAnonymous: map[string]int64{},
 		FreeCapWouldHits:          map[string]int64{},

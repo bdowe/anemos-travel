@@ -43,6 +43,9 @@ void main() {
   test('unknown and over-long paths parse to null (plain catch-all)', () {
     for (final path in [
       '/nope',
+      // Removed feature: old price-alert emails deep-linked here; stale
+      // links must fall through to the catch-all, not error.
+      '/alerts',
       '/trips/a/b',
       '/plan/a/b',
       '/admin',

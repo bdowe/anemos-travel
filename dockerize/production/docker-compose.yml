@@ -51,7 +51,7 @@ services:
     # DUFFEL_ACCESS_TOKEN, FLIGHT_OFFERS_PROVIDER / SERPAPI_API_KEY,
     # TICKETMASTER_API_KEY, FERRYHOPPER_AFFILIATE_ID,
     # BOOKING_AFFILIATE_ID), SMTP_*, PUBLIC_BASE_URL / PUBLIC_APP_PATH,
-    # SENTRY_DSN / SENTRY_RELEASE, ALLOWED_ORIGINS, ALERT_* / FREE_* tuning.
+    # SENTRY_DSN / SENTRY_RELEASE, ALLOWED_ORIGINS, FREE_* tuning.
     # See .env.sample in this directory for the full annotated inventory.
     # The `environment:` block holds only values that are composed or pinned
     # by the stack itself; compose gives `environment:` precedence over

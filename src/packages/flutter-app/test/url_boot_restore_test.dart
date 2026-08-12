@@ -10,10 +10,10 @@ import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/live_trip_provider.dart';
 import 'package:travel_route_planner/providers/resumable_chats_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
-import 'package:travel_route_planner/screens/alerts_screen.dart';
 import 'package:travel_route_planner/screens/app_shell.dart';
 import 'package:travel_route_planner/screens/import_trip_screen.dart';
 import 'package:travel_route_planner/screens/landing_screen.dart';
+import 'package:travel_route_planner/screens/notification_center_screen.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
 import 'support/url_sync_fakes.dart';
@@ -76,14 +76,15 @@ void main() {
     expect(reports.last, '/trips/t1');
   });
 
-  testWidgets('booting /alerts restores the screen in-shell on the home tab',
+  testWidgets(
+      'booting /notifications restores the screen in-shell on the home tab',
       (tester) async {
-    await pumpApp(tester, initialUrl: '/alerts', user: fakeUser());
+    await pumpApp(tester, initialUrl: '/notifications', user: fakeUser());
 
     expect(find.byType(AppShell), findsOneWidget);
     expect(read(tester, navIndexProvider), AppTab.home.index);
-    expect(find.byType(AlertsScreen), findsOneWidget);
-    expect(reports.last, '/alerts');
+    expect(find.byType(NotificationCenterScreen), findsOneWidget);
+    expect(reports.last, '/notifications');
   });
 
   testWidgets('booting /import restores onto the trips tab', (tester) async {

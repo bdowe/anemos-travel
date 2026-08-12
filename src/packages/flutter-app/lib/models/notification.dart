@@ -4,9 +4,10 @@ part 'notification.g.dart';
 
 /// One row in the generalized notifications feed (Wave 16). Type-agnostic: the
 /// discriminator is [type] and the render data lives in [payload] — a raw JSON
-/// map the UI switches on. `readAt == null` means unread. Today the only writer
-/// is the price-alert checker (`type == 'price_drop'`); trip reminders,
-/// collaborator edits and invite-accepted land here in later waves.
+/// map the UI switches on. `readAt == null` means unread. Writers: trip
+/// reminders and the weekly nudge, collaborator edits, invite-accepted and
+/// share-joined activity, plus admin-only ops rows. Historical `price_drop`
+/// rows (from the removed price-alerts feature) still render.
 @JsonSerializable()
 class AppNotification {
   final String id;

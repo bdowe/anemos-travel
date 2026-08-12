@@ -1,5 +1,11 @@
 # Spec: Price Alerts v2 — Notification Center & Flexible Dates
 
+> **STATUS: PARTIALLY REMOVED 2026-08.** The alert/flex-dates surface was
+> deleted with v1 (resurrectable from git @ 8ca59c5). The generalized
+> notification center this spec introduced SURVIVES — trip reminders, collab
+> activity and ops rows still write to it, and it moved to a first-class
+> "Notifications" account-menu item.
+
 > Every price drop becomes a durable in-app notification, and an alert can
 > watch a small window of dates instead of exactly one.
 

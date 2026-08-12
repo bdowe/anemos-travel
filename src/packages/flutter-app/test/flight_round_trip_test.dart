@@ -7,16 +7,12 @@ import 'package:travel_route_planner/models/flight_leg.dart';
 import 'package:travel_route_planner/models/flight_offer.dart';
 import 'package:travel_route_planner/models/flight_search_request.dart';
 import 'package:travel_route_planner/models/flight_search_response.dart';
-import 'package:travel_route_planner/models/price_alert.dart';
 import 'package:travel_route_planner/models/user.dart';
-import 'package:travel_route_planner/providers/alerts_provider.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/flights_provider.dart';
 import 'package:travel_route_planner/screens/flight_search_screen.dart';
-import 'package:travel_route_planner/services/alerts_api_service.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/flights_api_service.dart';
-import 'package:travel_route_planner/widgets/create_alert_sheet.dart';
 import 'package:travel_route_planner/widgets/flight_offer_card.dart';
 import 'package:travel_route_planner/l10n/l10n.dart';
 import 'package:travel_route_planner/utils/flight_labels.dart';
@@ -57,23 +53,6 @@ class _FakeAuthNotifier extends StateNotifier<AuthState>
 
   @override
   Future<void> adoptSession(String token, UserModel user) async {}
-}
-
-class _FakeAlertsApiService extends AlertsApiService {
-  final List<Map<String, dynamic>> created = [];
-  _FakeAlertsApiService() : super(ApiClient(baseUrl: 'http://test'));
-
-  @override
-  Future<PriceAlert> create(Map<String, dynamic> body) async {
-    created.add(body);
-    return PriceAlert(
-      id: 'a1',
-      origin: body['origin'] as String,
-      destination: body['destination'] as String,
-      departDate: body['depart_date'] as String,
-      returnDate: body['return_date'] as String?,
-    );
-  }
 }
 
 /// Captures every search request; answers with one offer that mirrors the
@@ -320,68 +299,8 @@ void main() {
     });
   });
 
-  group('CreateAlertSheet', () {
-    Future<_FakeAlertsApiService> openSheet(
-        WidgetTester tester, CreateAlertSheet sheet) async {
-      final service = _FakeAlertsApiService();
-      await tester.pumpWidget(ProviderScope(
-        overrides: [alertsApiServiceProvider.overrideWithValue(service)],
-        child: MaterialApp(
-          localizationsDelegates: testLocalizationsDelegates,
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => FilledButton(
-                onPressed: () => CreateAlertSheet.show(context, sheet),
-                child: const Text('open'),
-              ),
-            ),
-          ),
-        ),
-      ));
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
-      return service;
-    }
-
-    testWidgets('round-trip search stores return_date on the alert',
-        (tester) async {
-      final service = await openSheet(
-        tester,
-        const CreateAlertSheet(
-          origin: 'JFK',
-          destination: 'CDG',
-          departDate: '2026-09-01',
-          returnDate: '2026-09-10',
-        ),
-      );
-      // The summary shows what will be watched, including the return — as
-      // localized display dates, not raw ISO (flightDateLabel).
-      expect(find.textContaining('Sep 1 → Sep 10'), findsOneWidget);
-
-      await tester.tap(find.text('Create alert'));
-      await tester.pumpAndSettle();
-
-      expect(service.created.single['return_date'], '2026-09-10');
-    });
-
-    testWidgets('one-way search omits return_date', (tester) async {
-      final service = await openSheet(
-        tester,
-        const CreateAlertSheet(
-          origin: 'JFK',
-          destination: 'CDG',
-          departDate: '2026-09-01',
-        ),
-      );
-      await tester.tap(find.text('Create alert'));
-      await tester.pumpAndSettle();
-
-      expect(service.created.single.containsKey('return_date'), isFalse);
-    });
-  });
-
   group('FlightSearchScreen round trip', () {
-    Future<(_FakeFlightsApiService, _FakeAlertsApiService)> pumpScreen(
+    Future<_FakeFlightsApiService> pumpScreen(
         WidgetTester tester, String departDate) async {
       tester.view.physicalSize = const Size(1200, 2000);
       tester.view.devicePixelRatio = 1.0;
@@ -389,11 +308,9 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       final flights = _FakeFlightsApiService();
-      final alerts = _FakeAlertsApiService();
       await tester.pumpWidget(ProviderScope(
         overrides: [
           flightsApiServiceProvider.overrideWithValue(flights),
-          alertsApiServiceProvider.overrideWithValue(alerts),
           authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
         ],
         child: MaterialApp(
@@ -411,14 +328,13 @@ void main() {
       // fields and re-search (one tap, same as the user path).
       await tester.tap(find.text('Edit search'));
       await tester.pumpAndSettle();
-      return (flights, alerts);
+      return flights;
     }
 
-    testWidgets(
-        'return date threads through search request and Watch this route',
+    testWidgets('return date threads through the search request',
         (tester) async {
       final depart = DateTime.now().add(const Duration(days: 30));
-      final (flights, alerts) = await pumpScreen(tester, _fmt(depart));
+      final flights = await pumpScreen(tester, _fmt(depart));
 
       // Prefill auto-search runs one-way: no return_date, current behavior.
       expect(flights.requests, hasLength(1));
@@ -445,27 +361,12 @@ void main() {
       // Both slices render on the result card.
       expect(
           find.textContaining('CDG 10:00', findRichText: true), findsOneWidget);
-
-      // "Watch this route" carries the searched return date into the alert.
-      await tester.tap(find.textContaining('Watch this route'),
-          warnIfMissed: false);
-      await tester.pumpAndSettle();
-      // The sheet summary renders display dates (flightDateLabel), while the
-      // created alert below still carries the machine-facing ISO date.
-      expect(
-          find.textContaining(
-              '→ ${flightDateLabel(await _en(), expectedReturn)}'),
-          findsOneWidget);
-      await tester.tap(find.text('Create alert'));
-      await tester.pumpAndSettle();
-      expect(alerts.created.single['return_date'], expectedReturn);
-      expect(alerts.created.single['depart_date'], _fmt(depart));
     });
 
     testWidgets('clear button removes the return date (back to one-way)',
         (tester) async {
       final depart = DateTime.now().add(const Duration(days: 30));
-      final (flights, _) = await pumpScreen(tester, _fmt(depart));
+      final flights = await pumpScreen(tester, _fmt(depart));
 
       await tester.tap(find.text('Return (optional)'));
       await tester.pumpAndSettle();
@@ -670,7 +571,7 @@ void main() {
   });
 
   group('baggage: FlightSearchScreen', () {
-    Future<(_FakeFlightsApiService, _FakeAlertsApiService)> pumpScreen(
+    Future<_FakeFlightsApiService> pumpScreen(
         WidgetTester tester, String departDate) async {
       tester.view.physicalSize = const Size(1200, 2200);
       tester.view.devicePixelRatio = 1.0;
@@ -678,11 +579,9 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       final flights = _FakeFlightsApiService();
-      final alerts = _FakeAlertsApiService();
       await tester.pumpWidget(ProviderScope(
         overrides: [
           flightsApiServiceProvider.overrideWithValue(flights),
-          alertsApiServiceProvider.overrideWithValue(alerts),
           authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
         ],
         child: MaterialApp(
@@ -699,13 +598,12 @@ void main() {
       // group's helper).
       await tester.tap(find.text('Edit search'));
       await tester.pumpAndSettle();
-      return (flights, alerts);
+      return flights;
     }
 
-    testWidgets('selected bag tier flows into the search and the watch',
-        (tester) async {
+    testWidgets('selected bag tier flows into the search', (tester) async {
       final depart = DateTime.now().add(const Duration(days: 30));
-      final (flights, alerts) = await pumpScreen(tester, _fmt(depart));
+      final flights = await pumpScreen(tester, _fmt(depart));
 
       // The prefill auto-search runs on the personal-item default.
       expect(flights.requests.single.baggage, isNull);
@@ -716,31 +614,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(flights.requests, hasLength(2));
       expect(flights.requests.last.baggage, 'checked');
-
-      // "Watch this route" inherits the searched tier.
-      await tester.tap(find.textContaining('Watch this route'),
-          warnIfMissed: false);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Create alert'));
-      await tester.pumpAndSettle();
-      expect(alerts.created.single['baggage'], 'checked');
     });
 
-    testWidgets('personal item sends no baggage field and none on the watch',
-        (tester) async {
+    testWidgets('personal item sends no baggage field', (tester) async {
       final depart = DateTime.now().add(const Duration(days: 30));
-      final (flights, alerts) = await pumpScreen(tester, _fmt(depart));
+      final flights = await pumpScreen(tester, _fmt(depart));
 
       await tester.tap(find.text('Search Flights'));
       await tester.pumpAndSettle();
       expect(flights.requests.last.baggage, isNull);
-
-      await tester.tap(find.textContaining('Watch this route'),
-          warnIfMissed: false);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Create alert'));
-      await tester.pumpAndSettle();
-      expect(alerts.created.single.containsKey('baggage'), isFalse);
     });
   });
 }

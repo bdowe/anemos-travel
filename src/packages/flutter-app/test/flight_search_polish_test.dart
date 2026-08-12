@@ -173,8 +173,7 @@ Future<_FakeFlightsApiService> _pumpScreen(
   await tester.pumpWidget(ProviderScope(
     overrides: [
       flightsApiServiceProvider.overrideWithValue(flights),
-      // Anonymous: keeps the signed-in-only "Watch this route" row out of
-      // these layout/state tests.
+      // Anonymous: these are layout/state tests, no session needed.
       authProvider.overrideWith((ref) => _FakeAuthNotifier(null)),
     ],
     child: localizedTestApp(

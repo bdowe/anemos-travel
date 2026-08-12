@@ -41,7 +41,7 @@ LIMIT sqlc.arg('row_limit');
 
 -- name: RecordReminderSent :exec
 -- Dedup guard for the trip-reminder checker. Written BEFORE the email so a
--- crashed/retried tick can never double-send (mirrors MarkPriceAlertNotified).
+-- crashed/retried tick can never double-send.
 -- ON CONFLICT is belt-and-suspenders — ListTripsForReminder already excludes
 -- recorded rows, but two overlapping ticks must not error on the unique index.
 INSERT INTO reminder_sends (user_id, trip_lineage_key, kind)

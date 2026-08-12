@@ -140,7 +140,7 @@ func providerStatuses() []ProviderStat {
 	serpapiStat := stat("serpapi_flights", serpapiFlights.Configured())
 	switch {
 	case serpapiFlights.Active() && serpapiFlights.Configured():
-		serpapiStat.Note = "temporary flight-offers provider ACTIVE; price alerts paused"
+		serpapiStat.Note = "temporary flight-offers provider ACTIVE"
 	case serpapiFlights.Active():
 		serpapiStat.Note = "ACTIVE but key missing; flight search degrades to Google Flights links"
 	}

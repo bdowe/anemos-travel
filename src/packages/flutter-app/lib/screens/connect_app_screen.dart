@@ -21,7 +21,7 @@ import 'auth_screen.dart';
 /// the app already has sessions plus email/Google/Apple sign-in, so a
 /// signed-out user can authenticate however they normally do and land right
 /// back on this screen (the URL drives the route — same pattern as the
-/// /alerts deep link).
+/// utility-screen deep links).
 class ConnectAppScreen extends ConsumerStatefulWidget {
   final String requestToken;
   const ConnectAppScreen({super.key, required this.requestToken});

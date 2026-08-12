@@ -35,7 +35,6 @@ var timeseriesEventTypes = []string{
 	"plan_session_started",
 	"booking_link_clicked",
 	"itinerary_item_added",
-	"alert_created",
 }
 
 // metricsDaysParam clamps ?days= exactly like adminMetricsHandler.

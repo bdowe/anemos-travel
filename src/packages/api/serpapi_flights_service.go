@@ -22,8 +22,7 @@ import (
 // a test token. Unset env => Duffel, byte-identical to before this file
 // existed. Flip back by unsetting FLIGHT_OFFERS_PROVIDER and restarting.
 //
-// While active: price alerts are paused (price_alert_checker.go), bag fees
-// are unpriceable so carry_on/checked searches classify "unknown"
+// While active: bag fees are unpriceable so carry_on/checked searches classify "unknown"
 // (flight_baggage.go), check_flight_connectivity rides the swap too but with
 // a tighter candidate clamp and a daily-quota headroom guard
 // (plan_connectivity.go), and a failed search degrades to a Google Flights
@@ -86,7 +85,7 @@ func NewSerpapiFlightsService() *SerpapiFlightsService {
 	}
 	if s.Active() {
 		if s.Configured() {
-			fmt.Println("Flight offers provider: SerpApi Google Flights (TEMPORARY swap; price alerts paused)")
+			fmt.Println("Flight offers provider: SerpApi Google Flights (TEMPORARY swap)")
 		} else {
 			fmt.Println("Warning: FLIGHT_OFFERS_PROVIDER=serpapi but SERPAPI_API_KEY not set; flight search degrades to Google Flights links")
 		}
@@ -332,7 +331,7 @@ func serpapiOffer(item serpapiFlightItem, req FlightSearchRequest, idx int) Flig
 	return FlightOffer{
 		// Synthetic ID: unique within one response, which is all consumers
 		// need (best_offer_id match, Flutter list keys, savings label). Never
-		// persisted — price alerts are paused while the swap is active.
+		// persisted.
 		ID:       fmt.Sprintf("serpapi:%s-%s:%s:%d", strings.ToUpper(req.Origin), strings.ToUpper(req.Destination), req.DepartDate, idx),
 		Price:    item.Price, // round-trip TOTAL on type=1 (phase-1 semantics)
 		Currency: serpapiCurrency,

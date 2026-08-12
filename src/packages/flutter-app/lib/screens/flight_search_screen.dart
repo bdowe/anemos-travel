@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../models/airport.dart';
 import '../models/flight_search_request.dart';
-import '../providers/auth_provider.dart';
 import '../providers/flights_provider.dart';
 import '../providers/preferences_provider.dart';
 import '../theme/spacing.dart';
@@ -14,7 +13,6 @@ import '../widgets/choice_chip_row.dart';
 import '../widgets/collapsible_section.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/page_container.dart';
-import '../widgets/create_alert_sheet.dart';
 import '../widgets/flight_offer_card.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/section_header.dart';
@@ -89,9 +87,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
   /// own the viewport on phones; tapping the row re-opens it to edit.
   bool _formExpanded = true;
 
-  /// The parameters of the last submitted search (see _search); the alert
-  /// entry point and the collapsed-form summary read these so an
-  /// edited-but-unsearched form can't mislabel either.
+  /// The parameters of the last submitted search (see _search); the
+  /// collapsed-form summary reads these so an edited-but-unsearched form
+  /// can't mislabel it.
   ({
     String origin,
     String destination,
@@ -312,9 +310,8 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
 
   void _search() {
     if (!_canSearch) return;
-    // Snapshot what was actually searched: the "Watch this route" alert and
-    // the collapsed-form summary must describe these parameters, not whatever
-    // the form says later.
+    // Snapshot what was actually searched: the collapsed-form summary must
+    // describe these parameters, not whatever the form says later.
     final returnDate = _returnDate == null ? null : _fmtDate(_returnDate!);
     _watched = (
       origin: _origin!.iataCode,
@@ -413,60 +410,6 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
             ),
           ),
           const SliverToBoxAdapter(child: Divider(height: 1)),
-          // Watch-this-route entry (specs/price-alerts): only over a real
-          // result set and only signed in — alerts need an email to notify.
-          // Uses the searched snapshot, never the live form (which may have
-          // been edited since), and skips the price baseline when children
-          // were in the search (the checker re-searches adults only, so a
-          // family-priced baseline would read as a fake drop).
-          if (state.hasSearched &&
-              state.offers.isNotEmpty &&
-              _watched != null &&
-              ref.watch(authProvider.select((s) => s.isSignedIn)))
-            SliverToBoxAdapter(
-              child: PageContainer(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                    child: TextButton.icon(
-                      icon: const Icon(Icons.notifications_none, size: 18),
-                      label: Text(l10n.flightSearchWatchRoute),
-                      onPressed: () {
-                        final w = _watched!;
-                        // Seed the baseline from the cheapest EFFECTIVE price —
-                        // the checker tracks fare + bag fee on baggage-aware
-                        // watches, so a bare-fare baseline would read as a drop.
-                        // Unknown-fee offers can't seed a comparable baseline.
-                        final priced = state.offers
-                            .where((o) => !o.bagFeeUnknown)
-                            .toList();
-                        final cheapest = priced.isEmpty
-                            ? null
-                            : priced.reduce((a, b) =>
-                                a.displayPrice <= b.displayPrice ? a : b);
-                        final seedPrice = w.children > 0 ? null : cheapest;
-                        CreateAlertSheet.show(
-                          context,
-                          CreateAlertSheet(
-                            origin: w.origin,
-                            destination: w.destination,
-                            departDate: w.departDate,
-                            returnDate: w.returnDate,
-                            adults: w.adults,
-                            cabinClass: w.cabinClass,
-                            baggage: w.baggage,
-                            currentPrice: seedPrice?.displayPrice,
-                            currency: seedPrice?.currency,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ..._resultSlivers(state, l10n, theme),
         ],
       ),
