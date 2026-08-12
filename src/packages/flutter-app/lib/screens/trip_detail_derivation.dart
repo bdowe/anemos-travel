@@ -350,6 +350,28 @@ class TripDerivation {
     return null;
   }
 
+  /// The CURRENT-filter group holding [legKey]'s items: the leg key itself
+  /// under the full itinerary, possibly a merged run's key under a places
+  /// lens, or null when the key is stale or the lens dropped every item of
+  /// the leg (nothing should render open — its items aren't in the list).
+  /// Positions-based like [legFilteredItems]: lenses only MERGE adjacent
+  /// runs, never split one, so leg → group is a function. This is the one
+  /// leg→group mapping (specs/map-city-focus accordion) — expansion is
+  /// derived through it at read time, and it clamps, so build never needs
+  /// to write focus state. Null in → null out, matching a no-focus screen.
+  String? groupKeyForLeg(String? legKey) {
+    if (legKey == null) return null;
+    final i = legIndexOf(legKey);
+    if (i == null) return null;
+    final positions = {for (final it in legs[i].items) it.position};
+    for (final group in groups) {
+      if (group.items.any((it) => positions.contains(it.position))) {
+        return group.key;
+      }
+    }
+    return null;
+  }
+
   /// Day preselect for adding a place to a focused leg: the smallest day tag
   /// among the leg's items, else the leg's raw start offset from the trip
   /// start (clamped to day 1), else null — no preselection, matching the

@@ -193,10 +193,37 @@ void main() {
     await tester.tap(find.byType(CloseButton));
     await tester.pumpAndSettle();
 
-    // Back on the trip screen, the inline chips kept the focus.
+    // Back on the trip screen, the inline chips kept the focus AND the
+    // report-back opened Rome's group exclusively behind the modal
+    // (accordion: the selection materializes in the list on close).
     expect(find.byType(TripMapScreen), findsNothing);
     final inlineChips = tester.widget<MapLegChips>(find.byType(MapLegChips));
     expect(inlineChips.selected, 'Rome');
+    expect(find.text('Colosseum'), findsOneWidget);
+    expect(find.text('Louvre'), findsNothing,
+        reason: 'Paris stays collapsed — only Rome is open');
+  });
+
+  testWidgets(
+      'wide: the full-screen All chip collapses the group behind the modal',
+      (WidgetTester tester) async {
+    await pumpScreen(tester, surface: const Size(1200, 800));
+
+    await tester.tap(inMap(find.byIcon(Icons.fullscreen)));
+    await tester.pumpAndSettle();
+    await tapChip(tester, 'Rome');
+    // All deselects both ways, even reported back from the full-screen map.
+    await tapChip(tester, 'All');
+
+    await tester.tap(find.byType(CloseButton));
+    await tester.pumpAndSettle();
+
+    final inlineChips = tester.widget<MapLegChips>(find.byType(MapLegChips));
+    expect(inlineChips.selected, isNull);
+    final inlineMap = tester.widget<TripMap>(find.byType(TripMap));
+    expect(inlineMap.fitSignature, isNull);
+    expect(find.text('Colosseum'), findsNothing,
+        reason: 'the All chip closed the open group behind the modal');
   });
 
   testWidgets(

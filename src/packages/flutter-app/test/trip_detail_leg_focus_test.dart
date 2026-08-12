@@ -14,15 +14,19 @@ import 'package:travel_route_planner/widgets/trip_map.dart';
 import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
-// The two-way leg focus contract (specs/map-city-focus):
-//   * expanding a city header focuses its leg on the map; focus follows the
-//     LAST expanded section;
-//   * collapsing the focused section returns the map to All; collapsing any
-//     other section leaves the map alone;
-//   * a chip tap focuses + expands, and on the wide layout rests the city
-//     header just below the pinned chrome — phones never scroll;
-//   * a focus change clears the map pin selection;
+// The accordion city-focus contract (specs/map-city-focus, accordion rev):
+//   * the open group IS the selection: expanding a city header focuses its
+//     leg on the map and closes the previously open group — at most one
+//     group is ever open;
+//   * collapsing the open group (or tapping the All chip) deselects both
+//     ways: the map returns to All and everything is collapsed;
+//   * a chip tap selects — focuses + opens the leg's group — and on the
+//     wide layout rests the city header just below the pinned chrome;
+//     phones never scroll;
+//   * a map pin tap reveals its run in the list WITHOUT moving the camera
+//     (reveal-only), and a focus change clears the map pin selection;
 //   * bookings lenses (no city headers) get map-only chips, lens kept;
+//     places lenses resolve legs onto merged groups (groupKeyForLeg);
 //   * revisited cities focus per RUN key; single-leg trips have no focus.
 
 class _FakeTripsApiService extends TripsApiService {
@@ -31,6 +35,25 @@ class _FakeTripsApiService extends TripsApiService {
 
   @override
   Future<Trip> getTrip(String id) async => trip;
+}
+
+/// getTrip flips from [v1] to [v2] once addItineraryItem is called, so the
+/// screen's post-add `_load()` sees the new item (the Add-place flow).
+class _AddingTripsApiService extends TripsApiService {
+  final Trip v1;
+  final Trip v2;
+  bool added = false;
+  _AddingTripsApiService(this.v1, this.v2)
+      : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<Trip> getTrip(String id) async => added ? v2 : v1;
+
+  @override
+  Future<Trip> addItineraryItem(String tripId, Map<String, dynamic> body) async {
+    added = true;
+    return v2;
+  }
 }
 
 ItineraryItem _item(
@@ -106,8 +129,8 @@ void _useSurface(WidgetTester tester, Size size) {
 
 void main() {
   testWidgets(
-      'header taps drive focus: expand focuses, last expanded wins, '
-      'collapsing the focused leg restores All, others are inert',
+      'header taps drive the accordion: expanding selects and closes the '
+      'previous group, collapsing the open group restores All',
       (tester) async {
     // Tall surface: with the 364px map band pinned, expanded sections push
     // later headers below an 800px fold and header taps would miss.
@@ -120,20 +143,20 @@ void main() {
     await expandCity(tester, 'Paris');
     expect(_map(tester).fitSignature, 'Paris');
     expect(_map(tester).items.map((i) => i.name), ['Louvre', 'Orsay']);
+    expect(find.text('Louvre'), findsOneWidget);
 
-    // Expanding Rome steals the focus (focus = last expanded).
+    // Expanding Rome selects it — and closes Paris: at most one group open.
     await expandCity(tester, 'Rome');
     expect(_map(tester).fitSignature, 'Rome');
     expect(_map(tester).items, hasLength(8));
+    expect(find.text('Louvre'), findsNothing,
+        reason: 'selecting Rome must close the previously open Paris');
 
-    // Collapsing NON-focused Paris leaves the map alone.
-    await expandCity(tester, 'Paris');
-    expect(_map(tester).fitSignature, 'Rome');
-
-    // Collapsing the focused Rome returns the map to All.
+    // Collapsing the open Rome deselects: map to All, list all collapsed.
     await expandCity(tester, 'Rome');
     expect(_map(tester).fitSignature, isNull);
     expect(_map(tester).items, hasLength(11));
+    expect(find.text('Roman Forum 0'), findsNothing);
   });
 
   testWidgets(
@@ -142,14 +165,19 @@ void main() {
     _useSurface(tester, const Size(1200, 800));
     await _pump(tester, _threeCityTrip());
 
-    // Rome starts collapsed: its items aren't built.
+    // Rome starts collapsed: its items aren't built. Open Paris first so
+    // the chip tap also proves the accordion closes it.
     expect(find.text('Roman Forum 0'), findsNothing);
+    await expandCity(tester, 'Paris');
+    expect(find.text('Louvre'), findsOneWidget);
 
     await _tapChip(tester, 'Rome');
 
     expect(_map(tester).fitSignature, 'Rome');
-    // The section expanded…
+    // The section expanded — exclusively…
     expect(find.text('Roman Forum 0'), findsOneWidget);
+    expect(find.text('Louvre'), findsNothing,
+        reason: 'a chip tap closes the previously open group');
     // …and its header rests right below the pinned chrome: the 364px map
     // band (12 + 340 + 12) + the 56px itinerary tab row = 420, measured
     // from the viewport top (the app bar's bottom — the scroll math lives
@@ -163,6 +191,24 @@ void main() {
         .dy;
     expect((headerTop - (viewportTop + 420)).abs(), lessThanOrEqualTo(2),
         reason: 'Rome header should rest below map band + tab row');
+  });
+
+  testWidgets('the All chip deselects both ways: map to All, group closed',
+      (tester) async {
+    _useSurface(tester, const Size(1200, 800));
+    await _pump(tester, _threeCityTrip());
+
+    await _tapChip(tester, 'Rome');
+    expect(_map(tester).fitSignature, 'Rome');
+    expect(find.text('Roman Forum 0'), findsOneWidget);
+
+    // All = nothing selected: chips and headers are two views of ONE
+    // selection, so the open group closes with the map reset.
+    await _tapChip(tester, 'All');
+    expect(_map(tester).fitSignature, isNull);
+    expect(_map(tester).items, hasLength(11));
+    expect(find.text('Roman Forum 0'), findsNothing,
+        reason: 'the All chip closes the open group');
   });
 
   testWidgets('phone chip tap focuses the map without scrolling the list',
@@ -201,6 +247,52 @@ void main() {
     await _tapChip(tester, 'Paris');
     expect(_map(tester).selectedPosition, isNull);
     expect(_map(tester).fitSignature, 'Paris');
+  });
+
+  testWidgets('a pin tap reveals its run without moving the camera',
+      (tester) async {
+    _useSurface(tester, const Size(1200, 2200));
+    await _pump(tester, _threeCityTrip());
+
+    // From the All view, tap a Rome pin (invoked directly — marker hit
+    // boxes cluster-shift): its run opens so the highlighted row is
+    // reachable, but the camera must NOT refit out from under the
+    // zoom-to-pin move — fitSignature stays All.
+    _map(tester).onPinTap!(2);
+    await tester.pumpAndSettle();
+    expect(_map(tester).selectedPosition, 2);
+    expect(_map(tester).fitSignature, isNull);
+    // A sibling row, not the tapped item's name — that one also renders in
+    // the pin-tap snackbar.
+    expect(find.text('Roman Forum 1'), findsOneWidget);
+
+    // The reveal-only open group still collapses coherently: the map is
+    // already on All, so closing it changes nothing on the map.
+    await expandCity(tester, 'Rome');
+    expect(_map(tester).fitSignature, isNull);
+    expect(find.text('Roman Forum 1'), findsNothing);
+  });
+
+  testWidgets('a pin tap while a leg is focused keeps the camera and selection',
+      (tester) async {
+    _useSurface(tester, const Size(1200, 2200));
+    await _pump(tester, _threeCityTrip());
+
+    // Focus Rome, then tap a Rome pin: keepCamera must be a no-op on the
+    // focus (a focused map already renders only that leg's pins), so the
+    // camera stays on Rome AND the selection is NOT cleared — the pin-tap
+    // camera invariant.
+    await _tapChip(tester, 'Rome');
+    expect(_map(tester).fitSignature, 'Rome');
+
+    _map(tester).onPinTap!(3);
+    await tester.pumpAndSettle();
+    expect(_map(tester).fitSignature, 'Rome', reason: 'camera must not refit');
+    expect(_map(tester).selectedPosition, 3,
+        reason: 'keepCamera must not clear the selection');
+    // Rome stays the open group; Paris stays closed.
+    expect(find.text('Roman Forum 1'), findsWidgets);
+    expect(find.text('Louvre'), findsNothing);
   });
 
   testWidgets('bookings lens: a chip tap filters the map and keeps the lens',
@@ -254,6 +346,151 @@ void main() {
     expect(_map(tester).items.map((i) => i.name), ['Louvre']);
   });
 
+  testWidgets(
+      'places lens: a merged group opens for either of its legs '
+      '(groupKeyForLeg)', (tester) async {
+    _useSurface(tester, const Size(1200, 2200));
+    await _pump(
+      tester,
+      Trip(
+        id: 't1',
+        title: 'Paris twice',
+        status: 'planned',
+        createdAt: '2026-06-01',
+        updatedAt: '2026-06-01',
+        startDate: '2026-09-01',
+        endDate: '2026-09-03',
+        items: [
+          _item(0, 'Louvre', 'Paris', 48.8606, 2.3376, 1),
+          ItineraryItem(
+            id: 'i1',
+            position: 1,
+            name: 'Osteria',
+            latitude: 41.8902,
+            longitude: 12.4922,
+            category: 'restaurant',
+            day: 2,
+            city: 'Rome',
+          ),
+          _item(2, 'Marmottan', 'Paris', 48.8592, 2.2670, 3),
+        ],
+      ),
+    );
+
+    // The Attractions lens drops Rome's only item: the two Paris runs merge
+    // into ONE group keyed 'Paris', while the chips stay trip-wide (All +
+    // Paris + Rome + Paris).
+    await tester.tap(find.byIcon(Icons.filter_list));
+    await tester.pumpAndSettle();
+    await tester.tap(find.ancestor(
+        of: find.text('Attractions'),
+        matching: find.byWidgetPredicate((w) => w is CheckedPopupMenuItem)));
+    await tester.pumpAndSettle();
+
+    // Selecting the SECOND Paris run focuses its leg — and opens the one
+    // merged group both runs resolve to.
+    final parisChips = find.descendant(
+        of: find.byType(MapLegChips), matching: find.text('Paris'));
+    await tester.tap(parisChips.at(1));
+    await tester.pumpAndSettle();
+    expect(_map(tester).fitSignature, 'Paris#2');
+    expect(_map(tester).items.map((i) => i.name), ['Marmottan']);
+    expect(find.text('Louvre'), findsOneWidget,
+        reason: 'the merged Paris group holds both runs\' attractions');
+    expect(find.text('Marmottan'), findsWidgets);
+
+    // Selecting the first run refocuses the map; the same merged group
+    // simply stays open.
+    await tester.tap(parisChips.at(0));
+    await tester.pumpAndSettle();
+    expect(_map(tester).fitSignature, 'Paris');
+    expect(_map(tester).items.map((i) => i.name), ['Louvre']);
+    expect(find.text('Louvre'), findsOneWidget);
+  });
+
+  testWidgets('adding a place focuses the added city, closing the previous',
+      (tester) async {
+    _useSurface(tester, const Size(1200, 2200));
+    final v1 = _threeCityTrip();
+    // v2 inserts a fresh Rome item (consecutive with the existing Rome run,
+    // so it stays leg 'Rome'), Berlin shifted after it.
+    final v2 = Trip(
+      id: 't1',
+      title: 'Grand tour',
+      status: 'planned',
+      createdAt: '2026-06-01',
+      updatedAt: '2026-06-01',
+      startDate: '2026-09-01',
+      endDate: '2026-09-05',
+      items: [
+        _item(0, 'Louvre', 'Paris', 48.8606, 2.3376, 1),
+        _item(1, 'Orsay', 'Paris', 48.8600, 2.3266, 2),
+        for (var k = 0; k < 8; k++)
+          _item(2 + k, 'Roman Forum $k', 'Rome', 41.89 + k * 0.001, 12.49, 3),
+        // Fresh item: a unique id (NOT position-derived, which would collide
+        // with v1's Berlin id 'i10'); consecutive with Rome so it stays
+        // leg 'Rome'.
+        const ItineraryItem(
+          id: 'fresh-trevi',
+          position: 10,
+          name: 'Trevi Fountain',
+          latitude: 41.9009,
+          longitude: 12.4833,
+          category: 'attraction',
+          day: 3,
+          city: 'Rome',
+        ),
+        // Berlin keeps its v1 id ('i10') so it is NOT seen as fresh; only
+        // the position shifts.
+        const ItineraryItem(
+          id: 'i10',
+          position: 11,
+          name: 'Brandenburg Gate',
+          latitude: 52.5163,
+          longitude: 13.3777,
+          category: 'attraction',
+          day: 4,
+          city: 'Berlin',
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          tripsApiServiceProvider
+              .overrideWithValue(_AddingTripsApiService(v1, v2)),
+        ],
+        child: MaterialApp(
+            localizationsDelegates: testLocalizationsDelegates,
+            home: TripDetailScreen(tripId: 't1')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Open Paris so the add can be shown to CLOSE it (the item lands in Rome).
+    await expandCity(tester, 'Paris');
+    expect(_map(tester).fitSignature, 'Paris');
+    expect(find.text('Louvre'), findsOneWidget);
+
+    // Header "Add place" → manual entry → name → Add.
+    await tester.tap(find.text('Add place'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("Can't find it? Add manually"));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Place name').first, 'Trevi Fountain');
+    await tester.tap(
+        find.descendant(of: find.byType(AlertDialog), matching: find.text('Add')));
+    await tester.pumpAndSettle();
+
+    // The new item's leg (Rome) is now focused and its group open; Paris,
+    // the previously open group, is closed.
+    expect(_map(tester).fitSignature, 'Rome');
+    expect(find.text('Trevi Fountain'), findsWidgets);
+    expect(find.text('Louvre'), findsNothing,
+        reason: 'the previously open Paris closes under the accordion');
+  });
+
   testWidgets('single-leg trip: no chip strip, header taps never focus',
       (tester) async {
     _useSurface(tester, const Size(1200, 800));
@@ -283,10 +520,15 @@ void main() {
 
     // The sole group seeds open; toggling it never writes focus — with one
     // leg, "All" and "the leg" are the same map, and a fit bump would snap
-    // a user-panned camera for no visible change.
+    // a user-panned camera for no visible change. The LIST still toggles
+    // through the reveal-only hatch (this is the same writer path an
+    // 'Other places'-only trip takes).
+    expect(find.text('Louvre'), findsOneWidget); // seeded open
     await expandCity(tester, 'Paris'); // collapse (seeded open)
     expect(_map(tester).fitSignature, isNull);
+    expect(find.text('Louvre'), findsNothing, reason: 'list collapsed');
     await expandCity(tester, 'Paris'); // expand again
     expect(_map(tester).fitSignature, isNull);
+    expect(find.text('Louvre'), findsOneWidget, reason: 'list reopened');
   });
 }

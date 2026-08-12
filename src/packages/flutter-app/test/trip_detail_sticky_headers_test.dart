@@ -50,8 +50,8 @@ void main() {
         _item(0, 'Louvre', 'Paris', 1),
         _item(1, 'Orsay', 'Paris', 1),
         for (var k = 0; k < 6; k++) _item(2 + k, 'Paris stop $k', 'Paris', 2),
-        // Rome needs enough content that scrolling can carry its header all
-        // the way up to the pinned slot, fully pushing Paris off.
+        // Rome needs enough content that, once it is the open group, scrolling
+        // can carry its header all the way up to the pinned slot.
         for (var k = 0; k < 4; k++) _item(8 + k, 'Rome stop $k', 'Rome', 3),
         for (var k = 0; k < 4; k++)
           _item(12 + k, 'Rome day4 stop $k', 'Rome', 4),
@@ -69,21 +69,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Groups default collapsed — open both so scrolling has content. Rome
-    // first: while everything is collapsed both headers sit in the viewport,
-    // whereas expanding Paris first would push Rome's header below the fold
-    // and the tap would miss.
-    await expandCity(tester, 'Rome');
+    // Groups default collapsed. The accordion allows at most ONE open group
+    // (specs/map-city-focus, accordion rev) — expanding a city closes any
+    // other open group — so only Paris is opened here; its items alone
+    // provide the scroll extent for the Paris pinned-header assertions.
     await expandCity(tester, 'Paris');
 
     expect(find.text('Paris'), findsOneWidget);
 
     // Scroll into the middle of Paris day 2, far enough that both the city
     // and day headers have reached their pinned slots. jumpTo keeps offsets
-    // exact (drag gestures fling unpredictably past the target).
+    // exact (drag gestures fling unpredictably past the target). Offsets
+    // retuned for the accordion: with Rome collapsed, only Paris's items
+    // contribute extent (max ~626), so 450/600 replace the old 550/700.
     final position =
         tester.state<ScrollableState>(find.byType(Scrollable).first).position;
-    position.jumpTo(550);
+    position.jumpTo(450);
     await tester.pumpAndSettle();
 
     final parisDyA = tester.getTopLeft(find.text('Paris')).dy;
@@ -92,7 +93,7 @@ void main() {
 
     // Scroll a bit further, still within Paris day 2: the pinned city and
     // day headers hold their position while the items keep moving.
-    position.jumpTo(700);
+    position.jumpTo(600);
     await tester.pumpAndSettle();
 
     expect(
@@ -104,8 +105,17 @@ void main() {
     expect(parisDyA, greaterThan(0));
     expect(day2DyA, greaterThan(parisDyA));
 
-    // Scroll to the bottom: Rome takes over the pinned city slot, pushing
-    // the Paris and Day 2 headers off.
+    // Rome's turn in the pinned slot. Under the accordion Rome's body only
+    // exists while Rome is the open group, so bring its collapsed header
+    // fully into view and expand it — which also closes Paris (its Day 2
+    // header and items unbuild; the Paris header row itself still renders).
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    await expandCity(tester, 'Rome');
+
+    // Scroll to the bottom: Rome's header reaches the pinned city slot —
+    // the same slot Paris pinned in (parisDyA) — with its Day 4 header
+    // pinned below it.
     position.jumpTo(position.maxScrollExtent);
     await tester.pumpAndSettle();
 
@@ -114,7 +124,8 @@ void main() {
     expect(tester.getTopLeft(find.text('Day 4')).dy, greaterThan(parisDyA));
     final parisAfter = find.text('Paris');
     if (parisAfter.evaluate().isNotEmpty) {
-      // Still built within the cache extent, but scrolled above Rome.
+      // Collapsed Paris header still built, but scrolled above Rome's
+      // pinned slot.
       expect(tester.getTopLeft(parisAfter).dy, lessThan(parisDyA));
     }
   });

@@ -118,16 +118,20 @@ void main() {
 
     await _pump(tester, trip);
 
-    // Both groups default collapsed — expand them so these asserts exercise
-    // the filler suppression, not the collapse (a collapsed Vienna hides day
-    // headers regardless).
+    // Groups default collapsed and the accordion keeps at most ONE open:
+    // expanding Vienna closes Prague. So assert each city's body content
+    // while that city is the open group, one at a time — the asserts must
+    // exercise the filler suppression, not the collapse (a collapsed Vienna
+    // hides day headers regardless).
     await expandCity(tester, 'Prague');
+    expect(find.text('Prague Castle'), findsOneWidget);
+
+    // Selecting Vienna collapses Prague (its body content hides).
     await expandCity(tester, 'Vienna');
 
     // Still exactly one 'Vienna': the header. A broken filler filter would
     // render the filler tile as a second one inside the expanded group.
     expect(find.text('Vienna'), findsOneWidget);
-    expect(find.text('Prague Castle'), findsOneWidget);
     expect(find.text('Fri, Jun 12'), findsNothing);
   });
 }

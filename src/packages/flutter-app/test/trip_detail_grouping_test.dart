@@ -97,15 +97,18 @@ void main() {
     expect(chipTextIn('Green Turtle Cay', 'Jun 10 – Jun 12'), findsOneWidget);
     expect(chipTextIn('Green Turtle Cay', '· 2 nights'), findsOneWidget);
 
-    // Groups default collapsed — open both to reach their contents.
+    // Groups default collapsed and at most ONE is open at a time (accordion):
+    // expanding a city closes the previously open one. Assert each group's
+    // body while that group is the open one.
     await expandCity(tester, 'Green Turtle Cay');
-    await expandCity(tester, 'Great Guana Cay');
-
-    // Items still render under their groups.
     expect(find.text("Brendal's Dive Center"), findsOneWidget);
-    expect(find.text('Dive Guana'), findsOneWidget);
-
     // Legacy items (no day) render with no "Day N" sub-headers.
+    expect(find.textContaining('Day 1'), findsNothing);
+
+    // Opening Great Guana Cay collapses Green Turtle Cay.
+    await expandCity(tester, 'Great Guana Cay');
+    expect(find.text('Dive Guana'), findsOneWidget);
+    // Legacy rule holds in this group too.
     expect(find.textContaining('Day 1'), findsNothing);
   });
 
@@ -147,22 +150,27 @@ void main() {
     expect(find.text('Paris'), findsOneWidget);
     expect(find.text('Rome'), findsOneWidget);
 
-    // Groups default collapsed — open both to reach the day sub-headers.
+    // Groups default collapsed and at most ONE is open at a time (accordion):
+    // opening Rome would collapse Paris, so each city's day sub-headers are
+    // asserted while that city is the open group.
     await expandCity(tester, 'Paris');
-    await expandCity(tester, 'Rome');
 
     // Day sub-headers show the weekday + date derived from the trip start
     // (day N -> startDate + (N-1)). Jun 10 2026 is a Wednesday.
     expect(find.text('Wed, Jun 10'), findsOneWidget);
     expect(find.text('Thu, Jun 11'), findsOneWidget);
-    expect(find.text('Sat, Jun 13'), findsOneWidget);
 
     // Paris spans days 1–2 -> Jun 10 – Jun 11 (1 night) next to the city name.
+    // (Chip-level: renders regardless of expansion.)
     expect(chipTextIn('Paris', 'Jun 10 – Jun 11'), findsOneWidget);
     expect(chipTextIn('Paris', '· 1 night'), findsOneWidget);
 
-    // The Versailles day trip still nests under its day.
+    // The Versailles day trip still nests under its day (Paris group body).
     expect(find.text('Day trip · Versailles'), findsOneWidget);
+
+    // Opening Rome collapses Paris.
+    await expandCity(tester, 'Rome');
+    expect(find.text('Sat, Jun 13'), findsOneWidget);
     expect(find.text('Colosseum'), findsOneWidget);
   });
 }

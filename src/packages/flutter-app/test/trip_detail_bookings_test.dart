@@ -117,23 +117,27 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Groups default collapsed — open both cities to reach the embedded
-    // rows (the header counter and Other bookings render regardless).
-    await expandCity(tester, 'Paris');
-    await expandCity(tester, 'Rome');
+    // Groups default collapsed, and the accordion contract allows at most ONE
+    // open city at a time (expanding a city closes the previous one), so each
+    // city's embedded rows are asserted while that city is the open group.
+    // Headers, the tab counter, and Other bookings render regardless.
 
-    // City-matched bookings render once each, as compact embedded rows.
+    // Paris open: its city-matched bookings render once each, as compact
+    // embedded rows, with arrival + stay above the city's first item.
+    await expandCity(tester, 'Paris');
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
-    expect(find.widgetWithText(BookingTodoRow, 'Stay in Rome'), findsOneWidget);
     expect(find.widgetWithText(BookingTodoRow, 'JFK → Paris'), findsOneWidget);
-    expect(find.widgetWithText(BookingTodoRow, 'Paris → Rome'), findsOneWidget);
-    expect(find.widgetWithText(BookingTodoRow, 'Rome → JFK'), findsOneWidget);
-
-    // Arrival + stay sit above the city's first item; the return flight home
-    // comes after the last city's last item.
     expect(tester.getTopLeft(find.text('JFK → Paris')).dy,
         lessThan(tester.getTopLeft(find.text('Louvre')).dy));
+
+    // Rome open (Paris closes): 'Paris → Rome' is Rome's ARRIVAL row, so it
+    // renders inside Rome's group above Rome's first item; the return flight
+    // home comes after the last city's last item.
+    await expandCity(tester, 'Rome');
+    expect(find.widgetWithText(BookingTodoRow, 'Stay in Rome'), findsOneWidget);
+    expect(find.widgetWithText(BookingTodoRow, 'Paris → Rome'), findsOneWidget);
+    expect(find.widgetWithText(BookingTodoRow, 'Rome → JFK'), findsOneWidget);
     expect(tester.getTopLeft(find.text('Paris → Rome')).dy,
         lessThan(tester.getTopLeft(find.text('Colosseum')).dy));
     expect(tester.getTopLeft(find.text('Rome → JFK')).dy,
