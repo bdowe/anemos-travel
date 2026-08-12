@@ -26,7 +26,6 @@ import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
 import 'guides_screen.dart';
 import 'local_guide_detail_screen.dart';
-import 'trip_detail_screen.dart';
 
 /// Which time-of-day greeting the home header shows. The variant is chosen
 /// without a BuildContext (and unit-tested that way); [greetingText] maps it to
@@ -198,12 +197,9 @@ class HomeScreen extends ConsumerWidget {
                 if (liveTrip != null) ...[
                   LiveTripCard(
                     trip: liveTrip,
-                    onTap: () => Navigator.of(context).push(
-                      locatedRoute(
-                        TripDetailScreen(tripId: liveTrip.id),
-                        tripDetailLocation(liveTrip.id),
-                      ),
-                    ),
+                    // On the Trips tab (not pushed over Home): the Trips nav
+                    // item highlights and back lands on the trips list.
+                    onTap: () => openTripOnTripsTab(ref, liveTrip.id),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
@@ -220,12 +216,8 @@ class HomeScreen extends ConsumerWidget {
                           title: recentTrip.title,
                           dateRange: recentTrip.dateRange,
                           status: recentTrip.status,
-                          onTap: () => Navigator.of(context).push(
-                            locatedRoute(
-                              TripDetailScreen(tripId: recentTrip.tripId),
-                              tripDetailLocation(recentTrip.tripId),
-                            ),
-                          ),
+                          onTap: () =>
+                              openTripOnTripsTab(ref, recentTrip.tripId),
                         )
                       : null,
                 ),

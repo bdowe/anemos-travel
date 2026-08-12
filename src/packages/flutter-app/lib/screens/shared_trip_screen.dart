@@ -165,25 +165,20 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
       ref.invalidate(sharedWithMeProvider);
       ref.read(navIndexProvider.notifier).state = AppTab.trips.index;
       // Read before navigating: pushNamedAndRemoveUntil disposes this state,
-      // so the callbacks below must not touch ref.
+      // so the callback below must not touch ref.
       final navKeys = ref.read(tabNavKeysProvider);
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       // The shell (and the Trips tab's nested navigator) remounts over the
-      // next frames; retry until it's attached rather than betting on one
-      // frame and silently dropping the push. If every attempt misses, the
-      // user still lands on the Trips tab where the joined trip now shows.
-      void openOnTripsTab([int attempts = 10]) {
-        final nav = navKeys[AppTab.trips.index].currentState;
-        if (nav != null) {
-          nav.push(locatedRoute(
-              TripDetailScreen(tripId: tripId), tripDetailLocation(tripId)));
-        } else if (attempts > 0) {
-          WidgetsBinding.instance
-              .addPostFrameCallback((_) => openOnTripsTab(attempts - 1));
-        }
-      }
-
-      WidgetsBinding.instance.addPostFrameCallback((_) => openOnTripsTab());
+      // next frames; pushOnTabWhenReady retries until it's attached rather
+      // than betting on one frame and silently dropping the push. Deferred a
+      // frame so the push can't land on a navigator the reset just discarded.
+      // If every attempt misses, the user still lands on the Trips tab where
+      // the joined trip now shows.
+      WidgetsBinding.instance.addPostFrameCallback((_) => pushOnTabWhenReady(
+          navKeys,
+          AppTab.trips,
+          () => locatedRoute(
+              TripDetailScreen(tripId: tripId), tripDetailLocation(tripId))));
     } catch (e) {
       if (mounted) {
         showSnack(context, l10n.sharedJoinError(friendlyError(l10n, e)));

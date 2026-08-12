@@ -204,13 +204,15 @@ class UrlSyncController {
     final tripId = target.tripId;
     final utility = target.utility;
     final chatId = target.chatId;
+    final navKeys = _ref.read(tabNavKeysProvider);
     if (tripId != null) {
-      _pushOnTabWhenReady(
+      pushOnTabWhenReady(
+          navKeys,
           target.tab,
           () => locatedRoute(
               TripDetailScreen(tripId: tripId), tripDetailLocation(tripId)));
     } else if (utility != null) {
-      _pushOnTabWhenReady(target.tab,
+      pushOnTabWhenReady(navKeys, target.tab,
           () => locatedRoute(_utilityScreen(utility), utilityLocation(utility)));
     } else if (chatId != null) {
       // Fire-and-forget: success rehydrates planProvider (the Plan tab —
@@ -222,21 +224,6 @@ class UrlSyncController {
         plan: _ref.read(planProvider.notifier),
         chatId: chatId,
       );
-    }
-  }
-
-  /// The shell (and the tab's nested navigator) mounts over the next frames;
-  /// retry rather than betting on one frame (the shared-trip join-landing
-  /// pattern). If every attempt misses, the user still lands on the right
-  /// tab and the URL self-corrects to the tab root.
-  void _pushOnTabWhenReady(AppTab tab, Route<dynamic> Function() buildRoute,
-      [int attempts = 10]) {
-    final nav = _ref.read(tabNavKeysProvider)[tab.index].currentState;
-    if (nav != null) {
-      nav.push(buildRoute());
-    } else if (attempts > 0) {
-      WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _pushOnTabWhenReady(tab, buildRoute, attempts - 1));
     }
   }
 

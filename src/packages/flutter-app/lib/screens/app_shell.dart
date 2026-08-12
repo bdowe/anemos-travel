@@ -12,8 +12,11 @@ import 'trips_list_screen.dart';
 
 /// Persistent navigation shell. The rail (wide) / bar (narrow) lives here,
 /// outside the per-tab navigators, so it never moves when a page is pushed —
-/// only the content area animates. Each tab keeps its own push stack, so a trip
-/// opened in one tab stays put when you switch away and back.
+/// only the content area animates. Each tab has its own push stack, but a nav
+/// button always lands on the page it names: selecting a tab resets that tab's
+/// stack to its root ([selectTab]). Background stacks survive only for
+/// programmatic switch+push flows (Home trip cards, boot restore, shared-trip
+/// join), which write [navIndexProvider] directly.
 ///
 /// [navDestinations] carries the icons and ordering; its labels are display
 /// copy, so the shell renders the localized label for each tab instead
@@ -36,14 +39,7 @@ class AppShell extends ConsumerWidget {
     final urlSync = ref.watch(urlSyncProvider);
     final isWide = MediaQuery.sizeOf(context).width >= kRailBreakpoint;
 
-    void onSelect(int i) {
-      if (i == ref.read(navIndexProvider)) {
-        // Tapping the active tab again returns it to its root.
-        navKeys[i].currentState?.popUntil((r) => r.isFirst);
-      } else {
-        ref.read(navIndexProvider.notifier).state = i;
-      }
-    }
+    void onSelect(int i) => selectTab(ref, i);
 
     // The root navigator only holds the shell, so forward a system/browser back
     // to the active tab's navigator — otherwise nested pushes (trip detail, etc.)
