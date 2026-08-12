@@ -157,6 +157,8 @@ void _useTallViewport(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
+/// Pumps the trip detail screen; [openSheet] then taps the app-bar health
+/// icon so the finding rows (and their fix buttons) are on screen.
 Future<void> _pumpScreen(
   WidgetTester tester, {
   required Trip trip,
@@ -166,6 +168,7 @@ Future<void> _pumpScreen(
   _FakeTransportApiService? transport,
   _FakeChecklistApiService? checklist,
   _FakeBudgetApiService? budget,
+  bool openSheet = true,
 }) async {
   _useTallViewport(tester);
   await tester.pumpWidget(
@@ -188,10 +191,8 @@ Future<void> _pumpScreen(
     ),
   );
   await tester.pumpAndSettle();
-  // Trip health renders behind a collapsed one-line row — expand it so the
-  // finding rows (and their fix buttons) are on screen.
-  await tester.ensureVisible(find.text('Trip health'));
-  await tester.tap(find.text('Trip health'));
+  if (!openSheet) return;
+  await tester.tap(find.byTooltip('Trip health'));
   await tester.pumpAndSettle();
 }
 
@@ -351,12 +352,12 @@ void main() {
     expect(inSheet('2026-08-03'), findsOneWidget);
   });
 
-  testWidgets('trailing cluster leads with Trip health, empty rows trail',
+  testWidgets('health lives in the app bar; cluster orders packing → budget',
       (tester) async {
-    // Layout contract (friction-log 2026-08-04): the cluster is ordered
-    // Trip health → What to wear & pack → Budget, so actionable review state
-    // is met before the empty-state rows. (The packing slot was retitled by
-    // the merged what-to-wear section, specs/what-to-wear.)
+    // Layout contract (friction-log 2026-08-12, evolving 2026-08-04): Trip
+    // health left the trailing cluster for the always-visible app-bar icon
+    // (its count badge is the glanceable state), so the cluster is now
+    // What to wear & pack → Budget only, with no health row in the body.
     final review = _FakeReviewApiService([
       _finding('packing', 'No umbrella for rainy Athens',
           const FindingFix(
@@ -369,13 +370,16 @@ void main() {
         trip: _trip(),
         review: review,
         checklist: _FakeChecklistApiService(),
-        budget: _FakeBudgetApiService());
+        budget: _FakeBudgetApiService(),
+        openSheet: false);
+
+    // The health entry is the app-bar icon; no "Trip health" row in the body.
+    expect(find.byTooltip('Trip health'), findsOneWidget);
+    expect(find.text('Trip health'), findsNothing);
 
     // The tall test viewport lays out the whole cluster in one frame.
-    final healthY = tester.getTopLeft(find.text('Trip health')).dy;
     final packingY = tester.getTopLeft(find.text('What to wear & pack')).dy;
     final budgetY = tester.getTopLeft(find.text('Budget')).dy;
-    expect(healthY, lessThan(packingY));
     expect(packingY, lessThan(budgetY));
   });
 }

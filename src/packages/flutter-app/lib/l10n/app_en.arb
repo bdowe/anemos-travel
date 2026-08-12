@@ -1264,6 +1264,7 @@
   "reviewOfflineSnack": "You're offline — reconnect to run more checks.",
   "reviewHoursChecked": "Opening hours checked",
   "reviewCheckHours": "Also check opening hours",
+  "reviewHoursCheckFailed": "Couldn't check opening hours — try again.",
   "liveTripEyebrow": "HAPPENING NOW",
   "liveTripStatusLive": "Live",
   "liveTripDay": "Day {day}",

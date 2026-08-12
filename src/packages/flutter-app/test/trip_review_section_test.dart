@@ -60,7 +60,7 @@ Future<_FakeTripReviewApiService> _pump(
           body: SingleChildScrollView(
             child: TripReviewSection(
               tripId: 't1',
-              isOffline: isOffline,
+              isOffline: () => isOffline,
               onScrollToDay: onScrollToDay,
               dayForItem: dayForItem,
               onApplyFix: onApplyFix,

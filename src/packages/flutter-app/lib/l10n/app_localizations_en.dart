@@ -1953,6 +1953,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reviewCheckHours => 'Also check opening hours';
 
   @override
+  String get reviewHoursCheckFailed =>
+      'Couldn\'t check opening hours — try again.';
+
+  @override
   String get liveTripEyebrow => 'HAPPENING NOW';
 
   @override
