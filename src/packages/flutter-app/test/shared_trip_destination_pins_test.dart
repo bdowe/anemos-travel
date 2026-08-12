@@ -11,7 +11,7 @@ import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/shared_trip_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
-import 'package:travel_route_planner/widgets/map_day_chips.dart';
+import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/section_header.dart';
 
 import 'support/l10n_test_app.dart';
@@ -82,7 +82,7 @@ void main() {
 
   testWidgets(
       'All shows destination pins with ungeocoded legs skipped (numbering '
-      'stays contiguous); a day chip flips to item pins',
+      'stays contiguous); a city focus flips to item pins',
       (WidgetTester tester) async {
     await pumpScreen(
       tester,
@@ -106,13 +106,12 @@ void main() {
     );
     expect(tooltip.message, 'Rome');
 
-    // Day 1: per-item pins return.
+    // Focusing a city: per-item pins return.
     await tester.tap(find.descendant(
-      of: find.byType(MapDayChips),
-      matching: find.text('Day 1'),
+      of: find.byType(MapLegChips),
+      matching: find.text('Paris'),
     ));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.byType(MarkerClusterLayerWidget), findsOneWidget);
     expect(inMap('1'), findsOneWidget);
   });

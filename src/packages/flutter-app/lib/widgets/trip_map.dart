@@ -125,7 +125,7 @@ class TripMap extends StatefulWidget {
   final Widget? emptyAction;
 
   /// Extra top camera-fit padding (px) for overlays floating on the map's top
-  /// edge (e.g. [MapDayChips]), so fitted markers never land underneath them.
+  /// edge (e.g. [MapLegChips]), so fitted markers never land underneath them.
   /// The default keeps existing call sites unchanged.
   final double topOverlayInset;
 

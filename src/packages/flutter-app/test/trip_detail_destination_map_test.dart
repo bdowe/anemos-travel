@@ -10,7 +10,7 @@ import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
-import 'package:travel_route_planner/widgets/map_day_chips.dart';
+import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -76,11 +76,11 @@ void main() {
 
   Future<void> tapChip(WidgetTester tester, String label) async {
     await tester.tap(find.descendant(
-      of: find.byType(MapDayChips),
+      of: find.byType(MapLegChips),
       matching: find.text(label),
     ));
-    await tester.pump();
-    await tester.pump(); // post-frame camera re-fit
+    // Settles the camera re-fit and the focus-driven page scroll.
+    await tester.pumpAndSettle();
   }
 
   /// Pin labels scoped to the map — the itinerary list renders its own text.
@@ -88,7 +88,7 @@ void main() {
       find.descendant(of: find.byType(FlutterMap), matching: find.text(text));
 
   testWidgets(
-      'All numbers destinations 1..N in visit order; day chips flip to '
+      'All numbers destinations 1..N in visit order; a city focus flips to '
       'per-stop pins and back', (WidgetTester tester) async {
     await pumpScreen(tester);
 
@@ -104,8 +104,8 @@ void main() {
     );
     expect(tooltip.message, startsWith('Rome'));
 
-    // Day 1: per-item stop pins return, inside the clusterer.
-    await tapChip(tester, 'Day 1');
+    // Focusing Paris: per-item stop pins return, inside the clusterer.
+    await tapChip(tester, 'Paris');
     expect(find.byType(MarkerClusterLayerWidget), findsOneWidget);
     expect(inMap('1'), findsOneWidget);
     expect(inMap('2'), findsOneWidget);

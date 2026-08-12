@@ -9,7 +9,7 @@ import 'package:travel_route_planner/models/accommodation.dart';
 import 'package:travel_route_planner/models/itinerary_item.dart';
 import 'package:travel_route_planner/providers/flights_provider.dart';
 import 'package:travel_route_planner/screens/trip_map_screen.dart';
-import 'package:travel_route_planner/widgets/map_day_chips.dart';
+import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
 import 'support/l10n_test_app.dart';
@@ -29,11 +29,18 @@ final _items = [
   _item(1, 'Café de Flore', 48.8540, 2.3326),
 ];
 
+/// Three legs so the home-overlay matrix has a first, a middle, and a last.
+const _legChips = [
+  (key: 'Paris', label: 'Paris'),
+  (key: 'Rome', label: 'Rome'),
+  (key: 'Berlin', label: 'Berlin'),
+];
+
 /// [viewPadding] simulates device chrome (e.g. the 34px iOS home-indicator
 /// band) — the test binding's own MediaQuery always reports zero.
 Widget _app({
   EdgeInsets viewPadding = EdgeInsets.zero,
-  void Function(int? day)? onAddPlace,
+  void Function(String? legKey)? onAddPlace,
   String title = 'Paris getaway',
   String? homeAirport,
   LatLng? firstCityPoint,
@@ -53,11 +60,11 @@ Widget _app({
       ),
       home: TripMapScreen(
         title: title,
-        itemsForDay: (_) => _items,
-        staysForDay: (_) => const <Accommodation>[],
+        itemsForLeg: (_) => _items,
+        staysForLeg: (_) => const <Accommodation>[],
         segmentLabels: const {},
-        dayCount: 3,
-        onDaySelected: (_) {},
+        legChips: _legChips,
+        onLegSelected: (_) {},
         onAddPlace: onAddPlace,
         homeAirport: homeAirport,
         firstCityPoint: firstCityPoint,
@@ -66,6 +73,16 @@ Widget _app({
       ),
     ),
   );
+}
+
+Future<void> _tapChip(WidgetTester tester, String label) async {
+  await tester.tap(
+    find.descendant(
+      of: find.byType(MapLegChips),
+      matching: find.text(label),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -90,15 +107,15 @@ void main() {
   });
 
   testWidgets(
-    'app bar carries a persistent add-place action wired to the current day',
+    'app bar carries a persistent add-place action wired to the current leg',
     (tester) async {
       var called = false;
-      int? receivedDay = -1;
+      String? receivedLeg = 'sentinel';
       await tester.pumpWidget(
         _app(
-          onAddPlace: (d) {
+          onAddPlace: (k) {
             called = true;
-            receivedDay = d;
+            receivedLeg = k;
           },
         ),
       );
@@ -109,18 +126,12 @@ void main() {
 
       await tester.tap(action);
       expect(called, isTrue);
-      expect(receivedDay, isNull); // opened on All
+      expect(receivedLeg, isNull); // opened on All
 
-      // Selecting a day must carry through to the action.
-      await tester.tap(
-        find.descendant(
-          of: find.byType(MapDayChips),
-          matching: find.text('Day 2'),
-        ),
-      );
-      await tester.pumpAndSettle();
+      // Selecting a leg must carry through to the action.
+      await _tapChip(tester, 'Rome');
       await tester.tap(action);
-      expect(receivedDay, 2);
+      expect(receivedLeg, 'Rome');
     },
   );
 
@@ -149,18 +160,8 @@ void main() {
           ],
         );
 
-    Future<void> tapDay(WidgetTester tester, String label) async {
-      await tester.tap(
-        find.descendant(
-          of: find.byType(MapDayChips),
-          matching: find.text(label),
-        ),
-      );
-      await tester.pumpAndSettle();
-    }
-
     testWidgets(
-      'home pin shows on All and the endpoint days, hides mid-trip',
+      'home pin shows on All and the endpoint legs, hides mid-trip',
       (tester) async {
         await tester.pumpWidget(appWithHome());
         await tester.pumpAndSettle();
@@ -168,14 +169,14 @@ void main() {
         // "All": both legs → home pin present.
         expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
 
-        // Mid-trip day: neither leg belongs to it → no orphan pin.
-        await tapDay(tester, 'Day 2');
+        // Mid-trip leg: neither home leg belongs to it → no orphan pin.
+        await _tapChip(tester, 'Rome');
         expect(find.byIcon(Icons.flight_takeoff), findsNothing);
 
-        // Day 1 carries the outbound leg, the last day the return leg.
-        await tapDay(tester, 'Day 1');
+        // The first leg carries the outbound leg, the last leg the return.
+        await _tapChip(tester, 'Paris');
         expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
-        await tapDay(tester, 'Day 3');
+        await _tapChip(tester, 'Berlin');
         expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
@@ -223,18 +224,8 @@ void main() {
     Finder inMap(String text) =>
         find.descendant(of: find.byType(FlutterMap), matching: find.text(text));
 
-    Future<void> tapDay(WidgetTester tester, String label) async {
-      await tester.tap(
-        find.descendant(
-          of: find.byType(MapDayChips),
-          matching: find.text(label),
-        ),
-      );
-      await tester.pumpAndSettle();
-    }
-
     testWidgets(
-        'All shows destination pins; day chips flip to item pins '
+        'All shows destination pins; leg chips flip to item pins '
         'and back', (tester) async {
       await tester.pumpWidget(_app(destinations: dests));
       await tester.pumpAndSettle();
@@ -244,11 +235,11 @@ void main() {
       expect(inMap('1'), findsOneWidget);
       expect(inMap('2'), findsOneWidget);
 
-      // A day selection restores per-item pins (the fixture's two items).
-      await tapDay(tester, 'Day 1');
+      // A leg focus restores per-item pins (the fixture's two items).
+      await _tapChip(tester, 'Paris');
       expect(find.byType(MarkerClusterLayerWidget), findsOneWidget);
 
-      await tapDay(tester, 'All');
+      await _tapChip(tester, 'All');
       expect(find.byType(MarkerClusterLayerWidget), findsNothing);
       expect(inMap('1'), findsOneWidget);
       expect(inMap('2'), findsOneWidget);

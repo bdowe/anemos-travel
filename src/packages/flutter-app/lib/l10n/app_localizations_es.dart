@@ -1319,8 +1319,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripNoMappedPlaces => 'No hay lugares en el mapa';
 
   @override
-  String tripNoPlacesOnDay(int day) {
-    return 'No hay lugares marcados el día $day';
+  String tripNoPlacesInLeg(String city) {
+    return 'No hay lugares marcados en $city';
   }
 
   @override
@@ -2274,8 +2274,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String get sharedNoMappedPlaces => 'No hay lugares en el mapa';
 
   @override
-  String sharedNoPlacesOnDay(int day) {
-    return 'No hay lugares fijados el día $day';
+  String sharedNoPlacesIn(String city) {
+    return 'No hay lugares fijados en $city';
   }
 
   @override

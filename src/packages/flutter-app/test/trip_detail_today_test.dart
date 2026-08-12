@@ -9,7 +9,7 @@ import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
-import 'package:travel_route_planner/widgets/map_day_chips.dart';
+import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/status_pill.dart';
 
 import 'support/l10n_test_app.dart';
@@ -217,10 +217,11 @@ void main() {
     expect(find.text('Day 1'), findsOneWidget); // plain headers, no dates
   });
 
-  testWidgets('a live trip preselects today on the map day chips',
+  testWidgets("a live trip preselects today's leg on the map chips",
       (WidgetTester tester) async {
-    // Real (tight Paris-cluster) coordinates so the map sliver mounts — the
-    // auto-scroll then also exercises the map-shown pinned-chrome height.
+    // Real coordinates so the map sliver mounts — the auto-scroll then also
+    // exercises the map-shown pinned-chrome height. Two cities so the leg
+    // strip exists: today (day 2) belongs to the Rome leg.
     final trip = Trip(
       id: 't1',
       title: 'Live Mapped Trip',
@@ -230,15 +231,32 @@ void main() {
       startDate: start,
       endDate: end,
       items: [
-        _item(0, 'Louvre', 1, lat: 48.8606, lng: 2.3376),
-        _item(1, 'Orsay', 1, lat: 48.8600, lng: 2.3266),
-        _item(2, 'Pantheon', 2, lat: 48.8462, lng: 2.3464),
+        ItineraryItem(
+          id: 'i0',
+          position: 0,
+          name: 'Louvre',
+          latitude: 48.8606,
+          longitude: 2.3376,
+          category: 'attraction',
+          day: 1,
+          city: 'Paris',
+        ),
+        ItineraryItem(
+          id: 'i1',
+          position: 1,
+          name: 'Colosseum',
+          latitude: 41.8902,
+          longitude: 12.4922,
+          category: 'attraction',
+          day: 2,
+          city: 'Rome',
+        ),
       ],
     );
     await _pumpScreen(tester, _FakeTripsApiService(trip));
 
     expect(
-        tester.widget<MapDayChips>(find.byType(MapDayChips)).selected, 2);
+        tester.widget<MapLegChips>(find.byType(MapLegChips)).selected, 'Rome');
     expect(_todayChip(), findsOneWidget);
   });
 

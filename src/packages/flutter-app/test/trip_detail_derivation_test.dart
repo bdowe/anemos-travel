@@ -215,30 +215,21 @@ void main() {
     });
   });
 
-  group('lazy per-day accessors', () {
+  group('staysOnNight (the Tonight-caption night math)', () {
     test('stable List identity per (derivation, day)', () {
       final d = _compute(stays: [_parisStay]);
-      expect(identical(d.dayFilteredItems(1), d.dayFilteredItems(1)), isTrue);
-      expect(
-          identical(d.dayFilteredItems(null), d.dayFilteredItems(null)), isTrue);
-      expect(identical(d.dayFilteredItems(null), d.filtered), isTrue);
-      expect(identical(d.dayFilteredStays(1), d.dayFilteredStays(1)), isTrue);
-      expect(identical(d.dayFilteredStays(null), d.confirmedStays), isTrue);
       expect(identical(d.staysOnNight(2), d.staysOnNight(2)), isTrue);
     });
 
-    test('day filtering matches the legacy per-call rule', () {
+    test('checkout-exclusive, confirmed stays only', () {
       final trip = _trip(stays: [_parisStay, _draftStay]);
       final d = _compute(trip: trip);
-      expect([for (final i in d.dayFilteredItems(1)) i.name], ['Louvre']);
-      expect([for (final i in d.dayFilteredItems(4)) i.name], ['Trevi']);
       // Confirmed stays only — the auto draft never reaches the map.
       expect([for (final a in d.confirmedStays) a.id], ['a1']);
       // Checkout-exclusive night math: Sep 1 + Sep 2 covered, Sep 3 not.
       expect([for (final a in d.staysOnNight(1)) a.id], ['a1']);
       expect([for (final a in d.staysOnNight(2)) a.id], ['a1']);
       expect(d.staysOnNight(3), isEmpty);
-      expect([for (final a in d.dayFilteredStays(2)) a.id], ['a1']);
     });
   });
 
@@ -350,12 +341,9 @@ void main() {
       expect(_compute(itemFilter: 'bookings').filtered.length, 5);
     });
 
-    test('map inputs: shown gate, day chips, destinations, endpoints', () {
+    test('map inputs: shown gate, destinations, endpoints', () {
       final d = _compute(stays: const []);
       expect(d.mapShown, isTrue);
-      expect(d.mapDayCount, 5);
-      // Coordinate-bearing items carry days 1, 2, 3, 5 (Trevi has none).
-      expect(d.mappedDays, {1, 2, 3, 5});
       // One destination pin per geocoded leg, visit order, dated.
       expect([for (final m in d.mapDestinations) m.label],
           ['Paris', 'Rome', 'Paris']);
@@ -363,13 +351,12 @@ void main() {
       expect(d.homeLegEndpoints.first?.latitude, 48.86);
       expect(d.homeLegEndpoints.last?.latitude, 48.86);
 
-      // A geocoded stay both shows the map and lights its nights' chips.
+      // A geocoded stay shows the map on its own.
       final stayOnly = _compute(
         trip: _trip(items: const [], stays: [_parisStay]),
       );
       expect(stayOnly.mapShown, isTrue);
-      expect(stayOnly.mapDayCount, 5);
-      expect(stayOnly.mappedDays, {1, 2});
+      expect(stayOnly.legChips, isEmpty);
 
       final bare = _compute(trip: _trip(items: const []));
       expect(bare.mapShown, isFalse);
@@ -387,6 +374,187 @@ void main() {
       expect(d.firstGroupKeyForDay(5), 'Paris#2');
       expect(d.firstGroupKeyForDay(9), isNull);
       expect(d.firstGroupKeyForDay(null), isNull);
+    });
+
+    test('legChips: full-leg keys in visit order, localized labels', () {
+      final d = _compute();
+      expect([for (final c in d.legChips) c.key], ['Paris', 'Rome', 'Paris#2']);
+      expect(
+          [for (final c in d.legChips) c.label], ['Paris', 'Rome', 'Paris']);
+      // A single-leg trip still yields its one entry — hiding the <2-leg
+      // strip is the widget's rule, so the gate has one home.
+      final solo = _compute(
+        trip: _trip(items: [
+          _item(0, 'Louvre', city: 'Paris', day: 1, lat: 48.86, lng: 2.35),
+        ]),
+      );
+      expect(solo.legChips.length, 1);
+      // The 'Other places' run keeps the raw registry key, localized label.
+      final other = _compute(
+        trip: _trip(items: [
+          _item(0, 'Louvre', city: 'Paris', day: 1, lat: 48.86, lng: 2.35),
+          const ItineraryItem(
+            id: 'i-mystery',
+            position: 1,
+            name: 'Mystery spot',
+            latitude: 0,
+            longitude: 0,
+          ),
+        ]),
+      );
+      expect(other.legChips[1].key, 'Other places');
+      expect(other.legChips[1].label, _l10n.tripOtherPlaces);
+    });
+
+    test('mappedLegKeys: geocoded items, stay-only legs, unmapped legs', () {
+      // Default fixture: every leg has a geocoded item.
+      expect(_compute().mappedLegKeys, {'Paris', 'Rome', 'Paris#2'});
+
+      // Rome loses its coordinates and has no stay → unmapped (muted chip).
+      final items = [
+        _item(0, 'Louvre', city: 'Paris', day: 1, lat: 48.86, lng: 2.35),
+        _item(1, 'Colosseum', city: 'Rome', day: 3),
+      ];
+      final bare = _compute(trip: _trip(items: items));
+      expect(bare.mappedLegKeys, {'Paris'});
+
+      // A geocoded stay covering Rome's nights lights the leg back up.
+      const romeStay = Accommodation(
+        id: 'a3',
+        name: 'Rome Inn',
+        address: 'Via Y, Rome',
+        latitude: 41.9,
+        longitude: 12.5,
+        checkIn: '2026-09-03',
+        checkOut: '2026-09-05',
+      );
+      final withStay =
+          _compute(trip: _trip(items: items, stays: [romeStay]));
+      expect(withStay.mappedLegKeys, {'Paris', 'Rome'});
+    });
+
+    test('legFilteredItems: position-set of the full leg ∩ lens', () {
+      final d = _compute();
+      expect([for (final i in d.legFilteredItems('Rome')) i.name],
+          ['Colosseum', 'Trevi']);
+      expect([for (final i in d.legFilteredItems('Paris#2')) i.name],
+          ['Louvre Again']);
+      expect(d.legFilteredItems('Nowhere'), isEmpty);
+      expect(identical(d.legFilteredItems(null), d.filtered), isTrue);
+      expect(identical(d.legFilteredItems('Rome'), d.legFilteredItems('Rome')),
+          isTrue, reason: 'stable identity per (derivation, key)');
+
+      // A lens that drops the middle city merges the two Paris runs in
+      // GROUPS — but the full-leg position set keeps focus correct for the
+      // second visit, which no longer exists as a group key.
+      final merged = [
+        _item(0, 'Louvre', city: 'Paris', day: 1, lat: 48.86, lng: 2.35),
+        _item(1, 'Osteria',
+            city: 'Rome', day: 2, lat: 41.89, lng: 12.49,
+            category: 'restaurant'),
+        _item(2, 'Louvre Again', city: 'Paris', day: 3, lat: 48.86, lng: 2.35),
+      ];
+      final lensed =
+          _compute(trip: _trip(items: merged), itemFilter: 'attraction');
+      expect([for (final g in lensed.groups) g.key], ['Paris']);
+      expect(
+          [for (final l in lensed.legs) l.key], ['Paris', 'Rome', 'Paris#2']);
+      expect([for (final i in lensed.legFilteredItems('Paris#2')) i.name],
+          ['Louvre Again']);
+      expect(lensed.legFilteredItems('Rome'), isEmpty,
+          reason: 'the lens dropped the leg\'s only item');
+    });
+
+    test('legFilteredStays: raw-range night overlap, checkout-exclusive', () {
+      // _parisStay (Sep 1 → Sep 3) anchors Paris to Sep 1–Sep 3: nights
+      // Sep 1 + Sep 2. Rome (days 3-4) spans Sep 3–Sep 4: night Sep 3 only.
+      final d = _compute(trip: _trip(stays: [_parisStay]));
+      expect([for (final a in d.legFilteredStays('Paris')) a.id], ['a1']);
+      // Checkout Sep 3 is exclusive → the stay covers no Rome night.
+      expect(d.legFilteredStays('Rome'), isEmpty);
+      // The revisit shares its locality's stay-anchored range (rawLegRanges'
+      // first-matching-accommodation rule), so the city's stay plots on a
+      // Paris#2 focus too — same city, same pin.
+      expect([for (final a in d.legFilteredStays('Paris#2')) a.id], ['a1']);
+      expect(identical(d.legFilteredStays(null), d.confirmedStays), isTrue);
+      expect(
+          identical(
+              d.legFilteredStays('Paris'), d.legFilteredStays('Paris')),
+          isTrue,
+          reason: 'stable identity per (derivation, key)');
+      expect(d.legFilteredStays('Nowhere'), isEmpty);
+
+      // A zero-night squeezed leg plots no stays — even one covering the
+      // calendar night the leg sits on belongs to the neighbor.
+      const viennaStay = Accommodation(
+        id: 'a4',
+        name: 'Vienna Hotel',
+        address: 'Ring 1, Vienna',
+        latitude: 48.2,
+        longitude: 16.37,
+        checkIn: '2026-09-04',
+        checkOut: '2026-09-06',
+      );
+      final squeezed = _compute(
+        trip: _trip(
+          items: [
+            _item(0, 'Belvedere',
+                city: 'Vienna', day: 1, lat: 48.19, lng: 16.38),
+            _item(1, 'Castle', city: 'Prague', day: 5, lat: 50.09, lng: 14.4),
+          ],
+          stays: [viennaStay],
+        ),
+      );
+      expect(squeezed.legFilteredStays('Prague'), isEmpty);
+      expect([for (final a in squeezed.legFilteredStays('Vienna')) a.id],
+          ['a4']);
+
+      // An undated leg (no parseable range) plots no stays.
+      final undated = _compute(
+        trip: Trip(
+          id: 't3',
+          title: 'No dates',
+          status: 'planned',
+          createdAt: '2026-08-01',
+          updatedAt: '2026-08-01',
+          items: _items(),
+          accommodations: const [_parisStay],
+        ),
+      );
+      expect(undated.legFilteredStays('Rome'), isEmpty);
+    });
+
+    test('legKeyForDay / legKeyOfPosition / legIndexOf / dayForLeg', () {
+      final d = _compute();
+      expect(d.legKeyForDay(1), 'Paris');
+      // Resolves on the day TAG, geocoded or not (Trevi has no coords).
+      expect(d.legKeyForDay(4), 'Rome');
+      expect(d.legKeyForDay(5), 'Paris#2');
+      expect(d.legKeyForDay(9), isNull);
+      expect(d.legKeyForDay(null), isNull);
+
+      expect(d.legKeyOfPosition(0), 'Paris');
+      expect(d.legKeyOfPosition(3), 'Rome');
+      expect(d.legKeyOfPosition(4), 'Paris#2');
+      expect(d.legKeyOfPosition(99), isNull);
+
+      expect(d.legIndexOf('Paris'), 0);
+      expect(d.legIndexOf('Paris#2'), 2);
+      expect(d.legIndexOf('Nope'), isNull);
+
+      expect(d.dayForLeg('Rome'), 3, reason: 'smallest day tag wins');
+      expect(d.dayForLeg(null), isNull);
+      expect(d.dayForLeg('Nope'), isNull);
+
+      // A day-less leg falls back to its raw range's trip-start offset:
+      // Paris pins Sep 1, the auto allocation hands Rome Sep 4–Sep 5.
+      final dayless = _compute(
+        trip: _trip(items: [
+          _item(0, 'Louvre', city: 'Paris', day: 1, lat: 48.86, lng: 2.35),
+          _item(1, 'Colosseum', city: 'Rome', lat: 41.89, lng: 12.49),
+        ]),
+      );
+      expect(dayless.dayForLeg('Rome'), 4);
     });
 
     test('city fillers keep their group but drop their day keys', () {

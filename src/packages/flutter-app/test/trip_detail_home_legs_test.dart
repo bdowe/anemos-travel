@@ -14,16 +14,17 @@ import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/preferences_api_service.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
-import 'package:travel_route_planner/widgets/map_day_chips.dart';
+import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
 import 'support/l10n_test_app.dart';
 
 /// Home-airport legs on the INLINE trip-detail map card: the overlay follows
-/// the same day gating as the full-screen map (outbound on All/Day 1, return
-/// on All/last day, nothing mid-trip), keyed off the viewer's saved home
-/// airport. The default test surface (800x600) takes the wide pinned-card
-/// path, the surface the legs were invisible on before this feature.
+/// the same leg gating as the full-screen map (outbound on All / the first
+/// leg, return on All / the last leg, nothing mid-trip), keyed off the
+/// viewer's saved home airport. The default test surface (800x600) takes the
+/// wide pinned-card path, the surface the legs were invisible on before this
+/// feature.
 
 class _FakeTripsApiService extends TripsApiService {
   final Trip trip;
@@ -52,9 +53,14 @@ class _FakePrefsApi implements PreferencesApiService {
       const TravelerPreferences(homeAirport: 'EWR');
 }
 
-/// Real (tight Paris-cluster) coordinates so the trip detail screen mounts a
-/// live TripMap instead of skipping it.
-ItineraryItem _item(int pos, String name, double lat, double lng, int day) =>
+ItineraryItem _item(
+  int pos,
+  String name,
+  String city,
+  double lat,
+  double lng,
+  int day,
+) =>
     ItineraryItem(
       id: 'i$pos',
       position: pos,
@@ -63,28 +69,27 @@ ItineraryItem _item(int pos, String name, double lat, double lng, int day) =>
       longitude: lng,
       category: 'attraction',
       day: day,
-      city: 'Paris',
+      city: city,
     );
 
 void main() {
-  // Newark; far from the Paris fixtures, same point the full-screen tests use.
+  // Newark; far from the European fixtures, same point the full-screen
+  // tests use.
   const homePoint = (lat: 40.6895, lng: -74.1745);
 
-  // Sept 1–3 => Day 1..3 chips; Day 3 deliberately has nothing mappable, so
-  // the return-leg assertion also covers the on-map empty state (TripMap's
-  // home is a constructor argument, present whether or not tiles render).
+  // Three legs so the gate has a first, a middle, and a last.
   final trip = Trip(
     id: 't1',
-    title: 'Paris',
+    title: 'Grand tour',
     status: 'planned',
     createdAt: '2026-06-01',
     updatedAt: '2026-06-01',
     startDate: '2026-09-01',
     endDate: '2026-09-03',
     items: [
-      _item(0, 'Louvre', 48.8606, 2.3376, 1),
-      _item(1, 'Orsay', 48.8600, 2.3266, 1),
-      _item(2, 'Pantheon', 48.8462, 2.3464, 2),
+      _item(0, 'Louvre', 'Paris', 48.8606, 2.3376, 1),
+      _item(1, 'Colosseum', 'Rome', 41.8902, 12.4922, 2),
+      _item(2, 'Brandenburg Gate', 'Berlin', 52.5163, 13.3777, 3),
     ],
     accommodations: const [
       Accommodation(
@@ -120,15 +125,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// Scoped to MapDayChips: the itinerary list renders its own "Day N"
-  /// headers and an "All" category chip.
+  /// Scoped to MapLegChips: the itinerary list renders the same city names
+  /// as group headers.
   Future<void> tapChip(WidgetTester tester, String label) async {
     await tester.tap(find.descendant(
-      of: find.byType(MapDayChips),
+      of: find.byType(MapLegChips),
       matching: find.text(label),
     ));
-    await tester.pump();
-    await tester.pump(); // post-frame camera re-fit
+    // Settles the camera re-fit and the focus-driven page scroll.
+    await tester.pumpAndSettle();
   }
 
   TripMap map(WidgetTester tester) =>
@@ -148,20 +153,20 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('endpoint days keep their leg; mid-trip days get no overlay',
+  testWidgets('endpoint legs keep their home leg; mid-trip legs get none',
       (WidgetTester tester) async {
     await pumpScreen(tester);
 
-    await tapChip(tester, 'Day 1');
+    await tapChip(tester, 'Paris');
     var home = map(tester).home;
     expect(home!.outboundTo, isNotNull);
     expect(home.returnFrom, isNull);
 
-    await tapChip(tester, 'Day 2');
+    await tapChip(tester, 'Rome');
     expect(map(tester).home, isNull);
     expect(find.byIcon(Icons.flight_takeoff), findsNothing);
 
-    await tapChip(tester, 'Day 3');
+    await tapChip(tester, 'Berlin');
     home = map(tester).home;
     expect(home!.outboundTo, isNull);
     expect(home.returnFrom, isNotNull);

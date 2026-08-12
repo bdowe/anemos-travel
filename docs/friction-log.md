@@ -5,7 +5,23 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
-## 2026-08-11 — trip-detail dogfooding (overview show-more)
+## 2026-08-11 — trip-detail dogfooding (map day chips)
+
+- **[app] Friction → fixed (day chips → city focus, specs/map-city-focus):**
+  on a 10-destination trip the map's "All / Day 1 … Day 14+" strip said
+  nothing — day numbers are meaningless when you think in cities, and the
+  city groups below were "just a dropdown". Replaced day chips with
+  **destination chips** (All + one chip per `tripLegs` run, same keys as the
+  group headers) and made focus **two-way**: expanding a city header focuses
+  its leg on the map (per-item pins filtered to the leg + covering stays,
+  auto-fit); collapsing the focused header restores the All overview; a chip
+  tap focuses + expands, and on desktop rests the header right under the
+  pinned map. Day-level map filtering retired everywhere (inline,
+  full-screen, shared view); single-leg trips drop the strip (below 2 legs
+  the overview mode never engaged anyway). Focus identity is the
+  full-itinerary leg key — a places lens can merge adjacent runs, so map
+  content resolves by the leg's item POSITIONS, never group keys. Camera
+  moves stay instant (no animation dep); animated fly-to noted as polish.
 
 - **[app] Friction → fixed (dead "Show more" toggle):** the header overview's
   "Show more" appeared on wide windows even when the whole summary already fit

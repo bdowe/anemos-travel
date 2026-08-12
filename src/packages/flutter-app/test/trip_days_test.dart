@@ -99,4 +99,54 @@ void main() {
       );
     });
   });
+
+  group('stayCoversAnyNight (specs/map-city-focus)', () {
+    const checkIn = '2026-06-10';
+    const checkOut = '2026-06-12'; // nights of Jun 10 + Jun 11
+
+    test('overlapping ranges match', () {
+      expect(
+        stayCoversAnyNight(
+            checkIn, checkOut, DateTime(2026, 6, 11), DateTime(2026, 6, 14)),
+        isTrue,
+      );
+    });
+
+    test('checkout-exclusive on BOTH sides', () {
+      // The range's end night is exclusive: [Jun 8, Jun 10) holds nights
+      // Jun 8-9, none covered by a Jun 10 check-in…
+      expect(
+        stayCoversAnyNight(
+            checkIn, checkOut, DateTime(2026, 6, 8), DateTime(2026, 6, 10)),
+        isFalse,
+      );
+      // …and the stay's checkout night never counts either.
+      expect(
+        stayCoversAnyNight(
+            checkIn, checkOut, DateTime(2026, 6, 12), DateTime(2026, 6, 14)),
+        isFalse,
+      );
+    });
+
+    test('a zero-night range matches nothing', () {
+      expect(
+        stayCoversAnyNight(
+            checkIn, checkOut, DateTime(2026, 6, 10), DateTime(2026, 6, 10)),
+        isFalse,
+      );
+    });
+
+    test('missing or garbage stay dates never match', () {
+      expect(
+        stayCoversAnyNight(
+            null, checkOut, DateTime(2026, 6, 10), DateTime(2026, 6, 12)),
+        isFalse,
+      );
+      expect(
+        stayCoversAnyNight(
+            'junk', checkOut, DateTime(2026, 6, 10), DateTime(2026, 6, 12)),
+        isFalse,
+      );
+    });
+  });
 }

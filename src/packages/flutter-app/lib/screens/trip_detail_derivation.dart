@@ -16,8 +16,8 @@
 //     its input objects wholesale — EXCEPT `_reorderBatchInline`, the one
 //     in-place mutation, which bumps the epoch instead (the stated contract:
 //     any in-place mutation of a derivation input MUST bump the epoch).
-//   * The lazy per-day accessors ([dayFilteredItems], [dayFilteredStays],
-//     [staysOnNight]) return a stable List identity per (derivation, day) —
+//   * The lazy accessors ([legFilteredItems], [legFilteredStays],
+//     [staysOnNight]) return a stable List identity per (derivation, key) —
 //     the map-isolation follow-up (Wave 4 PR2) keys its marker cache on that
 //     identity, so keep it stable.
 //
@@ -182,20 +182,28 @@ class TripDerivation {
   /// caption, or the leg ranges.
   final List<Accommodation> confirmedStays;
 
-  /// Map day-chip count — spans the whole trip, never the category filter.
-  final int mapDayCount;
-
-  /// Days that would plot something on the map (muted chips otherwise).
-  final Set<int> mappedDays;
-
   /// Day keys (`'$groupKey#$day'`) of the CURRENT groups, collapsed ones
   /// included, so day-jump resolution can expand a group that has never
   /// rendered and still land (specs/today-mode).
   final Set<String> liveDayKeys;
 
-  // Lazy per-day caches — see the header comment for the identity contract.
-  final Map<int?, List<ItineraryItem>> _dayItemsCache = {};
+  /// Chip entries for the map's destination strip (specs/map-city-focus):
+  /// one per FULL-itinerary leg in visit order, labels display-ready
+  /// ([groupLabelText] localizes the 'Other places' run). The strip renders
+  /// only with ≥2 entries — with fewer, destination-overview mode never
+  /// engages and "All" vs "the one leg" would draw the identical map.
+  final List<({String key, String label})> legChips;
+
+  /// Legs that would plot something on the map — the muted-chip gate,
+  /// trip-wide (never lens-dependent): a geocoded item in the run, or a
+  /// confirmed geocoded stay covering one of the leg's raw-range nights.
+  final Set<String> mappedLegKeys;
+
+  // Lazy per-night/per-leg caches — see the header comment for the identity
+  // contract.
   final Map<int, List<Accommodation>> _staysOnNightCache = {};
+  final Map<String?, List<ItineraryItem>> _legItemsCache = {};
+  final Map<String, List<Accommodation>> _legStaysCache = {};
 
   TripDerivation._({
     required this.trip,
@@ -220,9 +228,9 @@ class TripDerivation {
     required this.homeLegEndpoints,
     required this.mapShown,
     required this.confirmedStays,
-    required this.mapDayCount,
-    required this.mappedDays,
     required this.liveDayKeys,
+    required this.legChips,
+    required this.mappedLegKeys,
   });
 
   /// Whether this derivation is still valid for the given inputs: identity
@@ -248,23 +256,6 @@ class TripDerivation {
       identical(l10n, this.l10n) &&
       itemFilter == this.itemFilter &&
       itemOrderEpoch == this.itemOrderEpoch;
-
-  /// [filtered] further narrowed to a map day chip selection (null = All).
-  /// The maps are the only consumers — the itinerary list never day-filters.
-  /// Untagged items (day == null) show only under All. Stable List identity
-  /// per (derivation, day).
-  List<ItineraryItem> dayFilteredItems(int? day) =>
-      _dayItemsCache.putIfAbsent(
-          day,
-          () => day == null
-              ? filtered
-              : filtered.where((i) => i.day == day).toList());
-
-  /// Stays the map should plot for a day chip selection: under All (null),
-  /// every confirmed stay; under Day N, only stays covering that night
-  /// (checkout-exclusive). Stable List identity per (derivation, day).
-  List<Accommodation> dayFilteredStays(int? day) =>
-      day == null ? confirmedStays : staysOnNight(day);
 
   /// Stays covering the night of trip day [day], checkout-exclusively — the
   /// single home of the day→night math shared by the map's day filter and
@@ -293,6 +284,95 @@ class TripDerivation {
       if (group.items.any((it) => it.day == day)) return group.key;
     }
     return null;
+  }
+
+  /// [filtered] narrowed to a focused leg (null = All → [filtered] itself).
+  /// Membership is the item's POSITION against the FULL-itinerary leg: a
+  /// places lens can merge adjacent runs and shift group keys, but positions
+  /// are stable, so lens ∩ leg composes correctly. Unknown key → empty.
+  /// Stable List identity per (derivation, key).
+  List<ItineraryItem> legFilteredItems(String? legKey) =>
+      _legItemsCache.putIfAbsent(legKey, () {
+        if (legKey == null) return filtered;
+        final i = legIndexOf(legKey);
+        if (i == null) return const [];
+        final positions = {for (final it in legs[i].items) it.position};
+        return filtered
+            .where((it) => positions.contains(it.position))
+            .toList();
+      });
+
+  /// Stays the map should plot for a focused leg: under All (null), every
+  /// confirmed stay; under a leg, confirmed stays covering one of the leg's
+  /// raw-range nights ([rawRanges] is index-aligned with [legs] — both run
+  /// the same tripLegs split). Checkout-exclusive on both sides, so a
+  /// zero-night squeezed leg and an undated leg plot none. Stable List
+  /// identity per (derivation, key).
+  List<Accommodation> legFilteredStays(String? legKey) {
+    if (legKey == null) return confirmedStays;
+    return _legStaysCache.putIfAbsent(legKey, () {
+      final i = legIndexOf(legKey);
+      if (i == null) return const [];
+      final start = rawRanges[i].start;
+      final end = rawRanges[i].end;
+      if (start == null || end == null) return const [];
+      return confirmedStays
+          .where((a) => stayCoversAnyNight(a.checkIn, a.checkOut, start, end))
+          .toList();
+    });
+  }
+
+  /// The FIRST full-itinerary leg (visit order) with an item tagged trip day
+  /// [day], or null — the Today-mode focus resolver. Leg twin of
+  /// [firstGroupKeyForDay], which stays on GROUP keys for the Tonight
+  /// caption.
+  String? legKeyForDay(int? day) {
+    if (day == null) return null;
+    for (final leg in legs) {
+      if (leg.items.any((it) => it.day == day)) return leg.key;
+    }
+    return null;
+  }
+
+  /// The full-itinerary leg containing the item at [position], or null.
+  String? legKeyOfPosition(int position) {
+    for (final leg in legs) {
+      if (leg.items.any((it) => it.position == position)) return leg.key;
+    }
+    return null;
+  }
+
+  /// Index of [legKey] in [legs] (and thus [rawRanges]) order, or null.
+  int? legIndexOf(String legKey) {
+    for (var i = 0; i < legs.length; i++) {
+      if (legs[i].key == legKey) return i;
+    }
+    return null;
+  }
+
+  /// Day preselect for adding a place to a focused leg: the smallest day tag
+  /// among the leg's items, else the leg's raw start offset from the trip
+  /// start (clamped to day 1), else null — no preselection, matching the
+  /// null-[legKey] (All) behavior.
+  int? dayForLeg(String? legKey) {
+    if (legKey == null) return null;
+    final i = legIndexOf(legKey);
+    if (i == null) return null;
+    int? minDay;
+    for (final it in legs[i].items) {
+      final d = it.day;
+      if (d != null && d >= 1 && (minDay == null || d < minDay)) minDay = d;
+    }
+    if (minDay != null) return minDay;
+    final start = rawRanges[i].start;
+    final tripStart = DateTime.tryParse(trip.startDate ?? '');
+    if (start == null || tripStart == null) return null;
+    // UTC-normalized like [nightsBetween] so DST can't skew the offset.
+    final diff = DateTime.utc(start.year, start.month, start.day)
+        .difference(
+            DateTime.utc(tripStart.year, tripStart.month, tripStart.day))
+        .inDays;
+    return diff < 0 ? 1 : diff + 1;
   }
 
   /// THE one computation site for everything above. Bodies are verbatim from
@@ -407,23 +487,6 @@ class TripDerivation {
         filtered.any((i) => i.latitude != 0 || i.longitude != 0) ||
             confirmedStays.any(TripMap.stayHasCoords);
 
-    final mapDayCount =
-        dayCount(trip.startDate, trip.endDate, items.map((i) => i.day));
-
-    final mappedDays = daysWithMappedContent(
-      trip.startDate,
-      mapDayCount,
-      [
-        for (final i in items)
-          if (i.latitude != 0 || i.longitude != 0) i.day,
-      ],
-      [
-        for (final a in confirmedStays)
-          if (TripMap.stayHasCoords(a))
-            (checkIn: a.checkIn, checkOut: a.checkOut),
-      ],
-    );
-
     // Mirrors the screen's `_buildGroupItemSlivers` day-header rule:
     // non-filler items carrying a day tag.
     final liveDayKeys = <String>{
@@ -431,6 +494,30 @@ class TripDerivation {
         for (final it in g.items)
           if (!isCityFiller(it) && it.day != null) '${g.key}#${it.day}',
     };
+
+    final legChips = <({String key, String label})>[
+      for (final leg in legs)
+        (key: leg.key, label: groupLabelText(l10n, leg.label)),
+    ];
+
+    final geoStays = [
+      for (final a in confirmedStays)
+        if (TripMap.stayHasCoords(a)) a,
+    ];
+    final mappedLegKeys = <String>{};
+    for (var i = 0; i < legs.length; i++) {
+      if (legs[i].coord != null) {
+        mappedLegKeys.add(legs[i].key);
+        continue;
+      }
+      final start = rawRanges[i].start;
+      final end = rawRanges[i].end;
+      if (start == null || end == null) continue;
+      if (geoStays
+          .any((a) => stayCoversAnyNight(a.checkIn, a.checkOut, start, end))) {
+        mappedLegKeys.add(legs[i].key);
+      }
+    }
 
     return TripDerivation._(
       trip: trip,
@@ -455,9 +542,9 @@ class TripDerivation {
       homeLegEndpoints: homeLegEndpoints,
       mapShown: mapShown,
       confirmedStays: confirmedStays,
-      mapDayCount: mapDayCount,
-      mappedDays: mappedDays,
       liveDayKeys: liveDayKeys,
+      legChips: legChips,
+      mappedLegKeys: mappedLegKeys,
     );
   }
 
