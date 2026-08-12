@@ -44,17 +44,31 @@ void pushOnActiveTab(WidgetRef ref, Widget page, {String? location}) {
       : locatedRoute(page, location));
 }
 
-/// Select a top-level tab the way a nav button does: the destination tab's
-/// stack is reset to its root — nav buttons always go to the page they name,
-/// whether it's a switch or a re-tap of the active tab. Programmatic
-/// switch+push flows (Home trip cards, boot restore, shared-trip join) write
-/// [navIndexProvider] directly instead, so their pushes survive.
+/// Tabs whose pushed stack survives switching away and back via a nav
+/// button: selecting the tab returns you to where you left it (e.g. the trip
+/// you were viewing); selecting it again pops to its root. Every other tab
+/// always lands on its root. Only Trips earns this: a trip is a workspace
+/// you step out of and back into, while Home and Plan are destinations.
+const Set<AppTab> _stackKeepingTabs = {AppTab.trips};
+
+/// Select a top-level tab the way a nav button does. Destinations outside
+/// [_stackKeepingTabs] are reset to their root — those nav buttons always go
+/// to the page they name — and a re-tap of the active tab pops to root
+/// everywhere. Programmatic switch+push flows (Home trip cards, boot
+/// restore, shared-trip join) write [navIndexProvider] directly instead, so
+/// their pushes survive.
 void selectTab(WidgetRef ref, int index) {
-  // Pop before switching: TabUrlObserver didPop bookkeeping (url_sync.dart)
-  // drains while the old tab is still current, so the only URL report is the
-  // destination tab's root.
-  ref.read(tabNavKeysProvider)[index].currentState?.popUntil((r) => r.isFirst);
-  if (ref.read(navIndexProvider) != index) {
+  final isActive = ref.read(navIndexProvider) == index;
+  if (isActive || !_stackKeepingTabs.contains(AppTab.values[index])) {
+    // Pop before switching: TabUrlObserver didPop bookkeeping (url_sync.dart)
+    // drains while the old tab is still current, so the only URL report is
+    // the destination tab's root.
+    ref
+        .read(tabNavKeysProvider)[index]
+        .currentState
+        ?.popUntil((r) => r.isFirst);
+  }
+  if (!isActive) {
     ref.read(navIndexProvider.notifier).state = index;
   }
 }

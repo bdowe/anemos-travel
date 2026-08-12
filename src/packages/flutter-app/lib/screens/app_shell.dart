@@ -12,11 +12,12 @@ import 'trips_list_screen.dart';
 
 /// Persistent navigation shell. The rail (wide) / bar (narrow) lives here,
 /// outside the per-tab navigators, so it never moves when a page is pushed —
-/// only the content area animates. Each tab has its own push stack, but a nav
-/// button always lands on the page it names: selecting a tab resets that tab's
-/// stack to its root ([selectTab]). Background stacks survive only for
-/// programmatic switch+push flows (Home trip cards, boot restore, shared-trip
-/// join), which write [navIndexProvider] directly.
+/// only the content area animates. Each tab has its own push stack; nav-button
+/// behavior is [selectTab]'s contract: Home (and Plan) always land on their
+/// root, while Trips keeps your place — first tap returns to the trip you
+/// were viewing, a second tap pops to the list. Programmatic switch+push
+/// flows (Home trip cards, boot restore, shared-trip join) write
+/// [navIndexProvider] directly, so their pushes survive regardless.
 ///
 /// [navDestinations] carries the icons and ordering; its labels are display
 /// copy, so the shell renders the localized label for each tab instead
