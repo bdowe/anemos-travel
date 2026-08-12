@@ -4,22 +4,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../models/trip_finding.dart';
 import '../providers/trip_review_provider.dart';
+import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import 'empty_state.dart';
 import 'section_header.dart';
 import 'status_pill.dart';
 
-/// The trip-detail "Trip health" section: surfaces the read-only review from
+/// The "Trip health" findings list: surfaces the read-only review from
 /// `GET /trips/{id}/review` as an ordered list of findings, worst-severity
 /// first. Self-contained — it owns its data via [tripReviewProvider], keyed on
-/// (tripId, checkHours). Mirrors [ChecklistSection]/[BudgetSection] structure.
+/// (tripId, checkHours). Rendered as the body of the trip-detail health sheet
+/// (`showTripHealthSheet`), which the app-bar health icon opens.
 ///
 /// Tapping a finding with a resolvable day deep-links the itinerary to that day
 /// via [onScrollToDay]; [dayForItem] resolves an item id → day when a finding
 /// carries only an item id. Both are optional (no-op when absent/unresolvable).
 class TripReviewSection extends ConsumerStatefulWidget {
   final String tripId;
-  final bool isOffline;
+
+  /// Reads the CURRENT offline state at interaction time. A callback rather
+  /// than a bool because the sheet route hosting this widget never rebuilds
+  /// on the screen's connectivity setState — a captured bool would freeze
+  /// the offline guard for the sheet's whole lifetime.
+  final bool Function() isOffline;
 
   /// Scrolls the itinerary to [day]. Wired to the screen's `_scrollToDay`.
   final void Function(int day)? onScrollToDay;
@@ -32,10 +39,6 @@ class TripReviewSection extends ConsumerStatefulWidget {
   /// refresh, so it supplies this; when null the fix button is hidden.
   final Future<void> Function(TripFinding finding)? onApplyFix;
 
-  /// False when a parent (trip detail's collapsed-section row) already
-  /// renders the divider/title/severity pill, so this widget is body-only.
-  final bool showHeader;
-
   const TripReviewSection({
     super.key,
     required this.tripId,
@@ -43,35 +46,57 @@ class TripReviewSection extends ConsumerStatefulWidget {
     this.onScrollToDay,
     this.dayForItem,
     this.onApplyFix,
-    this.showHeader = true,
   });
 
-  /// Severity → pill colors, shared with the collapsed-section row so the
-  /// collapsed count pill matches the expanded rows. Critical reads loud
-  /// (red), warn amber, info neutral.
-  static ({Color bg, Color fg}) severityColors(
+  /// One switch per severity keeps the two color pairs in lockstep — the
+  /// container pair (finding rows and count pills on light surfaces) and the
+  /// solid pair (the app-bar badge over the brand gradient, where translucent
+  /// container fills vanish). A severity added here shows up on every surface
+  /// at once; there is no second case-list to drift.
+  static ({Color bg, Color fg, Color solidBg, Color solidFg}) _severityPalette(
       ThemeData theme, String severity) {
     switch (severity) {
       case 'critical':
         return (
           bg: theme.colorScheme.errorContainer,
           fg: theme.colorScheme.onErrorContainer,
+          solidBg: theme.colorScheme.error,
+          solidFg: theme.colorScheme.onError,
         );
       case 'warn':
         return (
-          bg: Colors.amber.withValues(alpha: 0.20),
-          fg: Colors.amber.shade900,
+          bg: AppColors.warningContainer,
+          fg: AppColors.onWarningContainer,
+          solidBg: AppColors.warningSolid,
+          solidFg: AppColors.onWarningSolid,
         );
       default:
         return (
           bg: theme.colorScheme.surfaceContainerHighest,
           fg: theme.colorScheme.onSurfaceVariant,
+          solidBg: AppColors.neutralSolid,
+          solidFg: AppColors.onNeutralSolid,
         );
     }
   }
 
+  /// Severity → pill colors for rows and count pills on light surfaces.
+  /// Critical reads loud (red), warn amber, info neutral.
+  static ({Color bg, Color fg}) severityColors(
+      ThemeData theme, String severity) {
+    final p = _severityPalette(theme, severity);
+    return (bg: p.bg, fg: p.fg);
+  }
+
+  /// Severity → opaque colors for the app-bar count badge over the brand
+  /// gradient.
+  static ({Color bg, Color fg}) badgeColors(ThemeData theme, String severity) {
+    final p = _severityPalette(theme, severity);
+    return (bg: p.solidBg, fg: p.solidFg);
+  }
+
   /// Worst severity in [findings] ("critical" > "warn" > "info"), or null
-  /// when the list is empty. Shared with the collapsed-section row.
+  /// when the list is empty. Shared with the app-bar badge.
   static String? worstSeverity(Iterable<TripFinding> findings) {
     String? worst;
     for (final f in findings) {
@@ -119,6 +144,11 @@ class _TripReviewSectionState extends ConsumerState<TripReviewSection> {
   // Opt-in opening-hours check: flips the provider key to the slower variant.
   bool _checkHours = false;
 
+  // A failed hours check reverted [_checkHours]; shown as an inline caption
+  // by the toggle (a snackbar would render behind the sheet). Cleared on the
+  // next toggle attempt.
+  bool _hoursCheckFailed = false;
+
   TripReviewKey get _key =>
       TripReviewKey(widget.tripId, checkHours: _checkHours);
 
@@ -136,26 +166,61 @@ class _TripReviewSectionState extends ConsumerState<TripReviewSection> {
   }
 
   void _toggleCheckHours() {
-    if (widget.isOffline) {
+    if (widget.isOffline()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.l10n.reviewOfflineSnack)),
       );
       return;
     }
-    setState(() => _checkHours = !_checkHours);
+    setState(() {
+      _checkHours = !_checkHours;
+      _hoursCheckFailed = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(tripReviewProvider(_key));
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    // A failed hours check would otherwise strand the widget on a valueless
+    // provider key — inside the sheet that reads as a blank modal with no way
+    // back. Revert to the base key (whose value is cached) and flag inline.
+    ref.listen(tripReviewProvider(_key), (_, next) {
+      if (next.hasError && !next.isLoading && _checkHours) {
+        // Invalidate the failed variant so a retry refetches instead of
+        // replaying the cached error (the family is not autoDispose).
+        ref.invalidate(tripReviewProvider(_key));
+        setState(() {
+          _checkHours = false;
+          _hoursCheckFailed = true;
+        });
+      }
+    });
     // Best-effort: on error or first load with no data, render nothing rather
     // than an error state — a utility section shouldn't shout. (Offline still
     // shows the last-loaded findings — the read GET is cached by the family.)
     final findings = async.valueOrNull;
-    if (findings == null) return const SizedBox.shrink();
+    if (findings == null) {
+      // In the sheet this is reachable only via the hours-check key switch
+      // (the app-bar icon gates opening on a loaded base list): keep the
+      // sheet's shape — header + spinner — while the slower variant fetches,
+      // never a bare drag handle.
+      if (async.isLoading) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SectionHeader(title: l10n.reviewSectionTitle),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ],
+        );
+      }
+      return const SizedBox.shrink();
+    }
 
-    final theme = Theme.of(context);
-    final l10n = context.l10n;
     final sorted = [...findings]
       ..sort((a, b) => _rankOf(a.severity).compareTo(_rankOf(b.severity)));
     final worst = sorted.isEmpty ? null : sorted.first.severity;
@@ -163,20 +228,17 @@ class _TripReviewSectionState extends ConsumerState<TripReviewSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.showHeader) ...[
-          const Divider(height: 32),
-          SectionHeader(
-            title: l10n.reviewSectionTitle,
-            action: findings.isEmpty
-                ? null
-                : StatusPill.custom(
-                    label: l10n.reviewCountToReview(findings.length),
-                    background: _severityColors(theme, worst!).bg,
-                    foreground: _severityColors(theme, worst).fg,
-                  ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
+        SectionHeader(
+          title: l10n.reviewSectionTitle,
+          action: findings.isEmpty
+              ? null
+              : StatusPill.custom(
+                  label: l10n.reviewCountToReview(findings.length),
+                  background: _severityColors(theme, worst!).bg,
+                  foreground: _severityColors(theme, worst).fg,
+                ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
         if (findings.isEmpty)
           EmptyState(
             compact: true,
@@ -264,19 +326,31 @@ class _TripReviewSectionState extends ConsumerState<TripReviewSection> {
   Widget _buildCheckHoursAction(ThemeData theme, bool loading) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: TextButton.icon(
-        icon: loading
-            ? const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Icon(_checkHours ? Icons.check : Icons.access_time),
-        label: Text(_checkHours
-            ? context.l10n.reviewHoursChecked
-            : context.l10n.reviewCheckHours),
-        onPressed:
-            (widget.isOffline || _checkHours) ? null : _toggleCheckHours,
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppSpacing.sm,
+        children: [
+          TextButton.icon(
+            icon: loading
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(_checkHours ? Icons.check : Icons.access_time),
+            label: Text(_checkHours
+                ? context.l10n.reviewHoursChecked
+                : context.l10n.reviewCheckHours),
+            onPressed:
+                (widget.isOffline() || _checkHours) ? null : _toggleCheckHours,
+          ),
+          if (_hoursCheckFailed)
+            Text(
+              context.l10n.reviewHoursCheckFailed,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.error),
+            ),
+        ],
       ),
     );
   }

@@ -3488,6 +3488,12 @@ abstract class AppLocalizations {
   /// **'Also check opening hours'**
   String get reviewCheckHours;
 
+  /// No description provided for @reviewHoursCheckFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t check opening hours — try again.'**
+  String get reviewHoursCheckFailed;
+
   /// No description provided for @liveTripEyebrow.
   ///
   /// In en, this message translates to:

@@ -5,6 +5,33 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-12 — trip-detail dogfooding (trip health modal)
+
+- **[app] Friction → fixed (health row → app-bar icon + badge, the 08-03
+  remedy delivered):** the 08-03 resolution kept Trip health inline for
+  glanceability and named the fix if reachability recurred — "surfacing the
+  health pill higher"; the 08-04 cluster reorder was the stopgap. This is
+  the full remedy: Trip health left the trailing cluster for a fact-check
+  **app-bar icon with a severity-colored count badge** — visible from the
+  first frame on every breakpoint, which answers the 08-03 "a menu would
+  hide glanceable state" objection (count + worst severity are MORE
+  glanceable in the app bar than below the whole itinerary). Tapping opens
+  a **bottom-sheet modal** (`showTripHealthSheet`) whose body is
+  `TripReviewSection` (its body-only `showHeader` knob retired with the
+  row); fix flows stack their own sheets above it on the same tab
+  navigator, and the list + badge live-update through the one provider
+  invalidation; tapping a day-anchored finding pops the sheet, then
+  scrolls. The badge needed **solid** color pairs (`AppColors.warningSolid`
+  + neutral) — the .20-alpha container amber vanishes on the teal gradient.
+  Cluster is now Packing → Budget. Sheet feedback contract (post-review
+  hardening): a FAILED fix throws out of `_applyFix` and the sheet closes
+  itself so the error snackbar is seen (never a silent no-op); a failed
+  hours-check reverts to the cached list with an inline note instead of
+  blanking the modal; `isOffline` is a live callback, not a bool frozen at
+  open. Known debt: success-path Undo snackbars still render behind the
+  open sheet on phones (primary feedback = the finding dropping off the
+  list), and there is still zero usage telemetry on any of these surfaces.
+
 ## 2026-08-12 — trip-detail dogfooding (add-CTA declutter)
 
 - **[app] Friction → fixed (one add CTA per view):** the itinerary tail

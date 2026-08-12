@@ -47,6 +47,15 @@ abstract final class AppColors {
   static Color get warningContainer => Colors.amber.withValues(alpha: 0.20);
   static Color get onWarningContainer => Colors.amber.shade900;
 
+  // Solid counterparts to the container pairs, for chrome drawn over the
+  // brand gradient (the app-bar health badge): the alpha container colors
+  // disappear against the teal, so on-gradient badges need an opaque fill.
+  // The neutral pair is the no-active-severity fallback.
+  static Color get warningSolid => Colors.amber.shade600;
+  static Color get onWarningSolid => Colors.black87;
+  static Color get neutralSolid => Colors.white;
+  static Color get onNeutralSolid => brandDark;
+
   /// Accent color for an itinerary place by its category. `scheme` supplies the
   /// theme-derived fallbacks so this stays in sync with the seed.
   static Color forCategory(String? category, ColorScheme scheme) {

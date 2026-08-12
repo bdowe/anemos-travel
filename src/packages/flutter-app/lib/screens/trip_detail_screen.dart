@@ -61,6 +61,7 @@ import '../widgets/booking_todo_card.dart';
 import '../widgets/budget_section.dart';
 import '../widgets/checklist_section.dart';
 import '../widgets/collapsible_section.dart';
+import '../widgets/trip_health_sheet.dart';
 import '../widgets/trip_review_section.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/choice_chip_row.dart';
@@ -229,10 +230,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   String? _unfocusedOpenLegKey;
   final Set<String> _collapsedDays = {};
   bool _citySeedConsumed = false;
-  // Trailing sections (Packing/Budget/Trip health) render as collapsed
-  // one-line summaries; this holds the ones the user opened. Session-only,
-  // like the city/day sets, and held HERE (not in the section widgets) so
-  // expansion survives silent refreshes and the offline-banner reparent.
+  // Trailing sections (Packing/Budget) render as collapsed one-line
+  // summaries; this holds the ones the user opened. Session-only, like the
+  // city/day sets, and held HERE (not in the section widgets) so expansion
+  // survives silent refreshes and the offline-banner reparent.
   final Set<String> _expandedSections = {};
   String?
       _homeAirport; // traveler's saved home airport (IATA), for outbound/return flights
@@ -3821,8 +3822,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// adds open the existing sheet PREFILLED; set-dates / raise-budget open the
   /// existing editors. After any success the trip reloads and the review
   /// re-reads (see [_afterFix]) so the resolved finding drops off.
+  ///
+  /// THROWS on the offline guard and on API failure — after showing this
+  /// screen's error snackbar, which renders BEHIND the health sheet's modal
+  /// barrier. The throw is the sheet's signal to close itself so that
+  /// snackbar is actually seen (trip_health_sheet.dart's onApplyFix wrapper);
+  /// user-cancelled flows (dismissed prefill sheet, missing fix fields)
+  /// return normally.
   Future<void> _applyFix(TripFinding finding) async {
-    if (_guardOffline()) return;
+    if (_guardOffline()) throw StateError('offline');
     final l10n = context.l10n;
     final fix = finding.fix;
     if (fix == null) return;
@@ -3846,6 +3854,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           await _afterFix();
         } catch (e) {
           _showSnack(l10n.tripAddStayFailed(friendlyError(l10n, e)));
+          rethrow;
         }
         break;
       case 'add_transport':
@@ -3867,6 +3876,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           await _afterFix();
         } catch (e) {
           _showSnack(l10n.tripAddTransportFailed(friendlyError(l10n, e)));
+          rethrow;
         }
         break;
       case 'move_item':
@@ -3891,6 +3901,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           ));
         } catch (e) {
           _showSnack(l10n.tripMoveItemFailed(friendlyError(l10n, e)));
+          rethrow;
         }
         break;
       case 'mark_booked':
@@ -3913,6 +3924,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           ));
         } catch (e) {
           _showSnack(l10n.tripUpdateBookingFailed(friendlyError(l10n, e)));
+          rethrow;
         }
         break;
       case 'add_packing':
@@ -3945,6 +3957,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           ));
         } catch (e) {
           _showSnack(l10n.tripAddPackingFailed(friendlyError(l10n, e)));
+          rethrow;
         }
         break;
       case 'set_dates':
@@ -4107,11 +4120,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   String _fmtDayHeader(DateTime d) => mmmed().format(d);
 
   // ── Trailing collapsed sections ─────────────────────────────────────────
-  // Trip health / Packing / Budget end the page as one-line summary rows,
-  // closed by default — health first so its actionable review pill is met
-  // before the empty-state rows. Summary data comes from watches HERE in
-  // the parent — the section widgets are only mounted while expanded, so a
-  // child-side watch could never feed a collapsed row's counts.
+  // Packing / Budget end the page as one-line summary rows, closed by
+  // default. Summary data comes from watches HERE in the parent — the
+  // section widgets are only mounted while expanded, so a child-side watch
+  // could never feed a collapsed row's counts. (Trip health left this
+  // cluster for the app-bar icon + sheet — see _healthAppBarAction.)
 
   bool _sectionExpanded(String id) => _expandedSections.contains(id);
 
@@ -4375,52 +4388,49 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  Widget? _healthSectionRow(Trip trip, ThemeData theme) {
-    // Base provider key (checkHours: false): the section's internal opt-in
-    // hours check flips ITS key to the slower variant, so this collapsed
-    // count can briefly lag while that toggle is on — accepted.
-    // Parent watch = loaded-or-not only; finding counts/severity render in
-    // the Consumer, so a background review refresh repaints the row alone.
-    final visible = ref.watch(tripReviewProvider(TripReviewKey(trip.id))
-        .select((a) => a.valueOrNull != null));
-    if (!visible) return null;
+  /// The app-bar Trip health entry: fact-check icon with a severity-colored
+  /// count badge, opening the findings sheet. Replaced the trailing-cluster
+  /// row (friction-log 2026-08-12) — the badge is now the ONLY glanceable
+  /// health surface, so it stays visible on every breakpoint.
+  ///
+  /// Base provider key (checkHours: false): the sheet's internal opt-in hours
+  /// check flips ITS key to the slower variant, so this badge can briefly lag
+  /// while that toggle is on — accepted. The whole action lives in one
+  /// Consumer so review refetches repaint the icon alone; no value yet
+  /// (first load, error, viewer 404) hides it, matching the old row's gate.
+  Widget _healthAppBarAction(Trip trip, ThemeData theme) {
     return Consumer(
       builder: (context, ref, _) {
         final findings = ref
             .watch(tripReviewProvider(TripReviewKey(trip.id)))
             .valueOrNull;
         if (findings == null) return const SizedBox.shrink();
-        final l10n = context.l10n;
+        const icon = Icon(Icons.fact_check_outlined);
+        // Severity → color derived only via the shared statics; badgeColors
+        // is the opaque on-gradient variant of the pill pair.
         final worst = TripReviewSection.worstSeverity(findings);
-        final colors = worst == null
-            ? null
-            : TripReviewSection.severityColors(theme, worst);
-        return CollapsibleSection(
-          title: l10n.reviewSectionTitle,
-          icon: Icons.fact_check_outlined,
-          summary: findings.isEmpty ? l10n.reviewEmptyTitle : null,
-          pill: findings.isEmpty
-              ? null
-              : StatusPill.custom(
-                  label: l10n.reviewCountToReview(findings.length),
-                  background: colors!.bg,
-                  foreground: colors.fg,
-                ),
-          expanded: _sectionExpanded('health'),
-          onToggle: () => _toggleSection('health'),
-          child: TripReviewSection(
+        final colors =
+            worst == null ? null : TripReviewSection.badgeColors(theme, worst);
+        return IconButton(
+          tooltip: context.l10n.reviewSectionTitle,
+          onPressed: () => showTripHealthSheet(
+            context,
             tripId: trip.id,
-            isOffline: _isOffline,
+            // Live read, not a captured bool: the sheet route never rebuilds
+            // on this screen's connectivity setState.
+            isOffline: () => _isOffline,
             onScrollToDay: _scrollToDay,
-            dayForItem: (itemId) {
-              for (final item in trip.items ?? const <ItineraryItem>[]) {
-                if (item.id == itemId) return item.day;
-              }
-              return null;
-            },
+            dayForItem: _dayOfItem,
             onApplyFix: _readOnly ? null : _applyFix,
-            showHeader: false,
           ),
+          icon: findings.isEmpty
+              ? icon
+              : Badge(
+                  backgroundColor: colors!.bg,
+                  textColor: colors.fg,
+                  label: Text('${findings.length}'),
+                  child: icon,
+                ),
         );
       },
     );
@@ -4826,9 +4836,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             maxLines: 1,
             overflow: TextOverflow.ellipsis),
         actions: [
+          // Contextual icons lead; share/delete/leave keep the outer-edge
+          // spots for every role. Health goes first: its severity count
+          // badge is glanceable state, worth the leading slot on every
+          // breakpoint (it replaced the trailing-cluster row).
+          if (trip != null) _healthAppBarAction(trip, theme),
           // Narrow: the header card drops its Refine button (one clean chip
-          // row), so the trip-level refine entry moves up here — first, so
-          // share/delete/leave keep their outer-edge spots for every role.
+          // row), so the trip-level refine entry moves up here.
           // Same gates as the button it replaces: editors only
           // (specs/collaborator-refine), disabled — not hidden — offline.
           if (_narrow && trip != null && trip.canEdit)
@@ -5456,7 +5470,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                               ),
                           // Trailing sections, collapsed to one-line summary
                           // rows (settings-list rhythm: hairline dividers).
-                          // One sliver for all three; the 96px bottom padding
+                          // One sliver for both; the 96px bottom padding
                           // keeps the chat FAB off the last row. Each _xxx
                           // SectionRow hides itself exactly when its expanded
                           // section would (see the builders).
@@ -5465,11 +5479,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                 gutter, AppSpacing.sm, gutter, 96),
                             sliver: SliverToBoxAdapter(
                               child: _sectionCluster([
-                                  // Health first: it carries actionable state
-                                  // (the review pill), so it's met right after
-                                  // the itinerary; empty Packing/Budget rows
-                                  // trail at the true page bottom.
-                                  _healthSectionRow(trip, theme),
                                   _packingSectionRow(trip, theme),
                                   _budgetSectionRow(trip, theme),
                                 ]),

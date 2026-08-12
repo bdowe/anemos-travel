@@ -1968,6 +1968,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get reviewCheckHours => 'Comprobar también los horarios';
 
   @override
+  String get reviewHoursCheckFailed =>
+      'No se pudieron comprobar los horarios — inténtalo de nuevo.';
+
+  @override
   String get liveTripEyebrow => 'SUCEDIENDO AHORA';
 
   @override

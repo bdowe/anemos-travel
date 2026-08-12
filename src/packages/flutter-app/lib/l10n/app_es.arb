@@ -565,6 +565,7 @@
   "reviewOfflineSnack": "Estás sin conexión — vuelve a conectarte para hacer más comprobaciones.",
   "reviewHoursChecked": "Horarios comprobados",
   "reviewCheckHours": "Comprobar también los horarios",
+  "reviewHoursCheckFailed": "No se pudieron comprobar los horarios — inténtalo de nuevo.",
   "liveTripEyebrow": "SUCEDIENDO AHORA",
   "liveTripStatusLive": "En curso",
   "liveTripDay": "Día {day}",
