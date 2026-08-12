@@ -272,7 +272,7 @@ func TestAdminTimeseries(t *testing.T) {
 		t.Fatalf("series missing: %v", body["series"])
 	}
 	for _, key := range []string{"landing_viewed", "user_registered", "trip_created",
-		"plan_session_started", "booking_link_clicked", "itinerary_item_added", "alert_created"} {
+		"plan_session_started", "booking_link_clicked", "itinerary_item_added"} {
 		if _, ok := series[key]; !ok {
 			t.Errorf("series[%s] missing (stable slots require every type)", key)
 		}
@@ -331,9 +331,6 @@ func TestAdminTotals(t *testing.T) {
 	          VALUES ($1, 0, 'Museum', 0, 0)`, t1)
 	mustExec(`INSERT INTO booking_todos (trip_id, kind, todo_key, title)
 	          VALUES ($1, 'stay', 'stay:x', 'Stay in X')`, t1)
-	mustExec(`INSERT INTO price_alerts (user_id, origin, destination, depart_date, status)
-	          VALUES ($1, 'JFK', 'CDG', '2026-09-01', 'active'),
-	                 ($1, 'JFK', 'ATH', '2026-09-01', 'cancelled')`, user.ID)
 	mustExec(`INSERT INTO local_sources (name) VALUES ('Test Local')`)
 	mustExec(`INSERT INTO local_recommendations (source_id, city, name, status)
 	          SELECT id, 'Athens', 'Published Spot', 'published' FROM local_sources LIMIT 1`)
@@ -360,7 +357,6 @@ func TestAdminTotals(t *testing.T) {
 		"trip_lineages":        2,
 		"itinerary_items":      1,
 		"booking_todos":        1,
-		"active_price_alerts":  1, // cancelled excluded
 		"published_local_recs": 1, // draft excluded
 		"local_guides":         0,
 		"active_collaborators": 1, // revoked excluded

@@ -935,7 +935,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDeleteAccountBody.
   ///
   /// In en, this message translates to:
-  /// **'This permanently deletes your account, trips, preferences and alerts. There is no undo.'**
+  /// **'This permanently deletes your account, trips and preferences. There is no undo.'**
   String get settingsDeleteAccountBody;
 
   /// No description provided for @settingsConfirmPassword.
@@ -3590,11 +3590,11 @@ abstract class AppLocalizations {
   /// **'Travel profile'**
   String get accountMenuTravelProfile;
 
-  /// No description provided for @accountMenuPriceAlerts.
+  /// No description provided for @accountMenuNotifications.
   ///
   /// In en, this message translates to:
-  /// **'Price alerts'**
-  String get accountMenuPriceAlerts;
+  /// **'Notifications'**
+  String get accountMenuNotifications;
 
   /// No description provided for @accountMenuRetakeQuiz.
   ///
@@ -3626,234 +3626,6 @@ abstract class AppLocalizations {
   /// **'Sign out'**
   String get accountMenuSignOut;
 
-  /// No description provided for @alertsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Price alerts'**
-  String get alertsTitle;
-
-  /// No description provided for @alertsSignInTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign in to watch fares'**
-  String get alertsSignInTitle;
-
-  /// No description provided for @alertsSignInMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'Price alerts email you when a flight you care about drops.'**
-  String get alertsSignInMessage;
-
-  /// No description provided for @alertsSignIn.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign in'**
-  String get alertsSignIn;
-
-  /// No description provided for @alertsLoadErrorTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not load alerts'**
-  String get alertsLoadErrorTitle;
-
-  /// No description provided for @alertsEmptyTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'No alerts yet'**
-  String get alertsEmptyTitle;
-
-  /// No description provided for @alertsEmptyMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'Search a flight and tap \"Watch this route\" — we\'ll email you when the price drops.'**
-  String get alertsEmptyMessage;
-
-  /// No description provided for @alertsEmptyCta.
-  ///
-  /// In en, this message translates to:
-  /// **'Search flights'**
-  String get alertsEmptyCta;
-
-  /// No description provided for @alertsLastSeen.
-  ///
-  /// In en, this message translates to:
-  /// **'Last seen {price}'**
-  String alertsLastSeen(String price);
-
-  /// No description provided for @alertsTargetPrice.
-  ///
-  /// In en, this message translates to:
-  /// **'target {price}'**
-  String alertsTargetPrice(String price);
-
-  /// No description provided for @alertsWatchingAnyDrop.
-  ///
-  /// In en, this message translates to:
-  /// **'watching for any drop'**
-  String get alertsWatchingAnyDrop;
-
-  /// No description provided for @alertsAdults.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} adults'**
-  String alertsAdults(int count);
-
-  /// Flexible-dates suffix on an alert card, e.g. "±3 days"
-  ///
-  /// In en, this message translates to:
-  /// **'±{count, plural, one{1 day} other{{count} days}}'**
-  String alertsFlexDays(int count);
-
-  /// No description provided for @alertsBaselineDelta.
-  ///
-  /// In en, this message translates to:
-  /// **'Down {amount} from when you started watching'**
-  String alertsBaselineDelta(String amount);
-
-  /// No description provided for @alertsChecked.
-  ///
-  /// In en, this message translates to:
-  /// **'Checked {when}'**
-  String alertsChecked(String when);
-
-  /// No description provided for @alertsSetTargetTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Set target price'**
-  String get alertsSetTargetTitle;
-
-  /// No description provided for @alertsSetTargetBody.
-  ///
-  /// In en, this message translates to:
-  /// **'Get notified when the fare hits or drops below this price.'**
-  String get alertsSetTargetBody;
-
-  /// No description provided for @alertsNotifyAtOrBelow.
-  ///
-  /// In en, this message translates to:
-  /// **'Notify me at or below'**
-  String get alertsNotifyAtOrBelow;
-
-  /// No description provided for @alertsWatchAnyDropInstead.
-  ///
-  /// In en, this message translates to:
-  /// **'Watch for any drop instead'**
-  String get alertsWatchAnyDropInstead;
-
-  /// No description provided for @alertsInvalidTarget.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter a valid target price'**
-  String get alertsInvalidTarget;
-
-  /// No description provided for @alertsActionsTooltip.
-  ///
-  /// In en, this message translates to:
-  /// **'Alert actions'**
-  String get alertsActionsTooltip;
-
-  /// No description provided for @alertsEditTarget.
-  ///
-  /// In en, this message translates to:
-  /// **'Edit target price'**
-  String get alertsEditTarget;
-
-  /// No description provided for @alertsPause.
-  ///
-  /// In en, this message translates to:
-  /// **'Pause'**
-  String get alertsPause;
-
-  /// No description provided for @alertsResume.
-  ///
-  /// In en, this message translates to:
-  /// **'Resume'**
-  String get alertsResume;
-
-  /// No description provided for @alertsStatusExpired.
-  ///
-  /// In en, this message translates to:
-  /// **'Expired'**
-  String get alertsStatusExpired;
-
-  /// No description provided for @alertsStatusPaused.
-  ///
-  /// In en, this message translates to:
-  /// **'Paused'**
-  String get alertsStatusPaused;
-
-  /// No description provided for @alertsStatusDropped.
-  ///
-  /// In en, this message translates to:
-  /// **'Price dropped'**
-  String get alertsStatusDropped;
-
-  /// No description provided for @alertsStatusWatching.
-  ///
-  /// In en, this message translates to:
-  /// **'Watching'**
-  String get alertsStatusWatching;
-
-  /// No description provided for @alertSheetTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Watch this route'**
-  String get alertSheetTitle;
-
-  /// No description provided for @alertSheetBestPriceNow.
-  ///
-  /// In en, this message translates to:
-  /// **'Best price now: {price}'**
-  String alertSheetBestPriceNow(String price);
-
-  /// No description provided for @alertSheetAnyDropTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Notify me on any real price drop'**
-  String get alertSheetAnyDropTitle;
-
-  /// No description provided for @alertSheetAnyDropSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'At least 5% and \$5 below the last price'**
-  String get alertSheetAnyDropSubtitle;
-
-  /// No description provided for @alertSheetFlexTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Date flexibility'**
-  String get alertSheetFlexTitle;
-
-  /// No description provided for @alertSheetFlexHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Watch a few days around your departure and we\'ll flag the cheapest one.'**
-  String get alertSheetFlexHelp;
-
-  /// No description provided for @alertSheetFlexExact.
-  ///
-  /// In en, this message translates to:
-  /// **'Exact'**
-  String get alertSheetFlexExact;
-
-  /// No description provided for @alertSheetCreating.
-  ///
-  /// In en, this message translates to:
-  /// **'Creating…'**
-  String get alertSheetCreating;
-
-  /// No description provided for @alertSheetCreate.
-  ///
-  /// In en, this message translates to:
-  /// **'Create alert'**
-  String get alertSheetCreate;
-
-  /// No description provided for @alertSheetWatchingSnack.
-  ///
-  /// In en, this message translates to:
-  /// **'Watching {origin} → {destination} — we\'ll email you on a drop'**
-  String alertSheetWatchingSnack(String origin, String destination);
-
   /// No description provided for @notifTitle.
   ///
   /// In en, this message translates to:
@@ -3875,7 +3647,7 @@ abstract class AppLocalizations {
   /// No description provided for @notifEmptyMessage.
   ///
   /// In en, this message translates to:
-  /// **'Price drops on routes you watch will show up here.'**
+  /// **'Trip reminders and co-planning updates will show up here.'**
   String get notifEmptyMessage;
 
   /// No description provided for @notifUnreadSemantic.
@@ -4759,12 +4531,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Search Flights'**
   String get flightSearchSubmit;
-
-  /// No description provided for @flightSearchWatchRoute.
-  ///
-  /// In en, this message translates to:
-  /// **'Watch this route — email me on a drop'**
-  String get flightSearchWatchRoute;
 
   /// No description provided for @flightSearchErrorTitle.
   ///

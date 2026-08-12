@@ -7,7 +7,7 @@ import '../providers/notifications_provider.dart';
 import '../providers/auth_provider.dart';
 import '../screens/account_settings_screen.dart';
 import '../screens/admin_metrics_screen.dart';
-import '../screens/alerts_screen.dart';
+import '../screens/notification_center_screen.dart';
 import '../screens/onboarding_quiz_screen.dart';
 import '../screens/preferences_screen.dart';
 import '../screens/local_admin_screen.dart';
@@ -44,9 +44,9 @@ void _onSelected(BuildContext context, WidgetRef ref, String value) {
     // Push onto the active tab's navigator so the rail/bar stays put.
     pushOnActiveTab(ref, const PreferencesScreen(),
         location: utilityLocation(BootUtility.preferences));
-  } else if (value == 'alerts') {
-    pushOnActiveTab(ref, const AlertsScreen(),
-        location: utilityLocation(BootUtility.alerts));
+  } else if (value == 'notifications') {
+    pushOnActiveTab(ref, const NotificationCenterScreen(),
+        location: utilityLocation(BootUtility.notifications));
   } else if (value == 'retake_quiz') {
     // No location: a transient flow, not a page worth restoring on refresh.
     pushOnActiveTab(ref, const OnboardingQuizScreen(retake: true));
@@ -70,7 +70,7 @@ List<PopupMenuEntry<String>> _items(
   String? displayName,
   String? email, {
   bool isAdmin = false,
-  int unreadAlerts = 0,
+  int unreadNotifications = 0,
 }) {
   return [
     if (displayName != null) ...[
@@ -127,17 +127,17 @@ List<PopupMenuEntry<String>> _items(
       ),
     ),
     PopupMenuItem<String>(
-      value: 'alerts',
+      value: 'notifications',
       child: _menuRow(
-        unreadAlerts > 0
+        unreadNotifications > 0
             ? Badge.count(
-                count: unreadAlerts,
+                count: unreadNotifications,
                 child: Icon(Icons.notifications_none,
                     size: 20, color: theme.colorScheme.onSurfaceVariant),
               )
             : Icon(Icons.notifications_none,
                 size: 20, color: theme.colorScheme.onSurfaceVariant),
-        l10n.accountMenuPriceAlerts,
+        l10n.accountMenuNotifications,
       ),
     ),
     PopupMenuItem<String>(
@@ -221,7 +221,7 @@ class AccountMenu extends ConsumerWidget {
       icon: unread > 0 ? Badge.count(count: unread, child: avatar) : avatar,
       onSelected: (v) => _onSelected(context, ref, v),
       itemBuilder: (_) => _items(theme, l10n, user?.displayName, user?.email,
-          isAdmin: user?.isAdmin ?? false, unreadAlerts: unread),
+          isAdmin: user?.isAdmin ?? false, unreadNotifications: unread),
     );
   }
 }
@@ -253,7 +253,7 @@ class RailAccountButton extends ConsumerWidget {
       icon: unread > 0 ? Badge.count(count: unread, child: avatar) : avatar,
       onSelected: (v) => _onSelected(context, ref, v),
       itemBuilder: (_) => _items(theme, l10n, user?.displayName, user?.email,
-          isAdmin: user?.isAdmin ?? false, unreadAlerts: unread),
+          isAdmin: user?.isAdmin ?? false, unreadNotifications: unread),
     );
   }
 }

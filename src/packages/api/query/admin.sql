@@ -29,7 +29,6 @@ SELECT
   (SELECT count(DISTINCT COALESCE(chat_id, id::text)) FROM trips)::bigint AS trip_lineages,
   (SELECT count(*) FROM itinerary_items)::bigint AS itinerary_items,
   (SELECT count(*) FROM booking_todos)::bigint AS booking_todos,
-  (SELECT count(*) FROM price_alerts WHERE status = 'active')::bigint AS active_price_alerts,
   (SELECT count(*) FROM local_recommendations WHERE status = 'published')::bigint AS published_local_recs,
   (SELECT count(*) FROM local_guides)::bigint AS local_guides,
   (SELECT count(*) FROM trip_collaborators WHERE revoked_at IS NULL)::bigint AS active_collaborators,

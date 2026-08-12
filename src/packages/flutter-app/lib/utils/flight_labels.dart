@@ -14,8 +14,7 @@ import '../models/flight_offer.dart';
 /// (`economy` / `premium_economy` / `business` / `first`). The values sent to
 /// the Duffel-backed API are NEVER translated — only this display label is
 /// (specs/i18n-spanish). Unknown values render as-is so a new backend value
-/// never blanks a card. Shared by flight search, the alerts list and the
-/// create-alert sheet.
+/// never blanks a card. Shared by the flight search and details surfaces.
 String cabinClassLabel(AppLocalizations l10n, String value) => switch (value) {
       'economy' => l10n.flightSearchCabinEconomy,
       'premium_economy' => l10n.flightSearchCabinPremiumEconomy,

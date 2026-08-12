@@ -29,8 +29,8 @@ Future<void> showFlightDetails(BuildContext context, FlightOffer offer) {
     showDragHandle: true,
     isScrollControlled: true,
     useSafeArea: true,
-    // Desktop width cap (CreateAlertSheet's pattern): a full-bleed 1440px
-    // segment list reads as a handful of rows stranded across the window.
+    // Desktop width cap: a full-bleed 1440px segment list reads as a
+    // handful of rows stranded across the window.
     constraints: const BoxConstraints(maxWidth: 700),
     builder: (context) => _FlightDetailsSheet(offer: offer),
   );

@@ -130,10 +130,6 @@ class AdminMetrics {
   /// estClaudeCostUsd / activeUsers — the §8 COGS-per-active-user estimate.
   @JsonKey(name: 'est_cogs_per_active_user')
   final double estCogsPerActiveUser;
-  @JsonKey(name: 'alerts_created')
-  final int alertsCreated;
-  @JsonKey(name: 'alerts_triggered')
-  final int alertsTriggered;
 
   /// Free-cap would-hit crossings per cap kind (plan_runs / active_trips) —
   /// the Phase-3 demand signal. Measurement only; nothing is enforced.
@@ -184,8 +180,6 @@ class AdminMetrics {
     this.planCacheCreationTokens = 0,
     this.estClaudeCostUsd = 0,
     this.estCogsPerActiveUser = 0,
-    this.alertsCreated = 0,
-    this.alertsTriggered = 0,
     this.freeCapWouldHits = const {},
     this.freeCapUsersAffected = const {},
     this.placesCallsSinceProcessStart,

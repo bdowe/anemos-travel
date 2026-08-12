@@ -126,7 +126,7 @@ type GetUserDisplayNamesRow struct {
 
 // Batch display-name lookup for response attribution (owner name + last-editor
 // name on the trip view) — one round trip instead of N GetUserByID calls.
-// Array-param pattern per query/admin.sql / query/price_alerts.sql.
+// Array-param pattern per query/admin.sql.
 func (q *Queries) GetUserDisplayNames(ctx context.Context, dollar_1 []uuid.UUID) ([]GetUserDisplayNamesRow, error) {
 	rows, err := q.db.Query(ctx, getUserDisplayNames, dollar_1)
 	if err != nil {

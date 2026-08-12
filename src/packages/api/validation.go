@@ -12,7 +12,7 @@ import (
 // user or trip can store, so one client can't fill the disk or wedge the
 // single-instance API. The length ceilings are deliberately generous — these
 // are abuse/runaway guards, not product rules — and the data-volume caps are
-// env-tunable via envInt (like the ALERT_* / FREE_* knobs), read at call time.
+// env-tunable via envInt (like the FREE_* knobs), read at call time.
 
 // --- field length ceilings (rune counts). Generous by design. ---
 
@@ -68,8 +68,8 @@ func boundedOptional(field string, val *string, max int) error {
 }
 
 // --- per-user / per-trip data-volume caps (runaway guards). Count-before-
-// insert, generous defaults, env-tunable. Mirror maxActiveAlertsPerUser
-// (price_alert_handler.go): count first, reject with a clear 422 when over. ---
+// insert, generous defaults, env-tunable: count first, reject with a clear
+// 422 when over. ---
 
 const (
 	defaultMaxTripsPerUser          = 200

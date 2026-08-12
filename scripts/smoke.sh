@@ -27,7 +27,7 @@
 #                          existing mode still verifies the public shared read but
 #                          skips the owner-only mutations.
 #   SMOKE_SIGNING_SECRET  dev-only: the server's UNSUBSCRIBE/EXPORT signing secret.
-#                          When set, step 9 forges a one-click unsubscribe token
+#                          When set, step 8 forges a one-click unsubscribe token
 #                          and asserts the public endpoint honors it. Skipped when
 #                          unset (production never exposes its secret — see the
 #                          MANUAL CHECKS block for the real inbox round-trip).
@@ -96,7 +96,7 @@ req() {
   local h
   for h in "$@"; do hdr+=(-H "$h"); done
   tmp="$(mktemp)"; dh="$(mktemp)"
-  # The strict auth/alerts endpoints share a 5/min-per-IP bucket; honor a 429's
+  # The strict auth endpoints share a 5/min-per-IP bucket; honor a 429's
   # Retry-After once so back-to-back runs (or a polluted bucket) don't spuriously
   # fail. Capped so a hostile Retry-After can't hang the run.
   for attempt in 1 2; do
@@ -454,28 +454,8 @@ else
   skip "export tokens — no owner token in existing mode"
 fi
 
-# ===== 7. Price alerts ========================================================
-step "7. Price alerts"
-depart="$(date -u -v+30d '+%Y-%m-%d' 2>/dev/null || date -u -d '+30 days' '+%Y-%m-%d' 2>/dev/null)"
-req POST /alerts \
-  "$(jq -n --arg d "$depart" '{origin:"JFK", destination:"CDG", depart_date:$d}')" \
-  "Authorization: Bearer $TOKEN"
-if [ "$LAST_STATUS" = "201" ]; then
-  pass "POST /alerts created an alert (JFK->CDG $depart)"
-else
-  fail "POST /alerts" "status=$LAST_STATUS: $(err_of "$RESP_BODY")"
-fi
-req GET /alerts "" "Authorization: Bearer $TOKEN"
-# /alerts returns a bare JSON array; be tolerant of a {alerts:[...]} wrapper too.
-alert_count="$(printf '%s' "$RESP_BODY" | jq -r 'if type=="array" then length else (.alerts | length) end' 2>/dev/null || echo 0)"
-if [ "$LAST_STATUS" = "200" ] && [ "${alert_count:-0}" -ge 1 ] 2>/dev/null; then
-  pass "GET /alerts lists the alert ($alert_count total)"
-else
-  fail "GET /alerts lists the alert" "status=$LAST_STATUS count=$alert_count"
-fi
-
-# ===== 8. Notifications =======================================================
-step "8. Notifications"
+# ===== 7. Notifications =======================================================
+step "7. Notifications"
 req GET /notifications "" "Authorization: Bearer $TOKEN"
 check "GET /notifications" "200" "$LAST_STATUS" "$(err_of "$RESP_BODY")"
 req GET /notifications/unread-count "" "Authorization: Bearer $TOKEN"
@@ -487,8 +467,8 @@ else
   fail "POST /notifications/read" "status=$LAST_STATUS: $(err_of "$RESP_BODY")"
 fi
 
-# ===== 9. One-click unsubscribe (dev-only, forged token) ======================
-step "9. One-click unsubscribe (dev-only)"
+# ===== 8. One-click unsubscribe (dev-only, forged token) ======================
+step "8. One-click unsubscribe (dev-only)"
 if [ -n "$SMOKE_SIGNING_SECRET" ]; then
   payload="${USER_ID}|all"
   sig_b64="$(printf '%s' "$payload" \
@@ -506,8 +486,8 @@ else
   skip "unsubscribe — SMOKE_SIGNING_SECRET unset (server dev secret is random/unknowable; real check is the inbox round-trip below)"
 fi
 
-# ===== 10. Legal pages (launch-ready) ========================================
-step "10. Legal pages"
+# ===== 9. Legal pages (launch-ready) ========================================
+step "9. Legal pages"
 for page in terms privacy; do
   code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time "$SMOKE_TIMEOUT" "$BASE_URL/$page" 2>/dev/null || echo 000)"
   html="$(curl -sS --max-time "$SMOKE_TIMEOUT" "$BASE_URL/$page" 2>/dev/null || true)"
@@ -520,8 +500,8 @@ for page in terms privacy; do
   fi
 done
 
-# ===== 11. SEO plumbing + version marker =====================================
-step "11. SEO plumbing + version marker"
+# ===== 10. SEO plumbing + version marker =====================================
+step "10. SEO plumbing + version marker"
 for path in /robots.txt /sitemap.xml; do
   code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time "$SMOKE_TIMEOUT" "$BASE_URL$path" 2>/dev/null || echo 000)"
   check "GET $path -> 200" "200" "$code"
@@ -533,11 +513,11 @@ else
   skip "/app/version.json — served by the deployed gateway (dev proxies the live Flutter dev server); verify on prod"
 fi
 
-# ===== 12. Edge security headers =============================================
+# ===== 11. Edge security headers =============================================
 # Added to the deployment/production gateway (snippets/security-headers.conf).
 # The lean dev gateway doesn't carry them, so treat their absence as a SKIP and
 # hard-verify on prod — same posture as the bot-UA OG rewrite in step 5.
-step "12. Edge security headers"
+step "11. Edge security headers"
 hdrs="$(curl -sS -I --max-time "$SMOKE_TIMEOUT" "$BASE_URL/app/" 2>/dev/null || true)"
 if printf '%s' "$hdrs" | grep -qi '^strict-transport-security:'; then
   for h in Strict-Transport-Security X-Content-Type-Options X-Frame-Options Content-Security-Policy-Report-Only; do
@@ -551,8 +531,8 @@ else
   skip "edge security headers — absent on this gateway (deployment/production only; verify on prod with curl -I)"
 fi
 
-# ===== 13. Localized share preview (es) ======================================
-step "13. Localized share preview (es)"
+# ===== 12. Localized share preview (es) ======================================
+step "12. Localized share preview (es)"
 if [ -n "$SHARE_TOKEN" ]; then
   es_prev="$(curl -sS --max-time "$SMOKE_TIMEOUT" "$API/share-preview/$SHARE_TOKEN?lang=es" 2>/dev/null || true)"
   if printf '%s' "$es_prev" | grep -qi '<html lang="es"' && printf '%s' "$es_prev" | grep -q 'og:'; then
@@ -564,8 +544,8 @@ else
   skip "localized share preview — no share token from step 5"
 fi
 
-# ===== 14. Teardown ===========================================================
-step "14. Teardown (delete throwaway account)"
+# ===== 13. Teardown ===========================================================
+step "13. Teardown (delete throwaway account)"
 req DELETE /auth/account "$(jq -n --arg p "$PASSWORD" '{password:$p}')" \
   "Authorization: Bearer $TOKEN"
 if [ "$LAST_STATUS" = "204" ]; then
@@ -594,10 +574,10 @@ ${C_BOLD}MANUAL CHECKS REMAINING (need real DNS/SMTP/crawler)${C_RESET}
     - SMTP deliverability + full inbox round-trips: signup verification email,
       password-reset email, and the List-Unsubscribe one-click (RFC 8058) link
       all arrive and work end to end.
-    - Legal review sign-off: step 10 auto-checks the draft-banner/noindex/TODO
+    - Legal review sign-off: step 9 auto-checks the draft-banner/noindex/TODO
       are gone, but a human still owns the "the copy is correct" sign-off.
     - Prod-only edge checks (skipped against the dev gateway): the security
-      headers (step 12) and /app/version.json (step 11) must be re-run against
+      headers (step 11) and /app/version.json (step 10) must be re-run against
       the live https://goldentempotravel.com gateway with curl -I / curl.
     - MCP connector (when MCP_ENABLED=true): link from ChatGPT (Settings ->
       Apps & Connectors -> Developer Mode) and from claude.ai (Settings ->

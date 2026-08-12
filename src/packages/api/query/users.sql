@@ -51,7 +51,7 @@ DELETE FROM users WHERE id = $1;
 -- name: GetUserDisplayNames :many
 -- Batch display-name lookup for response attribution (owner name + last-editor
 -- name on the trip view) — one round trip instead of N GetUserByID calls.
--- Array-param pattern per query/admin.sql / query/price_alerts.sql.
+-- Array-param pattern per query/admin.sql.
 SELECT id, display_name FROM users WHERE id = ANY($1::uuid[]);
 
 -- name: ListAdminUsers :many

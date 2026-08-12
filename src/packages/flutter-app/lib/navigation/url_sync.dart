@@ -9,7 +9,6 @@ import '../providers/plan_resume.dart';
 import '../providers/resumable_chats_provider.dart';
 import '../screens/account_settings_screen.dart';
 import '../screens/admin_metrics_screen.dart';
-import '../screens/alerts_screen.dart';
 import '../screens/guides_screen.dart';
 import '../screens/import_trip_screen.dart';
 import '../screens/local_admin_screen.dart';
@@ -228,7 +227,6 @@ class UrlSyncController {
   }
 
   Widget _utilityScreen(BootUtility utility) => switch (utility) {
-        BootUtility.alerts => const AlertsScreen(),
         BootUtility.preferences => const PreferencesScreen(),
         BootUtility.account => const AccountSettingsScreen(),
         BootUtility.adminMetrics => const AdminMetricsScreen(),

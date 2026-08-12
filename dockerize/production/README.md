@@ -202,7 +202,7 @@ curl -sI  https://www.goldentempotravel.com/                # 301 → apex
 ```
 
 For the full end-to-end journey (register → trip → item → share/OG → export →
-alerts → notifications → teardown), run the smoke harness against the live host.
+notifications → teardown), run the smoke harness against the live host.
 It registers a throwaway user and deletes it in teardown, so it is safe to run
 against production:
 

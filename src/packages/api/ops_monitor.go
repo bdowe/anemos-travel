@@ -21,9 +21,9 @@ import (
 // alerts on TRANSITIONS only — any change to the REASON SET, not just the
 // healthy<->degraded boolean, so a second outage arriving while already
 // degraded (backups stale, then the AI account runs dry) still alerts instead
-// of hiding behind the first. It mirrors the price-alert / re-engagement
-// checker shape exactly (own goroutine, env-cadence ticker, jittered first
-// tick, dbPool-nil guard, injectable clock in runOnce).
+// of hiding behind the first. It mirrors the re-engagement checker shape
+// exactly (own goroutine, env-cadence ticker, jittered first tick,
+// dbPool-nil guard, injectable clock in runOnce).
 //
 // Alerting on transitions (not on every degraded tick) is the dedup: a five-
 // minute tick over a multi-hour outage fires ONE alert, and one recovery. State
@@ -68,7 +68,7 @@ type healthMonitor struct {
 // startHealthMonitor launches the background loop. No-ops (with a log line)
 // when persistence is unavailable — with no DB there is no admin list to alert
 // and pingDB is always false; the monitor resumes on next boot once a database
-// is configured, exactly like startAlertChecker.
+// is configured, exactly like startReengagementChecker.
 func startHealthMonitor(ctx context.Context) {
 	if dbPool == nil {
 		log.Printf("ops health: monitor disabled (no database)")

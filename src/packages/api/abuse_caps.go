@@ -18,8 +18,8 @@ import (
 // at the same seams. Every map evicts idle keys via a janitor so churn can't
 // grow it unbounded, mirroring ipRateLimiter's structure.
 
-// --- tunables (env-overridable via envInt; read at call time like the ALERT_*
-// and FREE_* knobs so ops/tests can adjust without a boot-order dependency) ---
+// --- tunables (env-overridable via envInt; read at call time like the FREE_*
+// knobs so ops/tests can adjust without a boot-order dependency) ---
 
 const (
 	// Login lockout: consecutive failed logins to one email before a temporary

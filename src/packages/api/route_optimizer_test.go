@@ -7,6 +7,8 @@ import (
 
 func f64(v float64) *float64 { return &v }
 
+func strp(s string) *string { return &s }
+
 // TestOptimizeRoutePreserveOrder verifies that with PreserveOrder set, the route
 // keeps the caller-supplied order (no NN/2-opt reshuffle) while still populating
 // per-leg travel timings. Locations carry coordinates so no Places API is hit.

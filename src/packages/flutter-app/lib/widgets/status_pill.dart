@@ -9,8 +9,7 @@ import '../theme/spacing.dart';
 /// trip-detail header.
 ///
 /// [StatusPill.custom] renders the same pill chrome with an explicit label and
-/// colors (no leading icon, smaller type) for non-trip states — e.g. the price
-/// alerts screen.
+/// colors (no leading icon, smaller type) for non-trip states.
 class StatusPill extends StatelessWidget {
   final String status;
 

@@ -8,7 +8,7 @@
 
 import 'package:intl/intl.dart';
 
-/// Symbols for the codes our providers (Duffel flights, Ferryhopper, alerts)
+/// Symbols for the codes our providers (Duffel flights, Ferryhopper)
 /// actually return. Deliberately short: a distinct, unambiguous symbol only.
 /// Anything not listed falls back to showing the ISO code itself.
 const Map<String, String> _currencySymbols = {

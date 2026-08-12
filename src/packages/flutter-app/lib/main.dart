@@ -95,8 +95,8 @@ Route<dynamic> generateRoute(RouteSettings settings, {bool isBoot = false}) {
     );
   }
   // URL persistence (specs/url-page-persistence): recognized app paths —
-  // tabs, /trips/<id> (and the connector's /trip/<id> alias), /alerts and the
-  // other utility screens, /plan/<chatId> — land on the normal gate carrying
+  // tabs, /trips/<id> (and the connector's /trip/<id> alias), the utility
+  // screens, /plan/<chatId> — land on the normal gate carrying
   // a parsed target that URL sync applies once the session resolves, so the
   // page boots inside the shell. Unknown paths parse to null and behave like
   // the plain catch-all.

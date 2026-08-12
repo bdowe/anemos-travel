@@ -1,5 +1,10 @@
 # Spec: Price Alerts
 
+> **STATUS: REMOVED 2026-08.** Feature deleted (never watched a real fare on
+> prod: paused under the SerpApi swap, test-mode Duffel before that, never
+> used). Code resurrectable from git @ 8ca59c5. The notification center it
+> spawned (v2) lives on with other writers.
+
 > Watch a flight route; get told when the fare drops.
 
 ## Context

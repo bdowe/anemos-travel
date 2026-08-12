@@ -458,7 +458,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsDeleteAccountBody =>
-      'Esto elimina de forma permanente tu cuenta, tus viajes, tus preferencias y tus alertas. No se puede deshacer.';
+      'Esto elimina de forma permanente tu cuenta, tus viajes y tus preferencias. No se puede deshacer.';
 
   @override
   String get settingsConfirmPassword => 'Confirma tu contraseña';
@@ -2026,7 +2026,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get accountMenuTravelProfile => 'Perfil de viaje';
 
   @override
-  String get accountMenuPriceAlerts => 'Alertas de precio';
+  String get accountMenuNotifications => 'Notificaciones';
 
   @override
   String get accountMenuRetakeQuiz => 'Repetir el cuestionario de viaje';
@@ -2044,147 +2044,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get accountMenuSignOut => 'Cerrar sesión';
 
   @override
-  String get alertsTitle => 'Alertas de precio';
-
-  @override
-  String get alertsSignInTitle => 'Inicia sesión para seguir tarifas';
-
-  @override
-  String get alertsSignInMessage =>
-      'Las alertas de precio te avisan por correo cuando baja un vuelo que te interesa.';
-
-  @override
-  String get alertsSignIn => 'Iniciar sesión';
-
-  @override
-  String get alertsLoadErrorTitle => 'No se pudieron cargar las alertas';
-
-  @override
-  String get alertsEmptyTitle => 'Aún no tienes alertas';
-
-  @override
-  String get alertsEmptyMessage =>
-      'Busca un vuelo y toca «Seguir esta ruta»: te avisaremos por correo cuando baje el precio.';
-
-  @override
-  String get alertsEmptyCta => 'Buscar vuelos';
-
-  @override
-  String alertsLastSeen(String price) {
-    return 'Visto por última vez $price';
-  }
-
-  @override
-  String alertsTargetPrice(String price) {
-    return 'objetivo $price';
-  }
-
-  @override
-  String get alertsWatchingAnyDrop => 'atento a cualquier bajada';
-
-  @override
-  String alertsAdults(int count) {
-    return '$count adultos';
-  }
-
-  @override
-  String alertsFlexDays(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count días',
-      one: '1 día',
-    );
-    return '±$_temp0';
-  }
-
-  @override
-  String alertsBaselineDelta(String amount) {
-    return 'Bajó $amount desde que empezaste a seguirla';
-  }
-
-  @override
-  String alertsChecked(String when) {
-    return 'Comprobado $when';
-  }
-
-  @override
-  String get alertsSetTargetTitle => 'Fijar precio objetivo';
-
-  @override
-  String get alertsSetTargetBody =>
-      'Te avisamos cuando la tarifa llegue a este precio o baje de él.';
-
-  @override
-  String get alertsNotifyAtOrBelow => 'Avísame a este precio o menos';
-
-  @override
-  String get alertsWatchAnyDropInstead => 'Mejor seguir cualquier bajada';
-
-  @override
-  String get alertsInvalidTarget => 'Introduce un precio objetivo válido';
-
-  @override
-  String get alertsActionsTooltip => 'Acciones de la alerta';
-
-  @override
-  String get alertsEditTarget => 'Editar precio objetivo';
-
-  @override
-  String get alertsPause => 'Pausar';
-
-  @override
-  String get alertsResume => 'Reanudar';
-
-  @override
-  String get alertsStatusExpired => 'Caducada';
-
-  @override
-  String get alertsStatusPaused => 'Pausada';
-
-  @override
-  String get alertsStatusDropped => 'Bajó el precio';
-
-  @override
-  String get alertsStatusWatching => 'Siguiendo';
-
-  @override
-  String get alertSheetTitle => 'Seguir esta ruta';
-
-  @override
-  String alertSheetBestPriceNow(String price) {
-    return 'Mejor precio ahora: $price';
-  }
-
-  @override
-  String get alertSheetAnyDropTitle => 'Avísame ante cualquier bajada real';
-
-  @override
-  String get alertSheetAnyDropSubtitle =>
-      'Al menos un 5 % y \$5 por debajo del último precio';
-
-  @override
-  String get alertSheetFlexTitle => 'Flexibilidad de fechas';
-
-  @override
-  String get alertSheetFlexHelp =>
-      'Vigilamos unos días alrededor de tu salida y te señalamos el más barato.';
-
-  @override
-  String get alertSheetFlexExact => 'Exacta';
-
-  @override
-  String get alertSheetCreating => 'Creando…';
-
-  @override
-  String get alertSheetCreate => 'Crear alerta';
-
-  @override
-  String alertSheetWatchingSnack(String origin, String destination) {
-    return 'Siguiendo $origin → $destination: te avisaremos por correo cuando baje';
-  }
-
-  @override
   String get notifTitle => 'Notificaciones';
 
   @override
@@ -2195,7 +2054,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get notifEmptyMessage =>
-      'Aquí aparecerán las bajadas de precio de las rutas que sigas.';
+      'Aquí aparecerán los recordatorios de viaje y las novedades de planificación compartida.';
 
   @override
   String get notifUnreadSemantic => 'No leída';
@@ -2777,10 +2636,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get flightSearchSubmit => 'Buscar vuelos';
-
-  @override
-  String get flightSearchWatchRoute =>
-      'Sigue esta ruta — te aviso por correo si baja el precio';
 
   @override
   String get flightSearchErrorTitle => 'No se pudieron cargar los vuelos';

@@ -18,7 +18,6 @@ const _totals = AdminTotals(
   tripLineages: 11,
   itineraryItems: 88,
   bookingTodos: 21,
-  activePriceAlerts: 2,
   publishedLocalRecs: 14,
   localGuides: 3,
   activeCollaborators: 1,
@@ -29,7 +28,7 @@ const _totals = AdminTotals(
 );
 
 void main() {
-  testWidgets('renders funnel, AI, and alert tiles from metrics',
+  testWidgets('renders funnel and AI tiles from metrics',
       (tester) async {
     tester.view.physicalSize = const Size(800, 3600);
     tester.view.devicePixelRatio = 1.0;
@@ -57,8 +56,6 @@ void main() {
       planCacheReadTokens: 900000,
       estClaudeCostUsd: 12.5,
       estCogsPerActiveUser: 0.21,
-      alertsCreated: 5,
-      alertsTriggered: 1,
       freeCapWouldHits: {'plan_runs': 3, 'active_trips': 1},
       freeCapUsersAffected: {'plan_runs': 2, 'active_trips': 1},
       placesCallsSinceProcessStart: PlacesCalls(
@@ -117,7 +114,6 @@ void main() {
     // authenticated one, so 'booking' labels a row in each.
     expect(find.text('Anonymous clicks by provider'), findsOneWidget);
     expect(find.text('booking'), findsNWidgets(2));
-    expect(find.text('Price alerts'), findsOneWidget);
 
     // Provider-call counters: honestly labeled as since-restart, with the
     // per-class breakdown and the Places cost estimate.
@@ -163,7 +159,7 @@ void main() {
     expect(find.text('Landing views'), findsNothing);
     expect(find.textContaining('anonymous, rate-limit bounded'), findsNothing);
     expect(find.text('Anonymous clicks by provider'), findsNothing);
-    expect(find.text('Price alerts'), findsOneWidget);
+    expect(find.text('AI planning'), findsOneWidget);
   });
 
   testWidgets('omits the anonymous provider split when the map is empty',
@@ -256,7 +252,6 @@ void main() {
       'Plan sessions',
       'Booking clicks',
       'Itinerary items added',
-      'Price alerts created',
     ]) {
       expect(find.text(title), findsOneWidget);
     }

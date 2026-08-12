@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver for goose
 	"github.com/jackc/puddle/v2"
@@ -153,4 +154,18 @@ func dbErrorStatus(err error) int {
 		return http.StatusServiceUnavailable
 	}
 	return http.StatusInternalServerError
+}
+
+// --- small pg-type conversion helpers ---
+
+// dateString renders a pgtype.Date as YYYY-MM-DD, "" when unset.
+func dateString(d pgtype.Date) string {
+	if !d.Valid {
+		return ""
+	}
+	return d.Time.Format(dateLayout)
+}
+
+func pgTimestamptz(t time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: t, Valid: true}
 }

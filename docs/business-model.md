@@ -88,7 +88,7 @@ features.
 | Booking checklist + handoff links | ✅ Full | ✅ Full |
 | Traveler preferences / profile | ✅ Full | ✅ Full |
 | Collaboration / shared trips | — | ✅ *(roadmap)* |
-| Price / fare alerts | — | ✅ *(roadmap)* |
+| Price / fare alerts | — | *(removed 2026-08; resurrectable from git @ 8ca59c5)* |
 | Richer in-app accommodation search | — | ✅ *(roadmap)* |
 | Offline itineraries | — | ✅ *(roadmap)* |
 | Priority / faster model | — | ✅ |
@@ -97,7 +97,7 @@ Shipped vs. roadmap follows the honesty rule at the bottom of
 `sales-pitch.md`: nothing roadmap-only is claimed as live. At launch of the
 paid tier, "unlimited + priority" may be the only shipped gates — which is
 another reason the tier ships in Phase 3, after at least one roadmap anchor
-feature (most likely price alerts or collaboration) exists.
+feature (most likely collaboration) exists.
 
 ---
 
@@ -157,7 +157,7 @@ without leaving the app), so it's a product win and a revenue win in one.
 **Phase 3 — paid tier.** Trigger conditions, not a date:
 - retention proven across ≥2 trips for a meaningful cohort;
 - a measured cohort actually hitting the free caps (demand signal);
-- at least one roadmap anchor feature (alerts or collaboration) shipped to
+- at least one roadmap anchor feature (collaboration) shipped to
   gate behind it.
 
 ---

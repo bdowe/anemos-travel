@@ -245,4 +245,20 @@ void main() {
     final service = await _pump(tester, [_priceDrop()]);
     expect(service.markReadCalled, isTrue);
   });
+
+  testWidgets('a malformed createdAt renders the row without a timestamp',
+      (tester) async {
+    await _pump(tester, const [
+      AppNotification(
+        id: 'g1',
+        type: 'trip_reminder',
+        payload: {'title': 'Paris trip starts soon'},
+        createdAt: 'garbage',
+      ),
+    ]);
+
+    // No FormatException red screen; the row itself still renders.
+    expect(tester.takeException(), isNull);
+    expect(find.text('Paris trip starts soon'), findsOneWidget);
+  });
 }

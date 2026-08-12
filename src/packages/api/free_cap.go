@@ -21,8 +21,8 @@ import (
 // degraded mode (acceptable for a demand signal — see the spec's accuracy
 // model and its usage_counters upgrade path for strict metering), and any
 // error simply skips the signal. No request is ever rejected, delayed, or
-// altered. Cribbed from price_alert_handler.go's maxActiveAlertsPerUser
-// template, minus the enforcement branch.
+// altered. Same count-first template as the per-user data-volume caps
+// (validation.go), minus the enforcement branch.
 
 const (
 	defaultFreePlanSessionsPerMonth = 20 // business-model §4 placeholder
@@ -33,7 +33,7 @@ const (
 	freeCapWindowDays = 30
 )
 
-// Read at call time (the ALERT_TICK_MINUTES pattern) so tests and ops can
+// Read at call time (the envInt pattern) so tests and ops can
 // lower a cap via env without a boot-order dependency. Invalid/zero/negative
 // values fall back to the default.
 func freePlanSessionsPerMonth() int {

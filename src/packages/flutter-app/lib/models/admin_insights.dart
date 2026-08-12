@@ -78,8 +78,6 @@ class AdminTotals {
   final int itineraryItems;
   @JsonKey(name: 'booking_todos')
   final int bookingTodos;
-  @JsonKey(name: 'active_price_alerts')
-  final int activePriceAlerts;
   @JsonKey(name: 'published_local_recs')
   final int publishedLocalRecs;
   @JsonKey(name: 'local_guides')
@@ -101,7 +99,6 @@ class AdminTotals {
     this.tripLineages = 0,
     this.itineraryItems = 0,
     this.bookingTodos = 0,
-    this.activePriceAlerts = 0,
     this.publishedLocalRecs = 0,
     this.localGuides = 0,
     this.activeCollaborators = 0,

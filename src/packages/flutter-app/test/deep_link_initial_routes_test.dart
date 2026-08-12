@@ -25,7 +25,6 @@ void main() {
       '/trips',
       '/trips/t1',
       '/trip/t1',
-      '/alerts',
       '/preferences',
       '/account',
       '/admin/metrics',

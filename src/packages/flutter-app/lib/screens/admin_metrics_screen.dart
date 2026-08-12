@@ -176,7 +176,6 @@ class _TotalsSection extends ConsumerWidget {
             _Stat('Trips', '${t.trips}', caption: '${t.tripLineages} lineages'),
             _Stat('Itinerary items', '${t.itineraryItems}'),
             _Stat('Booking todos', '${t.bookingTodos}'),
-            _Stat('Active price alerts', '${t.activePriceAlerts}'),
             _Stat('Published local recs', '${t.publishedLocalRecs}',
                 caption: '${t.localGuides} guides'),
             _Stat('Sharing', '${t.activeShares}',
@@ -206,7 +205,6 @@ class _TrendsPane extends ConsumerWidget {
     ('plan_session_started', 'Plan sessions'),
     ('booking_link_clicked', 'Booking clicks'),
     ('itinerary_item_added', 'Itinerary items added'),
-    ('alert_created', 'Price alerts created'),
   ];
 
   @override
@@ -399,13 +397,6 @@ class _MetricsBody extends StatelessWidget {
               ),
           ]),
         ],
-        const SizedBox(height: AppSpacing.xl),
-        const SectionHeader(title: 'Price alerts'),
-        const SizedBox(height: AppSpacing.sm),
-        _TileGrid(tiles: [
-          _Stat('Created', '${m.alertsCreated}'),
-          _Stat('Triggered', '${m.alertsTriggered}'),
-        ]),
         const SizedBox(height: AppSpacing.xxl),
       ],
     );

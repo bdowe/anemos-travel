@@ -12,13 +12,11 @@ import (
 )
 
 // Generalized notifications read API (Wave 16): the notification-center spine.
-// Supersedes alert_events_handler.go — where that feed was welded to
-// price_alerts (route/date columns joined inline), this one is type-agnostic:
-// each row carries a `type` discriminator and a `payload` JSON bag the client
-// switches on. The only writer today is the price-alert checker
-// (price_alert_checker.go settle), which writes a `price_drop` row; trip
-// reminders / collaborator edits / invite-accepted land here in later PRs.
-// This file only reads and marks. All routes require auth.
+// Type-agnostic: each row carries a `type` discriminator and a `payload` JSON
+// bag the client switches on. Writers: the re-engagement checkers (trip
+// reminders, weekly nudge), collab/share activity (notifications_writer.go),
+// and the ops self-check monitor (admin-only rows). This file only reads and
+// marks. All routes require auth.
 
 const (
 	defaultNotificationsLimit = 50

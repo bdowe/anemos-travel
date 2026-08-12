@@ -32,18 +32,6 @@ type Accommodation struct {
 	Booked    bool        `json:"booked"`
 }
 
-type AlertEvent struct {
-	ID                   uuid.UUID          `json:"id"`
-	AlertID              uuid.UUID          `json:"alert_id"`
-	UserID               uuid.UUID          `json:"user_id"`
-	Price                float64            `json:"price"`
-	Currency             string             `json:"currency"`
-	PreviousPrice        *float64           `json:"previous_price"`
-	OccurredAt           time.Time          `json:"occurred_at"`
-	ReadAt               pgtype.Timestamptz `json:"read_at"`
-	MatchedDepartureDate pgtype.Date        `json:"matched_departure_date"`
-}
-
 type AnalyticsEvent struct {
 	ID        uuid.UUID   `json:"id"`
 	UserID    pgtype.UUID `json:"user_id"`
@@ -238,30 +226,6 @@ type PlanChatSession struct {
 	MessageCount int32     `json:"message_count"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
-}
-
-type PriceAlert struct {
-	ID                uuid.UUID          `json:"id"`
-	UserID            uuid.UUID          `json:"user_id"`
-	TripID            pgtype.UUID        `json:"trip_id"`
-	Origin            string             `json:"origin"`
-	Destination       string             `json:"destination"`
-	DepartDate        pgtype.Date        `json:"depart_date"`
-	ReturnDate        pgtype.Date        `json:"return_date"`
-	CabinClass        string             `json:"cabin_class"`
-	Adults            int32              `json:"adults"`
-	TargetPrice       *float64           `json:"target_price"`
-	Currency          *string            `json:"currency"`
-	LastCheckedPrice  *float64           `json:"last_checked_price"`
-	LastCheckedAt     pgtype.Timestamptz `json:"last_checked_at"`
-	LastNotifiedPrice *float64           `json:"last_notified_price"`
-	LastNotifiedAt    pgtype.Timestamptz `json:"last_notified_at"`
-	Status            string             `json:"status"`
-	CreatedAt         time.Time          `json:"created_at"`
-	UpdatedAt         time.Time          `json:"updated_at"`
-	BaselinePrice     *float64           `json:"baseline_price"`
-	FlexDays          int16              `json:"flex_days"`
-	Baggage           string             `json:"baggage"`
 }
 
 type ReminderSend struct {
