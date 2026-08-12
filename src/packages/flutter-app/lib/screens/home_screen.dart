@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/app_info.dart';
 import '../l10n/l10n.dart';
+import '../models/accommodation.dart';
 import '../models/local_guide.dart';
+import '../models/trip.dart';
 import '../providers/auth_provider.dart';
 import '../providers/live_trip_provider.dart';
 import '../providers/local_provider.dart';
@@ -15,6 +17,7 @@ import '../navigation/app_routes.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import '../theme/spacing.dart';
+import '../utils/leg_ranges.dart';
 import '../widgets/account_menu.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/continue_chats_section.dart';
@@ -24,6 +27,8 @@ import '../widgets/live_trip_card.dart';
 import '../widgets/near_me_chip.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
+import '../widgets/trip_map.dart';
+import '../widgets/trip_map_destinations.dart';
 import 'guides_screen.dart';
 import 'local_guide_detail_screen.dart';
 
@@ -526,48 +531,145 @@ class _RecentTripCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: AppRadius.mdAll,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.sm + 2),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child:
-                      const Icon(Icons.luggage, color: Colors.white, size: 26),
-                ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _RecentTripMapBand(),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.sm + 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        meta,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.85),
-                        ),
+                      child: const Icon(Icons.luggage,
+                          color: Colors.white, size: 26),
+                    ),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            meta,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios,
+                        size: 16, color: Colors.white70),
+                  ],
                 ),
-                const Icon(Icons.arrow_forward_ios,
-                    size: 16, color: Colors.white70),
-              ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Height of the recent-trip card's map band — slightly shorter than the
+/// trip-detail phone preview (180) so the Continue section doesn't dominate
+/// the home fold.
+const double _recentTripMapHeight = 160;
+
+/// The recent-trip card's map band: the cached trip's overview map (numbered
+/// destination pins + route line, the trip-detail visual) rendered as a
+/// static preview above the title row. Collapses to nothing while the cache
+/// read resolves, on a miss (MRU eviction, fresh device), and when nothing on
+/// the trip is mappable — the card then renders exactly as it did before the
+/// band existed. The ONLY watcher of [recentTripDetailProvider], so home's
+/// narrow-select doctrine holds: cache resolution rebuilds this leaf, never
+/// the hero/greeting/guides subtree, and a suppressed card (recent == live
+/// trip) never mounts it, so no cache read happens at all.
+class _RecentTripMapBand extends ConsumerStatefulWidget {
+  const _RecentTripMapBand();
+
+  @override
+  ConsumerState<_RecentTripMapBand> createState() =>
+      _RecentTripMapBandState();
+}
+
+class _RecentTripMapBandState extends ConsumerState<_RecentTripMapBand> {
+  /// Derived-list memo, keyed the TripDerivation.matches way: identity on the
+  /// cached Trip and the localizations object (a locale switch delivers a new
+  /// instance and re-labels the pins). Stable list identities across home
+  /// rebuilds keep TripMap's identity-keyed caches valid.
+  Trip? _memoTrip;
+  AppLocalizations? _memoL10n;
+  List<TripMapDestination> _destinations = const [];
+  List<Accommodation> _stays = const [];
+  bool _mappable = false;
+
+  void _recompute(Trip trip, AppLocalizations l10n) {
+    if (identical(trip, _memoTrip) && identical(l10n, _memoL10n)) return;
+    _memoTrip = trip;
+    _memoL10n = l10n;
+    // Confirmed stays only — the same !auto rule as the trip screen: a
+    // suggested draft's dates/position are themselves derived, so it must
+    // not render as a real stay pin.
+    _stays = [
+      for (final a in trip.accommodations ?? const <Accommodation>[])
+        if (!a.auto) a
+    ];
+    _destinations = tripMapDestinations(rawLegRanges(trip), l10n);
+    // Mirrors the trip-detail derivation's mapShown gate: mount the map only
+    // when something would actually plot — TripMap's light empty-state box
+    // is the wrong surface inside this brand-gradient card.
+    _mappable = (trip.items ?? const [])
+            .any((i) => i.latitude != 0 || i.longitude != 0) ||
+        _stays.any(TripMap.stayHasCoords);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // valueOrNull keeps the previous trip through the cache re-read that
+    // follows every detail view (record() mints a fresh RecentTrip), so a
+    // resolved band never collapses and re-grows on the way back home.
+    final trip = ref.watch(recentTripDetailProvider).valueOrNull;
+    if (trip == null) return const SizedBox.shrink();
+    _recompute(trip, context.l10n);
+    if (!_mappable) return const SizedBox.shrink();
+    return ClipRRect(
+      // Tiles paint square corners; clip to the card's top radius (the
+      // bottom edge sits mid-card above the title row).
+      borderRadius:
+          const BorderRadius.vertical(top: Radius.circular(AppRadius.md)),
+      child: SizedBox(
+        height: _recentTripMapHeight,
+        child: ExcludeSemantics(
+          // Decorative band: keep pin tooltips and the (tap-dead) attribution
+          // button out of the a11y tree. AbsorbPointer swallows descendant
+          // taps but not the ancestor InkWell, so the whole card stays one
+          // tap target — the trip-detail phone preview's mechanism.
+          child: AbsorbPointer(
+            child: TripMap(
+              items: trip.items ?? const [],
+              accommodations: _stays,
+              // ≥2 destinations → overview pins + route line; fewer (single-
+              // city trips) falls back to per-item pins inside TripMap, the
+              // same as the detail screen's All view.
+              destinations: _destinations,
+              interactive: false,
             ),
           ),
         ),
