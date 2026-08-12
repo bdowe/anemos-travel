@@ -7,6 +7,7 @@ import '../utils/tracked_launch.dart';
 import '../utils/trip_format.dart';
 import 'add_to_calendar_button.dart';
 import 'booking_sheets.dart';
+import 'booking_todo_card.dart' show kBookingRowLeadingSlot;
 
 /// A confirmed booking's saved details, rendered as a slim indented line
 /// under its [BookingTodoRow] in the itinerary (or standalone in detail-only
@@ -153,11 +154,12 @@ class BookingDetailRow extends StatelessWidget {
     }
     final calendar = _calendarButton(l10n);
 
-    // Indented to sit under the todo row's title column (12px padding + 18px
-    // icon + 8px gap); detail-only rows share the alignment so mixed lists
-    // stay rhythmic.
+    // Indented to sit under the todo rows' title column (12px row padding +
+    // the fixed leading slot + 8px gap); detail-only rows share the alignment
+    // so mixed lists stay rhythmic.
     return Padding(
-      padding: const EdgeInsets.only(left: 38, top: 2, bottom: 2),
+      padding: const EdgeInsets.only(
+          left: 12 + kBookingRowLeadingSlot + 8, top: 2, bottom: 2),
       child: Row(
         children: [
           Icon(

@@ -51,6 +51,13 @@ String _providerOpenLabel(
       : l10n.bookingCardOpenIn(brand);
 }
 
+/// Width of the fixed leading slot in a [BookingTodoRow]: the 18px kind icon
+/// plus the 16px mode-menu caret (see [_ModeMenu]). Every row reserves the
+/// full slot — stay rows, transport rows with the mode menu, and transport
+/// rows without it — so their titles all start at the same x.
+/// BookingDetailRow derives its indent from this; change it here only.
+const double kBookingRowLeadingSlot = 34; // 18 icon + 16 caret
+
 /// A styled booking checklist card: an icon by kind, the title + dates, a
 /// "Booked" checkbox, and a button that opens the pre-filled search link.
 class BookingTodoCard extends StatelessWidget {
@@ -198,10 +205,19 @@ class BookingTodoRow extends StatelessWidget {
       padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
       child: Row(
         children: [
-          if (todo.kind == 'transport' && onModeChanged != null)
-            _ModeMenu(todo: todo, onModeChanged: onModeChanged!)
-          else
-            Icon(_kindIcon(todo), size: 18, color: theme.colorScheme.primary),
+          // Fixed-width slot, left-aligned child: with or without the caret,
+          // every row's title starts at the same x. Align keeps the
+          // constraints loose so the menu's hit target is unchanged.
+          SizedBox(
+            width: kBookingRowLeadingSlot,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: todo.kind == 'transport' && onModeChanged != null
+                  ? _ModeMenu(todo: todo, onModeChanged: onModeChanged!)
+                  : Icon(_kindIcon(todo),
+                      size: 18, color: theme.colorScheme.primary),
+            ),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -226,19 +242,34 @@ class BookingTodoRow extends StatelessWidget {
               ],
             ),
           ),
-          TextButton.icon(
-            onPressed: onOpen,
-            icon: const Icon(Icons.open_in_new, size: 18),
-            // Booked rows recede: the link stays usable (re-check a price,
-            // find the confirmation email's provider) but stops competing
-            // with unbooked rows for attention.
-            style: todo.booked
-                ? TextButton.styleFrom(foregroundColor: muted)
-                : null,
-            label: Text(_providerOpenLabel(
-                context.l10n, todo, openLabelOverride,
-                compact: compact)),
-          ),
+          // Compact rows drop the external-link glyph along with the long
+          // label: at the 360px overflow floor the row's fixed chrome
+          // (leading slot + button + kebab + checkbox) must leave the title
+          // a nonzero share.
+          if (compact)
+            TextButton(
+              onPressed: onOpen,
+              style: todo.booked
+                  ? TextButton.styleFrom(foregroundColor: muted)
+                  : null,
+              child: Text(_providerOpenLabel(
+                  context.l10n, todo, openLabelOverride,
+                  compact: true)),
+            )
+          else
+            TextButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.open_in_new, size: 18),
+              // Booked rows recede: the link stays usable (re-check a price,
+              // find the confirmation email's provider) but stops competing
+              // with unbooked rows for attention.
+              style: todo.booked
+                  ? TextButton.styleFrom(foregroundColor: muted)
+                  : null,
+              label: Text(_providerOpenLabel(
+                  context.l10n, todo, openLabelOverride,
+                  compact: false)),
+            ),
           if (onAddDetails != null)
             PopupMenuButton<String>(
               icon: Icon(Icons.more_vert, size: 18, color: muted),

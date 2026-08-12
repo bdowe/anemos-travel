@@ -2404,8 +2404,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
+              // left: lines the icon up with the booking rows' kind icons,
+              // which sit at 12px (BookingTodoRow's own left padding).
               padding: const EdgeInsets.only(
-                  top: AppSpacing.sm, bottom: AppSpacing.xs),
+                  left: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.xs),
               child: Row(
                 children: [
                   Icon(Icons.verified, size: 16, color: AppColors.toolLocal),
@@ -2514,7 +2516,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       child: Consumer(builder: (context, ref, _) {
         final async = ref.watch(eventsByCityProvider(query));
         final header = Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
+          // left: lines the icon up with the booking rows' kind icons, which
+          // sit at 12px (BookingTodoRow's own left padding).
+          padding: const EdgeInsets.only(
+              left: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.xs),
           child: Row(
             children: [
               Icon(Icons.local_activity, size: 16, color: AppColors.toolEvents),
