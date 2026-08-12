@@ -86,7 +86,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Europe',
-      status: 'planned',
       startDate: '2026-06-10',
       endDate: '2026-06-14',
       createdAt: '2026-06-01',

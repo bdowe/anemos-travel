@@ -21,7 +21,6 @@ ItineraryItem _item(int pos, String name, String city, {int? day}) =>
 Trip _trip(List<ItineraryItem> items, List<TripLegDto>? legs) => Trip(
       id: 't1',
       title: 'Parity',
-      status: 'planned',
       startDate: '2026-08-24',
       endDate: '2026-08-28',
       createdAt: '2026-08-01',

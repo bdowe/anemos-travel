@@ -2606,24 +2606,6 @@ abstract class AppLocalizations {
   /// **'Add dates'**
   String get tripAddDates;
 
-  /// No description provided for @tripChangeStatus.
-  ///
-  /// In en, this message translates to:
-  /// **'Change status'**
-  String get tripChangeStatus;
-
-  /// No description provided for @tripStatusDraft.
-  ///
-  /// In en, this message translates to:
-  /// **'Draft'**
-  String get tripStatusDraft;
-
-  /// No description provided for @tripStatusPlanned.
-  ///
-  /// In en, this message translates to:
-  /// **'Planned'**
-  String get tripStatusPlanned;
-
   /// No description provided for @tripCoPlanningWith.
   ///
   /// In en, this message translates to:
@@ -3205,18 +3187,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Weekend in Tokyo'**
   String get homeSuggestionTokyo;
-
-  /// No description provided for @homeStatusDraft.
-  ///
-  /// In en, this message translates to:
-  /// **'Draft'**
-  String get homeStatusDraft;
-
-  /// No description provided for @homeStatusPlanned.
-  ///
-  /// In en, this message translates to:
-  /// **'Planned'**
-  String get homeStatusPlanned;
 
   /// No description provided for @homeLocalGuidesTitle.
   ///

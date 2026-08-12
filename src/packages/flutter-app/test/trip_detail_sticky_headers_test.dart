@@ -41,7 +41,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Two cities',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       items: [

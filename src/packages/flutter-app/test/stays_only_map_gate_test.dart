@@ -36,7 +36,6 @@ class _FakeTripsApiService extends TripsApiService {
 Trip _trip({List<ItineraryItem>? items, List<Accommodation>? stays}) => Trip(
       id: 't1',
       title: 'Lisbon long weekend',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       items: items ?? const [],

@@ -26,7 +26,6 @@ class _FakeTripsApiService extends TripsApiService {
 Trip _trip({String? access, List<BookingTodo>? todos}) => Trip(
       id: 't1',
       title: 'Sevilla week',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       startDate: '2026-09-01',

@@ -75,7 +75,6 @@ class HomeScreen extends ConsumerWidget {
             tripId: r.tripId,
             title: r.title,
             dateRange: r.dateRange,
-            status: r.status,
           )));
     // Populated app-wide: AppShell's IndexedStack keeps TripsListScreen
     // mounted, and its loadTrips() feeds tripsProvider — no fetch from here.
@@ -220,7 +219,6 @@ class HomeScreen extends ConsumerWidget {
                       ? _RecentTripCard(
                           title: recentTrip.title,
                           dateRange: recentTrip.dateRange,
-                          status: recentTrip.status,
                           onTap: () =>
                               openTripOnTripsTab(ref, recentTrip.tripId),
                         )
@@ -483,15 +481,6 @@ class _AgentHeroCard extends StatelessWidget {
   }
 }
 
-/// Trip status is a canonical API value ('draft' / 'planned') — only its
-/// display label is translated; anything unrecognized keeps its raw
-/// capitalized form (specs/i18n-spanish).
-String _statusLabel(AppLocalizations l10n, String status) => switch (status) {
-      '' || 'draft' => l10n.homeStatusDraft,
-      'planned' => l10n.homeStatusPlanned,
-      _ => '${status[0].toUpperCase()}${status.substring(1)}',
-    };
-
 /// One-tap way back into the most recently viewed trip, styled as a lighter
 /// sibling of the hero card (same teal family as the app bar gradient).
 /// Rendered inside the "Continue where you left off" section, which supplies
@@ -499,26 +488,20 @@ String _statusLabel(AppLocalizations l10n, String status) => switch (status) {
 class _RecentTripCard extends StatelessWidget {
   final String title;
   final String? dateRange;
-  final String status;
   final VoidCallback onTap;
 
   const _RecentTripCard({
     required this.title,
     required this.dateRange,
-    required this.status,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l10n = context.l10n;
-    // Date + status snapshot, styled white-on-teal to match the card rather
-    // than the light-surface StatusPill used elsewhere.
-    final meta = <String>[
-      if (dateRange != null && dateRange!.isNotEmpty) dateRange!,
-      _statusLabel(l10n, status),
-    ].join('  ·  ');
+    // Date snapshot, styled white-on-teal to match the card; the line is
+    // dropped entirely for an undated trip.
+    final meta = (dateRange != null && dateRange!.isNotEmpty) ? dateRange! : null;
 
     return Container(
       decoration: BoxDecoration(
@@ -562,15 +545,17 @@ class _RecentTripCard extends StatelessWidget {
                               color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            meta,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.85),
+                          if (meta != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              meta,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.85),
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),

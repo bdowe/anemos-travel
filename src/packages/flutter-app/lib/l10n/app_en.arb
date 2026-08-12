@@ -926,9 +926,6 @@
   "tripBudgetTargetHint": "Leave blank to just track spending",
   "tripRename": "Rename",
   "tripAddDates": "Add dates",
-  "tripChangeStatus": "Change status",
-  "tripStatusDraft": "Draft",
-  "tripStatusPlanned": "Planned",
   "tripCoPlanningWith": "Co-planning with {name} — your changes save for everyone.",
   "@tripCoPlanningWith": {
     "placeholders": {
@@ -1175,8 +1172,6 @@
   "homeSuggestionParis": "2 days in Paris",
   "homeSuggestionRome": "Museums in Rome",
   "homeSuggestionTokyo": "Weekend in Tokyo",
-  "homeStatusDraft": "Draft",
-  "homeStatusPlanned": "Planned",
   "homeLocalGuidesTitle": "Local guides",
   "homeGuideByline": "By {name}",
   "@homeGuideByline": {

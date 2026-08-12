@@ -80,7 +80,6 @@ ItineraryItem _item(
 Trip _threeCityTrip() => Trip(
       id: 't1',
       title: 'Grand tour',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       startDate: '2026-09-01',
@@ -322,7 +321,6 @@ void main() {
       Trip(
         id: 't1',
         title: 'Paris twice',
-        status: 'planned',
         createdAt: '2026-06-01',
         updatedAt: '2026-06-01',
         startDate: '2026-09-01',
@@ -499,7 +497,6 @@ void main() {
       Trip(
         id: 't1',
         title: 'Just Paris',
-        status: 'planned',
         createdAt: '2026-06-01',
         updatedAt: '2026-06-01',
         startDate: '2026-09-01',

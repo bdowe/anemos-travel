@@ -74,7 +74,6 @@ UserModel fakeUser() => UserModel(
 Trip fakeTrip(String id) => Trip(
       id: id,
       title: 'Lisbon long weekend',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       items: const [],

@@ -37,7 +37,6 @@ String _rel(int days) => _iso(DateTime.now().add(Duration(days: days)));
 Trip _trip(String id, String title, {List<String>? cities}) => Trip(
       id: id,
       title: title,
-      status: 'planned',
       startDate: _rel(10),
       endDate: _rel(20),
       cities: cities,
@@ -113,7 +112,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Big Summer Adventure 2026',
-      status: 'planned',
       startDate: _rel(-1),
       endDate: _rel(1),
       cities: const ['Prague', 'Kraków', 'Berlin'],

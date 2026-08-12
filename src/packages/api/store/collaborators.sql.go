@@ -52,7 +52,7 @@ func (q *Queries) CreateTripCollaborator(ctx context.Context, arg CreateTripColl
 }
 
 const getEditableTripByID = `-- name: GetEditableTripByID :one
-SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.status, t.chat_id, t.summary, t.updated_by, t.travel_mode FROM trips t
+SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode FROM trips t
 WHERE t.id = $1
   AND (t.user_id = $2 OR EXISTS (
         SELECT 1 FROM trip_collaborators c
@@ -79,7 +79,6 @@ func (q *Queries) GetEditableTripByID(ctx context.Context, arg GetEditableTripBy
 		&i.Title,
 		&i.StartDate,
 		&i.EndDate,
-		&i.Status,
 		&i.ChatID,
 		&i.Summary,
 		&i.UpdatedBy,
@@ -89,7 +88,7 @@ func (q *Queries) GetEditableTripByID(ctx context.Context, arg GetEditableTripBy
 }
 
 const getViewableTripByID = `-- name: GetViewableTripByID :one
-SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.status, t.chat_id, t.summary, t.updated_by, t.travel_mode, CASE WHEN t.user_id = $2 THEN 'owner' ELSE c.role END::text AS access
+SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, CASE WHEN t.user_id = $2 THEN 'owner' ELSE c.role END::text AS access
 FROM trips t
 LEFT JOIN trip_collaborators c ON c.owner_id = t.user_id AND c.chat_id = t.chat_id
      AND c.user_id = $2 AND c.revoked_at IS NULL
@@ -109,7 +108,6 @@ type GetViewableTripByIDRow struct {
 	Title      string      `json:"title"`
 	StartDate  pgtype.Date `json:"start_date"`
 	EndDate    pgtype.Date `json:"end_date"`
-	Status     string      `json:"status"`
 	ChatID     *string     `json:"chat_id"`
 	Summary    *string     `json:"summary"`
 	UpdatedBy  pgtype.UUID `json:"updated_by"`
@@ -132,7 +130,6 @@ func (q *Queries) GetViewableTripByID(ctx context.Context, arg GetViewableTripBy
 		&i.Title,
 		&i.StartDate,
 		&i.EndDate,
-		&i.Status,
 		&i.ChatID,
 		&i.Summary,
 		&i.UpdatedBy,
@@ -192,14 +189,14 @@ func (q *Queries) ListCollaboratorsByOwnerAndChat(ctx context.Context, arg ListC
 
 const listLatestCollaboratedTripsForUser = `-- name: ListLatestCollaboratedTripsForUser :many
 SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
-       latest.title, latest.start_date, latest.end_date, latest.status,
+       latest.title, latest.start_date, latest.end_date,
        latest.chat_id, latest.role, latest.version_count,
        COALESCE(c2.cities, ARRAY[]::text[])::text[] AS cities,
        COALESCE(u.display_name, '')::text AS owner_name
 FROM (
   SELECT DISTINCT ON (t.chat_id)
          t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date,
-         t.end_date, t.status, t.chat_id, c.role,
+         t.end_date, t.chat_id, c.role,
          count(*) OVER (PARTITION BY t.chat_id) AS version_count
   FROM trips t
   JOIN trip_collaborators c ON c.owner_id = t.user_id AND c.chat_id = t.chat_id
@@ -229,7 +226,6 @@ type ListLatestCollaboratedTripsForUserRow struct {
 	Title        string      `json:"title"`
 	StartDate    pgtype.Date `json:"start_date"`
 	EndDate      pgtype.Date `json:"end_date"`
-	Status       string      `json:"status"`
 	ChatID       *string     `json:"chat_id"`
 	Role         string      `json:"role"`
 	VersionCount int64       `json:"version_count"`
@@ -256,7 +252,6 @@ func (q *Queries) ListLatestCollaboratedTripsForUser(ctx context.Context, userID
 			&i.Title,
 			&i.StartDate,
 			&i.EndDate,
-			&i.Status,
 			&i.ChatID,
 			&i.Role,
 			&i.VersionCount,

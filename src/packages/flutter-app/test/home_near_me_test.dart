@@ -82,7 +82,6 @@ String _iso(DateTime d) =>
 Trip _liveTrip() => Trip(
       id: 't1',
       title: 'Athens Trip',
-      status: 'planned',
       startDate: _iso(DateTime.now().subtract(const Duration(days: 1))),
       endDate: _iso(DateTime.now().add(const Duration(days: 1))),
       createdAt: '2026-06-01',

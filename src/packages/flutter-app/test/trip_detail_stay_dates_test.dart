@@ -87,7 +87,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Iberia',
-      status: 'planned',
       startDate: '2026-08-24',
       endDate: '2026-08-28',
       createdAt: '2026-08-01',
@@ -144,7 +143,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Big Summer',
-      status: 'planned',
       startDate: '2026-08-24',
       endDate: '2026-09-01',
       createdAt: '2026-08-01',
@@ -211,7 +209,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Iberia',
-      status: 'planned',
       startDate: '2026-08-24',
       endDate: '2026-08-28',
       createdAt: '2026-08-01',

@@ -257,7 +257,6 @@ func duplicateSharedTripHandler(w http.ResponseWriter, r *http.Request) {
 	copyTrip, err := qtx.CreateTrip(ctx, store.CreateTripParams{
 		UserID:     user.ID,
 		Title:      src.Title + " (copy)",
-		Status:     "draft",
 		ChatID:     &newChatID,
 		Summary:    src.Summary,
 		TravelMode: src.TravelMode,

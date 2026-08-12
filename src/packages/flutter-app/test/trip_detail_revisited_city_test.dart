@@ -45,7 +45,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'Athens & Santorini',
-      status: 'planned',
       createdAt: '2026-09-10',
       updatedAt: '2026-09-10',
       items: [
@@ -88,7 +87,6 @@ void main() {
     final trip = Trip(
       id: 't2',
       title: 'Athens & Santorini',
-      status: 'planned',
       createdAt: '2026-09-10',
       updatedAt: '2026-09-10',
       items: [

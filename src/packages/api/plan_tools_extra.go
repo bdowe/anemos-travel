@@ -636,7 +636,7 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 		var b strings.Builder
 		fmt.Fprintf(&b, "The traveler's saved trips (%d):\n", len(trips))
 		for _, t := range trips {
-			line := fmt.Sprintf("- %s [id: %s] — %s", t.Title, t.ID, t.Status)
+			line := fmt.Sprintf("- %s [id: %s]", t.Title, t.ID)
 			if d := dateString(t.StartDate); d != "" {
 				line += ", starts " + d
 			}
@@ -671,7 +671,7 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "Trip %q [id: %s], status %s", trip.Title, trip.ID, trip.Status)
+	fmt.Fprintf(&b, "Trip %q [id: %s]", trip.Title, trip.ID)
 	if d := dateString(trip.StartDate); d != "" {
 		fmt.Fprintf(&b, ", %s", d)
 		if e := dateString(trip.EndDate); e != "" {

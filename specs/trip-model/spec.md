@@ -151,7 +151,8 @@ struct/class definitions.
   - *Status* — a lifecycle label. Phase 1 supports **draft** (the default on
     creation) and **planned**; transitions are not gated (either value can be set
     freely). Future phases may add values (e.g. **completed**), so the model must
-    not assume the set is closed.
+    not assume the set is closed. *(Superseded 2026-08: the manual status was
+    retired — see specs/retire-trip-status.)*
   - *Created at* — the timestamp when the Trip was first persisted; immutable.
   - *Updated at* — the timestamp of the most recent change to any Trip field.
 
@@ -274,3 +275,5 @@ struct/class definitions.
 - **Status values — `draft` (default) and `planned`; transitions not gated.**
   Either value can be set freely; no precondition (e.g. dates required) is
   enforced this phase. The value set is left open for future additions.
+  *(Superseded 2026-08: the manual status was retired and its consumers now
+  derive their signals — see specs/retire-trip-status.)*

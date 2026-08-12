@@ -35,7 +35,6 @@ Trip _trip(
     Trip(
       id: 't1',
       title: 'Fixture',
-      status: 'planned',
       startDate: startDate,
       endDate: endDate,
       createdAt: '2026-08-01',

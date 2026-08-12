@@ -318,7 +318,6 @@ class _TripCard extends ConsumerWidget {
                 _DateChip(label: range)
               else
                 Text(l10n.tripsListCreated(shortDate(trip.createdAt))),
-              StatusPill(status: trip.status),
               if (!trip.isOwner && (trip.ownerName ?? '').isNotEmpty)
                 Text(
                   trip.canEdit

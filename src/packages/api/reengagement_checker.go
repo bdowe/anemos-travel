@@ -19,9 +19,11 @@ import (
 // first run, dbPool-nil guard, pure email builders + fire-and-forget sends).
 //
 //   - Trip reminders fire 3 days before departure ('trip_soon') and on the
-//     departure day ('trip_today') for planned, dated trips.
-//   - A weekly nudge re-invites users who started planning (a draft trip or a
-//     resumable plan chat) but have gone quiet for a week.
+//     departure day ('trip_today') for dated trips.
+//   - A weekly nudge re-invites users who started planning but have gone
+//     quiet for a week with unfinished work: an undated trip, an upcoming
+//     trip with unbooked booking todos, or a resumable plan chat
+//     (specs/retire-trip-status — derived signals, no status flag).
 //
 // Posture (Brian): all three are opt-out (default on), and the in-app
 // notification is ALWAYS written regardless of the email opt-out — only the
@@ -160,8 +162,12 @@ func (c *reengagementChecker) sendTripReminder(ctx context.Context, q *store.Que
 
 func (c *reengagementChecker) runWeeklyNudge(ctx context.Context, q *store.Queries, now time.Time) {
 	cutoff := now.AddDate(0, 0, -nudgeIdleDays)
+	// Calendar date (UTC) for the upcoming-trip arm of the unfinished-work
+	// predicate, same convention as runTripReminders' target dates.
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	rows, err := q.ListUsersForWeeklyNudge(ctx, store.ListUsersForWeeklyNudgeParams{
 		Cutoff:   pgTimestamptz(cutoff),
+		Today:    pgtype.Date{Time: today, Valid: true},
 		RowLimit: int32(c.batchSize),
 	})
 	if err != nil {

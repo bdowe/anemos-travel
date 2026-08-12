@@ -113,7 +113,6 @@ const _confirmedLeg = TripSegment(
 Trip _trip({String? access, List<BookingTodo>? todos}) => Trip(
       id: 't1',
       title: 'Paris',
-      status: 'planned',
       startDate: '2026-06-10',
       endDate: '2026-06-12',
       createdAt: '2026-06-01',

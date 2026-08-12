@@ -28,7 +28,6 @@ class _EmptyTripsApiService extends TripsApiService {
 Trip _sharedTrip() => Trip(
       id: 'shared-1',
       title: 'Athens Together',
-      status: 'planned',
       startDate: '2026-08-01',
       endDate: '2026-08-05',
       createdAt: '2026-06-01',

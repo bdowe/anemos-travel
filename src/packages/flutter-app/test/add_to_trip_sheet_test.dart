@@ -54,7 +54,6 @@ Trip _trip({List<ItineraryItem> items = const [], String? start, String? end}) =
     Trip(
       id: 't1',
       title: 'Lisbon Trip',
-      status: 'draft',
       startDate: start,
       endDate: end,
       createdAt: '2026-06-01',

@@ -174,7 +174,7 @@ func createTestTrip(t *testing.T, owner uuid.UUID, items int) store.Trip {
 	q := store.New(dbPool)
 	chat := uuid.NewString()
 	trip, err := q.CreateTrip(ctx, store.CreateTripParams{
-		UserID: owner, Title: "Test Trip", Status: "draft", ChatID: &chat,
+		UserID: owner, Title: "Test Trip", ChatID: &chat,
 	})
 	if err != nil {
 		t.Fatalf("createTestTrip: %v", err)

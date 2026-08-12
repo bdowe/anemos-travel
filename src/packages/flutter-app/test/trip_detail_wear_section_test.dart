@@ -95,7 +95,6 @@ Trip _trip({String? access, List<ItineraryItem>? items, String? endDate}) =>
     Trip(
       id: 't1',
       title: 'Paris',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       startDate: '2026-09-15',

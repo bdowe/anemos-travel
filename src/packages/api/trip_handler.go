@@ -53,7 +53,6 @@ type TripResponse struct {
 	Summary        *string                 `json:"summary,omitempty"`
 	StartDate      *string                 `json:"start_date,omitempty"`
 	EndDate        *string                 `json:"end_date,omitempty"`
-	Status         string                  `json:"status"`
 	ChatID         *string                 `json:"chat_id,omitempty"`
 	TravelMode     *string                 `json:"travel_mode,omitempty"`
 	VersionCount   int                     `json:"version_count"`
@@ -129,17 +128,17 @@ type TripStatusResponse struct {
 	UpdatedByName *string   `json:"updated_by_name,omitempty"`
 }
 
+// PatchTripRequest deliberately has no Status field: the draft/planned label
+// is retired (specs/retire-trip-status). Stale clients that still send
+// {"status": ...} are tolerated — the decoder ignores unknown keys.
 type PatchTripRequest struct {
 	Title     *string `json:"title"`
 	StartDate *string `json:"start_date"`
 	EndDate   *string `json:"end_date"`
-	Status    *string `json:"status"`
 	// TravelMode cannot be cleared back to NULL over PATCH (COALESCE update);
 	// 'mixed' is the effective unset.
 	TravelMode *string `json:"travel_mode"`
 }
-
-var allowedStatuses = map[string]bool{"draft": true, "planned": true}
 
 // allowedTravelModes are the trip-level travel_mode values: the segment modes
 // (minus 'other') plus 'mixed' for genuinely multi-mode trips. NULL/unset
@@ -219,7 +218,6 @@ func toTripResponse(t store.Trip, items []store.ItineraryItem, accommodations []
 		Summary:    t.Summary,
 		StartDate:  dateToPtr(t.StartDate),
 		EndDate:    dateToPtr(t.EndDate),
-		Status:     t.Status,
 		ChatID:     t.ChatID,
 		TravelMode: t.TravelMode,
 		CreatedAt:  t.CreatedAt,
@@ -313,7 +311,7 @@ func persistTrip(ctx context.Context, userID uuid.UUID, chatID, title, summary, 
 		modePtr = &m
 	}
 
-	trip, err := q.CreateTrip(ctx, store.CreateTripParams{UserID: userID, Title: finalTitle, Status: "draft", ChatID: chatPtr, Summary: summaryPtr, TravelMode: modePtr})
+	trip, err := q.CreateTrip(ctx, store.CreateTripParams{UserID: userID, Title: finalTitle, ChatID: chatPtr, Summary: summaryPtr, TravelMode: modePtr})
 	if err != nil {
 		return "", false, err
 	}
@@ -393,7 +391,6 @@ func listTripsHandler(w http.ResponseWriter, r *http.Request) {
 			Title:     t.Title,
 			StartDate: t.StartDate,
 			EndDate:   t.EndDate,
-			Status:    t.Status,
 			ChatID:    t.ChatID,
 		}, nil, nil, nil, nil)
 		resp.VersionCount = int(t.VersionCount)
@@ -438,7 +435,7 @@ func getTripHandler(w http.ResponseWriter, r *http.Request) {
 	trip := store.Trip{
 		ID: row.ID, UserID: row.UserID, CreatedAt: row.CreatedAt,
 		UpdatedAt: row.UpdatedAt, Title: row.Title, StartDate: row.StartDate,
-		EndDate: row.EndDate, Status: row.Status, ChatID: row.ChatID,
+		EndDate: row.EndDate, ChatID: row.ChatID,
 		Summary: row.Summary, UpdatedBy: row.UpdatedBy, TravelMode: row.TravelMode,
 	}
 	q := store.New(dbPool)
@@ -638,7 +635,7 @@ func refineTripHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func patchTripHandler(w http.ResponseWriter, r *http.Request) {
-	// Editors may adjust title/dates/status too. UpdateTrip's WHERE user_id
+	// Editors may adjust title/dates too. UpdateTrip's WHERE user_id
 	// stays owner-scoped — satisfied by the OWNER's id off the authorized row.
 	authorized, ok := editableTrip(w, r)
 	if !ok {
@@ -651,10 +648,6 @@ func patchTripHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Status != nil && !allowedStatuses[*req.Status] {
-		writeJSONError(w, http.StatusBadRequest, "status must be 'draft' or 'planned'")
-		return
-	}
 	if req.TravelMode != nil && !allowedTravelModes[*req.TravelMode] {
 		writeJSONError(w, http.StatusBadRequest, "travel_mode must be one of: flight, car, train, bus, ferry, mixed")
 		return
@@ -692,7 +685,6 @@ func patchTripHandler(w http.ResponseWriter, r *http.Request) {
 		Title:      req.Title,
 		StartDate:  start,
 		EndDate:    end,
-		Status:     req.Status,
 		TravelMode: req.TravelMode,
 		ID:         id,
 		UserID:     authorized.UserID,

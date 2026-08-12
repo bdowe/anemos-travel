@@ -65,7 +65,6 @@ List<ItineraryItem> _items() => [
 Trip _trip({List<ItineraryItem>? items, List<Accommodation>? stays}) => Trip(
       id: 't1',
       title: 'Paris & Rome',
-      status: 'planned',
       startDate: '2026-09-01',
       endDate: '2026-09-05',
       createdAt: '2026-08-01',
@@ -267,7 +266,6 @@ void main() {
         trip: Trip(
           id: 't2',
           title: 'Day trip',
-          status: 'planned',
           startDate: '2026-09-01',
           endDate: '2026-09-01',
           createdAt: '2026-08-01',
@@ -514,7 +512,6 @@ void main() {
         trip: Trip(
           id: 't3',
           title: 'No dates',
-          status: 'planned',
           createdAt: '2026-08-01',
           updatedAt: '2026-08-01',
           items: _items(),

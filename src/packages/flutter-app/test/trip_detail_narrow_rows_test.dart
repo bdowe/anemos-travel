@@ -45,7 +45,6 @@ ItineraryItem _item(int pos, String name, String category,
 Trip _trip({String? access}) => Trip(
       id: 't1',
       title: 'Sevilla week',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       startDate: '2026-09-01',
@@ -166,7 +165,6 @@ void main() {
     final trip = Trip(
       id: 't1',
       title: 'A very long trip title that will need to ellipsize somewhere',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       startDate: '2026-09-01',

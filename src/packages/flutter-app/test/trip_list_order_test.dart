@@ -17,7 +17,6 @@ Trip _trip(
     Trip(
       id: id,
       title: id,
-      status: 'draft',
       startDate: start,
       endDate: end,
       createdAt: created,

@@ -16,11 +16,21 @@ func TestTripOwnerCRUD(t *testing.T) {
 		t.Fatalf("owner GET = %d: %s", get.Code, get.Body.String())
 	}
 
+	// Stale-client compat pin (specs/retire-trip-status): a PATCH that still
+	// sends the retired status field must succeed — the unknown key is
+	// ignored — and the response must not carry a status field.
 	patch := doJSON(t, "PATCH", "/api/v1/trips/"+trip.ID.String(), token, map[string]any{
 		"status": "planned",
 	})
 	if patch.Code != http.StatusOK {
 		t.Fatalf("owner PATCH = %d: %s", patch.Code, patch.Body.String())
+	}
+	var patched map[string]any
+	if err := json.Unmarshal(patch.Body.Bytes(), &patched); err != nil {
+		t.Fatalf("decode PATCH response: %v", err)
+	}
+	if _, ok := patched["status"]; ok {
+		t.Fatalf("trip response still carries retired status field: %s", patch.Body.String())
 	}
 
 	del := doJSON(t, "DELETE", "/api/v1/trips/"+trip.ID.String(), token, nil)
@@ -45,7 +55,7 @@ func TestTripOwnershipIsolation(t *testing.T) {
 		body   any
 	}{
 		{"GET", nil},
-		{"PATCH", map[string]any{"status": "planned"}},
+		{"PATCH", map[string]any{"title": "Hijacked"}},
 		{"DELETE", nil},
 	} {
 		if rec := doJSON(t, tc.method, path, intruderToken, tc.body); rec.Code != http.StatusNotFound {
@@ -88,10 +98,10 @@ func TestTripPatchValidation(t *testing.T) {
 	trip := createTestTrip(t, owner.ID, 1)
 
 	rec := doJSON(t, "PATCH", "/api/v1/trips/"+trip.ID.String(), token, map[string]any{
-		"status": "abandoned",
+		"start_date": "08/01/2026",
 	})
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("invalid status = %d, want 400", rec.Code)
+		t.Fatalf("invalid start_date = %d, want 400", rec.Code)
 	}
 }
 
@@ -114,9 +124,9 @@ func TestTripPatchTravelMode(t *testing.T) {
 	}
 
 	// A later PATCH that omits travel_mode must not clear it.
-	rec = doJSON(t, "PATCH", path, token, map[string]any{"status": "planned"})
+	rec = doJSON(t, "PATCH", path, token, map[string]any{"title": "Renamed"})
 	if rec.Code != http.StatusOK {
-		t.Fatalf("PATCH status = %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("PATCH title = %d: %s", rec.Code, rec.Body.String())
 	}
 	resp = TripResponse{}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {

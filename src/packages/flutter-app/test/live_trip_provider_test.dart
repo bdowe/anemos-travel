@@ -9,7 +9,6 @@ import 'package:travel_route_planner/providers/live_trip_provider.dart';
 Trip _trip(String id, {String? start, String? end}) => Trip(
       id: id,
       title: 'Trip $id',
-      status: 'planned',
       startDate: start,
       endDate: end,
       createdAt: '2026-06-01',

@@ -59,7 +59,6 @@ ItineraryItem _item(int pos, String name, int day) => ItineraryItem(
 Trip _twoDayTrip(DateTime start) => Trip(
       id: 't1',
       title: 'Weather Trip',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       startDate: _iso(start),
@@ -178,7 +177,6 @@ void main() {
     final undated = Trip(
       id: 't1',
       title: 'Undated',
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       items: [

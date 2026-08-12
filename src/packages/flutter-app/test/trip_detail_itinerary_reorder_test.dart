@@ -30,7 +30,6 @@ ItineraryItem _item(int pos, String name, String category,
 Trip _tripWith(List<ItineraryItem> items) => Trip(
       id: 't1',
       title: 'Paris',
-      status: 'planned',
       startDate: '2026-09-01',
       endDate: '2026-09-03',
       createdAt: '2026-08-01',

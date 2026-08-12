@@ -35,7 +35,6 @@ class _QueuedTripsApiService extends TripsApiService {
 Trip _trip(String title) => Trip(
       id: 't1',
       title: title,
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       items: [

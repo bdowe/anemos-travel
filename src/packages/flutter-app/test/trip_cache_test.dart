@@ -11,7 +11,6 @@ import 'package:travel_route_planner/services/trip_cache.dart';
 Trip _trip(String id, {String title = 'Trip'}) => Trip(
       id: id,
       title: title,
-      status: 'planned',
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
     );

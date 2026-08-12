@@ -6,17 +6,13 @@ import 'package:travel_route_planner/widgets/status_pill.dart';
 
 import 'support/l10n_test_app.dart';
 
-/// Wave-2 foundations (polish/wave2-foundations): the shared StatusPill and
-/// map chip widgets must resolve their labels through AppLocalizations —
-/// they previously shipped hardcoded English onto the trips list, the
-/// trip-detail header, and all three map surfaces. (MapLegChips' city labels
-/// are data; only its "All" chip localizes.)
+/// Wave-2 foundations (polish/wave2-foundations): the shared map chip widget
+/// must resolve its labels through AppLocalizations — it previously shipped
+/// hardcoded English onto all three map surfaces. (MapLegChips' city labels
+/// are data; only its "All" chip localizes.) StatusPill's draft/planned
+/// variant is retired (specs/retire-trip-status); the surviving custom pill
+/// renders its explicit label verbatim.
 void main() {
-  Widget pill(String status, {Locale? locale}) => localizedTestApp(
-        home: Scaffold(body: StatusPill(status: status)),
-        locale: locale,
-      );
-
   Widget chips({Locale? locale}) => localizedTestApp(
         home: Scaffold(
           body: MapLegChips(
@@ -31,30 +27,18 @@ void main() {
         locale: locale,
       );
 
-  group('StatusPill localization', () {
-    testWidgets('renders English labels under en', (tester) async {
-      await tester.pumpWidget(pill('draft'));
-      expect(find.text('Draft'), findsOneWidget);
-    });
-
-    testWidgets('renders Spanish labels under es', (tester) async {
-      await tester.pumpWidget(pill('draft', locale: const Locale('es')));
-      expect(find.text('Borrador'), findsOneWidget);
-      expect(find.text('Draft'), findsNothing);
-
-      await tester.pumpWidget(pill('planned', locale: const Locale('es')));
-      expect(find.text('Planificado'), findsOneWidget);
-    });
-
-    testWidgets('empty status falls back to draft copy', (tester) async {
-      await tester.pumpWidget(pill('', locale: const Locale('es')));
-      expect(find.text('Borrador'), findsOneWidget);
-    });
-
-    testWidgets('unknown status title-cases instead of rendering blank',
-        (tester) async {
-      await tester.pumpWidget(pill('archived'));
-      expect(find.text('Archived'), findsOneWidget);
+  group('StatusPill.custom', () {
+    testWidgets('renders its explicit label', (tester) async {
+      await tester.pumpWidget(localizedTestApp(
+        home: const Scaffold(
+          body: StatusPill.custom(
+            label: 'Live',
+            background: Colors.green,
+            foreground: Colors.white,
+          ),
+        ),
+      ));
+      expect(find.text('Live'), findsOneWidget);
     });
   });
 
