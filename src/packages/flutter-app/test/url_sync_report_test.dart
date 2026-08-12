@@ -75,8 +75,14 @@ void main() {
     expect(reports.last, '/trips');
   });
 
-  testWidgets('per-tab memory: switching away and back restores the page URL',
+  testWidgets(
+      'programmatic tab switches keep the background stack (and its URL)',
       (tester) async {
+    // Direct navIndexProvider writes are the switch+push path (Home trip
+    // cards, boot restore, shared-trip join): they must NOT reset the
+    // destination tab's stack — only nav-button selection does (selectTab).
+    // Guards against moving the reset into a navIndex listener, which would
+    // clobber those flows' pushes.
     final container = await pumpApp(tester);
     container.read(navIndexProvider.notifier).state = AppTab.trips.index;
     await tester.pumpAndSettle();

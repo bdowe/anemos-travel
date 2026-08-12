@@ -6,9 +6,9 @@ import 'package:travel_route_planner/navigation/app_nav.dart';
 import 'package:travel_route_planner/widgets/brand_logo.dart';
 
 /// Logo-links-home: the brand badge is tappable when given onTap (rail brand
-/// and Home app bar), and goHome mirrors the shell's tab-select behavior —
-/// switch to Home from another tab, pop Home's stack to root when already
-/// there.
+/// and Home app bar), and goHome mirrors the shell's tab-select behavior
+/// (selectTab): land on the Home ROOT — the Home stack is popped to its root
+/// whether the tap switches tabs or Home is already active.
 void main() {
   testWidgets('BrandBadge with onTap fires the callback',
       (WidgetTester tester) async {
@@ -95,6 +95,47 @@ void main() {
         .push(MaterialPageRoute(builder: (_) => const Text('pushed page')));
     await tester.pumpAndSettle();
     expect(find.text('pushed page'), findsOneWidget);
+
+    goHome(capturedRef);
+    await tester.pumpAndSettle();
+
+    expect(find.text('pushed page'), findsNothing);
+    expect(find.text('home root'), findsOneWidget);
+    expect(container.read(navIndexProvider), AppTab.home.index);
+  });
+
+  testWidgets(
+      'goHome from another tab also pops the Home stack to its root',
+      (WidgetTester tester) async {
+    // Mutation pin for the selectTab reset: the old goHome only flipped the
+    // index when coming from another tab, leaving a page stacked on Home to
+    // greet the user. Nav buttons must land on the page they name.
+    late WidgetRef capturedRef;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: Consumer(builder: (context, ref, _) {
+          capturedRef = ref;
+          final keys = ref.watch(tabNavKeysProvider);
+          return MaterialApp(
+            home: Navigator(
+              key: keys[AppTab.home.index],
+              onGenerateRoute: (settings) => MaterialPageRoute(
+                builder: (_) => const Text('home root'),
+                settings: settings,
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(Consumer)));
+    container
+        .read(tabNavKeysProvider)[AppTab.home.index]
+        .currentState!
+        .push(MaterialPageRoute(builder: (_) => const Text('pushed page')));
+    await tester.pumpAndSettle();
+    container.read(navIndexProvider.notifier).state = AppTab.trips.index;
 
     goHome(capturedRef);
     await tester.pumpAndSettle();
