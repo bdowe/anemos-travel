@@ -145,6 +145,36 @@ void main() {
     expect(tapped, isTrue);
   });
 
+  testWidgets('empty state never overflows a short preview-height box', (
+    WidgetTester tester,
+  ) async {
+    // Harsher than any real call site: the 180px phone preview minus the
+    // 44px chip-band inset and EmptyState's own padding leaves ~104px, and
+    // label + message + CTA (in the longer Spanish strings) is more content
+    // than any surface passes at that height. Widget tests rethrow
+    // RenderFlex overflows when the test ends, so a clean settle IS the
+    // no-overflow assertion.
+    await tester.pumpWidget(
+      _hostSized(
+        TripMap(
+          items: const [],
+          topOverlayInset: 64,
+          emptyLabel: 'No hay lugares marcados el día 3',
+          emptyMessage: 'Añade un lugar para verlo en el mapa.',
+          emptyAction: FilledButton(
+            onPressed: () {},
+            child: const Text('Añadir lugar'),
+          ),
+        ),
+        const Size(375, 180),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('No hay lugares marcados el día 3'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('changing fitSignature re-fits without crashing (smoke)', (
     WidgetTester tester,
   ) async {

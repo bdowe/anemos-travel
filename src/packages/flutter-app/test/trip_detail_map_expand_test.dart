@@ -186,6 +186,24 @@ void main() {
   });
 
   testWidgets(
+      'phone: a pin-less day keeps the inline preview inside its card '
+      '(no hint, no overflow)', (WidgetTester tester) async {
+    await pumpScreen(tester, surface: phone);
+
+    final chips = find.byType(MapDayChips);
+    await tester.tap(find.descendant(of: chips, matching: find.text('Day 3')));
+    await tester.pumpAndSettle();
+
+    // The preview shows only the label: the add-place hint invites an action
+    // the pointer-absorbing preview can't take, and it's what overflowed the
+    // 180px card. Widget tests rethrow RenderFlex overflows at test end —
+    // settling cleanly here IS the no-overflow assertion.
+    expect(find.text('No places pinned on Day 3'), findsOneWidget);
+    expect(find.text('Add a place to see it on the map.'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
       'escape key closes the full-screen map; a day picked '
       'there survives closing', (WidgetTester tester) async {
     await pumpScreen(tester, surface: phone);
@@ -211,12 +229,9 @@ void main() {
 
   testWidgets("escape closes the map from a pin-less day's empty state",
       (WidgetTester tester) async {
-    // Wide surface: the phone-size inline preview behind the route has a
-    // pre-existing EmptyState overflow on pin-less days that would fail this
-    // test before Escape is ever pressed.
-    await pumpScreen(tester, surface: const Size(1200, 800));
+    await pumpScreen(tester, surface: phone);
 
-    await tester.tap(inMap(find.byIcon(Icons.fullscreen)));
+    await tester.tap(find.byType(TripMap), warnIfMissed: false);
     await tester.pumpAndSettle();
 
     // Day 3 has no pins: TripMap drops the FlutterMap (and its focused

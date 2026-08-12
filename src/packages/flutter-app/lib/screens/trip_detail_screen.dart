@@ -4365,10 +4365,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               emptyLabel: day == null
                   ? l10n.tripNoMappedPlaces
                   : l10n.tripNoPlacesOnDay(day),
-              emptyMessage: _isOffline ? null : l10n.tripAddPlaceMapHint,
-              // The preview absorbs pointers, so its empty-state CTA could
-              // never be tapped; the pinned "+ Add place" button sits right
-              // below anyway.
+              // The preview absorbs pointers, so its empty-state add-place
+              // hint and CTA would invite an action it can't take (tapping
+              // opens the full-screen map, which has both); dropping them
+              // also keeps the empty state inside the 180px preview card.
+              // The pinned "+ Add place" button sits right below anyway.
+              emptyMessage:
+                  (expandable || _isOffline) ? null : l10n.tripAddPlaceMapHint,
               emptyAction: (expandable || _isOffline || _readOnly)
                   ? null
                   : FilledButton.tonalIcon(
