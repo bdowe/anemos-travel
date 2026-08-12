@@ -41,6 +41,12 @@ import '../utils/leg_ranges.dart';
 import '../utils/trip_days.dart';
 import '../utils/trip_legs.dart';
 import '../widgets/trip_map.dart';
+import '../widgets/trip_map_destinations.dart';
+
+// [groupLabelText] moved next to the map widget (trip_map_destinations.dart)
+// so the home screen's recent-trip map band shares it; re-exported here for
+// this file's existing consumers (the trip-detail screen).
+export '../widgets/trip_map_destinations.dart' show groupLabelText;
 
 /// City-header date-chip parts, kept separate so the header can align them as
 /// columns across rows: [range] renders left-aligned after the calendar icon,
@@ -76,11 +82,6 @@ typedef GroupedBookings = ({
   List<Accommodation> residualStays,
   List<TripSegment> residualSegments,
 });
-
-/// Display text for a city-group label: the canonical [kOtherPlacesLabel] key
-/// gets a translated label, every real city keeps the name as-is.
-String groupLabelText(AppLocalizations l10n, String label) =>
-    label == kOtherPlacesLabel ? l10n.tripOtherPlaces : label;
 
 /// True for the AI's "city filler" placeholder — an item whose name is just
 /// the city it renders under (e.g. name 'Prague', city 'Prague'), emitted for
@@ -460,20 +461,9 @@ class TripDerivation {
       }
     }
 
-    // Destination pins: one per location group with a real coordinate, in
-    // visit order; ungeocoded groups are skipped so the visible numbering
-    // stays contiguous.
-    final mapDestinations = <TripMapDestination>[
-      for (final r in rawRanges)
-        if (r.coord != null)
-          TripMapDestination(
-            label: groupLabelText(l10n, r.label),
-            point: LatLng(r.coord!.lat, r.coord!.lng),
-            dates: r.start != null && r.end != null
-                ? formatShortRange(r.start!, r.end!)
-                : null,
-          ),
-    ];
+    // Destination pins: the one construction site lives with the map widget
+    // (trip_map_destinations.dart), shared with the home recent-trip band.
+    final mapDestinations = tripMapDestinations(rawRanges, l10n);
 
     final firstCoord = rawRanges.isEmpty ? null : rawRanges.first.coord;
     final lastCoord = rawRanges.isEmpty ? null : rawRanges.last.coord;

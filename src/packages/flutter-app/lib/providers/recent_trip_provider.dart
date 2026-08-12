@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/trip.dart';
 import 'auth_provider.dart';
+import 'trip_cache_provider.dart';
 
 /// The trip detail screen the user last opened, remembered on-device so the
 /// home screen can offer a one-tap way back into it. Carries a snapshot of the
@@ -97,4 +99,24 @@ final recentTripProvider =
     StateNotifierProvider<RecentTripNotifier, RecentTrip?>((ref) {
   final userId = ref.watch(authProvider.select((s) => s.user?.id));
   return RecentTripNotifier(userId)..load();
+});
+
+/// Full cached detail of the recently viewed trip, feeding the home tile's
+/// map band. Cache-first and cache-ONLY: a miss (MRU eviction, fresh device)
+/// yields null and the tile renders its plain row — home never fetches, it
+/// only decorates what other screens load. The band therefore shows the trip
+/// *as of the last time this device viewed its detail* (accepted staleness:
+/// a collaborator's edit elsewhere appears on the next detail open).
+///
+/// Watches the WHOLE [recentTripProvider] state on purpose: [record] mints a
+/// fresh [RecentTrip] instance on every successful detail load, so this
+/// re-reads the just-rewritten cache after each detail view (edit → back home
+/// shows the new route). [TripCache.readTrip] drains queued writes first, so
+/// that read-after-write is safe. Watching [tripCacheProvider] (auth-keyed)
+/// re-resolves to null on sign-out.
+final recentTripDetailProvider = FutureProvider<Trip?>((ref) async {
+  final recent = ref.watch(recentTripProvider);
+  if (recent == null) return null;
+  final cached = await ref.watch(tripCacheProvider).readTrip(recent.tripId);
+  return cached?.trip;
 });
