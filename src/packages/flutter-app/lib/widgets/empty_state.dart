@@ -34,46 +34,55 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Center(
-      child: Padding(
-        padding: EdgeInsets.all(compact ? AppSpacing.lg : AppSpacing.xxl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: compact ? 32 : 64,
-              color: iconColor ?? theme.colorScheme.primary.withValues(alpha: 0.5),
-            ),
-            SizedBox(height: compact ? AppSpacing.sm : AppSpacing.lg),
-            Text(
-              title,
-              style: (compact
-                      ? theme.textTheme.titleMedium
-                      : theme.textTheme.titleLarge)
-                  ?.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            if (message != null) ...[
-              const SizedBox(height: AppSpacing.sm),
+      // Overflow floor for short fixed-height containers (inline map preview,
+      // large accessibility text scales, longer locales): when the content
+      // fits, the scroll view shrink-wraps and rendering is identical; when
+      // it doesn't, the block clips/scrolls instead of throwing a RenderFlex
+      // overflow.
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.all(compact ? AppSpacing.lg : AppSpacing.xxl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: compact ? 32 : 64,
+                color: iconColor ??
+                    theme.colorScheme.primary.withValues(alpha: 0.5),
+              ),
+              SizedBox(height: compact ? AppSpacing.sm : AppSpacing.lg),
               Text(
-                message!,
-                textAlign: TextAlign.center,
+                title,
                 style: (compact
-                        ? theme.textTheme.bodySmall
-                        : theme.textTheme.bodyMedium)
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        ? theme.textTheme.titleMedium
+                        : theme.textTheme.titleLarge)
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
               ),
+              if (message != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  message!,
+                  textAlign: TextAlign.center,
+                  style: (compact
+                          ? theme.textTheme.bodySmall
+                          : theme.textTheme.bodyMedium)
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
+              if (actions.isNotEmpty) ...[
+                SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  alignment: WrapAlignment.center,
+                  children: actions,
+                ),
+              ],
             ],
-            if (actions.isNotEmpty) ...[
-              SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                alignment: WrapAlignment.center,
-                children: actions,
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );
