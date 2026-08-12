@@ -7,6 +7,30 @@ actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 
 ## 2026-08-12 — trip-detail dogfooding (bookings view exit)
 
+- **[app] Friction → fixed (accordion city focus, supersedes the 08-11
+  two-way rules):** the 08-11 city-focus feel didn't hold up in use —
+  expanding one city didn't close the previously focused one; collapsing a
+  non-focused group did nothing to the map while re-expanding it re-fired
+  the camera; collapsing the focused group reset to All. All three were the
+  documented "multi-expansion, focus = last expanded, non-focused collapse
+  inert" design — the incoherence was the contract, not a bug. New
+  contract, one sentence: **the open group IS the selection** — expanding a
+  header (or tapping its chip) focuses its leg and closes the previous
+  group; collapsing the open group, or tapping All, deselects both ways
+  (map to overview, list all collapsed); Add place and Today/health
+  day-links select the target leg so list and map can never disagree; a map
+  pin tap stays reveal-only (camera must not refit under the zoom-to-pin);
+  `<2` legs still never focus. Implementation follows docs/zen.md: the
+  hand-synced `_expandedCities` set (6 writers, the drift source) is GONE —
+  the open group is **derived** from the focused leg at read time via
+  `TripDerivation.groupKeyForLeg` (lenses only merge runs, so leg → group
+  is a function), with one narrow reveal-only field (`_unfocusedOpenLegKey`)
+  for pin-tap/seed/single-leg, and one writer (`_setCityFocus`) asserting
+  the two never coexist. Deriving through the group key also fixed two
+  latent lens bugs for free: the desktop chip scroll targeted a leg key the
+  header registry never held, and the Add-place reveal added leg keys to a
+  group-keyed set — both silently inert under a places lens.
+
 - **[app] Friction → fixed (Itinerary | Bookings header tabs):** clicking
   "0 of 21 booked" opened the all-bookings view — "interesting view,
   actually" — but there was no visible way back; the only exit was buried

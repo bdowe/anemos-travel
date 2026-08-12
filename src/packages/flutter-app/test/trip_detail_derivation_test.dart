@@ -557,6 +557,37 @@ void main() {
       expect(dayless.dayForLeg('Rome'), 4);
     });
 
+    test('groupKeyForLeg: identity without a lens, merged key under one', () {
+      // No places lens → groups run the same split as legs: identity.
+      final d = _compute();
+      expect(d.groupKeyForLeg('Paris'), 'Paris');
+      expect(d.groupKeyForLeg('Rome'), 'Rome');
+      expect(d.groupKeyForLeg('Paris#2'), 'Paris#2');
+      expect(d.groupKeyForLeg('Nowhere'), isNull, reason: 'stale keys clamp');
+      expect(d.groupKeyForLeg(null), isNull);
+
+      // Bookings lenses keep the places set whole → still identity.
+      final bookings = _compute(itemFilter: 'bookings');
+      expect(bookings.groupKeyForLeg('Paris#2'), 'Paris#2');
+
+      // An attractions lens drops Rome's only item and merges the two Paris
+      // runs into ONE group keyed 'Paris': both legs map to it, and the
+      // fully-filtered-out leg maps to nothing (its items aren't in the
+      // list, so nothing should render open).
+      final merged = [
+        _item(0, 'Louvre', city: 'Paris', day: 1, lat: 48.86, lng: 2.35),
+        _item(1, 'Osteria',
+            city: 'Rome', day: 2, lat: 41.89, lng: 12.49,
+            category: 'restaurant'),
+        _item(2, 'Louvre Again', city: 'Paris', day: 3, lat: 48.86, lng: 2.35),
+      ];
+      final lensed =
+          _compute(trip: _trip(items: merged), itemFilter: 'attraction');
+      expect(lensed.groupKeyForLeg('Paris'), 'Paris');
+      expect(lensed.groupKeyForLeg('Paris#2'), 'Paris');
+      expect(lensed.groupKeyForLeg('Rome'), isNull);
+    });
+
     test('city fillers keep their group but drop their day keys', () {
       final items = [
         _item(0, 'Prague', city: 'Prague', day: 1, lat: 50.1, lng: 14.4),
