@@ -151,7 +151,7 @@ void main() {
     // The section expanded…
     expect(find.text('Roman Forum 0'), findsOneWidget);
     // …and its header rests right below the pinned chrome: the 364px map
-    // band (12 + 340 + 12) + the 48px itinerary title row = 412, measured
+    // band (12 + 340 + 12) + the 56px itinerary tab row = 420, measured
     // from the viewport top (the app bar's bottom — the scroll math lives
     // in viewport coordinates). The one correction pass tolerates ±2.
     final viewportTop = tester.getBottomLeft(find.byType(AppBar)).dy;
@@ -161,8 +161,8 @@ void main() {
                 of: cityHeaderLabel('Rome'), matching: find.byType(Material))
             .first)
         .dy;
-    expect((headerTop - (viewportTop + 412)).abs(), lessThanOrEqualTo(2),
-        reason: 'Rome header should rest below map band + title row');
+    expect((headerTop - (viewportTop + 420)).abs(), lessThanOrEqualTo(2),
+        reason: 'Rome header should rest below map band + tab row');
   });
 
   testWidgets('phone chip tap focuses the map without scrolling the list',
@@ -208,12 +208,9 @@ void main() {
     _useSurface(tester, const Size(1200, 800));
     await _pump(tester, _threeCityTrip());
 
-    // Enter the All-bookings lens: the city groups leave the tree.
-    await tester.tap(find.byIcon(Icons.filter_list));
-    await tester.pumpAndSettle();
-    await tester.tap(find.ancestor(
-        of: find.text('All bookings'),
-        matching: find.byWidgetPredicate((w) => w is CheckedPopupMenuItem)));
+    // Enter the Bookings view (header tab; the trip has no todos, so the
+    // label carries no count): the city groups leave the tree.
+    await tester.tap(find.text('Bookings'));
     await tester.pumpAndSettle();
     expect(cityHeaderLabel('Paris'), findsNothing);
 

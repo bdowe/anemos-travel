@@ -263,17 +263,6 @@
   "bookingRowAddDetails": "Add details…",
   "bookingRowOptions": "Booking options",
   "bookingRowModeTooltip": "Change transport mode",
-  "bookingsSummaryProgress": "{booked} of {total} booked",
-  "@bookingsSummaryProgress": {
-    "placeholders": {
-      "booked": {
-        "type": "int"
-      },
-      "total": {
-        "type": "int"
-      }
-    }
-  },
   "bookingsOpenListing": "Open listing",
   "bookingsEditStay": "Edit stay",
   "bookingsRemoveStay": "Remove stay",
@@ -772,11 +761,21 @@
   "tripFilterUnbooked": "Not booked yet",
   "tripFilterAllBooked": "Everything's booked",
   "tripFilterAllBookedMessage": "Nothing left to book on this trip — you're all set.",
-  "tripBookingsLensFilterLabel": "All bookings",
+  "tripTabBookings": "Bookings",
+  "tripTabBookingsCounted": "Bookings · {booked}/{total}",
+  "@tripTabBookingsCounted": {
+    "placeholders": {
+      "booked": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "tripBookingsLensEmptyTitle": "No bookings yet",
   "tripBookingsLensEmptyMessage": "Flights, stays, and reservations for this trip will show up here.",
   "tripBookingsLensNoneForDestination": "No bookings for this destination.",
-  "tripBookingsLensCounterHint": "View all bookings",
   "tripFilterNoMatch": "No places match this filter.",
   "tripNoPlacesYet": "No places yet",
   "tripNoPlacesYetMessage": "Refine with AI or add a place to start your itinerary.",

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:travel_route_planner/models/booking_todo.dart';
 import 'package:travel_route_planner/models/itinerary_item.dart';
 import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/services/api_client.dart';
@@ -22,7 +23,7 @@ class _FakeTripsApiService extends TripsApiService {
   Future<Trip> getTrip(String id) async => trip;
 }
 
-Trip _trip({String? access}) => Trip(
+Trip _trip({String? access, List<BookingTodo>? todos}) => Trip(
       id: 't1',
       title: 'Sevilla week',
       status: 'planned',
@@ -44,10 +45,11 @@ Trip _trip({String? access}) => Trip(
           city: 'Sevilla',
         ),
       ],
+      bookingTodos: todos,
     );
 
 Future<void> _pump(WidgetTester tester, Trip trip,
-    {required Size surface}) async {
+    {required Size surface, Locale? locale}) async {
   await tester.binding.setSurfaceSize(surface);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
@@ -57,6 +59,8 @@ Future<void> _pump(WidgetTester tester, Trip trip,
       ],
       child: MaterialApp(
         localizationsDelegates: testLocalizationsDelegates,
+        supportedLocales: const [Locale('en'), Locale('es')],
+        locale: locale,
         home: const TripDetailScreen(tripId: 't1'),
       ),
     ),
@@ -102,5 +106,40 @@ void main() {
     expect(find.text('Refine with AI'), findsOneWidget);
     expect(find.text('2026-09-01 → 2026-09-03'), findsOneWidget);
     expect(find.byTooltip('Refine with AI'), findsNothing);
+  });
+
+  // Itinerary-header half: the view tabs must fit a phone row whole, which
+  // is what the icon-only Add place buys (a labeled button + both tabs +
+  // the filter can't share 358px, especially in Spanish). An overflowing
+  // row would fail these pumps outright.
+  const oneTodo = [
+    BookingTodo(id: 'td1', kind: 'stay', todoKey: 'stay:sevilla', title: 'S'),
+  ];
+
+  testWidgets('narrow: whole view tabs, icon-only Add place',
+      (tester) async {
+    await _pump(tester, _trip(todos: oneTodo), surface: phone);
+
+    expect(find.text('Itinerary'), findsOneWidget);
+    expect(find.text('Bookings · 0/1'), findsOneWidget);
+    expect(find.text('Add place'), findsNothing);
+    expect(find.byTooltip('Add place'), findsOneWidget);
+  });
+
+  testWidgets('narrow Spanish: tabs render whole too', (tester) async {
+    await _pump(tester, _trip(todos: oneTodo),
+        surface: phone, locale: const Locale('es'));
+
+    expect(find.text('Itinerario'), findsOneWidget);
+    expect(find.text('Reservas · 0/1'), findsOneWidget);
+    expect(find.byTooltip('Añadir lugar'), findsOneWidget);
+  });
+
+  testWidgets('wide keeps the labeled Add place button', (tester) async {
+    await _pump(tester, _trip(todos: oneTodo),
+        surface: const Size(1200, 900));
+
+    expect(find.text('Add place'), findsOneWidget);
+    expect(find.byTooltip('Add place'), findsNothing);
   });
 }

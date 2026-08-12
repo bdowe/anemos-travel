@@ -595,11 +595,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get bookingRowModeTooltip => 'Cambiar el modo de transporte';
 
   @override
-  String bookingsSummaryProgress(int booked, int total) {
-    return '$booked de $total reservadas';
-  }
-
-  @override
   String get bookingsOpenListing => 'Abrir anuncio';
 
   @override
@@ -1289,7 +1284,12 @@ class AppLocalizationsEs extends AppLocalizations {
       'No queda nada por reservar en este viaje — todo listo.';
 
   @override
-  String get tripBookingsLensFilterLabel => 'Todas las reservas';
+  String get tripTabBookings => 'Reservas';
+
+  @override
+  String tripTabBookingsCounted(int booked, int total) {
+    return 'Reservas · $booked/$total';
+  }
 
   @override
   String get tripBookingsLensEmptyTitle => 'Aún no hay reservas';
@@ -1301,9 +1301,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get tripBookingsLensNoneForDestination =>
       'No hay reservas para este destino.';
-
-  @override
-  String get tripBookingsLensCounterHint => 'Ver todas las reservas';
 
   @override
   String get tripFilterNoMatch => 'Ningún lugar coincide con este filtro.';
