@@ -1,134 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:travel_route_planner/models/user.dart';
-import 'package:travel_route_planner/providers/auth_provider.dart';
-import 'package:travel_route_planner/providers/theme_mode_provider.dart';
 import 'package:travel_route_planner/screens/account_settings_screen.dart';
-import 'package:travel_route_planner/services/account_api_service.dart';
-import 'package:travel_route_planner/services/api_client.dart';
-import 'package:travel_route_planner/theme/app_theme.dart';
 
-import 'support/l10n_test_app.dart';
+import 'support/account_settings_harness.dart';
 
 /// End-to-end of the user-visible half of specs/dark-mode: the Appearance
-/// section in account settings restyles the whole app immediately, persists
+/// dropdown in account settings restyles the whole app immediately, persists
 /// the choice, and "Use device setting" follows the platform brightness live.
 ///
-/// The MaterialApp here is wired exactly like main.dart (theme / darkTheme /
-/// themeMode watched from the provider), so a tap on the real RadioListTile
-/// proves the full loop, not just the provider. Fakes follow
-/// settings_polish_test.dart.
+/// The MaterialApp comes from the shared account-settings harness, wired
+/// exactly like main.dart, so picking from the real dropdown proves the full
+/// loop, not just the provider.
 
-class _FakeAccountApi implements AccountApiService {
-  @override
-  ApiClient get apiClient => throw UnsupportedError('unused in tests');
+// Anchored to the screen rather than to a label: the dropdown's closed state
+// keeps every option's text in an IndexedStack, so label finders are ambiguous.
+Brightness _appBrightness(WidgetTester tester) =>
+    Theme.of(tester.element(find.byType(AccountSettingsScreen))).brightness;
 
-  // The settings screen loads the Connected-apps section on build; serve
-  // an empty list so pumping settles without network.
-  @override
-  Future<List<ConnectedApp>> listConnectedApps() async => const [];
-
-  @override
-  Future<void> revokeConnectedApp(String id) async {}
-
-  @override
-  Future<UserModel> updateDisplayName(String displayName) async => _user();
-
-  @override
-  Future<UserModel> updateLocale(String locale) async => _user();
-
-  @override
-  Future<({UserModel user, String token})> changePassword(
-          String current, String newPassword) async =>
-      (user: _user(), token: 'token');
-
-  @override
-  Future<UserModel> updateEmailPreferences({
-    bool? remindersEnabled,
-    bool? nudgesEnabled,
-  }) async =>
-      _user();
-
-  @override
-  Future<void> logoutAll() async {}
-
-  @override
-  Future<void> deleteAccount(String password) async {}
-}
-
-class _FakeAuthNotifier extends StateNotifier<AuthState>
-    implements AuthNotifier {
-  _FakeAuthNotifier(UserModel? user)
-      : super(AuthState(user: user, initialized: true));
-
-  @override
-  void clearError() => state = state.copyWith(clearError: true);
-
-  @override
-  Future<bool> login(String email, String password) async => false;
-
-  @override
-  Future<bool> register(String email, String password,
-          {String? displayName}) async =>
-      false;
-
-  @override
-  Future<void> completeOnboarding() async {}
-
-  @override
-  Future<void> logout() async {}
-
-  @override
-  Future<void> signOutLocally() async {}
-
-  @override
-  void setUser(UserModel user) {
-    state = state.copyWith(user: user);
-  }
-
-  @override
-  Future<void> adoptSession(String token, UserModel user) async {}
-}
-
-UserModel _user() => UserModel(
-      id: 'user-1',
-      email: 'user@example.com',
-      displayName: 'Test User',
-      isAdmin: false,
-      createdAt: DateTime(2026, 1, 1),
-    );
-
-Future<void> _pumpSettings(WidgetTester tester) async {
-  // Tall surface so the Appearance section is on-screen without scrolling
-  // mechanics (same trick as settings_polish_test.dart).
-  await tester.binding.setSurfaceSize(const Size(800, 2000));
-  addTearDown(() => tester.binding.setSurfaceSize(null));
-
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      accountApiServiceProvider.overrideWithValue(_FakeAccountApi()),
-      authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
-    ],
-    child: Consumer(builder: (context, ref, _) {
-      final mode = ref.watch(themeModeProvider.select((s) => s.mode));
-      return MaterialApp(
-        localizationsDelegates: testLocalizationsDelegates,
-        supportedLocales: const [Locale('en'), Locale('es')],
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        themeMode: mode,
-        home: const AccountSettingsScreen(),
-      );
-    }),
+/// Opens the appearance dropdown and picks [label] from the open menu.
+/// `DropdownMenuItem` only exists in the menu — the closed field renders the
+/// `selectedItemBuilder` widgets — so this finder can't hit the button itself.
+Future<void> _pickAppearance(WidgetTester tester, String label) async {
+  final field = find.byType(DropdownButtonFormField<ThemeMode>);
+  await tester.ensureVisible(field);
+  await tester.pumpAndSettle();
+  await tester.tap(field);
+  await tester.pumpAndSettle();
+  await tester.tap(find.descendant(
+    of: find.widgetWithText(DropdownMenuItem<ThemeMode>, label),
+    matching: find.text(label),
   ));
   await tester.pumpAndSettle();
 }
-
-Brightness _appBrightness(WidgetTester tester) =>
-    Theme.of(tester.element(find.text('Appearance'))).brightness;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -137,12 +42,10 @@ void main() {
 
   testWidgets('tapping Dark restyles the app immediately and persists it',
       (tester) async {
-    await _pumpSettings(tester);
+    await pumpAccountSettings(tester, user: testUser());
     expect(_appBrightness(tester), Brightness.light);
 
-    await tester.ensureVisible(find.text('Dark'));
-    await tester.tap(find.text('Dark'));
-    await tester.pumpAndSettle();
+    await _pickAppearance(tester, 'Dark');
 
     expect(_appBrightness(tester), Brightness.dark);
     final prefs = await SharedPreferences.getInstance();
@@ -151,7 +54,7 @@ void main() {
 
   testWidgets('a stored Dark choice comes up dark on launch', (tester) async {
     SharedPreferences.setMockInitialValues({'theme_mode': 'dark'});
-    await _pumpSettings(tester);
+    await pumpAccountSettings(tester, user: testUser());
     // The platform is light in tests — dark can only come from the store.
     expect(_appBrightness(tester), Brightness.dark);
   });
@@ -162,7 +65,7 @@ void main() {
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
 
     // Nothing stored: the default (system) mode tracks the OS.
-    await _pumpSettings(tester);
+    await pumpAccountSettings(tester, user: testUser());
     expect(_appBrightness(tester), Brightness.dark);
 
     // An OS appearance flip mid-session restyles without any tap.
@@ -176,15 +79,40 @@ void main() {
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
 
-    await _pumpSettings(tester);
+    await pumpAccountSettings(tester, user: testUser());
     expect(_appBrightness(tester), Brightness.dark);
 
-    await tester.ensureVisible(find.text('Light'));
-    await tester.tap(find.text('Light'));
-    await tester.pumpAndSettle();
+    await _pickAppearance(tester, 'Light');
 
     expect(_appBrightness(tester), Brightness.light);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('theme_mode'), 'light');
+  });
+
+  testWidgets('the appearance dropdown fits a 360px phone in Spanish',
+      (tester) async {
+    // "Usar la configuración del dispositivo" is the longest label either
+    // language ships and 360px is the narrow floor, so this is the case the
+    // closed field's ellipsis and the menu's variable item height exist for.
+    await pumpAccountSettings(
+      tester,
+      user: testUser(),
+      size: const Size(360, 2000),
+      locale: const Locale('es'),
+    );
+
+    final field = find.byType(DropdownButtonFormField<ThemeMode>);
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    expect(
+      find.widgetWithText(
+          DropdownMenuItem<ThemeMode>, 'Usar la configuración del dispositivo'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 }

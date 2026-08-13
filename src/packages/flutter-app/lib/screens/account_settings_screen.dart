@@ -276,12 +276,13 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       const _ConnectedAppsList(),
                       const SizedBox(height: AppSpacing.xl),
-                      SectionHeader(title: l10n.appearanceSectionTitle),
-                      const SizedBox(height: AppSpacing.sm),
+                      // Both are device-presentation choices, and each is a
+                      // one-line dropdown, so they share a section rather
+                      // than costing two headers.
+                      SectionHeader(title: l10n.appearanceLanguageSectionTitle),
+                      const SizedBox(height: AppSpacing.md),
                       const _AppearancePicker(),
-                      const SizedBox(height: AppSpacing.xl),
-                      SectionHeader(title: l10n.languageSectionTitle),
-                      const SizedBox(height: AppSpacing.sm),
+                      const SizedBox(height: AppSpacing.md),
                       const _LanguagePicker(),
                       const SizedBox(height: AppSpacing.xl),
                       SectionHeader(title: l10n.settingsEmailPrefsSection),
@@ -435,31 +436,41 @@ class _AppearancePicker extends ConsumerWidget {
     final l10n = context.l10n;
     final mode = ref.watch(themeModeProvider.select((s) => s.mode));
 
-    return RadioGroup<ThemeMode>(
-      groupValue: mode,
+    // One source for both `items` and `selectedItemBuilder`: the two lists
+    // must stay index-parallel, and deriving them can't drift.
+    final options = <(ThemeMode, String)>[
+      (ThemeMode.system, l10n.appearanceSystem),
+      (ThemeMode.light, l10n.appearanceLight),
+      (ThemeMode.dark, l10n.appearanceDark),
+    ];
+
+    return DropdownButtonFormField<ThemeMode>(
+      // Not just an initial value: the field re-syncs whenever this changes,
+      // so it still tracks a mode set from somewhere else.
+      initialValue: mode,
+      isExpanded: true,
+      // Null lets a menu row grow to fit a wrapped label instead of clipping
+      // it at the fixed 48px (DropdownMenuItem keeps that as a minimum, so
+      // the touch target survives) — headroom for the long translations,
+      // e.g. Spanish's "Usar la configuración del dispositivo".
+      itemHeight: null,
+      decoration: InputDecoration(labelText: l10n.appearanceSectionTitle),
+      // The closed field ellipsizes to one line so a long label can never
+      // grow the row; the open menu still spells each option out in full.
+      selectedItemBuilder: (context) => [
+        for (final (_, label) in options)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      items: [
+        for (final (value, label) in options)
+          DropdownMenuItem(value: value, child: Text(label)),
+      ],
       onChanged: (v) {
         if (v != null) ref.read(themeModeProvider.notifier).setMode(v);
       },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          RadioListTile<ThemeMode>(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.appearanceSystem),
-            value: ThemeMode.system,
-          ),
-          RadioListTile<ThemeMode>(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.appearanceLight),
-            value: ThemeMode.light,
-          ),
-          RadioListTile<ThemeMode>(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.appearanceDark),
-            value: ThemeMode.dark,
-          ),
-        ],
-      ),
     );
   }
 }
@@ -485,22 +496,32 @@ class _LanguagePicker extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        RadioGroup<String>(
-          groupValue: state.language,
+        DropdownButtonFormField<String>(
+          initialValue: state.language,
+          isExpanded: true,
+          itemHeight: null,
+          decoration: InputDecoration(labelText: l10n.languageSectionTitle),
+          selectedItemBuilder: (context) => [
+            for (final locale in kSupportedLocales)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  languageDisplayName(l10n, locale.languageCode),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          items: [
+            for (final locale in kSupportedLocales)
+              DropdownMenuItem(
+                value: locale.languageCode,
+                child: Text(languageDisplayName(l10n, locale.languageCode)),
+              ),
+          ],
           onChanged: (v) {
             if (v != null) ref.read(localeProvider.notifier).setLanguage(v);
           },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final locale in kSupportedLocales)
-                RadioListTile<String>(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(languageDisplayName(l10n, locale.languageCode)),
-                  value: locale.languageCode,
-                ),
-            ],
-          ),
         ),
         const SizedBox(height: AppSpacing.xs),
         // Saved trips and AI notes keep the language they were written in;

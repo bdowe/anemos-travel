@@ -8,6 +8,7 @@ import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/locale_provider.dart';
 import 'package:travel_route_planner/services/auth_storage.dart';
 
+import 'support/account_settings_harness.dart';
 import 'support/l10n_test_app.dart';
 
 /// End-to-end of the user-visible half of specs/i18n-spanish: picking a
@@ -69,6 +70,33 @@ void main() {
 
     expect(find.text('Idioma'), findsOneWidget);
     expect(find.text('Language'), findsNothing);
+  });
+
+  testWidgets('picking Español from the settings dropdown redraws the app',
+      (tester) async {
+    // The picker itself, driven the way a user drives it. Signed out on
+    // purpose: that is what keeps setLanguage's account sync off the network.
+    await pumpAccountSettings(tester);
+
+    final field = find.byType(DropdownButtonFormField<String>);
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    expect(find.text('Appearance & language'), findsOneWidget);
+
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    // `DropdownMenuItem` exists only in the open menu — the closed field
+    // renders the selectedItemBuilder widgets instead.
+    await tester.tap(find.descendant(
+      of: find.widgetWithText(DropdownMenuItem<String>, 'Español'),
+      matching: find.text('Español'),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Apariencia e idioma'), findsOneWidget);
+    expect(find.text('Appearance & language'), findsNothing);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('locale_override'), 'es');
   });
 
   test('an explicit choice is persisted and restored on next launch', () async {
