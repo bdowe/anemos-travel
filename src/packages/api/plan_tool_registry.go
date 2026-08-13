@@ -368,8 +368,8 @@ var searchFlightsTool = anthropic.ToolParam{
 			"origin":       map[string]any{"type": "string", "description": "Departure city or IATA code, e.g. 'Boston' or 'BOS'"},
 			"destination":  map[string]any{"type": "string", "description": "Arrival city or IATA code"},
 			"depart_date":  map[string]any{"type": "string", "description": "YYYY-MM-DD"},
-			"return_date":  map[string]any{"type": "string", "description": "Optional YYYY-MM-DD for round trips"},
-			"adults":       map[string]any{"type": "integer", "description": "Optional, defaults to 1"},
+			"return_date":  map[string]any{"type": "string", "description": "Optional YYYY-MM-DD — ONLY when the traveler wants a round trip; omit for one-way searches (the default). When set, returned prices are round-trip totals."},
+			"adults":       map[string]any{"type": "integer", "description": "Optional number of adult travelers, defaults to 1. Returned prices are totals for the whole party, not per person."},
 			"child_ages":   map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Optional ages of child travelers (one per child, 0-17) — include when the traveler mentions kids"},
 			"cabin_class":  map[string]any{"type": "string", "enum": []string{"economy", "premium_economy", "business", "first"}, "description": "Optional cabin, defaults to economy — set when the traveler asks for a specific class"},
 			"optimize_for": map[string]any{"type": "string", "enum": []string{"cost", "time", "balanced"}, "description": "Ranking emphasis"},
@@ -907,11 +907,12 @@ func runSearchFlightsTool(s *planSession, input json.RawMessage) (string, bool) 
 	if adults < 1 {
 		adults = 1
 	}
-	bestN, err := searchFlightsWithBaggage(s.ctx, duffelService, FlightSearchRequest{
+	req := FlightSearchRequest{
 		Origin: originIata, Destination: destIata, DepartDate: in.DepartDate,
 		ReturnDate: in.ReturnDate, Adults: adults, ChildAges: in.ChildAges,
 		CabinClass: in.CabinClass, OptimizeFor: in.OptimizeFor, Baggage: in.Baggage,
-	})
+	}
+	bestN, err := searchFlightsWithBaggage(s.ctx, duffelService, req)
 	if err != nil {
 		// Temporary-provider degrade: a working Google Flights deep link beats
 		// a dead end (success-with-links idiom, like the Greek event_links
@@ -931,10 +932,7 @@ func runSearchFlightsTool(s *planSession, input json.RawMessage) (string, bool) 
 	if len(bestN) > 4 {
 		bestN = bestN[:4]
 	}
-	attachBookingURLs(bestN, FlightSearchRequest{
-		Origin: originIata, Destination: destIata,
-		DepartDate: in.DepartDate, ReturnDate: in.ReturnDate, Adults: adults,
-	})
+	attachBookingURLs(bestN, req)
 	if len(bestN) > 0 {
 		sendSSE(s.w, "flights", map[string]any{
 			"origin": originIata, "destination": destIata,
@@ -943,7 +941,7 @@ func runSearchFlightsTool(s *planSession, input json.RawMessage) (string, bool) 
 			"offers":  bestN,
 		})
 	}
-	return summarizeOffers(originIata, destIata, bestN), false
+	return summarizeOffers(req, bestN), false
 }
 
 func runSearchEventsTool(s *planSession, input json.RawMessage) (string, bool) {

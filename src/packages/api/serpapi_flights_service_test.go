@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -142,19 +143,21 @@ func TestSerpapiSearchFlightOffersMapping(t *testing.T) {
 		t.Errorf("other_flights offer mapped wrong: %+v", offers[1])
 	}
 
-	// Request params: RT phase-1, USD, key, uppercased IATA.
+	// Request params: RT phase-1, USD, key, uppercased IATA, deep_search +
+	// pinned point of sale on bookable (non-indicative) searches.
 	want := map[string]string{
 		"engine": "google_flights", "api_key": "test-serpapi-key",
 		"departure_id": "JFK", "arrival_id": "ATH",
 		"outbound_date": "2026-09-15", "return_date": "2026-09-22",
 		"type": "1", "currency": "USD", "adults": "1",
+		"deep_search": "true", "gl": "us", "hl": "en",
 	}
 	for k, v := range want {
 		if query[k] != v {
 			t.Errorf("query[%s] = %q, want %q", k, query[k], v)
 		}
 	}
-	for _, absent := range []string{"children", "infants_on_lap", "travel_class", "deep_search", "sort_by"} {
+	for _, absent := range []string{"children", "infants_on_lap", "travel_class", "sort_by"} {
 		if _, ok := query[absent]; ok {
 			t.Errorf("query[%s] should be omitted", absent)
 		}
@@ -272,7 +275,7 @@ func TestSerpapiFallbackDeepLink(t *testing.T) {
 	if strings.Contains(text, "exploded") {
 		t.Errorf("upstream error body leaked into model-facing text: %s", text)
 	}
-	if body := s.w.(*httptest.ResponseRecorder).Body.String(); strings.Contains(body, "event: flights") {
+	if body := s.w.(*httptest.ResponseRecorder).Body.String(); strings.Contains(body, `"type":"flights"`) {
 		t.Errorf("no flights SSE event should be emitted on fallback, got: %s", body)
 	}
 }
@@ -289,9 +292,12 @@ func TestSerpapiConnectivityRidesTheSwap(t *testing.T) {
 			[6]string{"JFK", "ATH", "Aegean", "A3 995", "2026-09-15 17:30", "2026-09-16 09:10"})}, nil),
 		"JFK-VIE": serpapiBody(nil, nil), // no service on this date
 	}
-	var upstream atomic.Int32 // handlers run on concurrent leg goroutines
+	var upstream, deepSearches atomic.Int32 // handlers run on concurrent leg goroutines
 	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
 		upstream.Add(1)
+		if r.URL.Query().Has("deep_search") {
+			deepSearches.Add(1)
+		}
 		w.Write([]byte(bodies[r.URL.Query().Get("departure_id")+"-"+r.URL.Query().Get("arrival_id")]))
 	})
 
@@ -310,6 +316,9 @@ func TestSerpapiConnectivityRidesTheSwap(t *testing.T) {
 	}
 	if n := upstream.Load(); n != 2 {
 		t.Errorf("SerpApi upstream calls = %d, want 2", n)
+	}
+	if n := deepSearches.Load(); n != 0 {
+		t.Errorf("indicative connectivity legs sent deep_search %d times, want 0 (would blow the 30s budget)", n)
 	}
 	if n := cs.requestCount(); n != 0 {
 		t.Errorf("connectivity made %d Duffel offer calls while swap active, want 0", n)
@@ -546,5 +555,105 @@ func TestSerpapiDailyCapAndCache(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Errorf("capped search must not reach upstream: %d calls", calls)
+	}
+}
+
+// The chat tool end-to-end under the swap: a round-trip, two-adult search must
+// send deep_search + type=1 upstream, and the model-facing text must label the
+// prices as round-trip party totals — the EWR→PRG 2x-misquote regression
+// (an unlabeled total read as a per-person one-way fare).
+func TestSearchFlightsToolRoundTripPartyHeader(t *testing.T) {
+	var query map[string]string
+	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
+		query = map[string]string{}
+		for k, v := range r.URL.Query() {
+			query[k] = v[0]
+		}
+		w.Write([]byte(serpapiBody([]string{serpapiItem(1027, 610,
+			[6]string{"EWR", "FRA", "Lufthansa", "LH 403", "2026-08-24 17:50", "2026-08-25 07:35"},
+			[6]string{"FRA", "PRG", "Lufthansa", "LH 1392", "2026-08-25 09:05", "2026-08-25 10:05"})}, nil)))
+	})
+
+	s := connSession()
+	input, _ := json.Marshal(map[string]any{
+		"origin": "EWR", "destination": "PRG",
+		"depart_date": "2026-08-24", "return_date": "2026-09-02", "adults": 2,
+	})
+	text, isErr := runSearchFlightsTool(s, input)
+	if isErr {
+		t.Fatalf("tool errored: %s", text)
+	}
+	if query["deep_search"] != "true" || query["type"] != "1" {
+		t.Errorf("bookable search params: deep_search=%q type=%q, want \"true\"/\"1\"", query["deep_search"], query["type"])
+	}
+	for _, want := range []string{
+		"EWR⇄PRG round trip 2026-08-24 → 2026-09-02",
+		"round-trip totals for all 2 travelers",
+		"USD 1027",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("tool text missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "saved with their trip") {
+		t.Errorf("tool text resurrected the false saved-with-trip claim:\n%s", text)
+	}
+	if body := s.w.(*httptest.ResponseRecorder).Body.String(); !strings.Contains(body, `"type":"flights"`) {
+		t.Errorf("flights SSE event missing:\n%s", body)
+	}
+}
+
+// Indicative (connectivity) searches skip deep_search, and the offers cache
+// keys on depth: a shallow probe must never serve its less-accurate result to
+// a follow-up bookable search on the same route, while same-depth repeats
+// still hit the cache.
+func TestSerpapiIndicativeSkipsDeepSearchAndSplitsCache(t *testing.T) {
+	var upstream atomic.Int32
+	var mu sync.Mutex
+	var deepParams, pointOfSale []string
+	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
+		upstream.Add(1)
+		mu.Lock()
+		deepParams = append(deepParams, r.URL.Query().Get("deep_search"))
+		pointOfSale = append(pointOfSale, r.URL.Query().Get("gl")+"/"+r.URL.Query().Get("hl"))
+		mu.Unlock()
+		w.Write([]byte(serpapiBody([]string{serpapiItem(300, 120,
+			[6]string{"AAA", "BBB", "TestAir", "TA 1", "2026-09-01 08:00", "2026-09-01 10:00"})}, nil)))
+	})
+
+	req := FlightSearchRequest{Origin: "AAA", Destination: "BBB", DepartDate: "2026-09-01", Adults: 1}
+	shallow := req
+	shallow.Indicative = true
+
+	if _, err := serpapiFlights.SearchFlightOffers(context.Background(), shallow); err != nil {
+		t.Fatalf("indicative search: %v", err)
+	}
+	if _, err := serpapiFlights.SearchFlightOffers(context.Background(), req); err != nil {
+		t.Fatalf("bookable search: %v", err)
+	}
+	if n := upstream.Load(); n != 2 {
+		t.Errorf("upstream calls = %d, want 2 — the shallow cache line must not serve the deep search", n)
+	}
+	mu.Lock()
+	got := append([]string(nil), deepParams...)
+	pos := append([]string(nil), pointOfSale...)
+	mu.Unlock()
+	if len(got) != 2 || got[0] != "" || got[1] != "true" {
+		t.Errorf("deep_search per call = %q, want [\"\" \"true\"]", got)
+	}
+	// gl/hl pin the point of sale on EVERY search — indicative included —
+	// so a probe and its follow-up bookable search differ only in depth.
+	for i, p := range pos {
+		if p != "us/en" {
+			t.Errorf("call %d gl/hl = %q, want \"us/en\" on every search", i, p)
+		}
+	}
+
+	// Same-depth repeat IS a cache hit — the split must not erode the quota guard.
+	if _, err := serpapiFlights.SearchFlightOffers(context.Background(), req); err != nil {
+		t.Fatalf("repeat bookable search: %v", err)
+	}
+	if n := upstream.Load(); n != 2 {
+		t.Errorf("upstream calls after same-depth repeat = %d, want 2 (cache hit)", n)
 	}
 }

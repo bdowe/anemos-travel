@@ -23,7 +23,11 @@ import (
 // existed. Flip back by unsetting FLIGHT_OFFERS_PROVIDER and restarting.
 //
 // While active: bag fees are unpriceable so carry_on/checked searches classify "unknown"
-// (flight_baggage.go), check_flight_connectivity rides the swap too but with
+// (flight_baggage.go), bookable searches send deep_search for
+// Google-Flights-page price parity (15-45s slower) while indicative
+// connectivity probes stay shallow (FlightSearchRequest.Indicative) — all
+// searches pin gl=us&hl=en regardless,
+// check_flight_connectivity rides the swap too but with
 // a tighter candidate clamp and a daily-quota headroom guard
 // (plan_connectivity.go), and a failed search degrades to a Google Flights
 // deep link instead of an error (plan_tool_registry.go).
@@ -164,11 +168,20 @@ func (s *SerpapiFlightsService) SearchFlightOffers(ctx context.Context, req Flig
 		return nil, fmt.Errorf("SerpApi key not configured")
 	}
 
+	// The depth component splits the cache between deep (bookable) and shallow
+	// (indicative/connectivity) searches: without it, a shallow connectivity
+	// probe would serve its less-accurate prices to a follow-up bookable
+	// search on the same route for the whole TTL.
+	depth := "deep"
+	if req.Indicative {
+		depth = "shallow"
+	}
 	cacheKey := strings.Join([]string{
 		strings.ToUpper(req.Origin), strings.ToUpper(req.Destination),
 		req.DepartDate, req.ReturnDate,
 		fmt.Sprint(req.Adults), fmt.Sprint(req.ChildAges),
 		strings.ToLower(req.CabinClass),
+		depth,
 	}, "|")
 	if cached, ok := s.offersCache.get(cacheKey); ok {
 		s.calls.cacheHits.Add(1)
@@ -266,8 +279,18 @@ func (s *SerpapiFlightsService) fetch(ctx context.Context, req FlightSearchReque
 	if class := serpapiTravelClass(req.CabinClass); class != "1" {
 		params.Set("travel_class", class)
 	}
-	// No deep_search (seconds slower for marginal accuracy) and no sort_by —
-	// RankFlightOffers re-ranks on optimize_for regardless.
+	// deep_search makes SerpApi return the same results as the Google Flights
+	// web page (per their docs) at the cost of a 15-45s slower response, and
+	// gl/hl pin the US/English point of sale so prices can't drift with
+	// SerpApi's geo inference. Indicative (connectivity) searches skip
+	// deep_search: they're documented as indicative, and 3-6 deep legs would
+	// blow the 30s connectivity budget. No sort_by — RankFlightOffers re-ranks
+	// on optimize_for regardless.
+	if !req.Indicative {
+		params.Set("deep_search", "true")
+	}
+	params.Set("gl", "us")
+	params.Set("hl", "en")
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, s.BaseURL+"/search?"+params.Encode(), nil)
 	if err != nil {

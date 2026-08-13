@@ -289,6 +289,7 @@ func fetchConnectivity(ctx context.Context, legs []connLeg) map[connLeg]connLegR
 			offers, err := flightOffersSearch(ctx, duffelService, FlightSearchRequest{
 				Origin: leg.origin, Destination: leg.dest, DepartDate: leg.date,
 				Adults: 1, SupplierTimeoutMS: connectivitySupplierTimeoutMS,
+				Indicative: true,
 			})
 			var res connLegResult
 			switch {
