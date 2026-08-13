@@ -541,12 +541,25 @@ func TestFormatReviewFindingsStructuredTail(t *testing.T) {
 		{Severity: "warn", Category: "hours", Message: "The Acropolis may be closed on Monday (Day 3).", ItemID: &itemID,
 			Fix: &FindingFix{Action: "move_item", ItemID: &itemID, TargetDay: &day3}},
 	}
-	out := formatReviewFindings(findings)
+	step := &NextStep{Kind: "add_lodging", Title: "Book a place to stay",
+		Detail: "No lodging booked for the night of Mon, Aug 3."}
+	out := formatReviewFindings(findings, step)
 	if !strings.Contains(out, "[fix: category=lodging fix=add_lodging check_in=2026-08-03 check_out=2026-08-04 city=Naxos]") {
 		t.Fatalf("lodging tail missing:\n%s", out)
 	}
 	if !strings.Contains(out, "item_id="+itemID) || !strings.Contains(out, "fix=move_item") || !strings.Contains(out, "target_day=3") {
 		t.Fatalf("move tail missing:\n%s", out)
+	}
+	if !strings.Contains(out, "Suggested next step: Book a place to stay") ||
+		!strings.Contains(out, "[next_step: kind=add_lodging]") {
+		t.Fatalf("next-step line missing:\n%s", out)
+	}
+	// A past trip (nil step) narrates findings only; an all-set step says so.
+	if noStep := formatReviewFindings(findings, nil); strings.Contains(noStep, "Suggested next step") {
+		t.Fatalf("nil step still narrated:\n%s", noStep)
+	}
+	if done := formatReviewFindings(nil, &NextStep{Kind: "all_set", Title: "You're all set"}); !strings.Contains(done, "kind=all_set") {
+		t.Fatalf("all_set narration missing:\n%s", done)
 	}
 }
 
