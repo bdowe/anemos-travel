@@ -380,7 +380,7 @@ class _GuideMapState extends State<_GuideMap> {
                     interactionOptions: interaction,
                   )
                 : appMapOptions(
-                    initialCameraFit: CameraFit.bounds(
+                    initialCameraFit: AppCameraFitBounds(
                       bounds: LatLngBounds.fromPoints(points),
                       padding: const EdgeInsets.all(32),
                     ),

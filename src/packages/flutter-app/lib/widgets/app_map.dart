@@ -83,12 +83,17 @@ class AppMapCrs extends Crs {
 
 /// Shared [MapOptions] for every [FlutterMap] in the app: single-world
 /// rendering, the space-dark backdrop, and a camera that can't wander off the
-/// planet. Callers pass whichever framing they have — a center+zoom or a
-/// [CameraFit] — plus their interaction flags.
+/// planet. Callers pass whichever framing they have — a center+zoom or an
+/// [AppCameraFitBounds] — plus their interaction flags.
+///
+/// The fit parameter is deliberately the value-equal [AppCameraFitBounds],
+/// not the raw [CameraFit]: a raw fit compares by identity, which silently
+/// breaks the `MapOptions.==` short-circuit this helper exists to enable
+/// (see [AppCameraFitBounds]).
 MapOptions appMapOptions({
   LatLng? initialCenter,
   double? initialZoom,
-  CameraFit? initialCameraFit,
+  AppCameraFitBounds? initialCameraFit,
   double minZoom = 1,
   required InteractionOptions interactionOptions,
 }) {
@@ -181,6 +186,47 @@ class AppMapCameraConstraint extends CameraConstraint {
 
   @override
   int get hashCode => (AppMapCameraConstraint).hashCode;
+}
+
+/// Value-equal [CameraFit.bounds].
+///
+/// flutter_map compares [MapOptions] by value, but a [CameraFit] only by
+/// identity — so a fit constructed fresh each build makes `MapOptions.==`
+/// fail and every rebuild re-runs the map controller's options setter: a new
+/// controller state plus `notifyListeners` through the whole map subtree
+/// (tile, polyline, marker and cluster layers all rebuild for nothing). The
+/// initial fit itself is applied only once per [FlutterMap] state, so equal
+/// inputs producing an equal fit changes no camera behavior.
+///
+/// Wraps rather than subclasses [FitBounds] — its constructor is private —
+/// the same delegation pattern as [AppMapCrs] above. Equality is defined on
+/// exactly the two fields our maps feed the wrapped fit: [bounds] and
+/// [padding].
+@immutable
+class AppCameraFitBounds extends CameraFit {
+  /// The bounds the fitted camera must contain, per [CameraFit.bounds].
+  final LatLngBounds bounds;
+
+  /// Pixel padding around the fitted bounds, per [CameraFit.bounds].
+  final EdgeInsets padding;
+
+  final CameraFit _inner;
+
+  /// Create a value-equal bounds fit.
+  AppCameraFitBounds({required this.bounds, this.padding = EdgeInsets.zero})
+      : _inner = CameraFit.bounds(bounds: bounds, padding: padding);
+
+  @override
+  MapCamera fit(MapCamera camera) => _inner.fit(camera);
+
+  @override
+  bool operator ==(Object other) =>
+      other is AppCameraFitBounds &&
+      bounds == other.bounds &&
+      padding == other.padding;
+
+  @override
+  int get hashCode => Object.hash(bounds, padding);
 }
 
 /// Shared basemap for every map in the app: Esri World Imagery satellite
