@@ -175,15 +175,22 @@ func checkDates(locale string, d exportData) []Finding {
 	return out
 }
 
-// checkUnscheduled emits one grouped finding for all items with no day (cleaner
-// than one-per-item when many are unscheduled).
-func checkUnscheduled(locale string, d exportData) []Finding {
-	var count int
-	for _, it := range d.Items {
+// countUnscheduled counts the items with no day assigned. Shared with
+// deriveNextStep (trip_next_step.go) so "unscheduled" has one definition.
+func countUnscheduled(items []store.ItineraryItem) int {
+	count := 0
+	for _, it := range items {
 		if it.Day == nil {
 			count++
 		}
 	}
+	return count
+}
+
+// checkUnscheduled emits one grouped finding for all items with no day (cleaner
+// than one-per-item when many are unscheduled).
+func checkUnscheduled(locale string, d exportData) []Finding {
+	count := countUnscheduled(d.Items)
 	if count == 0 {
 		return nil
 	}
@@ -194,6 +201,50 @@ func checkUnscheduled(locale string, d exportData) []Finding {
 	return []Finding{{
 		Severity: "info", Category: "unscheduled", TripID: d.Trip.ID.String(), Message: msg,
 	}}
+}
+
+// dayRun is an inclusive run of consecutive empty days ([first, last]).
+type dayRun struct {
+	first, last int
+}
+
+// emptyDayRuns returns the runs of consecutive empty days between the first
+// and last scheduled day, collapsed exactly the way checkDensity reports them.
+// Extracted so deriveNextStep (trip_next_step.go) reads the same runs instead
+// of sniffing empty-day findings by convention (they share category "packing"
+// with the over-packed warnings and carry no distinguishing field). Nil when
+// no item is scheduled at all.
+func emptyDayRuns(items []store.ItineraryItem) []dayRun {
+	counts := map[int]int{}
+	minDay, maxDay := 0, 0
+	for _, it := range items {
+		if it.Day == nil {
+			continue
+		}
+		day := int(*it.Day)
+		counts[day]++
+		if minDay == 0 || day < minDay {
+			minDay = day
+		}
+		if day > maxDay {
+			maxDay = day
+		}
+	}
+	if len(counts) == 0 {
+		return nil
+	}
+	var runs []dayRun
+	for day := minDay; day <= maxDay; day++ {
+		if counts[day] != 0 {
+			continue
+		}
+		first := day
+		for day < maxDay && counts[day+1] == 0 {
+			day++
+		}
+		runs = append(runs, dayRun{first: first, last: day})
+	}
+	return runs
 }
 
 // checkDensity flags empty days between the first and last scheduled day, and
@@ -220,21 +271,14 @@ func checkDensity(locale string, d exportData) []Finding {
 		return nil
 	}
 	var out []Finding
-	for day := minDay; day <= maxDay; day++ {
-		if len(buckets[day]) != 0 {
-			continue
+	// One finding per empty-day run, anchored on the run's first day (that's
+	// where tap-to-scroll lands).
+	for _, r := range emptyDayRuns(d.Items) {
+		msg := tr(locale, "review.emptyDay", r.first)
+		if r.last > r.first {
+			msg = tr(locale, "review.emptyDayRange", r.first, r.last)
 		}
-		// Collapse a run of consecutive empty days into one finding anchored
-		// on the run's first day (that's where tap-to-scroll lands).
-		first := day
-		for day < maxDay && len(buckets[day+1]) == 0 {
-			day++
-		}
-		msg := tr(locale, "review.emptyDay", first)
-		if day > first {
-			msg = tr(locale, "review.emptyDayRange", first, day)
-		}
-		dd := first
+		dd := r.first
 		out = append(out, Finding{
 			Severity: "info", Category: "packing", TripID: tripID, Day: &dd,
 			Message: msg,

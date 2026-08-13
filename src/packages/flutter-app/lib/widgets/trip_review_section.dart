@@ -215,7 +215,7 @@ class _TripReviewSectionState extends ConsumerState<TripReviewSection> {
     // Best-effort: on error or first load with no data, render nothing rather
     // than an error state — a utility section shouldn't shout. (Offline still
     // shows the last-loaded findings — the read GET is cached by the family.)
-    final findings = async.valueOrNull;
+    final findings = async.valueOrNull?.findings;
     if (findings == null) {
       // In the sheet this is reachable only via the hours-check key switch
       // (the app-bar icon gates opening on a loaded base list): keep the

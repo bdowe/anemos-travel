@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"travel-route-planner/store"
 )
@@ -13,9 +14,13 @@ import (
 // collaborator); a missing or non-editable trip 404s.
 
 // ReviewResponse envelopes the ordered findings so the payload can grow
-// (summary counts, etc.) without breaking clients.
+// (summary counts, etc.) without breaking clients. NextStep/PlanProgress are
+// the Next Step CTA projection (trip_next_step.go); both omitted for past
+// trips.
 type ReviewResponse struct {
-	Findings []Finding `json:"findings"`
+	Findings     []Finding     `json:"findings"`
+	NextStep     *NextStep     `json:"next_step,omitempty"`
+	PlanProgress *PlanProgress `json:"plan_progress,omitempty"`
 }
 
 func getTripReviewHandler(w http.ResponseWriter, r *http.Request) {
@@ -50,5 +55,6 @@ func getTripReviewHandler(w http.ResponseWriter, r *http.Request) {
 	findings := reviewTrip(r.Context(), requestLocale(r.Context()), data,
 		reviewOptions{CheckHours: checkHours, Budget: &br},
 		reviewDeps{Weather: weatherService, Places: placesService})
-	writeJSON(w, http.StatusOK, ReviewResponse{Findings: findings})
+	step, progress := deriveNextStep(requestLocale(r.Context()), time.Now().UTC(), data, findings)
+	writeJSON(w, http.StatusOK, ReviewResponse{Findings: findings, NextStep: step, PlanProgress: progress})
 }

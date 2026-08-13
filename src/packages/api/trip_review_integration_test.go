@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -112,8 +113,73 @@ func TestTripReview_CleanTrip(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET review = %d: %s", rec.Code, rec.Body.String())
 	}
-	if fs := listOf(t, decode(t, rec), "findings"); len(fs) != 0 {
+	body := decode(t, rec)
+	if fs := listOf(t, body, "findings"); len(fs) != 0 {
 		t.Fatalf("clean trip should have no findings, got %v", fs)
+	}
+	// This fixture's dates are in the past, which pins the next-step past-trip
+	// gate: no step, no progress (omitted, not all_set).
+	if body["next_step"] != nil || body["plan_progress"] != nil {
+		t.Fatalf("past trip should omit next_step/plan_progress, got %v / %v",
+			body["next_step"], body["plan_progress"])
+	}
+}
+
+// TestTripReview_NextStepPayload pins the Next Step CTA contract on a future-
+// dated trip: the JSON keys, the ladder pick, prefix progress, the canonical-
+// English seed, and the check_hours invariance (both cache variants must agree
+// on the step).
+func TestTripReview_NextStepPayload(t *testing.T) {
+	resetDB(t)
+	owner, ownerToken := createTestUser(t, "owner@example.com")
+	trip := createTestTrip(t, owner.ID, 2) // two items, both day=nil
+	id := trip.ID.String()
+
+	// Future dates keep the trip ahead of `now` whenever this test runs.
+	start := time.Now().UTC().AddDate(0, 0, 30).Format("2006-01-02")
+	end := time.Now().UTC().AddDate(0, 0, 33).Format("2006-01-02")
+	rec := doJSON(t, "PATCH", "/api/v1/trips/"+id, ownerToken, map[string]any{
+		"start_date": start, "end_date": end,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch trip = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	stepKind := func(query string) (string, map[string]any) {
+		rec := doJSON(t, "GET", "/api/v1/trips/"+id+"/review"+query, ownerToken, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET review%s = %d: %s", query, rec.Code, rec.Body.String())
+		}
+		body := decode(t, rec)
+		step, ok := body["next_step"].(map[string]any)
+		if !ok {
+			t.Fatalf("next_step missing: %v", body)
+		}
+		kind, _ := step["kind"].(string)
+		return kind, body
+	}
+
+	// Both items are unscheduled → phase 2, plan_itinerary.
+	kind, body := stepKind("")
+	if kind != "plan_itinerary" {
+		t.Fatalf("kind = %q, want plan_itinerary", kind)
+	}
+	step := body["next_step"].(map[string]any)
+	if title, _ := step["title"].(string); title == "" {
+		t.Fatalf("localized title missing: %v", step)
+	}
+	if seed, _ := step["seed_prompt"].(string); !strings.Contains(seed, "update_itinerary_section") {
+		t.Fatalf("seed_prompt off: %v", step)
+	}
+	progress, ok := body["plan_progress"].(map[string]any)
+	if !ok || progress["done"] != float64(1) || progress["total"] != float64(7) {
+		t.Fatalf("plan_progress = %v, want 1/7", body["plan_progress"])
+	}
+
+	// check_hours must not change the step (deterministic across variants).
+	hoursKind, _ := stepKind("?check_hours=true")
+	if hoursKind != kind {
+		t.Fatalf("check_hours variant diverged: %q vs %q", hoursKind, kind)
 	}
 }
 

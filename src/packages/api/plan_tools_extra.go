@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
@@ -309,14 +310,20 @@ func runReviewTripTool(s *planSession, input json.RawMessage) (string, bool) {
 	findings := reviewTrip(s.ctx, requestLocale(s.ctx), data,
 		reviewOptions{CheckHours: false, Budget: br},
 		reviewDeps{Weather: weatherService})
-	return formatReviewFindings(findings), false
+	// The Next Step projection rides along so the agent gives the same "do
+	// this first" guidance the trip page's card does — same derivation, no new
+	// tool (the /plan registry is a prompt-cache prefix and stays untouched).
+	step, _ := deriveNextStep(requestLocale(s.ctx), time.Now().UTC(), data, findings)
+	return formatReviewFindings(findings, step), false
 }
 
 // formatReviewFindings renders findings for the model to narrate: grouped by
-// severity, each line already carrying its day number where relevant.
-func formatReviewFindings(findings []Finding) string {
+// severity, each line already carrying its day number where relevant, plus the
+// suggested next step (nil for past trips).
+func formatReviewFindings(findings []Finding, step *NextStep) string {
 	if len(findings) == 0 {
-		return "Trip review found no issues — the saved plan looks complete: every day has something, nights are covered, and transport and bookings are in order. Reassure the traveler briefly."
+		return "Trip review found no issues — the saved plan looks complete: every day has something, nights are covered, and transport and bookings are in order. Reassure the traveler briefly." +
+			nextStepNarration(step)
 	}
 	bySev := map[string][]Finding{}
 	for _, f := range findings {
@@ -345,7 +352,29 @@ func formatReviewFindings(findings []Finding) string {
 		"set_trip_dates when the trip has no dates (fix=set_dates — ask the traveler for their travel dates first). " +
 		"You can also update_itinerary_section, add booking to-dos, or add packing items. " +
 		"Summarize the findings for the traveler in plain language and offer to fix them.")
+	b.WriteString(nextStepNarration(step))
 	return b.String()
+}
+
+// nextStepNarration renders the suggested next step for the model: the same
+// localized copy the trip page's card shows, plus a machine-readable kind tag.
+// Empty for past trips (step == nil), where there is nothing left to steer
+// toward.
+func nextStepNarration(step *NextStep) string {
+	if step == nil {
+		return ""
+	}
+	if step.Kind == "all_set" {
+		return "\nSuggested next step: none — every planning phase (dates, itinerary, lodging, " +
+			"transport, schedule, bookings, packing) is complete. [next_step: kind=all_set]"
+	}
+	s := "\nSuggested next step: " + step.Title
+	if step.Detail != "" {
+		s += " — " + step.Detail
+	}
+	s += fmt.Sprintf(" [next_step: kind=%s] ", step.Kind)
+	s += "Guide the traveler toward this step first; the findings above are the full picture."
+	return s
 }
 
 // reviewFindingTail renders a compact, machine-readable [fix: ...] hint from a

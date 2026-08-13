@@ -2053,6 +2053,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accountMenuSignOut => 'Sign out';
 
   @override
+  String get nextStepEyebrow => 'Next step';
+
+  @override
+  String nextStepProgress(int n, int total) {
+    return '$n of $total';
+  }
+
+  @override
+  String get nextStepViewAll => 'View all';
+
+  @override
+  String get nextStepSetDatesAction => 'Pick dates';
+
+  @override
+  String get nextStepPlanAction => 'Plan in chat';
+
+  @override
+  String get nextStepLodgingAction => 'Find lodging';
+
+  @override
+  String get nextStepTransportAction => 'Find options';
+
+  @override
+  String get nextStepScheduleAction => 'Fill the gaps';
+
+  @override
+  String get nextStepBookAction => 'Review bookings';
+
+  @override
+  String get nextStepPackingAction => 'Open packing list';
+
+  @override
+  String get nextStepAllSetDismiss => 'Dismiss';
+
+  @override
   String get notifTitle => 'Notifications';
 
   @override
