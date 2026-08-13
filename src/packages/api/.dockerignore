@@ -1,0 +1,32 @@
+# This file is the API image's ignore list: the build context is
+# src/packages/api (compose + ci.yml), so the repo-root .dockerignore never
+# applies here — Docker reads only the context root's ignore file.
+
+# Secrets — must never enter any build layer. Even builder-only layers land
+# in the local BuildKit cache and in CI's gha cache exports (mode=max).
+.env
+.env.*
+
+# Local build artifacts (a stale multi-MB host binary otherwise dominates
+# the context and busts the COPY layer cache on every rebuild).
+travel-route-planner
+main
+*.test
+*.out
+
+# Not compiled into the binary (Go's _test.go convention); excluding them
+# keeps the `COPY . .` layer stable across test-only edits.
+*_test.go
+test_examples.sh
+test_data.json
+test_countries.json
+
+# sqlc inputs — store/ is the generated, committed output the build compiles;
+# the .sql sources and codegen config are dev-time only.
+query/
+sqlc.yaml
+
+# Build meta / docs
+Dockerfile
+.dockerignore
+.env.sample

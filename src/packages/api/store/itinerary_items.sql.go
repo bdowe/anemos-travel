@@ -47,10 +47,10 @@ type SetItineraryItemPositionsBatchParams struct {
 }
 
 // Batch statements for itinerary items (perf: replace per-row write loops
-// with one round trip). The per-row originals live in query/trips.sql.
-// Batch twin of SetItineraryItemPosition: one round trip for the whole
-// reorder. ids and positions are parallel arrays; the trip_id scope mirrors
-// the per-row statement so a foreign id can never move another trip's row.
+// with one round trip). The non-batch item queries live in query/trips.sql.
+// One round trip for the whole reorder. ids and positions are parallel
+// arrays; every row is scoped to trip_id so a foreign id can never move
+// another trip's row.
 func (q *Queries) SetItineraryItemPositionsBatch(ctx context.Context, arg SetItineraryItemPositionsBatchParams) error {
 	_, err := q.db.Exec(ctx, setItineraryItemPositionsBatch, arg.TripID, arg.Ids, arg.Positions)
 	return err

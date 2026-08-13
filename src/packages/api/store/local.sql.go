@@ -345,59 +345,6 @@ func (q *Queries) LinkGuideRecommendation(ctx context.Context, arg LinkGuideReco
 	return err
 }
 
-const listDraftGuides = `-- name: ListDraftGuides :many
-SELECT g.id, g.source_id, g.title, g.city, g.neighborhood, g.body, g.hero_image_url, g.status, g.created_at, g.updated_at, s.name AS source_name FROM local_guides g
-JOIN local_sources s ON s.id = g.source_id
-WHERE g.status = 'draft'
-ORDER BY g.created_at DESC
-`
-
-type ListDraftGuidesRow struct {
-	ID           uuid.UUID `json:"id"`
-	SourceID     uuid.UUID `json:"source_id"`
-	Title        string    `json:"title"`
-	City         string    `json:"city"`
-	Neighborhood *string   `json:"neighborhood"`
-	Body         string    `json:"body"`
-	HeroImageUrl *string   `json:"hero_image_url"`
-	Status       string    `json:"status"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	SourceName   string    `json:"source_name"`
-}
-
-func (q *Queries) ListDraftGuides(ctx context.Context) ([]ListDraftGuidesRow, error) {
-	rows, err := q.db.Query(ctx, listDraftGuides)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListDraftGuidesRow
-	for rows.Next() {
-		var i ListDraftGuidesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.SourceID,
-			&i.Title,
-			&i.City,
-			&i.Neighborhood,
-			&i.Body,
-			&i.HeroImageUrl,
-			&i.Status,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SourceName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listLocalSources = `-- name: ListLocalSources :many
 SELECT id, name, bio, photo_url, location, expertise, credibility, consent_ref, created_at, updated_at FROM local_sources ORDER BY name ASC
 `
@@ -775,33 +722,6 @@ func (q *Queries) ListRecommendationsByStatus(ctx context.Context, status string
 		return nil, err
 	}
 	return items, nil
-}
-
-const setLocalGuideStatus = `-- name: SetLocalGuideStatus :one
-UPDATE local_guides SET status = $2 WHERE id = $1 RETURNING id, source_id, title, city, neighborhood, body, hero_image_url, status, created_at, updated_at
-`
-
-type SetLocalGuideStatusParams struct {
-	ID     uuid.UUID `json:"id"`
-	Status string    `json:"status"`
-}
-
-func (q *Queries) SetLocalGuideStatus(ctx context.Context, arg SetLocalGuideStatusParams) (LocalGuide, error) {
-	row := q.db.QueryRow(ctx, setLocalGuideStatus, arg.ID, arg.Status)
-	var i LocalGuide
-	err := row.Scan(
-		&i.ID,
-		&i.SourceID,
-		&i.Title,
-		&i.City,
-		&i.Neighborhood,
-		&i.Body,
-		&i.HeroImageUrl,
-		&i.Status,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
 }
 
 const setLocalRecommendationStatus = `-- name: SetLocalRecommendationStatus :one

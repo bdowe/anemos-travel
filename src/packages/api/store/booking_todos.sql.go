@@ -242,21 +242,6 @@ func (q *Queries) SetBookingTodoMode(ctx context.Context, arg SetBookingTodoMode
 	return i, err
 }
 
-const setBookingTodoPosition = `-- name: SetBookingTodoPosition :exec
-UPDATE booking_todos SET position = $3 WHERE id = $1 AND trip_id = $2
-`
-
-type SetBookingTodoPositionParams struct {
-	ID       uuid.UUID `json:"id"`
-	TripID   uuid.UUID `json:"trip_id"`
-	Position int32     `json:"position"`
-}
-
-func (q *Queries) SetBookingTodoPosition(ctx context.Context, arg SetBookingTodoPositionParams) error {
-	_, err := q.db.Exec(ctx, setBookingTodoPosition, arg.ID, arg.TripID, arg.Position)
-	return err
-}
-
 const setBookingTodoPositionsBatch = `-- name: SetBookingTodoPositionsBatch :exec
 UPDATE booking_todos b
 SET position = u.pos
@@ -273,9 +258,9 @@ type SetBookingTodoPositionsBatchParams struct {
 	Positions []int32     `json:"positions"`
 }
 
-// Batch twin of SetBookingTodoPosition: one round trip for the whole reorder.
-// ids and positions are parallel arrays; the trip_id scope mirrors the
-// per-row statement so a foreign id can never move another trip's row.
+// One round trip for the whole reorder. ids and positions are parallel
+// arrays; every row is scoped to trip_id so a foreign id can never move
+// another trip's row.
 func (q *Queries) SetBookingTodoPositionsBatch(ctx context.Context, arg SetBookingTodoPositionsBatchParams) error {
 	_, err := q.db.Exec(ctx, setBookingTodoPositionsBatch, arg.TripID, arg.Ids, arg.Positions)
 	return err
@@ -397,6 +382,10 @@ type UpsertBookingTodoParams struct {
 	Position   int32       `json:"position"`
 }
 
+// KEPT deliberately though no handler calls it directly: it is the semantic
+// reference for UpsertBookingTodosBatch's column list / ON CONFLICT set, and
+// its generated Params struct is the row type the batch path builds
+// (booking_todo_handler.go). Delete only together with a handler refactor.
 func (q *Queries) UpsertBookingTodo(ctx context.Context, arg UpsertBookingTodoParams) (BookingTodo, error) {
 	row := q.db.QueryRow(ctx, upsertBookingTodo,
 		arg.TripID,

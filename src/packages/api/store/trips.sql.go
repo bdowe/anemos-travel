@@ -498,21 +498,6 @@ func (q *Queries) ListTripsByOwner(ctx context.Context, userID uuid.UUID) ([]Tri
 	return items, nil
 }
 
-const setItineraryItemPosition = `-- name: SetItineraryItemPosition :exec
-UPDATE itinerary_items SET position = $3 WHERE id = $1 AND trip_id = $2
-`
-
-type SetItineraryItemPositionParams struct {
-	ID       uuid.UUID `json:"id"`
-	TripID   uuid.UUID `json:"trip_id"`
-	Position int32     `json:"position"`
-}
-
-func (q *Queries) SetItineraryItemPosition(ctx context.Context, arg SetItineraryItemPositionParams) error {
-	_, err := q.db.Exec(ctx, setItineraryItemPosition, arg.ID, arg.TripID, arg.Position)
-	return err
-}
-
 const setTripDates = `-- name: SetTripDates :exec
 UPDATE trips SET start_date = $2, end_date = $3 WHERE id = $1
 `

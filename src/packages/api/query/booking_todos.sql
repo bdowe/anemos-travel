@@ -2,6 +2,10 @@
 SELECT * FROM booking_todos WHERE trip_id = $1 ORDER BY position ASC, created_at ASC;
 
 -- name: UpsertBookingTodo :one
+-- KEPT deliberately though no handler calls it directly: it is the semantic
+-- reference for UpsertBookingTodosBatch's column list / ON CONFLICT set, and
+-- its generated Params struct is the row type the batch path builds
+-- (booking_todo_handler.go). Delete only together with a handler refactor.
 INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
 ON CONFLICT (trip_id, todo_key) DO UPDATE SET
@@ -97,13 +101,10 @@ SET kind        = COALESCE(sqlc.narg('kind'), kind),
 WHERE id = sqlc.arg('id') AND trip_id = sqlc.arg('trip_id') AND auto = false
 RETURNING *;
 
--- name: SetBookingTodoPosition :exec
-UPDATE booking_todos SET position = $3 WHERE id = $1 AND trip_id = $2;
-
 -- name: SetBookingTodoPositionsBatch :exec
--- Batch twin of SetBookingTodoPosition: one round trip for the whole reorder.
--- ids and positions are parallel arrays; the trip_id scope mirrors the
--- per-row statement so a foreign id can never move another trip's row.
+-- One round trip for the whole reorder. ids and positions are parallel
+-- arrays; every row is scoped to trip_id so a foreign id can never move
+-- another trip's row.
 UPDATE booking_todos b
 SET position = u.pos
 FROM (
