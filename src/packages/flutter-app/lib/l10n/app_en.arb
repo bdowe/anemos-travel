@@ -707,6 +707,7 @@
   "tripTurnOffSharing": "Turn off sharing",
   "tripDeleteTrip": "Delete trip",
   "tripRemoveFromMyTrips": "Remove from my trips",
+  "tripMoreActions": "More options",
   "tripLocalIntel": "Local intel",
   "tripLocalGuideTitle": "Local guide: {title}",
   "@tripLocalGuideTitle": {

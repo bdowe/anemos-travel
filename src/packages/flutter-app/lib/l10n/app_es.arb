@@ -346,6 +346,7 @@
   "tripTurnOffSharing": "Desactivar el uso compartido",
   "tripDeleteTrip": "Eliminar viaje",
   "tripRemoveFromMyTrips": "Quitar de mis viajes",
+  "tripMoreActions": "Más opciones",
   "tripLocalIntel": "Información local",
   "tripLocalGuideTitle": "Guía local: {title}",
   "tripGuideBy": "Por {name}",

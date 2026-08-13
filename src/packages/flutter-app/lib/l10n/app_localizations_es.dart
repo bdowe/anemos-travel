@@ -1180,6 +1180,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripRemoveFromMyTrips => 'Quitar de mis viajes';
 
   @override
+  String get tripMoreActions => 'Más opciones';
+
+  @override
   String get tripLocalIntel => 'Información local';
 
   @override
