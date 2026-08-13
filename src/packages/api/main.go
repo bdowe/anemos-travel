@@ -318,9 +318,12 @@ func airportsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Duffel's key travels in a header (no URL leak), but its error
 		// strings can echo upstream response bodies — same policy: log the
-		// detail, answer generically.
+		// detail, answer generically. 502, not 500: the failure is the
+		// upstream provider's, clients treat 502 on a GET as retryable, and
+		// writeJSONError keeps the Content-Type set above honest
+		// (http.Error overwrote it with text/plain).
 		ctxLog(r.Context()).Error("airport search failed", "error", err)
-		http.Error(w, "Failed to search airports", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusBadGateway, "airport search unavailable")
 		return
 	}
 
@@ -598,6 +601,23 @@ func main() {
 // buildRouter wires all routes and middleware. It reads only package globals
 // (dbPool, service singletons), so main() and the integration tests construct
 // identical routers.
+// generalRate* size the per-IP backstop bucket against the app's own boot
+// fan-out, not against abuse: a cold boot onto a trip-detail page fires ~15
+// fixed API calls plus ~5 per city (weather, local recs, guides, events,
+// greece-links), and each /places/photo also debits this bucket (tier buckets
+// are additive) — a 10-city trip is ~90 requests in 1-3s. Burst 180 = two
+// back-to-back hard refreshes with zero refill headroom; 120/min (2 tokens/s)
+// restores a full boot's budget in ~45s while still capping sustained abuse
+// at 2 rps/IP (the strict/photo/transcribe/oauth/import tiers and the
+// concurrency shedder are unchanged). The prod realip chain keys the bucket
+// per end user; if shared-NAT contention ever shows in rate_limited_total,
+// the escalation is per-user keying for authenticated requests, not a bigger
+// burst. Sizing pinned by TestGeneralLimiterAbsorbsColdBootBurst.
+const (
+	generalRatePerMinute = 120
+	generalRateBurst     = 180
+)
+
 func buildRouter() *mux.Router {
 	router := mux.NewRouter()
 
@@ -615,7 +635,7 @@ func buildRouter() *mux.Router {
 	// Rate limiting: a general per-IP cap on everything, plus a strict tier
 	// on the endpoints that are expensive (AI streaming) or brute-forceable
 	// (credentials). Health checks stay exempt for container probes.
-	generalLimiter := newIPRateLimiter(60, 30)
+	generalLimiter := newIPRateLimiter(generalRatePerMinute, generalRateBurst)
 	strictLimiter := newIPRateLimiter(5, 3)
 	strict := rateLimitMiddleware(strictLimiter)
 	// Anonymous analytics gets its own bucket: sharing the strict one would let
@@ -626,16 +646,20 @@ func buildRouter() *mux.Router {
 	anonEvents := rateLimitMiddleware(anonEventsLimiter)
 	router.Use(requestIDMiddleware)
 	router.Use(recoveryMiddleware)
-	// Global concurrency ceiling (abuse_caps.go): a single Pi instance with
-	// WriteTimeout:0 (needed for SSE) has no cap on concurrent in-flight
-	// requests, so a burst could swamp it. Shed excess load early — right after
-	// recovery/requestID — with a non-blocking 503 + Retry-After (/health is
-	// exempt so probes still answer under saturation).
-	router.Use(newConcurrencyLimiter(maxInflightRequests()).middleware)
 	// metricsMiddleware sits right after recovery so it times the full handler
 	// (recovered panics count as the 500 they return) and folds each request
-	// into the in-process opsMetrics registry (ops_metrics.go).
+	// into the in-process opsMetrics registry (ops_metrics.go). It must wrap
+	// the concurrency shedder below: registered the other way round, shed
+	// 503s never reached the metrics layer and were invisible to the ops
+	// view.
 	router.Use(metricsMiddleware)
+	// Global concurrency ceiling (abuse_caps.go): a single small instance
+	// with WriteTimeout:0 (needed for SSE) has no cap on concurrent in-flight
+	// requests, so a burst could swamp it. Shed excess load early — before
+	// any per-request work beyond metrics — with a non-blocking 503 +
+	// Retry-After (/health is exempt so probes still answer under
+	// saturation).
+	router.Use(newConcurrencyLimiter(maxInflightRequests()).middleware)
 	router.Use(corsMiddleware)
 	// Negotiates the response language for every route, including the public
 	// token-gated exports that have no session to read a stored locale from
@@ -906,7 +930,13 @@ func startServer(router *mux.Router) {
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 0,
-		IdleTimeout:  60 * time.Second,
+		// Must strictly exceed the nginx gateway's upstream keepalive idle
+		// (keepalive_timeout 55s, dockerize/deployment/nginx/perf.conf) so
+		// nginx always closes pooled connections first. When both sides
+		// idled out at exactly 60s, nginx could dispatch a request onto a
+		// connection Go was simultaneously closing — intermittent "upstream
+		// prematurely closed connection" 502s after idle gaps.
+		IdleTimeout: 120 * time.Second,
 	}
 
 	log.Printf("Starting Travel Route Planner API server on port %s", port)

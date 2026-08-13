@@ -230,6 +230,86 @@ func TestSearchFlightOffersDefaultsToEconomy(t *testing.T) {
 	}
 }
 
+// A 200-with-empty places answer must not be cached: entries live 24h, and
+// pinning a transient empty payload would erase an airport (and the trip
+// map's home-airport pin) for a day, for every user resolving that code.
+// Non-empty results ARE cached.
+func TestPlaceSuggestionsDoesNotCacheEmptyResults(t *testing.T) {
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.Header().Set("Content-Type", "application/json")
+		if hits <= 2 {
+			w.Write([]byte(`{"data":[]}`))
+			return
+		}
+		w.Write([]byte(`{"data":[{"type":"airport","name":"Los Angeles International Airport","iata_code":"LAX","city_name":"Los Angeles","iata_country_code":"US","latitude":33.9425,"longitude":-118.408}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	d := &DuffelService{
+		Token:       "test-token",
+		BaseURL:     srv.URL,
+		Version:     "v2",
+		Client:      &http.Client{Timeout: 5 * time.Second},
+		placesCache: newTTLCache[[]Airport](time.Minute, 10),
+	}
+
+	ctx := context.Background()
+	if got, err := d.SearchAirports(ctx, "LAX"); err != nil || len(got) != 0 {
+		t.Fatalf("first call = %v, %v; want empty success", got, err)
+	}
+	// The empty answer was not cached: the second call reaches upstream again.
+	if _, err := d.SearchAirports(ctx, "LAX"); err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if hits != 2 {
+		t.Fatalf("upstream hits after two empty rounds = %d, want 2", hits)
+	}
+	// The third call gets a real result...
+	if got, err := d.SearchAirports(ctx, "LAX"); err != nil || len(got) != 1 {
+		t.Fatalf("third call = %v, %v; want the LAX row", got, err)
+	}
+	// ...which IS cached: a fourth call must not touch upstream.
+	if _, err := d.SearchAirports(ctx, "LAX"); err != nil {
+		t.Fatalf("fourth call: %v", err)
+	}
+	if hits != 3 {
+		t.Fatalf("upstream hits = %d, want 3 (non-empty result served from cache)", hits)
+	}
+}
+
+// A Duffel upstream failure must answer 502 with a JSON body: the old
+// http.Error(500, text/plain) read as our fault rather than the provider's,
+// and clients treat 502 on a GET as retryable.
+func TestAirportsSearchHandlerDuffelFailureIs502JSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "duffel exploded", http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+	old := duffelService
+	duffelService = &DuffelService{
+		Token:       "test-token",
+		BaseURL:     srv.URL,
+		Version:     "v2",
+		Client:      &http.Client{Timeout: 5 * time.Second},
+		placesCache: newTTLCache[[]Airport](time.Minute, 10),
+	}
+	t.Cleanup(func() { duffelService = old })
+
+	rec := httptest.NewRecorder()
+	airportsSearchHandler(rec, httptest.NewRequest(http.MethodGet, "/api/v1/flights/airports?q=LAX", nil))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Fatalf("Content-Type = %q, want application/json", ct)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("502 body is not JSON (%v): %s", err, rec.Body.String())
+	}
+}
+
 func TestPlaceSuggestionsCarriesCoordinates(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
