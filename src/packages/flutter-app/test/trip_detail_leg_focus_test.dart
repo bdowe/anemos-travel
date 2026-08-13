@@ -192,6 +192,65 @@ void main() {
         reason: 'Rome header should rest below map band + tab row');
   });
 
+  testWidgets(
+      'chip tap scrolls straight to the target: no up-then-down reversal',
+      (tester) async {
+    _useSurface(tester, const Size(1200, 800));
+    await _pump(tester, _threeCityTrip());
+
+    // Open Rome (8 items) for scroll extent, then park at the very bottom.
+    // The regression only shows on a net-upward scroll: from the top the
+    // buggy motion (animate clamped at ~0, one down-snap) was still
+    // monotone and the resting assert above passed all along.
+    await _tapChip(tester, 'Rome');
+    final scrollable = find
+        .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable))
+        .first;
+    final position = tester.state<ScrollableState>(scrollable).position;
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    final start = position.pixels;
+
+    // Tap Paris WITHOUT settling, then sample the scroll frame by frame:
+    // double-subtracting the pinned chrome animated ~420px past the target
+    // and let the correction pass snap back down — a direction reversal
+    // mid-gesture.
+    await tester.tap(find.descendant(
+        of: find.byType(MapLegChips), matching: find.text('Paris')));
+    final samples = <double>[];
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      samples.add(position.pixels);
+    }
+    await tester.pumpAndSettle();
+    samples.add(position.pixels);
+
+    expect(samples.last, lessThan(start),
+        reason: 'premise: the Paris rest offset must sit above the parked '
+            'bottom position — otherwise this scenario went vacuous');
+    var maxRise = 0.0;
+    for (var i = 1; i < samples.length; i++) {
+      final rise = samples[i] - samples[i - 1];
+      if (rise > maxRise) maxRise = rise;
+    }
+    expect(maxRise, lessThanOrEqualTo(2),
+        reason: 'a net-upward scroll must never move back down '
+            '(up-then-down jank); from $start: $samples');
+
+    // And it still lands exactly: Paris rests below the pinned chrome.
+    final viewportTop = tester.getBottomLeft(find.byType(AppBar)).dy;
+    final headerTop = tester
+        .getTopLeft(find
+            .ancestor(
+                of: cityHeaderLabel('Paris'), matching: find.byType(Material))
+            .first)
+        .dy;
+    expect((headerTop - (viewportTop + 420)).abs(), lessThanOrEqualTo(2),
+        reason: 'Paris header should rest below map band + tab row');
+  });
+
   testWidgets('the All chip deselects both ways: map to All, group closed',
       (tester) async {
     _useSurface(tester, const Size(1200, 800));

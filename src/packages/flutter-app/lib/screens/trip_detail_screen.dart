@@ -587,7 +587,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Combined height of the chrome pinned above the itinerary slivers: the
   /// map header (when it renders AND is pinned — on phones the map scrolls
   /// away, so it never rests above a target header) plus the itinerary
-  /// title header.
+  /// title header. This is the resting-slot measurement for the scroll
+  /// helpers' correction passes ONLY — never subtract it from a
+  /// getOffsetToReveal result, which already accounts for these extents
+  /// (`maxScrollObstructionExtentBefore`).
   double _pinnedChrome(Trip trip) {
     final mapShown = _derive(trip).mapShown;
     return ((_mapPinned && mapShown) ? _mapHeaderHeight : 0) +
@@ -725,9 +728,21 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Offset-reveal scroll to [dayKey]'s header (specs/today-mode plan.md,
   /// D1): `ensureVisible` is unreliable under SliverPinnedHeader /
-  /// MultiSliver, so compute the reveal offset, subtract everything pinned
-  /// above the header's resting slot, animate, then run exactly one
-  /// correction pass against the header's actual on-screen position.
+  /// MultiSliver, so compute the reveal offset, animate, then run exactly
+  /// one correction pass against the header's actual on-screen position.
+  ///
+  /// `getOffsetToReveal(target, 0)` already rests the target below the
+  /// viewport-level pinned chrome: it subtracts the summed obstruction of
+  /// the pinned viewport children before the target's sliver
+  /// (`maxScrollObstructionExtentBefore`) — exactly [_pinnedChrome], so
+  /// subtracting that here again would animate 56–420px past the target
+  /// and leave the correction pass to snap back every time (the
+  /// up-then-down jank). Only the city SliverPinnedHeader needs manual
+  /// subtraction: it sits INSIDE the group's SliverPadding→MultiSliver
+  /// viewport child and the obstruction walk never descends into a child
+  /// sliver. (That SliverPadding reporting 0 obstruction is also what
+  /// keeps getOffsetToReveal's isPinned→infinity branch unreachable for
+  /// these targets — don't unwrap it.)
   Future<void> _scrollToDayHeader(String dayKey) async {
     final trip = _trip;
     if (!mounted || trip == null || !_scroll.hasClients) return;
@@ -735,8 +750,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     if (target == null || !target.attached) return;
     final viewport = RenderAbstractViewport.maybeOf(target);
     if (viewport == null) return;
-    final resting = _pinnedChrome(trip) + _cityHeaderHeight(dayKey);
-    final reveal = viewport.getOffsetToReveal(target, 0).offset - resting;
+    final reveal = viewport.getOffsetToReveal(target, 0).offset -
+        _cityHeaderHeight(dayKey);
     final offset = reveal.clamp(0.0, _scroll.position.maxScrollExtent);
     await _scroll.animateTo(offset,
         duration: const Duration(milliseconds: 350),
@@ -849,7 +864,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Offset-reveal scroll resting [cityKey]'s header just below the pinned
   /// chrome — [_scrollToDayHeader] minus the city-header term (this header
-  /// IS the target). Same one-correction contract.
+  /// IS the target; the chrome rests via getOffsetToReveal's own
+  /// obstruction handling, see there). Same one-correction contract. The
+  /// accordion collapse of the previously open group in the same tap frame
+  /// is deliberately uncompensated: with the animation running straight at
+  /// the target it reads as a collapse, not as scroll misbehavior.
   Future<void> _scrollToCityHeader(String cityKey) async {
     final trip = _trip;
     if (!mounted || trip == null || !_scroll.hasClients) return;
@@ -858,8 +877,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     if (target == null || !target.attached) return;
     final viewport = RenderAbstractViewport.maybeOf(target);
     if (viewport == null) return;
-    final resting = _pinnedChrome(trip);
-    final reveal = viewport.getOffsetToReveal(target, 0).offset - resting;
+    final reveal = viewport.getOffsetToReveal(target, 0).offset;
     final offset = reveal.clamp(0.0, _scroll.position.maxScrollExtent);
     await _scroll.animateTo(offset,
         duration: const Duration(milliseconds: 350),
