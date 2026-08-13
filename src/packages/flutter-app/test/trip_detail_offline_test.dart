@@ -37,9 +37,10 @@ class _QueuedTripsApiService extends TripsApiService {
   }
 }
 
-Trip _trip(String title) => Trip(
+Trip _trip(String title, {String? access}) => Trip(
       id: 't1',
       title: title,
+      access: access,
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       items: [
@@ -148,7 +149,9 @@ void main() {
     ));
     expect(rename.onPressed, isNull);
     expect(find.byTooltip('Share trip'), findsNothing);
-    expect(find.byTooltip('Delete trip'), findsNothing);
+    // Delete/leave live behind the overflow menu, which mutates and is
+    // therefore hidden entirely while offline-serving.
+    expect(find.byTooltip('More options'), findsNothing);
 
     // The Bookings view's add menu is likewise disabled, not hidden. The
     // tab tap itself stays allowed offline — switching views is pure view
@@ -359,5 +362,47 @@ void main() {
         find.text(
             "You're going a little too fast — wait a moment and try again."),
         findsOneWidget);
+  });
+
+  group('app-bar overflow menu', () {
+    testWidgets('owner: delete sits behind the menu and still confirms',
+        (WidgetTester tester) async {
+      final service = _QueuedTripsApiService([_trip('Athens Trip')]);
+
+      await _pumpDetail(tester, service, TripCache('u1'));
+      await tester.pumpAndSettle();
+
+      // No bare delete button in the app bar anymore.
+      expect(find.byTooltip('Delete trip'), findsNothing);
+
+      await tester.tap(find.byTooltip('More options'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete trip'), findsOneWidget);
+
+      await tester.tap(find.text('Delete trip'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete trip?'), findsOneWidget);
+      expect(find.text('This cannot be undone.'), findsOneWidget);
+
+      // Cancel keeps the trip.
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete trip?'), findsNothing);
+      expect(find.text('Acropolis'), findsOneWidget);
+    });
+
+    testWidgets('non-owner: menu offers remove-from-my-trips, not delete',
+        (WidgetTester tester) async {
+      final service =
+          _QueuedTripsApiService([_trip('Athens Trip', access: 'editor')]);
+
+      await _pumpDetail(tester, service, TripCache('u1'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('More options'));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove from my trips'), findsOneWidget);
+      expect(find.text('Delete trip'), findsNothing);
+    });
   });
 }

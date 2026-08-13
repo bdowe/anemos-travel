@@ -2174,6 +2174,12 @@ abstract class AppLocalizations {
   /// **'Remove from my trips'**
   String get tripRemoveFromMyTrips;
 
+  /// No description provided for @tripMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More options'**
+  String get tripMoreActions;
+
   /// No description provided for @tripLocalIntel.
   ///
   /// In en, this message translates to:

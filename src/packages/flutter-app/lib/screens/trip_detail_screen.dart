@@ -4931,8 +4931,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   ? null
                   : () => _openRefine(trip, const RefineTarget.trip()),
             ),
-          // Sharing and deletion are owner-only surfaces; editors see
-          // neither. Both mutate, so they're hidden while offline-serving.
+          // Sharing is an owner-only surface; it mutates, so it's hidden
+          // while offline-serving.
           if (trip != null && trip.isOwner && !_isOffline)
             PopupMenuButton<String>(
               key: _shareMenuKey,
@@ -4969,19 +4969,41 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                     value: 'revoke', child: Text(l10n.tripTurnOffSharing)),
               ],
             ),
-          if (trip != null && trip.isOwner && !_isOffline)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: l10n.tripDeleteTrip,
-              onPressed: _delete,
-            ),
-          // Members (editors and viewer follows) can drop the trip from
-          // their own list; the owner's trip is untouched.
-          if (trip != null && !trip.isOwner && !_isOffline)
-            IconButton(
-              icon: const Icon(Icons.bookmark_remove_outlined),
-              tooltip: l10n.tripRemoveFromMyTrips,
-              onPressed: _leaveTrip,
+          // Destructive exits live behind an overflow menu, not a bare
+          // icon: owners get delete, members (editors and viewer follows)
+          // get remove-from-my-list — the owner's trip is untouched. Both
+          // still confirm via their handlers' dialogs.
+          if (trip != null && !_isOffline)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              tooltip: l10n.tripMoreActions,
+              onSelected: (v) => switch (v) {
+                'delete' => _delete(),
+                _ => _leaveTrip(),
+              },
+              itemBuilder: (context) => [
+                if (trip.isOwner)
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline,
+                          color: Theme.of(context).colorScheme.error),
+                      title: Text(l10n.tripDeleteTrip,
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error)),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  )
+                else
+                  PopupMenuItem(
+                    value: 'leave',
+                    child: ListTile(
+                      leading: const Icon(Icons.bookmark_remove_outlined),
+                      title: Text(l10n.tripRemoveFromMyTrips),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+              ],
             ),
         ],
       ),
