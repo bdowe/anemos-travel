@@ -104,7 +104,7 @@ abstract class AppLocalizations {
   /// **'Golden Tempo Travel'**
   String get appTitle;
 
-  /// Header of the language group in account settings.
+  /// Label of the language dropdown in account settings.
   ///
   /// In en, this message translates to:
   /// **'Language'**
@@ -134,7 +134,13 @@ abstract class AppLocalizations {
   /// **'Change language'**
   String get languageMenuTooltip;
 
-  /// Header of the light/dark appearance group in account settings.
+  /// Header of the merged appearance + language group in account settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance & language'**
+  String get appearanceLanguageSectionTitle;
+
+  /// Label of the light/dark appearance dropdown in account settings.
   ///
   /// In en, this message translates to:
   /// **'Appearance'**
