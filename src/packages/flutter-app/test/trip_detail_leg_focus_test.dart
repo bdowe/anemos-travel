@@ -14,17 +14,19 @@ import 'package:travel_route_planner/widgets/trip_map.dart';
 import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
-// The accordion city-focus contract (specs/map-city-focus, accordion rev):
-//   * the open group IS the selection: expanding a city header focuses its
-//     leg on the map and closes the previously open group — at most one
-//     group is ever open;
-//   * collapsing the open group (or tapping the All chip) deselects both
-//     ways: the map returns to All and everything is collapsed;
-//   * a chip tap selects — focuses + opens the leg's group — and on the
-//     wide layout rests the city header just below the pinned chrome;
-//     phones never scroll;
+// The map/list decoupling contract (specs/map-city-focus, decoupled rev):
+//   * city groups default EXPANDED; expansion is list-only state
+//     (_collapsedGroups) — a header tap is a pure toggle of that ONE group:
+//     it never writes map focus, never moves the camera, never touches
+//     other groups;
+//   * map focus (_focusedLegKey) is MAP-only state: a chip tap focuses the
+//     leg, un-collapses its group, and on the wide layout rests the city
+//     header just below the pinned chrome; phones never scroll. The All
+//     chip resets the MAP only — the list is untouched;
 //   * a map pin tap reveals its run in the list WITHOUT moving the camera
 //     (reveal-only), and a focus change clears the map pin selection;
+//   * a destination (region) pin tap on the All overview scrolls the list
+//     to the region's group — no focus write, the camera never moves;
 //   * bookings lenses (no city headers) get map-only chips, lens kept;
 //     places lenses resolve legs onto merged groups (groupKeyForLeg);
 //   * revisited cities focus per RUN key; single-leg trips have no focus.
@@ -128,55 +130,52 @@ void _useSurface(WidgetTester tester, Size size) {
 
 void main() {
   testWidgets(
-      'header taps drive the accordion: expanding selects and closes the '
-      'previous group, collapsing the open group restores All',
-      (tester) async {
+      'header taps are pure list toggles: the map never moves, focused '
+      'or not', (tester) async {
     // Tall surface: with the 364px map band pinned, expanded sections push
     // later headers below an 800px fold and header taps would miss.
     _useSurface(tester, const Size(1200, 2200));
     await _pump(tester, _threeCityTrip());
 
     expect(_map(tester).fitSignature, isNull);
+    expect(find.text('Louvre'), findsOneWidget); // groups default expanded
 
-    // Expand Paris → its leg focuses; the map filters to Paris.
-    await expandCity(tester, 'Paris');
-    expect(_map(tester).fitSignature, 'Paris');
-    expect(_map(tester).items.map((i) => i.name), ['Louvre', 'Orsay']);
-    expect(find.text('Louvre'), findsOneWidget);
-
-    // Expanding Rome selects it — and closes Paris: at most one group open.
-    await expandCity(tester, 'Rome');
-    expect(_map(tester).fitSignature, 'Rome');
-    expect(_map(tester).items, hasLength(8));
-    expect(find.text('Louvre'), findsNothing,
-        reason: 'selecting Rome must close the previously open Paris');
-
-    // Collapsing the open Rome deselects: map to All, list all collapsed.
-    await expandCity(tester, 'Rome');
+    // Collapse Paris → the LIST folds; the map stays the All overview.
+    await toggleCity(tester, 'Paris');
+    expect(find.text('Louvre'), findsNothing);
     expect(_map(tester).fitSignature, isNull);
     expect(_map(tester).items, hasLength(11));
+
+    // Re-expand: still not a focus write.
+    await toggleCity(tester, 'Paris');
+    expect(find.text('Louvre'), findsOneWidget);
+    expect(_map(tester).fitSignature, isNull);
+    expect(_map(tester).items, hasLength(11));
+
+    // Under an active focus the toggle is just as map-inert: collapsing
+    // the focused Rome folds the list, but the camera and its leg filter
+    // both hold — there is no accordion tying the two together anymore.
+    await _tapChip(tester, 'Rome');
+    expect(_map(tester).fitSignature, 'Rome');
+    await toggleCity(tester, 'Rome');
     expect(find.text('Roman Forum 0'), findsNothing);
+    expect(_map(tester).fitSignature, 'Rome',
+        reason: 'collapsing a group must not reset the map');
+    expect(_map(tester).items, hasLength(8));
   });
 
   testWidgets(
-      'desktop chip tap expands the section and rests its header just '
-      'below the pinned chrome', (tester) async {
+      'desktop chip tap rests the city header just below the pinned chrome',
+      (tester) async {
     _useSurface(tester, const Size(1200, 800));
     await _pump(tester, _threeCityTrip());
-
-    // Rome starts collapsed: its items aren't built. Open Paris first so
-    // the chip tap also proves the accordion closes it.
-    expect(find.text('Roman Forum 0'), findsNothing);
-    await expandCity(tester, 'Paris');
-    expect(find.text('Louvre'), findsOneWidget);
 
     await _tapChip(tester, 'Rome');
 
     expect(_map(tester).fitSignature, 'Rome');
-    // The section expanded — exclusively…
+    // The group's items are reachable (expanded — the landing default; the
+    // chip tap re-opens a manually collapsed group)…
     expect(find.text('Roman Forum 0'), findsOneWidget);
-    expect(find.text('Louvre'), findsNothing,
-        reason: 'a chip tap closes the previously open group');
     // …and its header rests right below the pinned chrome: the 364px map
     // band (12 + 340 + 12) + the 56px itinerary tab row = 420, measured
     // from the viewport top (the app bar's bottom — the scroll math lives
@@ -198,10 +197,11 @@ void main() {
     _useSurface(tester, const Size(1200, 800));
     await _pump(tester, _threeCityTrip());
 
-    // Open Rome (8 items) for scroll extent, then park at the very bottom.
-    // The regression only shows on a net-upward scroll: from the top the
-    // buggy motion (animate clamped at ~0, one down-snap) was still
-    // monotone and the resting assert above passed all along.
+    // Focus Rome, then park at the very bottom (every group lands expanded,
+    // so the 8 Rome items give plenty of scroll extent). The regression
+    // only shows on a net-upward scroll: from the top the buggy motion
+    // (animate clamped at ~0, one down-snap) was still monotone and the
+    // resting assert above passed all along.
     await _tapChip(tester, 'Rome');
     final scrollable = find
         .descendant(
@@ -251,7 +251,7 @@ void main() {
         reason: 'Paris header should rest below map band + tab row');
   });
 
-  testWidgets('the All chip deselects both ways: map to All, group closed',
+  testWidgets('the All chip resets the map only: the list is untouched',
       (tester) async {
     _useSurface(tester, const Size(1200, 800));
     await _pump(tester, _threeCityTrip());
@@ -260,13 +260,13 @@ void main() {
     expect(_map(tester).fitSignature, 'Rome');
     expect(find.text('Roman Forum 0'), findsOneWidget);
 
-    // All = nothing selected: chips and headers are two views of ONE
-    // selection, so the open group closes with the map reset.
+    // All = no focus: the camera returns to the overview, but expansion is
+    // list-only state — nothing collapses, no scroll happens.
     await _tapChip(tester, 'All');
     expect(_map(tester).fitSignature, isNull);
     expect(_map(tester).items, hasLength(11));
-    expect(find.text('Roman Forum 0'), findsNothing,
-        reason: 'the All chip closes the open group');
+    expect(find.text('Roman Forum 0'), findsOneWidget,
+        reason: 'the All chip must leave the list untouched');
   });
 
   testWidgets('phone chip tap focuses the map without scrolling the list',
@@ -284,9 +284,10 @@ void main() {
     await _tapChip(tester, 'Rome');
 
     expect(_map(tester).fitSignature, 'Rome');
-    // The section expanded, but the page did not move — the chips ride the
-    // scroll-away preview card, and scrolling would hide the map itself.
-    expect(find.text('Roman Forum 0'), findsOneWidget);
+    // The page did not move — the chips ride the scroll-away preview card,
+    // and scrolling would hide the map itself. (No item assert: with every
+    // group expanded, Rome's lazy tiles sit beyond the unscrolled cache
+    // extent and never build.)
     expect(tester.state<ScrollableState>(scrollable).position.pixels, 0);
   });
 
@@ -294,8 +295,8 @@ void main() {
     _useSurface(tester, const Size(1200, 2200));
     await _pump(tester, _threeCityTrip());
 
-    await expandCity(tester, 'Rome');
-    // Tapping an item row selects its pin on the map.
+    // Tapping an item row selects its pin on the map (the row is already
+    // built: groups land expanded).
     await tester.tap(find.text('Roman Forum 1'));
     await tester.pumpAndSettle();
     expect(_map(tester).selectedPosition, 3);
@@ -312,10 +313,14 @@ void main() {
     _useSurface(tester, const Size(1200, 2200));
     await _pump(tester, _threeCityTrip());
 
+    // A collapsed Rome is the case that matters: the reveal must re-open it.
+    await collapseCity(tester, 'Rome');
+    expect(find.text('Roman Forum 1'), findsNothing);
+
     // From the All view, tap a Rome pin (invoked directly — marker hit
-    // boxes cluster-shift): its run opens so the highlighted row is
+    // boxes cluster-shift): its run un-collapses so the highlighted row is
     // reachable, but the camera must NOT refit out from under the
-    // zoom-to-pin move — fitSignature stays All.
+    // zoom-to-pin move — fitSignature stays All, focus is never written.
     _map(tester).onPinTap!(2);
     await tester.pumpAndSettle();
     expect(_map(tester).selectedPosition, 2);
@@ -323,12 +328,53 @@ void main() {
     // A sibling row, not the tapped item's name — that one also renders in
     // the pin-tap snackbar.
     expect(find.text('Roman Forum 1'), findsOneWidget);
+  });
 
-    // The reveal-only open group still collapses coherently: the map is
-    // already on All, so closing it changes nothing on the map.
-    await expandCity(tester, 'Rome');
+  testWidgets(
+      'a destination pin tap scrolls to the region without touching the map',
+      (tester) async {
+    // Tall enough that Rome's header sits above the fold for the collapse
+    // tap, short enough that the fixture still has the ~425px of scroll
+    // extent the rest-below-chrome assertion needs (a 2200 surface
+    // swallows the whole trip: maxScrollExtent 0, nothing can scroll).
+    _useSurface(tester, const Size(1200, 1100));
+    await _pump(tester, _threeCityTrip());
+
+    await collapseCity(tester, 'Rome');
+    expect(find.text('Roman Forum 0'), findsNothing);
     expect(_map(tester).fitSignature, isNull);
-    expect(find.text('Roman Forum 1'), findsNothing);
+
+    // A region pin on the All overview reads as "take me there in the
+    // LIST" (invoked directly — the robust pattern at this level; the
+    // trip_map suite covers real taps): un-collapse + scroll, with NO
+    // focus write — focusing would swap the map to per-item pins and
+    // delete the very pins under the pointer.
+    _map(tester).onDestinationTap!('Rome');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Roman Forum 0'), findsOneWidget,
+        reason: 'the region tap re-opens its collapsed group');
+    // Same rest math as a chip tap: map band + tab row = 420, ±2 for the
+    // one correction pass.
+    final viewportTop = tester.getBottomLeft(find.byType(AppBar)).dy;
+    final headerTop = tester
+        .getTopLeft(find
+            .ancestor(
+                of: cityHeaderLabel('Rome'), matching: find.byType(Material))
+            .first)
+        .dy;
+    expect((headerTop - (viewportTop + 420)).abs(), lessThanOrEqualTo(2),
+        reason: 'Rome header should rest below map band + tab row');
+    final position = tester
+        .state<ScrollableState>(find
+            .descendant(
+                of: find.byType(CustomScrollView),
+                matching: find.byType(Scrollable))
+            .first)
+        .position;
+    expect(position.pixels, greaterThan(0));
+    expect(_map(tester).fitSignature, isNull,
+        reason: 'a region tap never moves the camera');
   });
 
   testWidgets('a pin tap while a leg is focused keeps the camera and selection',
@@ -348,9 +394,8 @@ void main() {
     expect(_map(tester).fitSignature, 'Rome', reason: 'camera must not refit');
     expect(_map(tester).selectedPosition, 3,
         reason: 'keepCamera must not clear the selection');
-    // Rome stays the open group; Paris stays closed.
+    // Rome's rows stay in place (a pin tap never collapses anything).
     expect(find.text('Roman Forum 1'), findsWidgets);
-    expect(find.text('Louvre'), findsNothing);
   });
 
   testWidgets('bookings lens: a chip tap filters the map and keeps the lens',
@@ -372,7 +417,7 @@ void main() {
         reason: 'a map chip must not exit the bookings lens');
   });
 
-  testWidgets('revisited city: each header run focuses its own leg',
+  testWidgets('revisited city: each chip run focuses its own leg',
       (tester) async {
     _useSurface(tester, const Size(1200, 2200));
     await _pump(
@@ -392,13 +437,18 @@ void main() {
       ),
     );
 
-    // The second Paris header focuses the SECOND run only.
-    await expandCity(tester, 'Paris', index: 1);
+    // Header taps no longer focus, so the two same-label Paris CHIPS drive
+    // per-run focus. The second chip focuses the SECOND run only.
+    final parisChips = find.descendant(
+        of: find.byType(MapLegChips), matching: find.text('Paris'));
+    await tester.tap(parisChips.at(1));
+    await tester.pumpAndSettle();
     expect(_map(tester).fitSignature, 'Paris#2');
     expect(_map(tester).items.map((i) => i.name), ['Marmottan']);
 
     // And the first run stays its own focus target.
-    await expandCity(tester, 'Paris', index: 0);
+    await tester.tap(parisChips.at(0));
+    await tester.pumpAndSettle();
     expect(_map(tester).fitSignature, 'Paris');
     expect(_map(tester).items.map((i) => i.name), ['Louvre']);
   });
@@ -443,7 +493,12 @@ void main() {
         matching: find.byWidgetPredicate((w) => w is CheckedPopupMenuItem)));
     await tester.pumpAndSettle();
 
-    // Selecting the SECOND Paris run focuses its leg — and opens the one
+    // Collapse the merged group first, so the chip tap's un-collapse must
+    // resolve the leg onto it (groupKeyForLeg) rather than find it open.
+    await collapseCity(tester, 'Paris');
+    expect(find.text('Louvre'), findsNothing);
+
+    // Selecting the SECOND Paris run focuses its leg — and re-opens the one
     // merged group both runs resolve to.
     final parisChips = find.descendant(
         of: find.byType(MapLegChips), matching: find.text('Paris'));
@@ -464,7 +519,7 @@ void main() {
     expect(find.text('Louvre'), findsOneWidget);
   });
 
-  testWidgets('adding a place focuses the added city, closing the previous',
+  testWidgets('adding a place focuses the added city on the map',
       (tester) async {
     _useSurface(tester, const Size(1200, 2200));
     final v1 = _threeCityTrip();
@@ -522,8 +577,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Open Paris so the add can be shown to CLOSE it (the item lands in Rome).
-    await expandCity(tester, 'Paris');
+    // Focus Paris first, so the add provably REfocuses the map (the item
+    // lands in Rome).
+    await _tapChip(tester, 'Paris');
     expect(_map(tester).fitSignature, 'Paris');
     expect(find.text('Louvre'), findsOneWidget);
 
@@ -538,12 +594,13 @@ void main() {
         find.descendant(of: find.byType(AlertDialog), matching: find.text('Add')));
     await tester.pumpAndSettle();
 
-    // The new item's leg (Rome) is now focused and its group open; Paris,
-    // the previously open group, is closed.
+    // The new item's leg (Rome) is now focused so the fresh pin is visible;
+    // Paris stays expanded — expansion is not the map's state, so a focus
+    // change collapses nothing.
     expect(_map(tester).fitSignature, 'Rome');
     expect(find.text('Trevi Fountain'), findsWidgets);
-    expect(find.text('Louvre'), findsNothing,
-        reason: 'the previously open Paris closes under the accordion');
+    expect(find.text('Louvre'), findsOneWidget,
+        reason: 'a focus change must not collapse any group');
   });
 
   testWidgets('single-leg trip: no chip strip, header taps never focus',
@@ -572,16 +629,16 @@ void main() {
       findsNothing,
     );
 
-    // The sole group seeds open; toggling it never writes focus — with one
-    // leg, "All" and "the leg" are the same map, and a fit bump would snap
-    // a user-panned camera for no visible change. The LIST still toggles
-    // through the reveal-only hatch (this is the same writer path an
-    // 'Other places'-only trip takes).
-    expect(find.text('Louvre'), findsOneWidget); // seeded open
-    await expandCity(tester, 'Paris'); // collapse (seeded open)
+    // The sole group lands expanded like every other; toggling it never
+    // writes focus — with one leg, "All" and "the leg" are the same map,
+    // and a fit bump would snap a user-panned camera for no visible
+    // change. The LIST still toggles through the same pure-toggle path
+    // every header tap takes.
+    expect(find.text('Louvre'), findsOneWidget); // expanded by default
+    await collapseCity(tester, 'Paris');
     expect(_map(tester).fitSignature, isNull);
     expect(find.text('Louvre'), findsNothing, reason: 'list collapsed');
-    await expandCity(tester, 'Paris'); // expand again
+    await toggleCity(tester, 'Paris'); // expand again
     expect(_map(tester).fitSignature, isNull);
     expect(find.text('Louvre'), findsOneWidget, reason: 'list reopened');
   });

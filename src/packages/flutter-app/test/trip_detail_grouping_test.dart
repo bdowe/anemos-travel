@@ -11,7 +11,6 @@ import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
 import 'support/chip_finders.dart';
-import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 /// Returns a fixed trip without hitting the network, so we can exercise the
@@ -96,18 +95,12 @@ void main() {
     expect(chipTextIn('Green Turtle Cay', 'Jun 10 – Jun 12'), findsOneWidget);
     expect(chipTextIn('Green Turtle Cay', '· 2 nights'), findsOneWidget);
 
-    // Groups default collapsed and at most ONE is open at a time (accordion):
-    // expanding a city closes the previously open one. Assert each group's
-    // body while that group is the open one.
-    await expandCity(tester, 'Green Turtle Cay');
+    // Groups default EXPANDED (list expansion is decoupled from the map),
+    // so both groups' bodies render on landing.
     expect(find.text("Brendal's Dive Center"), findsOneWidget);
-    // Legacy items (no day) render with no "Day N" sub-headers.
-    expect(find.textContaining('Day 1'), findsNothing);
-
-    // Opening Great Guana Cay collapses Green Turtle Cay.
-    await expandCity(tester, 'Great Guana Cay');
     expect(find.text('Dive Guana'), findsOneWidget);
-    // Legacy rule holds in this group too.
+    // Legacy items (no day) render with no "Day N" sub-headers, in either
+    // group.
     expect(find.textContaining('Day 1'), findsNothing);
   });
 
@@ -148,10 +141,8 @@ void main() {
     expect(find.text('Paris'), findsOneWidget);
     expect(find.text('Rome'), findsOneWidget);
 
-    // Groups default collapsed and at most ONE is open at a time (accordion):
-    // opening Rome would collapse Paris, so each city's day sub-headers are
-    // asserted while that city is the open group.
-    await expandCity(tester, 'Paris');
+    // Groups default EXPANDED, so both cities' day sub-headers render on
+    // landing.
 
     // Day sub-headers show the weekday + date derived from the trip start
     // (day N -> startDate + (N-1)). Jun 10 2026 is a Wednesday.
@@ -166,8 +157,7 @@ void main() {
     // The Versailles day trip still nests under its day (Paris group body).
     expect(find.text('Day trip · Versailles'), findsOneWidget);
 
-    // Opening Rome collapses Paris.
-    await expandCity(tester, 'Rome');
+    // Rome's day sub-header (day 4 -> Jun 13) renders alongside Paris's.
     expect(find.text('Sat, Jun 13'), findsOneWidget);
     expect(find.text('Colosseum'), findsOneWidget);
   });

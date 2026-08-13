@@ -73,10 +73,17 @@ class TripMapDestination {
   /// Pre-formatted date range for the tooltip; null shows the label alone.
   final String? dates;
 
+  /// Full-itinerary leg run key ('Prague', 'Prague#2') for callers that make
+  /// destination pins navigable via [TripMap.onDestinationTap]. Null — the
+  /// default, and what the shared/home views pass — keeps the pin a
+  /// tooltip-only marker.
+  final String? legKey;
+
   const TripMapDestination({
     required this.label,
     required this.point,
     this.dates,
+    this.legKey,
   });
 }
 
@@ -95,6 +102,11 @@ class TripMap extends StatefulWidget {
   final List<ItineraryItem> items;
   final int? selectedPosition;
   final void Function(int position)? onPinTap;
+
+  /// Tap handler for destination (trip-overview) pins, called with the pin's
+  /// [TripMapDestination.legKey]. Null — the default — keeps destination pins
+  /// tooltip-only (tap shows city + dates), the pre-existing behavior.
+  final void Function(String legKey)? onDestinationTap;
 
   /// Stays to plot alongside the itinerary. Entries without coordinates are
   /// skipped; the default keeps existing call sites unchanged.
@@ -155,6 +167,7 @@ class TripMap extends StatefulWidget {
     required this.items,
     this.selectedPosition,
     this.onPinTap,
+    this.onDestinationTap,
     this.segmentLabels = const {},
     this.accommodations = const [],
     this.fitSignature,
@@ -765,6 +778,10 @@ class _TripMapState extends State<TripMap> {
                             label: '${k + 1}',
                             name: d.label,
                             dates: d.dates,
+                            onTap: (widget.onDestinationTap != null &&
+                                    d.legKey != null)
+                                ? () => widget.onDestinationTap!(d.legKey!)
+                                : null,
                           ),
                         ),
                     ],
@@ -1014,8 +1031,10 @@ class _Pin extends StatelessWidget {
 /// A destination (city-leg) pin for the trip-overview mode: the same round
 /// numbered dot as itinerary pins, in one consistent color (category tinting
 /// is meaningless for a whole city). Destinations sit outside the
-/// position-based selection sync, so a tap shows a self-contained tooltip
-/// (city + dates) like [_StayPin] instead of driving [TripMap.onPinTap].
+/// position-based selection sync: with [onTap] wired the tap drives
+/// [TripMap.onDestinationTap] (the tooltip stays on hover/long-press);
+/// without it a tap shows a self-contained tooltip (city + dates) like
+/// [_StayPin] instead of driving [TripMap.onPinTap].
 class _DestinationPin extends StatelessWidget {
   /// The 1..N visit-order ordinal shown in the dot.
   final String label;
@@ -1026,30 +1045,46 @@ class _DestinationPin extends StatelessWidget {
   /// Pre-formatted date range; null shows the name alone.
   final String? dates;
 
+  /// Navigation tap, pre-bound to the pin's leg key by the caller. Null keeps
+  /// the pin tooltip-only.
+  final VoidCallback? onTap;
+
   const _DestinationPin({
     required this.label,
     required this.name,
     this.dates,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    // The tooltip's tap detector fills the marker's [_pinHitBox] box, so the
-    // whole transparent halo around the 24px dot triggers it.
-    return Tooltip(
-      message: dates == null ? name : '$name\n$dates',
-      triggerMode: TooltipTriggerMode.tap,
-      child: Center(
-        child: SizedBox.square(
-          dimension: 24,
-          child: _Pin(
-            label: label,
-            category: null,
-            selected: false,
-            color: Theme.of(context).colorScheme.primary,
-          ),
+    final message = dates == null ? name : '$name\n$dates';
+    final dot = Center(
+      child: SizedBox.square(
+        dimension: 24,
+        child: _Pin(
+          label: label,
+          category: null,
+          selected: false,
+          color: Theme.of(context).colorScheme.primary,
         ),
       ),
+    );
+    if (onTap == null) {
+      // The tooltip's tap detector fills the marker's [_pinHitBox] box, so
+      // the whole transparent halo around the 24px dot triggers it.
+      return Tooltip(
+        message: message,
+        triggerMode: TooltipTriggerMode.tap,
+        child: dot,
+      );
+    }
+    // Navigable pin: the opaque detector claims the full [_pinHitBox] halo
+    // for the tap; the tooltip keeps hover (desktop) and long-press.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Tooltip(message: message, child: dot),
     );
   }
 }

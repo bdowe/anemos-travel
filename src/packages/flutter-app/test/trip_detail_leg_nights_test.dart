@@ -224,8 +224,10 @@ void main() {
 
     double chevronRightIn(String city) {
       final row = headerRowOf(city);
+      // Groups land expanded, so the header chevron is expand_more (a
+      // collapsed row would show chevron_right); geometry is the same slot.
       final chevron = find.descendant(
-          of: row, matching: find.byIcon(Icons.chevron_right));
+          of: row, matching: find.byIcon(Icons.expand_more));
       expect(chevron, findsOneWidget);
       expect(
         tester.getTopRight(chevron).dx,
@@ -252,8 +254,9 @@ void main() {
     await _pump(tester, _pragueKrakowTrip());
 
     final row = headerRowOf('Prague');
+    // expand_more: groups land expanded (see the chevron test above).
     final chevron = find.descendant(
-        of: row, matching: find.byIcon(Icons.chevron_right));
+        of: row, matching: find.byIcon(Icons.expand_more));
     expect(
       tester.getTopRight(chevron).dx,
       moreOrLessEquals(tester.getTopRight(row).dx, epsilon: 0.1),
@@ -395,12 +398,19 @@ void main() {
             epsilon: 0.1),
         reason: "the 'Other places' nights suffix must share the right edge");
 
-    // The phantom slot is width-only: exactly one LIVE refine button.
-    final live = tester
-        .widgetList<IconButton>(
-            find.widgetWithIcon(IconButton, Icons.auto_awesome))
-        .where((b) => b.onPressed != null);
-    expect(live.length, 1,
+    // The phantom slot is width-only. Scoped to the two header rows: with
+    // groups expanded by default the day sub-headers mount too, and their
+    // own live refine buttons would alias a global count.
+    Iterable<IconButton> refinesIn(String city) =>
+        tester.widgetList<IconButton>(find.descendant(
+            of: headerRowOf(city),
+            matching: find.widgetWithIcon(IconButton, Icons.auto_awesome)));
+    expect(refinesIn('Prague').where((b) => b.onPressed != null).length, 1,
+        reason: 'the real city header keeps its live refine button');
+    final other = refinesIn('Other places').toList();
+    expect(other.length, 1,
+        reason: "the 'Other places' slot must exist (width-identical)");
+    expect(other.single.onPressed, isNull,
         reason: 'the Other-places placeholder must stay inert');
   });
 

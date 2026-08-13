@@ -23,16 +23,26 @@ String groupLabelText(AppLocalizations l10n, String label) =>
 /// real coordinate, in visit order; ungeocoded groups are skipped so the
 /// visible numbering stays contiguous. Callers pass [rawLegRanges] output —
 /// map pins stay on the RAW ranges by doctrine (see leg_ranges.dart).
+///
+/// [legKeys] (optional) makes the pins navigable: index-aligned with
+/// [rawRanges] — both follow tripLegs order, which is why the zip happens
+/// BEFORE the coord filter. [LegRange] itself stays key-free by doctrine
+/// (record typedef with a Go twin); the key comes from [TripLeg.key].
 List<TripMapDestination> tripMapDestinations(
-        List<LegRange> rawRanges, AppLocalizations l10n) =>
-    [
-      for (final r in rawRanges)
-        if (r.coord != null)
-          TripMapDestination(
-            label: groupLabelText(l10n, r.label),
-            point: LatLng(r.coord!.lat, r.coord!.lng),
-            dates: r.start != null && r.end != null
-                ? formatShortRange(r.start!, r.end!)
-                : null,
-          ),
-    ];
+    List<LegRange> rawRanges, AppLocalizations l10n,
+    {List<String>? legKeys}) {
+  assert(legKeys == null || legKeys.length == rawRanges.length,
+      'legKeys must be index-aligned with rawRanges (both follow tripLegs order)');
+  return [
+    for (final (i, r) in rawRanges.indexed)
+      if (r.coord != null)
+        TripMapDestination(
+          label: groupLabelText(l10n, r.label),
+          point: LatLng(r.coord!.lat, r.coord!.lng),
+          dates: r.start != null && r.end != null
+              ? formatShortRange(r.start!, r.end!)
+              : null,
+          legKey: legKeys?[i],
+        ),
+  ];
+}

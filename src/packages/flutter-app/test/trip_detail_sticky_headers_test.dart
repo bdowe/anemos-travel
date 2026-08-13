@@ -9,7 +9,6 @@ import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
-import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 class _FakeTripsApiService extends TripsApiService {
@@ -68,23 +67,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Groups default collapsed. The accordion allows at most ONE open group
-    // (specs/map-city-focus, accordion rev) — expanding a city closes any
-    // other open group — so only Paris is opened here; its items alone
-    // provide the scroll extent for the Paris pinned-header assertions.
-    await expandCity(tester, 'Paris');
-
+    // Groups default EXPANDED (list expansion is decoupled from the map;
+    // there is no single-open accordion anymore), so both groups' bodies
+    // contribute scroll extent from the start — no expand tap needed.
     expect(find.text('Paris'), findsOneWidget);
 
     // Scroll into the middle of Paris day 2, far enough that both the city
     // and day headers have reached their pinned slots. jumpTo keeps offsets
     // exact (drag gestures fling unpredictably past the target). Offsets
-    // retuned for the accordion (only the open Paris group contributes
-    // extent), again when the add-button trio left the itinerary tail for
-    // the Bookings view's header menu (450/570 replaced 450/600), and again
-    // when the wear/pack section left the tail for the app-bar icon — its
-    // sliver's 8px top pad went with it, so max extent is now ~562 and a
-    // 570 target would clamp: 450/550.
+    // re-verified for groups defaulting expanded (every group's body is
+    // mounted, so max extent grew to ~1250 — the wear/pack tail spacer
+    // trimmed ~8px of that, absorbed): the Paris header pins from ~400 and
+    // holds — with Day 2 pinned right below it — until Rome's header
+    // starts pushing it off past ~750, so 450/550 both land inside that
+    // stable window with 'Paris stop 4' on screen at each.
     final position =
         tester.state<ScrollableState>(find.byType(Scrollable).first).position;
     position.jumpTo(450);
@@ -108,17 +104,10 @@ void main() {
     expect(parisDyA, greaterThan(0));
     expect(day2DyA, greaterThan(parisDyA));
 
-    // Rome's turn in the pinned slot. Under the accordion Rome's body only
-    // exists while Rome is the open group, so bring its collapsed header
-    // fully into view and expand it — which also closes Paris (its Day 2
-    // header and items unbuild; the Paris header row itself still renders).
-    position.jumpTo(position.maxScrollExtent);
-    await tester.pumpAndSettle();
-    await expandCity(tester, 'Rome');
-
-    // Scroll to the bottom: Rome's header reaches the pinned city slot —
-    // the same slot Paris pinned in (parisDyA) — with its Day 4 header
-    // pinned below it.
+    // Rome's turn in the pinned slot. Its body is already mounted (groups
+    // default expanded), so a single jump to the bottom is enough: Rome's
+    // header reaches the pinned city slot — the same slot Paris pinned in
+    // (parisDyA) — with its Day 4 header pinned below it.
     position.jumpTo(position.maxScrollExtent);
     await tester.pumpAndSettle();
 
@@ -127,8 +116,8 @@ void main() {
     expect(tester.getTopLeft(find.text('Day 4')).dy, greaterThan(parisDyA));
     final parisAfter = find.text('Paris');
     if (parisAfter.evaluate().isNotEmpty) {
-      // Collapsed Paris header still built, but scrolled above Rome's
-      // pinned slot.
+      // Paris's header, if still built (it may unbuild past the cache
+      // extent), has been pushed above Rome's pinned slot.
       expect(tester.getTopLeft(parisAfter).dy, lessThan(parisDyA));
     }
   });

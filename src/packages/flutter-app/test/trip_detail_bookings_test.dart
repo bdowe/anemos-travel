@@ -14,7 +14,6 @@ import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/booking_todo_card.dart';
 
-import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 /// Returns a fixed trip without hitting the network, so we can exercise the
@@ -116,24 +115,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Groups default collapsed, and the accordion contract allows at most ONE
-    // open city at a time (expanding a city closes the previous one), so each
-    // city's embedded rows are asserted while that city is the open group.
-    // Headers, the tab counter, and Other bookings render regardless.
+    // Groups default EXPANDED (list expansion is decoupled from the map),
+    // so every city's embedded rows are asserted in one rendered pass.
 
-    // Paris open: its city-matched bookings render once each, as compact
+    // Paris: its city-matched bookings render once each, as compact
     // embedded rows, with arrival + stay above the city's first item.
-    await expandCity(tester, 'Paris');
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
     expect(find.widgetWithText(BookingTodoRow, 'JFK → Paris'), findsOneWidget);
     expect(tester.getTopLeft(find.text('JFK → Paris')).dy,
         lessThan(tester.getTopLeft(find.text('Louvre')).dy));
 
-    // Rome open (Paris closes): 'Paris → Rome' is Rome's ARRIVAL row, so it
-    // renders inside Rome's group above Rome's first item; the return flight
-    // home comes after the last city's last item.
-    await expandCity(tester, 'Rome');
+    // Rome: 'Paris → Rome' is Rome's ARRIVAL row, so it renders inside
+    // Rome's group above Rome's first item; the return flight home comes
+    // after the last city's last item.
     expect(find.widgetWithText(BookingTodoRow, 'Stay in Rome'), findsOneWidget);
     expect(find.widgetWithText(BookingTodoRow, 'Paris → Rome'), findsOneWidget);
     expect(find.widgetWithText(BookingTodoRow, 'Rome → JFK'), findsOneWidget);

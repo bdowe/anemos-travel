@@ -106,6 +106,17 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// The trip-detail page's scroll position (the outer CustomScrollView's
+  /// own scrollable — `.first` skips nested horizontal strips).
+  ScrollPosition pagePosition(WidgetTester tester) => tester
+      .state<ScrollableState>(find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first)
+      .position;
+
   testWidgets('phone: map is a static preview and scrolls away with the page',
       (WidgetTester tester) async {
     await pumpScreen(tester, surface: phone);
@@ -150,8 +161,12 @@ void main() {
     await tester.tap(find.byType(CloseButton));
     await tester.pumpAndSettle();
 
-    // Back on the trip screen, the inline chips kept the focus.
+    // Back on the trip screen, the focus survived — but the phone
+    // report-back pre-scrolled the list to Rome, carrying the scroll-away
+    // preview card (and its chips) offscreen; scroll back up to read them.
     expect(find.byType(TripMapScreen), findsNothing);
+    pagePosition(tester).jumpTo(0);
+    await tester.pumpAndSettle();
     final inlineChips = tester.widget<MapLegChips>(find.byType(MapLegChips));
     expect(inlineChips.selected, 'Rome');
     final inlineMap = tester.widget<TripMap>(find.byType(TripMap));
@@ -193,18 +208,16 @@ void main() {
     await tester.pumpAndSettle();
 
     // Back on the trip screen, the inline chips kept the focus AND the
-    // report-back opened Rome's group exclusively behind the modal
-    // (accordion: the selection materializes in the list on close).
+    // report-back pre-scrolled Rome's header into place behind the modal
+    // (expansion is decoupled from focus: no group collapses, the
+    // selection just lands in view on close).
     expect(find.byType(TripMapScreen), findsNothing);
     final inlineChips = tester.widget<MapLegChips>(find.byType(MapLegChips));
     expect(inlineChips.selected, 'Rome');
     expect(find.text('Colosseum'), findsOneWidget);
-    expect(find.text('Louvre'), findsNothing,
-        reason: 'Paris stays collapsed — only Rome is open');
   });
 
-  testWidgets(
-      'wide: the full-screen All chip collapses the group behind the modal',
+  testWidgets('wide: the full-screen All chip resets the map only',
       (WidgetTester tester) async {
     await pumpScreen(tester, surface: const Size(1200, 800));
 
@@ -221,8 +234,42 @@ void main() {
     expect(inlineChips.selected, isNull);
     final inlineMap = tester.widget<TripMap>(find.byType(TripMap));
     expect(inlineMap.fitSignature, isNull);
-    expect(find.text('Colosseum'), findsNothing,
-        reason: 'the All chip closed the open group behind the modal');
+    expect(find.text('Colosseum'), findsOneWidget,
+        reason: 'All resets the MAP only — the list is untouched, so the '
+            'previously focused group stays expanded');
+  });
+
+  testWidgets(
+      'phone: a full-screen region-pin tap focuses that leg and pre-scrolls '
+      'the list behind the modal', (WidgetTester tester) async {
+    await pumpScreen(tester, surface: phone);
+
+    // Open the full map from the All view — the only mode destination
+    // (region) pins render in.
+    await tester.tap(find.byType(TripMap), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(find.byType(TripMapScreen), findsOneWidget);
+
+    // Invoke the FULL-SCREEN map's destination callback directly (the
+    // inline preview passes null — its tap opens this modal instead).
+    // Chip-equivalent inside the modal: the map flips to the leg's pins.
+    tester.widget<TripMap>(find.byType(TripMap)).onDestinationTap!('Rome');
+    await tester.pumpAndSettle();
+
+    final fullMap = tester.widget<TripMap>(find.byType(TripMap));
+    expect(fullMap.fitSignature, 'Rome');
+    expect(fullMap.items.map((i) => i.name), ['Colosseum']);
+    final fullChips = tester.widget<MapLegChips>(find.byType(MapLegChips));
+    expect(fullChips.selected, 'Rome');
+
+    await tester.tap(find.byType(CloseButton));
+    await tester.pumpAndSettle();
+
+    // The report-back pre-scrolls the list on phones, so closing the modal
+    // lands on the region instead of the top of the page (the chips ride
+    // the scroll-away preview card, so they're offscreen by design).
+    expect(find.byType(TripMapScreen), findsNothing);
+    expect(pagePosition(tester).pixels, greaterThan(0));
   });
 
   testWidgets(
@@ -256,8 +303,11 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
-    // Same pop path as the close button: screen gone, focus kept.
+    // Same pop path as the close button: screen gone, focus kept (undo the
+    // phone report-back's pre-scroll to read the preview card's chips).
     expect(find.byType(TripMapScreen), findsNothing);
+    pagePosition(tester).jumpTo(0);
+    await tester.pumpAndSettle();
     final inlineChips = tester.widget<MapLegChips>(find.byType(MapLegChips));
     expect(inlineChips.selected, 'Rome');
   });

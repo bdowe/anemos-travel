@@ -9,7 +9,6 @@ import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
-import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 /// Returns a fixed trip without hitting the network, so we can exercise the
@@ -116,16 +115,10 @@ void main() {
 
     await _pump(tester, trip);
 
-    // Groups default collapsed and the accordion keeps at most ONE open:
-    // expanding Vienna closes Prague. So assert each city's body content
-    // while that city is the open group, one at a time — the asserts must
-    // exercise the filler suppression, not the collapse (a collapsed Vienna
-    // hides day headers regardless).
-    await expandCity(tester, 'Prague');
+    // Groups default EXPANDED, so both cities' bodies render at once — the
+    // asserts exercise the filler suppression itself, not collapse (a
+    // collapsed Vienna would hide day headers regardless).
     expect(find.text('Prague Castle'), findsOneWidget);
-
-    // Selecting Vienna collapses Prague (its body content hides).
-    await expandCity(tester, 'Vienna');
 
     // Still exactly one 'Vienna': the header. A broken filler filter would
     // render the filler tile as a second one inside the expanded group.

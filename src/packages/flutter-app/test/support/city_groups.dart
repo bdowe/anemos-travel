@@ -13,12 +13,19 @@ Finder cityHeaderLabel(String label) => find.descendant(
       matching: find.text(label),
     );
 
-/// Expands the trip-detail city group whose header shows [label] by tapping
-/// it. Groups default to collapsed (only a sole group is seeded open), so
-/// tests that assert on a group's contents expand it first. [index] picks
-/// among duplicate headers when a trip revisits a city (first run = 0).
-Future<void> expandCity(WidgetTester tester, String label,
+/// Toggles the trip-detail city group whose header shows [label] by tapping
+/// it. Groups default to EXPANDED (expansion is list-only state, decoupled
+/// from the map), so the first toggle collapses; tests that assert on a
+/// collapsed group's behavior collapse it here first. [index] picks among
+/// duplicate headers when a trip revisits a city (first run = 0).
+Future<void> toggleCity(WidgetTester tester, String label,
     {int index = 0}) async {
   await tester.tap(cityHeaderLabel(label).at(index));
   await tester.pumpAndSettle();
 }
+
+/// Collapse-intent alias of [toggleCity] for call sites where the direction
+/// matters to the reader; the tap itself is the same list-only toggle.
+Future<void> collapseCity(WidgetTester tester, String label,
+        {int index = 0}) =>
+    toggleCity(tester, label, index: index);

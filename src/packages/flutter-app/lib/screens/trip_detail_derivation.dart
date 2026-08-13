@@ -357,9 +357,9 @@ class TripDerivation {
   /// the leg (nothing should render open — its items aren't in the list).
   /// Positions-based like [legFilteredItems]: lenses only MERGE adjacent
   /// runs, never split one, so leg → group is a function. This is the one
-  /// leg→group mapping (specs/map-city-focus accordion) — expansion is
-  /// derived through it at read time, and it clamps, so build never needs
-  /// to write focus state. Null in → null out, matching a no-focus screen.
+  /// leg→group mapping — chip taps and map region-pin taps resolve their
+  /// un-collapse/scroll target through it, and it clamps, so stale keys
+  /// read as null. Null in → null out, matching a no-focus map.
   String? groupKeyForLeg(String? legKey) {
     if (legKey == null) return null;
     final i = legIndexOf(legKey);
@@ -487,7 +487,10 @@ class TripDerivation {
 
     // Destination pins: the one construction site lives with the map widget
     // (trip_map_destinations.dart), shared with the home recent-trip band.
-    final mapDestinations = tripMapDestinations(rawRanges, l10n);
+    // Leg keys ride along index-aligned ([legs] and [rawRanges] both run the
+    // tripLegs split over the full itinerary) so the pins are navigable.
+    final mapDestinations = tripMapDestinations(rawRanges, l10n,
+        legKeys: [for (final leg in legs) leg.key]);
 
     final firstCoord = rawRanges.isEmpty ? null : rawRanges.first.coord;
     final lastCoord = rawRanges.isEmpty ? null : rawRanges.last.coord;

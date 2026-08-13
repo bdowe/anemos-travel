@@ -13,7 +13,6 @@ import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/booking_todo_card.dart';
 
-import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 // Per-leg transport mode: the header pill is gone; each transport row carries
@@ -178,7 +177,6 @@ void main() {
       (WidgetTester tester) async {
     _useTallViewport(tester);
     final todosApi = await _pump(tester, _twoCityTrip());
-    await expandCity(tester, 'Rome');
 
     // The derived flight leg starts on Find flights with a mode menu.
     expect(find.textContaining('Find flights'), findsOneWidget);
@@ -212,7 +210,6 @@ void main() {
     // derive it as ground (rome2rio), not fall back to the flight default.
     final todosApi = await _pump(tester, _twoCityTrip(legMode: 'train'),
         modes: {'transport:paris>>rome': 'train'});
-    await expandCity(tester, 'Rome');
 
     final leg = todosApi.lastDerived!
         .singleWhere((d) => d['todo_key'] == 'transport:paris>>rome');
@@ -226,7 +223,6 @@ void main() {
     _useTallViewport(tester);
     final todosApi = await _pump(tester, _twoCityTrip(legMode: 'ferry'),
         modes: {'transport:paris>>rome': 'ferry'});
-    await expandCity(tester, 'Rome');
 
     final leg = todosApi.lastDerived!
         .singleWhere((d) => d['todo_key'] == 'transport:paris>>rome');
@@ -238,7 +234,6 @@ void main() {
       (WidgetTester tester) async {
     _useTallViewport(tester);
     await _pump(tester, _twoCityTrip(access: 'viewer'));
-    await expandCity(tester, 'Rome');
 
     expect(find.byType(BookingTodoRow), findsWidgets);
     expect(_rowModeMenu(), findsNothing);
