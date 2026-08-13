@@ -5,6 +5,21 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-13 — trip-detail dogfooding (Bookings tab counter → pill)
+
+- **[app] Friction → fixed (counter styling unified):** with the wear/pack
+  checked-count now a StatusPill in its sheet header, the Bookings tab's
+  inline "Bookings · 0/3" label was the last count not wearing the shared
+  pill chrome. The count moved out of the label into a `StatusPill.custom`
+  beside it (same surfaceContainerHighest/onSurfaceVariant pair as the
+  wear-sheet and checklist headers; `_headerTab` grew a `trailing` slot
+  inside the underlined region so the underline spans label + pill). On
+  **narrow** the pill is dropped entirely — the tab trio + counter was
+  exactly what pushed the FittedBox into visible scale-down at phone
+  widths (the narrow-header test's documented tripwire), and the count is
+  one tap away inside the view. `tripTabBookingsCounted` deleted from
+  both ARBs (dead key).
+
 ## 2026-08-13 — trip-detail dogfooding (expanded groups + navigable map)
 
 - **[app] Friction → fixed (decoupled expansion, supersedes the 08-1x

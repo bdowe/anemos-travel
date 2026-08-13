@@ -385,7 +385,6 @@
   "tripFilterAllBooked": "Todo reservado",
   "tripFilterAllBookedMessage": "No queda nada por reservar en este viaje — todo listo.",
   "tripTabBookings": "Reservas",
-  "tripTabBookingsCounted": "Reservas · {booked}/{total}",
   "tripBookingsLensEmptyTitle": "Aún no hay reservas",
   "tripBookingsLensEmptyMessage": "Los vuelos, alojamientos y reservas de este viaje aparecerán aquí.",
   "tripBookingsLensNoneForDestination": "No hay reservas para este destino.",

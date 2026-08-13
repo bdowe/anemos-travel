@@ -13,6 +13,7 @@ import 'package:travel_route_planner/providers/accommodations_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/booking_todo_card.dart';
+import 'package:travel_route_planner/widgets/status_pill.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -138,8 +139,13 @@ void main() {
         greaterThan(tester.getTopLeft(find.text('Trastevere')).dy));
 
     // The separate Bookings section is retired; the header's Bookings tab
-    // carries the booking progress in its label instead.
-    expect(find.text('Bookings · 0/6'), findsOneWidget);
+    // carries the booking progress as a StatusPill beside the label — the
+    // same checked/total chrome as the wear-sheet and checklist headers.
+    expect(find.text('Bookings'), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(StatusPill), matching: find.text('0/6')),
+        findsOneWidget);
 
     // Only the unmatched custom todo lands in the "Other bookings" area at
     // the itinerary's tail, as a card — directly visible, no expand step.

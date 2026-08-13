@@ -1297,11 +1297,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripTabBookings => 'Bookings';
 
   @override
-  String tripTabBookingsCounted(int booked, int total) {
-    return 'Bookings · $booked/$total';
-  }
-
-  @override
   String get tripBookingsLensEmptyTitle => 'No bookings yet';
 
   @override
