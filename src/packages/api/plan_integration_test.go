@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -709,4 +710,66 @@ func TestPlanSummaryPrependedBelowThreshold(t *testing.T) {
 	if !strings.HasPrefix(first, "Summary of the conversation so far") || !strings.Contains(first, "one vegetarian") {
 		t.Fatalf("first streamed message is not the summary: %q", first)
 	}
+}
+
+// The exact wire shape the Dart client emits (plan_service.dart builds the
+// top-level object; plan_provider.dart builds each message map), pinned as
+// raw hand-written JSON. Every other /plan test round-trips the server's own
+// PlanRequest struct, which can never catch client/server field-name or
+// nesting drift — this one can (2026-08-12 prod incident postmortem gap).
+func TestPlanWireShapeFromDartClient(t *testing.T) {
+	resetDB(t)
+
+	postRaw := func(t *testing.T, raw, token string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest("POST", "/api/v1/plan", strings.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-For", nextTestIP())
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		testRouter.ServeHTTP(rec, req)
+		return rec
+	}
+
+	assertCleanStream := func(t *testing.T, rec *httptest.ResponseRecorder, answer string) {
+		t.Helper()
+		if rec.Code != http.StatusOK {
+			t.Fatalf("/plan = %d, want 200", rec.Code)
+		}
+		events := planEvents(t, rec.Body.String())
+		if errs := eventsOfType(events, "error"); len(errs) != 0 {
+			t.Fatalf("stream has error events: %v", errs)
+		}
+		if got := joinedText(events); got != answer {
+			t.Fatalf("streamed text = %q, want %q", got, answer)
+		}
+	}
+
+	t.Run("anonymous chat with display_label", func(t *testing.T) {
+		const answer = "Athens it is."
+		newFakeAnthropic(t, textTurn(answer))
+		raw := `{"messages":[{"role":"user","content":"plan a day in Athens","display_label":"Near me: 37.9838, 23.7275"}],"chat_id":"` + uuid.NewString() + `"}`
+		assertCleanStream(t, postRaw(t, raw, ""), answer)
+	})
+
+	t.Run("authed trip-bound refine", func(t *testing.T) {
+		u, token := createTestUser(t, "wire-shape@example.com")
+		trip := createTestTrip(t, u.ID, 2)
+		const answer = "Day 2 relaxed."
+		newFakeAnthropic(t, textTurn(answer))
+		raw := fmt.Sprintf(`{"messages":[{"role":"user","content":"make day 2 more relaxed"}],"chat_id":%q,"trip_id":%q}`,
+			uuid.NewString(), trip.ID.String())
+		assertCleanStream(t, postRaw(t, raw, token), answer)
+	})
+
+	t.Run("chat with image attachment", func(t *testing.T) {
+		const answer = "That looks like the Acropolis."
+		newFakeAnthropic(t, textTurn(answer))
+		// 1x1 transparent PNG, base64 without a data: URI prefix — exactly how
+		// plan_provider.dart serializes attachment bytes.
+		raw := `{"messages":[{"role":"user","content":"where is this?","images":[{"media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}]}],"chat_id":"` + uuid.NewString() + `"}`
+		assertCleanStream(t, postRaw(t, raw, ""), answer)
+	})
 }

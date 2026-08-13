@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -132,24 +133,43 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
 		return
 	}
-	// Priming SSE comment, flushed before any body parsing or DB work:
-	// commits nginx/Cloudflare to streaming mode and gives the browser
-	// instant TTFB. The Dart client only parses `data: ` lines, so a
-	// comment frame is invisible to it.
-	fmt.Fprint(w, ": stream-open\n\n")
-	w.(http.Flusher).Flush()
-
 	// Overall wall-clock ceiling on the whole request (see planMaxDuration): a
 	// stuck stream eventually closes and frees its goroutine + concurrency slot.
 	ctx, cancel := context.WithTimeout(r.Context(), planMaxDuration)
 	defer cancel()
 	r = r.WithContext(ctx)
 
-	var req PlanRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	// INVARIANT: fully consume the request body BEFORE the first response
+	// write or flush. Writing commits the response, and a reverse proxy
+	// forwarding the request body unbuffered stops relaying it the moment
+	// the upstream responds — a decode after the first flush then reads EOF
+	// and every real-network request fails "invalid request body", while
+	// loopback dev and buffered test bodies pass (prod incident, 2026-08-12;
+	// TestPlanHandlerReadsBodyBeforeFirstWrite). The gateway now buffers
+	// /plan request bodies (dockerize/*/nginx), but this ordering must hold
+	// on its own; do not move the stream-open flush above this read.
+	// io.ReadAll (not json.Decoder, which stops at the first JSON value)
+	// drains to EOF; the body is MaxBytesReader-capped at 20 MiB
+	// (bodyLimitMiddleware).
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("plan body read: %v (read=%d content_length=%d)", err, len(raw), r.ContentLength)
 		sendSSE(w, "error", map[string]string{"message": "invalid request body"})
 		return
 	}
+	var req PlanRequest
+	if err := json.Unmarshal(raw, &req); err != nil {
+		log.Printf("plan body decode: %v (read=%d content_length=%d)", err, len(raw), r.ContentLength)
+		sendSSE(w, "error", map[string]string{"message": "invalid request body"})
+		return
+	}
+
+	// Priming SSE comment — flushed only after the body is fully consumed
+	// (invariant above) but still before any DB work or model calls: commits
+	// nginx/Cloudflare to streaming mode and keeps TTFB tight. The Dart
+	// client only parses `data: ` lines, so a comment frame is invisible.
+	fmt.Fprint(w, ": stream-open\n\n")
+	w.(http.Flusher).Flush()
 
 	// Cap the conversation before any model call: the whole history is resent
 	// on every agent-loop iteration, so these bounds are a hard cost lever.
