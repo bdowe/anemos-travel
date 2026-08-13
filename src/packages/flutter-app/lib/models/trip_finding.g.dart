@@ -63,3 +63,56 @@ Map<String, dynamic> _$FindingFixToJson(FindingFix instance) =>
       'packing_item': instance.packingItem,
       'packing_category': instance.packingCategory,
     };
+
+TripReview _$TripReviewFromJson(Map<String, dynamic> json) => TripReview(
+      findings: (json['findings'] as List<dynamic>)
+          .map((e) => TripFinding.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      nextStep: json['next_step'] == null
+          ? null
+          : NextStep.fromJson(json['next_step'] as Map<String, dynamic>),
+      planProgress: json['plan_progress'] == null
+          ? null
+          : PlanProgress.fromJson(
+              json['plan_progress'] as Map<String, dynamic>),
+    );
+
+Map<String, dynamic> _$TripReviewToJson(TripReview instance) =>
+    <String, dynamic>{
+      'findings': instance.findings,
+      'next_step': instance.nextStep,
+      'plan_progress': instance.planProgress,
+    };
+
+NextStep _$NextStepFromJson(Map<String, dynamic> json) => NextStep(
+      kind: json['kind'] as String,
+      title: json['title'] as String,
+      detail: json['detail'] as String?,
+      day: (json['day'] as num?)?.toInt(),
+      count: (json['count'] as num?)?.toInt(),
+      fix: json['fix'] == null
+          ? null
+          : FindingFix.fromJson(json['fix'] as Map<String, dynamic>),
+      seedPrompt: json['seed_prompt'] as String?,
+    );
+
+Map<String, dynamic> _$NextStepToJson(NextStep instance) => <String, dynamic>{
+      'kind': instance.kind,
+      'title': instance.title,
+      'detail': instance.detail,
+      'day': instance.day,
+      'count': instance.count,
+      'fix': instance.fix,
+      'seed_prompt': instance.seedPrompt,
+    };
+
+PlanProgress _$PlanProgressFromJson(Map<String, dynamic> json) => PlanProgress(
+      done: (json['done'] as num).toInt(),
+      total: (json['total'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$PlanProgressToJson(PlanProgress instance) =>
+    <String, dynamic>{
+      'done': instance.done,
+      'total': instance.total,
+    };

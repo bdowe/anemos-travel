@@ -1326,6 +1326,27 @@
   "accountMenuLocalIntelAdmin": "Local intel admin",
   "accountMenuMetrics": "Metrics",
   "accountMenuSignOut": "Sign out",
+  "nextStepEyebrow": "Next step",
+  "nextStepProgress": "{n} of {total}",
+  "@nextStepProgress": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "nextStepViewAll": "View all",
+  "nextStepSetDatesAction": "Pick dates",
+  "nextStepPlanAction": "Plan in chat",
+  "nextStepLodgingAction": "Find lodging",
+  "nextStepTransportAction": "Find options",
+  "nextStepScheduleAction": "Fill the gaps",
+  "nextStepBookAction": "Review bookings",
+  "nextStepPackingAction": "Open packing list",
+  "nextStepAllSetDismiss": "Dismiss",
   "notifTitle": "Notifications",
   "notifLoadErrorTitle": "Could not load notifications",
   "notifEmptyTitle": "No notifications yet",

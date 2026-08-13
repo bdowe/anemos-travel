@@ -105,3 +105,78 @@ class FindingFix {
       _$FindingFixFromJson(json);
   Map<String, dynamic> toJson() => _$FindingFixToJson(this);
 }
+
+/// The full `GET /trips/{id}/review` payload: the ordered findings plus the
+/// Next Step CTA projection (specs/next-step-cta). [nextStep]/[planProgress]
+/// are omitted by the server for past trips — absence means "nothing left to
+/// plan", which is distinct from the all_set terminal step.
+@JsonSerializable()
+class TripReview {
+  final List<TripFinding> findings;
+  @JsonKey(name: 'next_step')
+  final NextStep? nextStep;
+  @JsonKey(name: 'plan_progress')
+  final PlanProgress? planProgress;
+
+  const TripReview({
+    required this.findings,
+    this.nextStep,
+    this.planProgress,
+  });
+
+  factory TripReview.fromJson(Map<String, dynamic> json) =>
+      _$TripReviewFromJson(json);
+  Map<String, dynamic> toJson() => _$TripReviewToJson(this);
+}
+
+/// The first unmet phase of the planning ladder (server-derived, one per
+/// trip). [kind] is one of set_dates | plan_itinerary | add_lodging |
+/// add_transport | schedule_items | book_trip | add_packing | all_set; treat
+/// unknown kinds as future ladder phases (fall back to [fix] or the health
+/// sheet). [title]/[detail] arrive localized. [seedPrompt] is the canonical-
+/// English chat seed for chat-driven steps — send it verbatim, never a
+/// localized variant (specs/i18n-spanish).
+@JsonSerializable()
+class NextStep {
+  final String kind;
+  final String title;
+  final String? detail;
+  final int? day;
+  final int? count;
+
+  /// Same contract as a finding's fix — reuses the screen's apply-fix
+  /// plumbing for mechanical steps.
+  final FindingFix? fix;
+
+  @JsonKey(name: 'seed_prompt')
+  final String? seedPrompt;
+
+  const NextStep({
+    required this.kind,
+    required this.title,
+    this.detail,
+    this.day,
+    this.count,
+    this.fix,
+    this.seedPrompt,
+  });
+
+  factory NextStep.fromJson(Map<String, dynamic> json) =>
+      _$NextStepFromJson(json);
+  Map<String, dynamic> toJson() => _$NextStepToJson(this);
+}
+
+/// Prefix progress through the planning ladder: [done] phases are complete
+/// from the top, so the current step is phase done+1 of [total]. The total is
+/// server-owned so the ladder can grow without a client release.
+@JsonSerializable()
+class PlanProgress {
+  final int done;
+  final int total;
+
+  const PlanProgress({required this.done, required this.total});
+
+  factory PlanProgress.fromJson(Map<String, dynamic> json) =>
+      _$PlanProgressFromJson(json);
+  Map<String, dynamic> toJson() => _$PlanProgressToJson(this);
+}

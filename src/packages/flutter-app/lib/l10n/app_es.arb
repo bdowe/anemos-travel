@@ -587,6 +587,27 @@
   "accountMenuLocalIntelAdmin": "Administración de info local",
   "accountMenuMetrics": "Métricas",
   "accountMenuSignOut": "Cerrar sesión",
+  "nextStepEyebrow": "Siguiente paso",
+  "nextStepProgress": "{n} de {total}",
+  "@nextStepProgress": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "nextStepViewAll": "Ver todo",
+  "nextStepSetDatesAction": "Elegir fechas",
+  "nextStepPlanAction": "Planificar en el chat",
+  "nextStepLodgingAction": "Buscar alojamiento",
+  "nextStepTransportAction": "Ver opciones",
+  "nextStepScheduleAction": "Completar los huecos",
+  "nextStepBookAction": "Revisar reservas",
+  "nextStepPackingAction": "Abrir lista de equipaje",
+  "nextStepAllSetDismiss": "Descartar",
   "notifTitle": "Notificaciones",
   "notifLoadErrorTitle": "No se pudieron cargar las notificaciones",
   "notifEmptyTitle": "Aún no tienes notificaciones",

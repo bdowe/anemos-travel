@@ -3620,6 +3620,72 @@ abstract class AppLocalizations {
   /// **'Sign out'**
   String get accountMenuSignOut;
 
+  /// No description provided for @nextStepEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Next step'**
+  String get nextStepEyebrow;
+
+  /// No description provided for @nextStepProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} of {total}'**
+  String nextStepProgress(int n, int total);
+
+  /// No description provided for @nextStepViewAll.
+  ///
+  /// In en, this message translates to:
+  /// **'View all'**
+  String get nextStepViewAll;
+
+  /// No description provided for @nextStepSetDatesAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick dates'**
+  String get nextStepSetDatesAction;
+
+  /// No description provided for @nextStepPlanAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan in chat'**
+  String get nextStepPlanAction;
+
+  /// No description provided for @nextStepLodgingAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Find lodging'**
+  String get nextStepLodgingAction;
+
+  /// No description provided for @nextStepTransportAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Find options'**
+  String get nextStepTransportAction;
+
+  /// No description provided for @nextStepScheduleAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill the gaps'**
+  String get nextStepScheduleAction;
+
+  /// No description provided for @nextStepBookAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Review bookings'**
+  String get nextStepBookAction;
+
+  /// No description provided for @nextStepPackingAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Open packing list'**
+  String get nextStepPackingAction;
+
+  /// No description provided for @nextStepAllSetDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get nextStepAllSetDismiss;
+
   /// No description provided for @notifTitle.
   ///
   /// In en, this message translates to:
