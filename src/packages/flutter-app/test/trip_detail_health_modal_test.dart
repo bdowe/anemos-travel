@@ -50,11 +50,11 @@ class _FakeReviewApiService extends TripReviewApiService {
       : super(ApiClient(baseUrl: 'http://test'));
 
   @override
-  Future<List<TripFinding>> getReview(String tripId,
+  Future<TripReview> getReview(String tripId,
       {bool checkHours = false}) async {
     if (error) throw Exception('403');
     if (checkHours && hoursError) throw Exception('hours backend down');
-    return List.of(resolved ? resolvedFindings : findings);
+    return TripReview(findings: List.of(resolved ? resolvedFindings : findings));
   }
 }
 
@@ -66,7 +66,7 @@ class _TransientThenOkReviewApi extends _FakeReviewApiService {
   _TransientThenOkReviewApi(super.findings);
 
   @override
-  Future<List<TripFinding>> getReview(String tripId,
+  Future<TripReview> getReview(String tripId,
       {bool checkHours = false}) {
     calls++;
     if (calls == 1) {

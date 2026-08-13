@@ -35,11 +35,13 @@ class _ScriptedReviewApi extends TripReviewApiService {
   _ScriptedReviewApi(this.script) : super(ApiClient(baseUrl: 'http://test'));
 
   @override
-  Future<List<TripFinding>> getReview(String tripId,
+  Future<TripReview> getReview(String tripId,
       {bool checkHours = false}) {
     final next = script[calls < script.length ? calls : script.length - 1];
     calls++;
-    if (next is List<TripFinding>) return Future.value(next);
+    if (next is List<TripFinding>) {
+      return Future.value(TripReview(findings: next));
+    }
     return Future.error(next);
   }
 }

@@ -22,10 +22,10 @@ class _FakeTripReviewApiService extends TripReviewApiService {
       : super(ApiClient(baseUrl: 'http://test'));
 
   @override
-  Future<List<TripFinding>> getReview(String tripId,
+  Future<TripReview> getReview(String tripId,
       {bool checkHours = false}) async {
     checkHoursCalls.add(checkHours);
-    return List.of(findings);
+    return TripReview(findings: List.of(findings));
   }
 }
 

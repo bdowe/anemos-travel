@@ -68,6 +68,7 @@ import '../widgets/event_card.dart';
 import '../widgets/hover_reveal.dart';
 import '../widgets/local_rec_card.dart';
 import '../widgets/map_leg_chips.dart';
+import '../widgets/next_step_card.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/source_links_card.dart';
 import '../widgets/status_pill.dart';
@@ -132,6 +133,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // narrow ones); null target while closed.
   bool _panelOpen = false;
   RefineTarget? _refineTarget;
+
+  // Next Step CTA session state (specs/next-step-cta): the all_set
+  // celebration shows only after this session actually watched a step resolve
+  // (a trip opened already-complete shows nothing), and its X hides it for
+  // the rest of the session. Deliberately not persisted — steps carry no
+  // stable identity to key a durable dismissal on.
+  bool _hadNextStep = false;
+  bool _allSetDismissed = false;
   // The active view state. 'all' renders the grouped itinerary; 'bookings'
   // and 'unbooked' are the Bookings view (entered from the header tab) and
   // its left-to-book scope (the chip inside that view) — both replace the
@@ -530,6 +539,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         // current values on screen — no flash.
         ref.invalidate(budgetProvider(widget.tripId));
         ref.invalidate(expensesProvider(widget.tripId));
+        // Re-read the health review too: chat-driven mutations arrive through
+        // this refresh (trip_updated → onTripUpdated), and the health badge
+        // and Next Step card must advance behind an open panel — not on the
+        // next cold load. Also covers pull-to-refresh.
+        _invalidateReview();
         await _load(silent: true);
       } while (mounted && _refreshQueued);
       _refreshFuture = null;
@@ -850,10 +864,29 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       final todos = await ref
           .read(bookingTodosApiServiceProvider)
           .syncTodos(trip.id, _deriveTodos(trip));
-      if (mounted) setState(() => _bookingTodos = todos);
+      if (mounted) {
+        final changed = !_sameTodoState(_bookingTodos, todos);
+        setState(() => _bookingTodos = todos);
+        // The server's Next Step "book everything" aggregate reads booking
+        // todos, which lag until this sync lands — re-read the review when
+        // the sync actually changed them (specs/next-step-cta).
+        if (changed) _invalidateReview();
+      }
     } catch (_) {
       // Non-fatal: keep whatever booking todos came with the trip.
     }
+  }
+
+  /// Same todo set as far as the review cares: matching (todo_key, booked)
+  /// pairs in order. Anything else re-reads the review.
+  static bool _sameTodoState(List<BookingTodo> a, List<BookingTodo> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].todoKey != b[i].todoKey || a[i].booked != b[i].booked) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /// The trip's stated non-flight travel mode ('car'|'train'|'bus'|'ferry')
@@ -1492,6 +1525,25 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     setState(() {
       _panelOpen = true;
       _refineTarget = target;
+    });
+  }
+
+  /// Next Step chat entry (specs/next-step-cta): the same offline + canEdit
+  /// guards as [_openRefine], minus the items-empty guard — next-step seeds
+  /// are server-built and embed no section, and the zero-items
+  /// plan_itinerary step exists precisely for empty trips. [displayLabel] is
+  /// the step's server-localized title; the seed stays canonical English
+  /// (specs/i18n-spanish).
+  void _openSeededChat(Trip trip,
+      {required String seed, required String displayLabel}) {
+    if (_guardOffline()) return;
+    if (!trip.canEdit) return;
+    ref
+        .read(tripRefineProvider(widget.tripId).notifier)
+        .beginSectionRefinement(seed, displayLabel: displayLabel);
+    setState(() {
+      _panelOpen = true;
+      _refineTarget = const RefineTarget.assistant();
     });
   }
 
@@ -4045,6 +4097,113 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         tripReviewProvider(TripReviewKey(widget.tripId, checkHours: true)));
   }
 
+  /// Opens the Trip Health sheet with the screen's standard wiring — shared by
+  /// the Next Step card's "View all" and its unknown-kind fallback (the
+  /// app-bar badge keeps its own inline call).
+  void _openHealthSheet(Trip trip) {
+    showTripHealthSheet(
+      context,
+      tripId: trip.id,
+      isOffline: () => _isOffline,
+      onScrollToDay: _scrollToDay,
+      dayForItem: _dayOfItem,
+      onApplyFix: _readOnly ? null : _applyFix,
+    );
+  }
+
+  /// The Next Step card area (specs/next-step-cta), its own Consumer so review
+  /// refetches repaint the card alone — the `_healthAppBarAction` isolation
+  /// pattern. Hidden for viewers, while the review has no value (first load /
+  /// error / viewer 404), and for past trips (the server omits the step). The
+  /// all_set celebration is session-scoped via [_hadNextStep] /
+  /// [_allSetDismissed].
+  Widget _nextStepArea(Trip trip) {
+    if (_readOnly) return const SizedBox.shrink();
+    return Consumer(
+      builder: (context, ref, _) {
+        final review =
+            ref.watch(tripReviewProvider(TripReviewKey(trip.id))).valueOrNull;
+        final step = review?.nextStep;
+        if (step == null) return const SizedBox.shrink();
+        final allSet = step.kind == 'all_set';
+        if (!allSet && !_hadNextStep) {
+          // Record "this session saw a real step" post-frame (no setState in
+          // build); the guard makes it one-shot.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_hadNextStep) setState(() => _hadNextStep = true);
+          });
+        }
+        if (allSet && (!_hadNextStep || _allSetDismissed)) {
+          return const SizedBox.shrink();
+        }
+        return NextStepCard(
+          step: step,
+          progress: review?.planProgress,
+          compact: _narrow,
+          enabled: !_isOffline,
+          onPrimary: allSet ? null : () => _onNextStepAction(trip, step),
+          onViewAll: () => _openHealthSheet(trip),
+          onDismiss:
+              allSet ? () => setState(() => _allSetDismissed = true) : null,
+        );
+      },
+    );
+  }
+
+  /// Routes the Next Step card's primary action: planning steps seed the trip
+  /// chat with the server-built prompt; mechanical steps jump to the matching
+  /// control directly (mixed-actions decision, specs/next-step-cta). Unknown
+  /// kinds — future ladder phases from a newer server — fall back to the
+  /// step's fix, else the health sheet.
+  Future<void> _onNextStepAction(Trip trip, NextStep step) async {
+    switch (step.kind) {
+      case 'set_dates':
+        await _editDates();
+        _invalidateReview();
+        break;
+      case 'book_trip':
+        setState(() {
+          _itemFilter = 'unbooked';
+          _bookingsLensDestination = null;
+        });
+        break;
+      case 'add_packing':
+        await showWearPackSheet(
+          context,
+          tripId: trip.id,
+          // Checklist-only open: regions are the weather half, which needs a
+          // build-scoped watch — the checklist half is this step's target.
+          regions: const [],
+          canEdit: !_readOnly,
+          isOffline: () => _isOffline,
+        );
+        // Items added inside the sheet complete the step.
+        _invalidateReview();
+        break;
+      case 'plan_itinerary':
+      case 'add_lodging':
+      case 'add_transport':
+      case 'schedule_items':
+        final seed = step.seedPrompt;
+        if (seed == null || seed.isEmpty) return;
+        _openSeededChat(trip, seed: seed, displayLabel: step.title);
+        break;
+      default:
+        if (step.fix != null) {
+          await _applyFix(TripFinding(
+            severity: 'info',
+            category: step.kind,
+            message: step.title,
+            tripId: trip.id,
+            day: step.day,
+            fix: step.fix,
+          ));
+        } else {
+          _openHealthSheet(trip);
+        }
+    }
+  }
+
   int? _dayOfItem(String itemId) {
     for (final item in _trip?.items ?? const <ItineraryItem>[]) {
       if (item.id == itemId) return item.day;
@@ -4268,7 +4427,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       builder: (context, ref, _) {
         final findings = ref
             .watch(tripReviewProvider(TripReviewKey(trip.id)))
-            .valueOrNull;
+            .valueOrNull
+            ?.findings;
         if (findings == null) return const SizedBox.shrink();
         const icon = Icon(Icons.fact_check_outlined);
         final l10n = context.l10n;
@@ -5019,6 +5179,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   _buildHeaderCard(trip, theme),
+                                  _nextStepArea(trip),
                                   const SizedBox(height: AppSpacing.lg),
                                 ],
                               ),

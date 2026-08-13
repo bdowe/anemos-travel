@@ -29,9 +29,11 @@ class TripReviewKey {
   int get hashCode => Object.hash(tripId, checkHours);
 }
 
-/// A trip's health review, keyed by (trip id, check-hours). Mirrors
+/// A trip's health review — the full [TripReview] payload: findings plus the
+/// Next Step projection — keyed by (trip id, check-hours). Mirrors
 /// [checklistProvider]: refreshable by invalidating the family key. The
-/// hours-on variant is fetched lazily when the section flips the flag.
+/// hours-on variant is fetched lazily when the section flips the flag (the
+/// next step is identical across the two variants by server contract).
 ///
 /// Transient failures (429/5xx/network) self-heal via a one-shot 30s
 /// `invalidateSelf`: this family is not autoDispose, so a cached error would
@@ -39,7 +41,7 @@ class TripReviewKey {
 /// only manual retry path lives inside the sheet that the hidden icon can no
 /// longer open. Stable errors (the viewer's 404) stay cached, as before.
 final tripReviewProvider =
-    FutureProvider.family<List<TripFinding>, TripReviewKey>((ref, key) async {
+    FutureProvider.family<TripReview, TripReviewKey>((ref, key) async {
   try {
     return await ref
         .watch(tripReviewApiServiceProvider)

@@ -57,10 +57,10 @@ class _FakeReviewApiService extends TripReviewApiService {
       : super(ApiClient(baseUrl: 'http://test'));
 
   @override
-  Future<List<TripFinding>> getReview(String tripId,
+  Future<TripReview> getReview(String tripId,
       {bool checkHours = false}) async {
     calls++;
-    return resolved ? const [] : List.of(findings);
+    return TripReview(findings: resolved ? const [] : List.of(findings));
   }
 }
 
