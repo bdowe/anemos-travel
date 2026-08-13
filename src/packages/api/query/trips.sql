@@ -102,9 +102,6 @@ DELETE FROM itinerary_items WHERE id = $1 AND trip_id = $2;
 UPDATE itinerary_items SET position = position - 1
 WHERE trip_id = $1 AND position > $2;
 
--- name: SetItineraryItemPosition :exec
-UPDATE itinerary_items SET position = $3 WHERE id = $1 AND trip_id = $2;
-
 -- name: TouchTrip :exec
 -- Content writes don't touch the trips row, so bump updated_at by hand and
 -- record who made the edit (the "Updated by X" attribution on shared trips).

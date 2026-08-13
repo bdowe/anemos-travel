@@ -89,15 +89,6 @@ FROM local_guides g
 JOIN local_sources s ON s.id = g.source_id
 WHERE g.id = $1;
 
--- name: SetLocalGuideStatus :one
-UPDATE local_guides SET status = $2 WHERE id = $1 RETURNING *;
-
--- name: ListDraftGuides :many
-SELECT g.*, s.name AS source_name FROM local_guides g
-JOIN local_sources s ON s.id = g.source_id
-WHERE g.status = 'draft'
-ORDER BY g.created_at DESC;
-
 -- name: ListPublishedGuidesByCity :many
 SELECT g.*, s.name AS source_name, s.photo_url AS source_photo_url
 FROM local_guides g

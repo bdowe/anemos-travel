@@ -1,10 +1,10 @@
 -- Batch statements for itinerary items (perf: replace per-row write loops
--- with one round trip). The per-row originals live in query/trips.sql.
+-- with one round trip). The non-batch item queries live in query/trips.sql.
 
 -- name: SetItineraryItemPositionsBatch :exec
--- Batch twin of SetItineraryItemPosition: one round trip for the whole
--- reorder. ids and positions are parallel arrays; the trip_id scope mirrors
--- the per-row statement so a foreign id can never move another trip's row.
+-- One round trip for the whole reorder. ids and positions are parallel
+-- arrays; every row is scoped to trip_id so a foreign id can never move
+-- another trip's row.
 UPDATE itinerary_items i
 SET position = u.pos
 FROM (
