@@ -259,6 +259,7 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
   final _provider = TextEditingController();
   final _url = TextEditingController();
   final _notes = TextEditingController();
+  final _priceNote = TextEditingController();
   String _mode = 'flight';
   DateTime? _departDate;
 
@@ -272,6 +273,7 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
       _provider.text = s.provider ?? '';
       _url.text = s.url ?? '';
       _notes.text = s.notes ?? '';
+      _priceNote.text = s.priceNote ?? '';
       _mode = s.mode;
       _departDate =
           s.departDate == null ? null : DateTime.tryParse(s.departDate!);
@@ -289,7 +291,14 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
 
   @override
   void dispose() {
-    for (final c in [_origin, _destination, _provider, _url, _notes]) {
+    for (final c in [
+      _origin,
+      _destination,
+      _provider,
+      _url,
+      _notes,
+      _priceNote
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -320,6 +329,8 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
       if (_provider.text.trim().isNotEmpty) 'provider': _provider.text.trim(),
       if (_url.text.trim().isNotEmpty) 'url': _url.text.trim(),
       if (_notes.text.trim().isNotEmpty) 'notes': _notes.text.trim(),
+      if (_priceNote.text.trim().isNotEmpty)
+        'price_note': _priceNote.text.trim(),
     });
   }
 
@@ -411,6 +422,16 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
               controller: _url,
               decoration: InputDecoration(
                 labelText: l10n.bookingsSegmentUrlLabel,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            // Parity with AddStaySheet: the column and API accepted
+            // price_note all along — the form just never offered it.
+            TextField(
+              controller: _priceNote,
+              decoration: InputDecoration(
+                labelText: l10n.bookingsPriceNoteLabel,
                 border: const OutlineInputBorder(),
               ),
             ),

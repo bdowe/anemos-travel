@@ -300,15 +300,17 @@ type TripCollaborator struct {
 }
 
 type TripExpense struct {
-	ID        uuid.UUID `json:"id"`
-	TripID    uuid.UUID `json:"trip_id"`
-	Category  string    `json:"category"`
-	Label     string    `json:"label"`
-	Amount    float64   `json:"amount"`
-	Position  int32     `json:"position"`
-	Auto      bool      `json:"auto"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         uuid.UUID   `json:"id"`
+	TripID     uuid.UUID   `json:"trip_id"`
+	Category   string      `json:"category"`
+	Label      string      `json:"label"`
+	Amount     float64     `json:"amount"`
+	Position   int32       `json:"position"`
+	Auto       bool        `json:"auto"`
+	CreatedAt  time.Time   `json:"created_at"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+	SourceKind *string     `json:"source_kind"`
+	SourceID   pgtype.UUID `json:"source_id"`
 }
 
 type TripInvite struct {
