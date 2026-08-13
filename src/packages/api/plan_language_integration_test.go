@@ -80,6 +80,16 @@ func TestSystemPromptEnglishUnchanged(t *testing.T) {
 		if !strings.Contains(prompt, "call suggest_replies") {
 			t.Errorf("Accept-Language %q: prompt lost the suggest_replies instruction", header)
 		}
+		// Positive pins: flight searches default to one-way and quoted prices
+		// must be labeled (trip type + party size) — the price-semantics fix.
+		// Both sentences matter: the second guards non-tool turns where the
+		// model quotes prices without a fresh summarizeOffers header.
+		if !strings.Contains(prompt, "Search one-way by default") {
+			t.Errorf("Accept-Language %q: prompt lost the one-way-default flight instruction", header)
+		}
+		if !strings.Contains(prompt, "never present a party or round-trip total as a per-person one-way fare") {
+			t.Errorf("Accept-Language %q: prompt lost the price-labeling flight instruction", header)
+		}
 		// These requests are anonymous and not trip-bound, so the prompt is
 		// exactly basePrompt — it must still end on basePrompt's final
 		// sentence, proving nothing was appended.

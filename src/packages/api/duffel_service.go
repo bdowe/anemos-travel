@@ -113,6 +113,12 @@ type FlightSearchRequest struct {
 	// dragging the whole search. Internal-only (connectivity checks); never
 	// part of the public /flights/search request shape.
 	SupplierTimeoutMS int `json:"-"`
+
+	// Indicative marks a bulk comparison search (connectivity checks) where
+	// speed beats to-the-dollar accuracy: the SerpApi provider then skips
+	// deep_search, which adds 15-45s per call. Internal-only, like
+	// SupplierTimeoutMS; the Duffel path ignores it.
+	Indicative bool `json:"-"`
 }
 
 // allowedCabinClasses are Duffel's cabin_class values; empty input defaults
