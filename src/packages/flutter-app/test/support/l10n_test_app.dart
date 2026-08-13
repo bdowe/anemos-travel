@@ -21,9 +21,14 @@ const List<LocalizationsDelegate<dynamic>> testLocalizationsDelegates = [
 ///
 /// [locale] pins the language: leave it null to take English, or pass
 /// `Locale('es')` to assert translated copy.
+///
+/// [theme] pins the ThemeData: leave it null for Flutter's stock light theme
+/// (the historic behavior every existing test assumes), or pass
+/// `AppTheme.dark` for dark-mode smoke tests (specs/dark-mode).
 MaterialApp localizedTestApp({
   required Widget home,
   Locale? locale,
+  ThemeData? theme,
 }) {
   return MaterialApp(
     localizationsDelegates: testLocalizationsDelegates,
@@ -31,6 +36,7 @@ MaterialApp localizedTestApp({
     // but is not yet enabled for users.
     supportedLocales: const [Locale('en'), Locale('es')],
     locale: locale,
+    theme: theme,
     home: home,
   );
 }

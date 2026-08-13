@@ -24,6 +24,22 @@
   "@languageMenuTooltip": {
     "description": "Tooltip of the app-bar globe button that opens the language menu."
   },
+  "appearanceSectionTitle": "Appearance",
+  "@appearanceSectionTitle": {
+    "description": "Header of the light/dark appearance group in account settings."
+  },
+  "appearanceSystem": "Use device setting",
+  "@appearanceSystem": {
+    "description": "Appearance option that follows the OS light/dark preference."
+  },
+  "appearanceLight": "Light",
+  "@appearanceLight": {
+    "description": "Appearance option that forces the light theme."
+  },
+  "appearanceDark": "Dark",
+  "@appearanceDark": {
+    "description": "Appearance option that forces the dark theme."
+  },
   "commonSave": "Save",
   "commonCancel": "Cancel",
   "commonDelete": "Delete",

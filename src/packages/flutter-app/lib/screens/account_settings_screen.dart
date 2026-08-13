@@ -4,6 +4,7 @@ import '../l10n/l10n.dart';
 import '../providers/api_client_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
+import '../providers/theme_mode_provider.dart';
 import '../services/account_api_service.dart';
 import '../theme/spacing.dart';
 import '../widgets/gradient_app_bar.dart';
@@ -275,6 +276,10 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       const _ConnectedAppsList(),
                       const SizedBox(height: AppSpacing.xl),
+                      SectionHeader(title: l10n.appearanceSectionTitle),
+                      const SizedBox(height: AppSpacing.sm),
+                      const _AppearancePicker(),
+                      const SizedBox(height: AppSpacing.xl),
                       SectionHeader(title: l10n.languageSectionTitle),
                       const SizedBox(height: AppSpacing.sm),
                       const _LanguagePicker(),
@@ -412,6 +417,49 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Light/dark appearance choice (specs/dark-mode).
+///
+/// "Use device setting" is a live mode, not a resolved-once default: with it
+/// selected the app follows OS appearance changes as they happen. The choice
+/// is stored on this device only — appearance has no server-rendered
+/// counterpart, so unlike the language it never syncs to the account.
+class _AppearancePicker extends ConsumerWidget {
+  const _AppearancePicker();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final mode = ref.watch(themeModeProvider.select((s) => s.mode));
+
+    return RadioGroup<ThemeMode>(
+      groupValue: mode,
+      onChanged: (v) {
+        if (v != null) ref.read(themeModeProvider.notifier).setMode(v);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RadioListTile<ThemeMode>(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.appearanceSystem),
+            value: ThemeMode.system,
+          ),
+          RadioListTile<ThemeMode>(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.appearanceLight),
+            value: ThemeMode.light,
+          ),
+          RadioListTile<ThemeMode>(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.appearanceDark),
+            value: ThemeMode.dark,
+          ),
+        ],
+      ),
     );
   }
 }

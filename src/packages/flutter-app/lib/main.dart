@@ -8,6 +8,7 @@ import 'navigation/app_routes.dart';
 import 'navigation/url_sync.dart';
 import 'providers/auth_provider.dart';
 import 'providers/locale_provider.dart';
+import 'providers/theme_mode_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/connect_app_screen.dart';
 import 'screens/landing_screen.dart';
@@ -114,10 +115,15 @@ class TravelRoutePlannerApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Watching only the locale the widget layer needs, not the whole state.
     final locale = ref.watch(localeProvider.select((s) => s.materialLocale));
+    final themeMode = ref.watch(themeModeProvider.select((s) => s.mode));
     return MaterialApp(
       title: AppInfo.name,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      // specs/dark-mode. Unlike locale, "system" stays live: with it selected
+      // MaterialApp follows OS appearance changes as they happen.
+      themeMode: themeMode,
       // specs/i18n-spanish. Always concrete: the locale provider resolves the
       // device language itself and stores it at first launch.
       locale: locale,

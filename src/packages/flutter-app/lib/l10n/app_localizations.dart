@@ -134,6 +134,30 @@ abstract class AppLocalizations {
   /// **'Change language'**
   String get languageMenuTooltip;
 
+  /// Header of the light/dark appearance group in account settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get appearanceSectionTitle;
+
+  /// Appearance option that follows the OS light/dark preference.
+  ///
+  /// In en, this message translates to:
+  /// **'Use device setting'**
+  String get appearanceSystem;
+
+  /// Appearance option that forces the light theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get appearanceLight;
+
+  /// Appearance option that forces the dark theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get appearanceDark;
+
   /// No description provided for @commonSave.
   ///
   /// In en, this message translates to:
