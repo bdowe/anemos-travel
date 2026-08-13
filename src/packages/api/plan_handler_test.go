@@ -3,8 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"travel-route-planner/store"
@@ -129,5 +132,88 @@ func TestNotesPreview(t *testing.T) {
 	got := notesPreview(&long)
 	if r := []rune(got); len(r) != 81 || !strings.HasSuffix(got, "…") {
 		t.Fatalf("preview should be 80 runes + ellipsis, got %d runes: %q", len([]rune(got)), got)
+	}
+}
+
+// relayCutBody simulates a reverse proxy forwarding the request body
+// unbuffered (proxy_request_buffering off): the moment the handler commits
+// any response bytes, the proxy stops relaying the body and the handler's
+// reads hit EOF. This is exactly what nginx does — "upstream sent response
+// while sending request body" — and what broke prod chat on 2026-08-12.
+type relayCutBody struct {
+	data      *bytes.Reader
+	committed *atomic.Bool
+}
+
+func (b *relayCutBody) Read(p []byte) (int, error) {
+	if b.committed.Load() {
+		return 0, io.EOF
+	}
+	return b.data.Read(p)
+}
+
+func (b *relayCutBody) Close() error { return nil }
+
+// commitTrackingRecorder arms the relay cut on the first Write, WriteHeader,
+// or Flush. Embedding *httptest.ResponseRecorder keeps it an http.Flusher,
+// so planHandler's streaming assert passes.
+type commitTrackingRecorder struct {
+	*httptest.ResponseRecorder
+	committed *atomic.Bool
+}
+
+func (w *commitTrackingRecorder) Write(p []byte) (int, error) {
+	w.committed.Store(true)
+	return w.ResponseRecorder.Write(p)
+}
+
+func (w *commitTrackingRecorder) WriteHeader(code int) {
+	w.committed.Store(true)
+	w.ResponseRecorder.WriteHeader(code)
+}
+
+func (w *commitTrackingRecorder) Flush() {
+	w.committed.Store(true)
+	w.ResponseRecorder.Flush()
+}
+
+// planHandler must fully consume the request body BEFORE its first response
+// write or flush: a reverse proxy relaying the body unbuffered stops the
+// moment the upstream responds, so a decode after the priming flush reads
+// EOF and every real-network request dies with "invalid request body" while
+// buffered test bodies pass. This test wires the proxy behavior into the
+// recorder so that ordering violation fails here instead of on prod.
+func TestPlanHandlerReadsBodyBeforeFirstWrite(t *testing.T) {
+	anonPlanCounter.resetAll()
+	t.Setenv("FREE_ANON_PLAN_PER_DAY", "100")
+	// Deterministic post-decode short-circuit (same trick as
+	// TestPlanHandlerAnonCapEmitsFriendlySSE): with no key, the handler emits
+	// the not-configured error right after the decode + cap checks.
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
+	payload, err := json.Marshal(PlanRequest{Messages: []PlanChatMessage{{Role: "user", Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var committed atomic.Bool
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/plan",
+		&relayCutBody{data: bytes.NewReader(payload), committed: &committed})
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-For", "203.0.113.77")
+	rec := &commitTrackingRecorder{ResponseRecorder: httptest.NewRecorder(), committed: &committed}
+
+	planHandler(rec, req)
+
+	out := rec.Body.String()
+	if strings.Contains(out, "invalid request body") {
+		t.Fatalf("response committed before the body was fully read:\n%s", out)
+	}
+	// Positive proof the decode completed and the stream reached post-decode
+	// logic — guards against the tripwire silently never engaging.
+	if !strings.Contains(out, "ANTHROPIC_API_KEY not configured") {
+		t.Fatalf("stream never reached post-decode logic:\n%s", out)
+	}
+	if !committed.Load() {
+		t.Fatal("handler wrote no response at all")
 	}
 }
