@@ -1274,9 +1274,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripItinerary => 'Itinerario';
 
   @override
-  String get tripFilterTooltip => 'Filtrar lugares';
-
-  @override
   String get tripToday => 'Hoy';
 
   @override
@@ -1284,15 +1281,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tripFilterAll => 'Todos';
-
-  @override
-  String get tripFilterAttractions => 'Atracciones';
-
-  @override
-  String get tripFilterRestaurants => 'Restaurantes';
-
-  @override
-  String get tripFilterLocalPicks => 'Recomendados por locales';
 
   @override
   String get tripFilterUnbooked => 'Sin reservar';
@@ -1317,9 +1305,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get tripBookingsLensNoneForDestination =>
       'No hay reservas para este destino.';
-
-  @override
-  String get tripFilterNoMatch => 'Ningún lugar coincide con este filtro.';
 
   @override
   String get tripNoPlacesYet => 'Aún no hay lugares';

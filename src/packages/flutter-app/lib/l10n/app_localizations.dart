@@ -2342,12 +2342,6 @@ abstract class AppLocalizations {
   /// **'Itinerary'**
   String get tripItinerary;
 
-  /// No description provided for @tripFilterTooltip.
-  ///
-  /// In en, this message translates to:
-  /// **'Filter places'**
-  String get tripFilterTooltip;
-
   /// No description provided for @tripToday.
   ///
   /// In en, this message translates to:
@@ -2365,24 +2359,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All'**
   String get tripFilterAll;
-
-  /// No description provided for @tripFilterAttractions.
-  ///
-  /// In en, this message translates to:
-  /// **'Attractions'**
-  String get tripFilterAttractions;
-
-  /// No description provided for @tripFilterRestaurants.
-  ///
-  /// In en, this message translates to:
-  /// **'Restaurants'**
-  String get tripFilterRestaurants;
-
-  /// No description provided for @tripFilterLocalPicks.
-  ///
-  /// In en, this message translates to:
-  /// **'Locals\' picks'**
-  String get tripFilterLocalPicks;
 
   /// No description provided for @tripFilterUnbooked.
   ///
@@ -2425,12 +2401,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No bookings for this destination.'**
   String get tripBookingsLensNoneForDestination;
-
-  /// No description provided for @tripFilterNoMatch.
-  ///
-  /// In en, this message translates to:
-  /// **'No places match this filter.'**
-  String get tripFilterNoMatch;
 
   /// No description provided for @tripNoPlacesYet.
   ///
