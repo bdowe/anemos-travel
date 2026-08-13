@@ -117,8 +117,18 @@ jobs:
       - name: flutter test
         run: flutter test
 
-      - name: flutter build web
-        run: flutter build web --dart-define=API_BASE_URL=/api/v1
+      # PR-only: on main the gateway image build (build-push) is the real web
+      # build — rebuilding here would be a pure duplicate (~2-3 min). On PRs
+      # this is the only web compile, so it runs with the PRODUCTION flags:
+      # the old flagless build never exercised --base-href/APP_BASE_PATH,
+      # which is the exact parity gap behind the #320 service-worker bug.
+      - name: flutter build web (prod-parity compile check)
+        if: github.event_name == 'pull_request'
+        run: >
+          flutter build web
+          --base-href /app/
+          --dart-define=API_BASE_URL=/api/v1
+          --dart-define=APP_BASE_PATH=/app/
 
   migrations:
     name: Migrations apply from zero
@@ -227,6 +237,12 @@ jobs:
           build-args: |
             GIT_SHA=${{ github.sha }}
           cache-from: type=gha,scope=gateway
+          # mode=max (export ALL stages) is deliberate for both scopes: the
+          # layers worth caching are precisely the builder-stage ones (apt,
+          # flutter clone, web-only precache, pub get / go mod download);
+          # mode=min would export only the tiny final stages and force a full
+          # toolchain rebuild every main push. The web-only precache keeps the
+          # exported stage well inside the repo's 10 GB Actions cache budget.
           cache-to: type=gha,mode=max,scope=gateway
 
   deploy:
