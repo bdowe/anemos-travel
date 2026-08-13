@@ -1263,9 +1263,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripItinerary => 'Itinerary';
 
   @override
-  String get tripFilterTooltip => 'Filter places';
-
-  @override
   String get tripToday => 'Today';
 
   @override
@@ -1273,15 +1270,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tripFilterAll => 'All';
-
-  @override
-  String get tripFilterAttractions => 'Attractions';
-
-  @override
-  String get tripFilterRestaurants => 'Restaurants';
-
-  @override
-  String get tripFilterLocalPicks => 'Locals\' picks';
 
   @override
   String get tripFilterUnbooked => 'Not booked yet';
@@ -1306,9 +1294,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get tripBookingsLensNoneForDestination =>
       'No bookings for this destination.';
-
-  @override
-  String get tripFilterNoMatch => 'No places match this filter.';
 
   @override
   String get tripNoPlacesYet => 'No places yet';

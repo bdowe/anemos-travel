@@ -11,7 +11,7 @@
 //   * [TripDerivation.compute] is THE one computation site.
 //   * [TripDerivation.matches] is the memo signature: `identical()` on the
 //     object inputs (trip, bookingTodos, stays, segments, travelByPos, l10n)
-//     plus `==` on itemFilter and the item-order epoch. Identity works as an
+//     plus `==` on the item-order epoch. Identity works as an
 //     invalidation signal because every mutation path on the screen replaces
 //     its input objects wholesale — EXCEPT `_reorderBatchInline`, the one
 //     in-place mutation, which bumps the epoch instead (the stated contract:
@@ -111,7 +111,6 @@ class TripDerivation {
   final List<Accommodation> stays;
   final List<TripSegment> segments;
   final Map<int, LocationTiming> travelByPos;
-  final String itemFilter;
 
   /// The derivation OUTPUT is localized (nights suffixes, travel labels,
   /// 'Other places'), so the localizations object is a signature input: a
@@ -124,11 +123,9 @@ class TripDerivation {
 
   // ── Derived state, computed once in [compute] ─────────────────────────
 
-  /// Itinerary items matching the active places lens, used by both the map
-  /// and the list so they stay in sync. 'unbooked' and 'bookings' are
-  /// bookings lenses, not places ones — the list swaps to booking rows while
-  /// the places set (and thus the maps) stays whole.
-  final List<ItineraryItem> filtered;
+  /// The full itinerary, materialized once — the map and the list share this
+  /// one instance (stable identity for the marker cache).
+  final List<ItineraryItem> items;
 
   /// The canonical locality runs over the FULL itinerary (shared [tripLegs]
   /// split) — what the map pin-tap and expand-new-items flows walk.
@@ -152,8 +149,8 @@ class TripDerivation {
   /// (arrival-adjusted [visibleRanges] + localized nights suffix).
   final Map<int, LegDateChip> locationDates;
 
-  /// Consecutive same-locality runs of [filtered], labelled with the date
-  /// range precomputed for that location.
+  /// Consecutive same-locality runs — one [CityGroup] per [legs] entry,
+  /// labelled with the date range precomputed for that location.
   final List<CityGroup> groups;
 
   /// The one full-label booking partition: todos AND confirmed stays/segments
@@ -163,19 +160,19 @@ class TripDerivation {
   final GroupedBookings groupedBookings;
 
   /// Travel-time labels for the trip map, keyed by the source item's
-  /// position. Empty while a category filter is active.
+  /// position.
   final Map<int, String> segmentLabels;
 
-  /// Destination pins for the trip-overview map, derived from the FULL
-  /// itinerary — never the filtered view, which would shift the numbering.
+  /// Destination pins for the trip-overview map, one per leg range in visit
+  /// order.
   final List<TripMapDestination> mapDestinations;
 
   /// The trip's first/last location-group coordinates — the same derivation
   /// the outbound/return booking todos trust.
   final ({LatLng? first, LatLng? last}) homeLegEndpoints;
 
-  /// Map-visibility gate: a filtered item with coordinates OR a geocoded
-  /// stay. Shared by build and the pinned-chrome scroll math.
+  /// Map-visibility gate: an item with coordinates OR a geocoded stay.
+  /// Shared by build and the pinned-chrome scroll math.
   final bool mapShown;
 
   /// The trip's user-confirmed stays (auto=false). Suggested drafts are
@@ -195,15 +192,14 @@ class TripDerivation {
   /// engages and "All" vs "the one leg" would draw the identical map.
   final List<({String key, String label})> legChips;
 
-  /// Legs that would plot something on the map — the muted-chip gate,
-  /// trip-wide (never lens-dependent): a geocoded item in the run, or a
-  /// confirmed geocoded stay covering one of the leg's raw-range nights.
+  /// Legs that would plot something on the map — the muted-chip gate: a
+  /// geocoded item in the run, or a confirmed geocoded stay covering one of
+  /// the leg's raw-range nights.
   final Set<String> mappedLegKeys;
 
   // Lazy per-night/per-leg caches — see the header comment for the identity
   // contract.
   final Map<int, List<Accommodation>> _staysOnNightCache = {};
-  final Map<String?, List<ItineraryItem>> _legItemsCache = {};
   final Map<String, List<Accommodation>> _legStaysCache = {};
 
   TripDerivation._({
@@ -212,10 +208,9 @@ class TripDerivation {
     required this.stays,
     required this.segments,
     required this.travelByPos,
-    required this.itemFilter,
     required this.l10n,
     required this.itemOrderEpoch,
-    required this.filtered,
+    required this.items,
     required this.legs,
     required this.rawRanges,
     required this.visibleRanges,
@@ -235,17 +230,16 @@ class TripDerivation {
   });
 
   /// Whether this derivation is still valid for the given inputs: identity
-  /// on the object inputs, equality on the filter and the epoch. Every
-  /// mutation path on the screen replaces its input objects wholesale, so a
-  /// surviving identity means unchanged content (the epoch covers the one
-  /// documented in-place exception).
+  /// on the object inputs, equality on the epoch. Every mutation path on the
+  /// screen replaces its input objects wholesale, so a surviving identity
+  /// means unchanged content (the epoch covers the one documented in-place
+  /// exception).
   bool matches({
     required Trip trip,
     required List<BookingTodo> bookingTodos,
     required List<Accommodation> stays,
     required List<TripSegment> segments,
     required Map<int, LocationTiming> travelByPos,
-    required String itemFilter,
     required AppLocalizations l10n,
     required int itemOrderEpoch,
   }) =>
@@ -255,7 +249,6 @@ class TripDerivation {
       identical(segments, this.segments) &&
       identical(travelByPos, this.travelByPos) &&
       identical(l10n, this.l10n) &&
-      itemFilter == this.itemFilter &&
       itemOrderEpoch == this.itemOrderEpoch;
 
   /// Stays covering the night of trip day [day], checkout-exclusively — the
@@ -287,21 +280,15 @@ class TripDerivation {
     return null;
   }
 
-  /// [filtered] narrowed to a focused leg (null = All → [filtered] itself).
-  /// Membership is the item's POSITION against the FULL-itinerary leg: a
-  /// places lens can merge adjacent runs and shift group keys, but positions
-  /// are stable, so lens ∩ leg composes correctly. Unknown key → empty.
-  /// Stable List identity per (derivation, key).
-  List<ItineraryItem> legFilteredItems(String? legKey) =>
-      _legItemsCache.putIfAbsent(legKey, () {
-        if (legKey == null) return filtered;
-        final i = legIndexOf(legKey);
-        if (i == null) return const [];
-        final positions = {for (final it in legs[i].items) it.position};
-        return filtered
-            .where((it) => positions.contains(it.position))
-            .toList();
-      });
+  /// [items] narrowed to a focused leg: null = All → [items] itself, a live
+  /// key → that leg's own run list, a stale key → empty. Stable List
+  /// identity per (derivation, key) — both returns are lists this derivation
+  /// already holds.
+  List<ItineraryItem> legFilteredItems(String? legKey) {
+    if (legKey == null) return items;
+    final i = legIndexOf(legKey);
+    return i == null ? const [] : legs[i].items;
+  }
 
   /// Stays the map should plot for a focused leg: under All (null), every
   /// confirmed stay; under a leg, confirmed stays covering one of the leg's
@@ -351,26 +338,15 @@ class TripDerivation {
     return null;
   }
 
-  /// The CURRENT-filter group holding [legKey]'s items: the leg key itself
-  /// under the full itinerary, possibly a merged run's key under a places
-  /// lens, or null when the key is stale or the lens dropped every item of
-  /// the leg (nothing should render open — its items aren't in the list).
-  /// Positions-based like [legFilteredItems]: lenses only MERGE adjacent
-  /// runs, never split one, so leg → group is a function. This is the one
-  /// leg→group mapping — chip taps and map region-pin taps resolve their
+  /// Clamps [legKey] to a group that still exists: the key itself while the
+  /// leg is live, null when the key is stale. Groups and legs run the same
+  /// split, so a live leg key IS its group key. This is the one leg→group
+  /// mapping — chip taps and map region-pin taps resolve their
   /// un-collapse/scroll target through it, and it clamps, so stale keys
   /// read as null. Null in → null out, matching a no-focus map.
   String? groupKeyForLeg(String? legKey) {
     if (legKey == null) return null;
-    final i = legIndexOf(legKey);
-    if (i == null) return null;
-    final positions = {for (final it in legs[i].items) it.position};
-    for (final group in groups) {
-      if (group.items.any((it) => positions.contains(it.position))) {
-        return group.key;
-      }
-    }
-    return null;
+    return legIndexOf(legKey) == null ? null : legKey;
   }
 
   /// Day preselect for adding a place to a focused leg: the smallest day tag
@@ -406,21 +382,12 @@ class TripDerivation {
     required List<Accommodation> stays,
     required List<TripSegment> segments,
     required Map<int, LocationTiming> travelByPos,
-    required String itemFilter,
     required AppLocalizations l10n,
     required int itemOrderEpoch,
   }) {
-    final items = trip.items ?? const <ItineraryItem>[];
-
-    final filtered = switch (itemFilter) {
-      // The bookings lenses and the Budget view keep the item set whole —
-      // the map, leg chips, and Today math stay itinerary-shaped there.
-      'all' || 'unbooked' || 'bookings' || 'budget' => items.toList(),
-      'local' => items
-          .where((i) => (i.localSourceName ?? '').trim().isNotEmpty)
-          .toList(),
-      _ => items.where((i) => i.category == itemFilter).toList(),
-    };
+    // Materialized once so the map and the list share one List identity
+    // (the marker cache keys on it).
+    final items = (trip.items ?? const <ItineraryItem>[]).toList();
 
     final confirmedStays = (trip.accommodations ?? const <Accommodation>[])
         .where((a) => !a.auto)
@@ -454,11 +421,10 @@ class TripDerivation {
       }
     }
 
-    // Groups run the split over the FILTERED items (a category filter can
-    // merge adjacent same-label runs); chips key by first item position into
+    // Groups mirror [legs] one-to-one; chips key by first item position into
     // the full-itinerary map above.
     final groups = <CityGroup>[
-      for (final leg in tripLegs(filtered))
+      for (final leg in legs)
         (
           key: leg.key,
           label: leg.label,
@@ -471,18 +437,15 @@ class TripDerivation {
         legLabels, bookingTodos, stays, segments);
 
     // Travel-time labels for the map: one entry per within-city leg (same
-    // hub, adjacent in itinerary order). Empty while a category filter is
-    // active (legs aren't globally adjacent).
+    // hub, adjacent in itinerary order).
     final segmentLabels = <int, String>{};
-    if (itemFilter == 'all') {
-      final byPos = {for (final it in items) it.position: it};
-      for (final it in items) {
-        final next = byPos[it.position + 1];
-        if (next == null || hubOf(it) != hubOf(next)) continue;
-        final t = travelByPos[it.position];
-        if (t == null || t.travelToNextMin <= 0) continue;
-        segmentLabels[it.position] = fmtTravel(l10n, t.travelToNextMin);
-      }
+    final byPos = {for (final it in items) it.position: it};
+    for (final it in items) {
+      final next = byPos[it.position + 1];
+      if (next == null || hubOf(it) != hubOf(next)) continue;
+      final t = travelByPos[it.position];
+      if (t == null || t.travelToNextMin <= 0) continue;
+      segmentLabels[it.position] = fmtTravel(l10n, t.travelToNextMin);
     }
 
     // Destination pins: the one construction site lives with the map widget
@@ -500,9 +463,8 @@ class TripDerivation {
       last: lastCoord == null ? null : LatLng(lastCoord.lat, lastCoord.lng),
     );
 
-    final mapShown =
-        filtered.any((i) => i.latitude != 0 || i.longitude != 0) ||
-            confirmedStays.any(TripMap.stayHasCoords);
+    final mapShown = items.any((i) => i.latitude != 0 || i.longitude != 0) ||
+        confirmedStays.any(TripMap.stayHasCoords);
 
     // Mirrors the screen's `_buildGroupItemSlivers` day-header rule:
     // non-filler items carrying a day tag.
@@ -542,10 +504,9 @@ class TripDerivation {
       stays: stays,
       segments: segments,
       travelByPos: travelByPos,
-      itemFilter: itemFilter,
       l10n: l10n,
       itemOrderEpoch: itemOrderEpoch,
-      filtered: filtered,
+      items: items,
       legs: legs,
       rawRanges: rawRanges,
       visibleRanges: visibleRanges,

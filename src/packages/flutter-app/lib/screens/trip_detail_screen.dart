@@ -96,25 +96,6 @@ const _kOtherPlaces = kOtherPlacesLabel;
 
 // Canonical API values. These are sent to the server (or matched against
 // server data), so they are NEVER translated — only their display labels are.
-// This is the "Filter places" popup menu: 'local' is a client-only lens
-// (items with a local_source_name credit). The Bookings-view states
-// ('bookings'/'unbooked') are NOT menu entries — the header view tabs and
-// the in-view scope chip own them; see _itemFilter for the full state space.
-const _menuFilters = [
-  'all',
-  'attraction',
-  'restaurant',
-  'local',
-];
-
-String _filterLabel(AppLocalizations l10n, String value) => switch (value) {
-      'all' => l10n.tripFilterAll,
-      'attraction' => l10n.tripFilterAttractions,
-      'restaurant' => l10n.tripFilterRestaurants,
-      'local' => l10n.tripFilterLocalPicks,
-      _ => value,
-    };
-
 String _categoryLabel(AppLocalizations l10n, String value) => switch (value) {
       'attraction' => l10n.tripCategoryAttraction,
       'restaurant' => l10n.tripCategoryRestaurant,
@@ -151,13 +132,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // narrow ones); null target while closed.
   bool _panelOpen = false;
   RefineTarget? _refineTarget;
-  // The active view/filter state. 'all' plus the _menuFilters place kinds
-  // render the grouped itinerary; 'bookings' and 'unbooked' are the Bookings
-  // view (entered from the header tab) and its left-to-book scope (the chip
-  // inside that view) — both replace the city groups with flat booking rows;
-  // 'budget' is the Budget view (third header tab), which replaces them with
-  // the budget body. Tab selection is DERIVED from this one string every
-  // build — never stored as its own field (PR #335's invariant).
+  // The active view state. 'all' renders the grouped itinerary; 'bookings'
+  // and 'unbooked' are the Bookings view (entered from the header tab) and
+  // its left-to-book scope (the chip inside that view) — both replace the
+  // city groups with flat booking rows; 'budget' is the Budget view (third
+  // header tab), which replaces them with the budget body. Tab selection is
+  // DERIVED from this one string every build — never stored as its own
+  // field (PR #335's invariant).
   String _itemFilter = 'all';
   // Destination chip selection inside the 'bookings' lens (null = All).
   // Reset on every lens change so the lens always opens at All; clamped in
@@ -172,14 +153,21 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Whether the Budget view (third header tab) is active.
   bool get _inBudgetView => _itemFilter == 'budget';
+
+  /// Travel-time labels for whichever map is being built: empty in the
+  /// Bookings/Budget views, whose map stays label-free (the pre-existing
+  /// behavior from when the derivation view-gated these). The ONE gate for
+  /// both map call sites — inline card and full-screen.
+  Map<int, String> _mapSegmentLabels(TripDerivation d) =>
+      (_inBookingsView || _inBudgetView) ? const {} : d.segmentLabels;
   // Focused leg on the map; null = All. MAP-ONLY state (chips, camera fit,
   // per-leg item/stay filtering) — group expansion is _collapsedGroups,
   // fully decoupled. Keyed by the FULL-itinerary run key (leg.key,
-  // `#2`-suffixed on revisits) — never the lens-dependent group key. A
-  // ValueNotifier consumed solely by the map card's ListenableBuilder, so a
-  // focus write never rebuilds the screen and a same-value write is dropped.
-  // May hold a stale key after an edit removes the leg — readers clamp via
-  // _clampedLegKey (read-side, so build never mutates state).
+  // `#2`-suffixed on revisits). A ValueNotifier consumed solely by the map
+  // card's ListenableBuilder, so a focus write never rebuilds the screen
+  // and a same-value write is dropped. May hold a stale key after an edit
+  // removes the leg — readers clamp via _clampedLegKey (read-side, so
+  // build never mutates state).
   final ValueNotifier<String?> _focusedLegKey = ValueNotifier<String?>(null);
   // Whether the map renders as the wide layout's pinned header (true) or the
   // phone layout's scroll-away tap-to-expand card (false). Assigned each
@@ -282,7 +270,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           stays: _stays,
           segments: _segments,
           travelByPos: _travelByPos,
-          itemFilter: _itemFilter,
           l10n: l10n,
           itemOrderEpoch: _itemOrderEpoch,
         )) {
@@ -294,7 +281,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       stays: _stays,
       segments: _segments,
       travelByPos: _travelByPos,
-      itemFilter: _itemFilter,
       l10n: l10n,
       itemOrderEpoch: _itemOrderEpoch,
     );
@@ -593,9 +579,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   static const double _mapHeightNarrow = 180;
   // Itinerary/Bookings/Budget tab row (44 — real touch targets for the view
   // tabs)
-  // + bottom padding (8) + breathing room (4); the category filter lives in
-  // a popup menu inside the tab row, so the header is one fixed-height row
-  // whether or not the trip has items.
+  // + bottom padding (8) + breathing room (4); the header is one
+  // fixed-height row whether or not the trip has items.
   static const double _listHeaderHeight = 56;
 
   /// Combined height of the chrome pinned above the itinerary slivers: the
@@ -665,23 +650,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final d = _derive(trip);
     // "Show me that day" focuses the MAP on that day's leg and un-collapses
     // its group/day so the header can be measured. cityKey is a GROUP key
-    // from liveDayKeys; resolve the leg through an item actually tagged the
-    // landed-on day, NOT the group's first item — under a places lens a
-    // merged group spans several runs, and the first item can belong to an
-    // earlier run than the day we're jumping to (the map would then fit the
-    // wrong run). Bookings lenses and the Budget view keep the places set
-    // whole, so the pre-exit derivation's groups are the post-exit ones too.
-    final dayNum = int.tryParse(dayKey.substring(dayKey.lastIndexOf('#') + 1));
-    String? legKey;
-    for (final g in d.groups) {
-      if (g.key != cityKey || g.items.isEmpty) continue;
-      final anchor = g.items.firstWhere(
-        (it) => it.day == dayNum && !isCityFiller(it),
-        orElse: () => g.items.first,
-      );
-      legKey = d.legKeyOfPosition(anchor.position);
-      break;
-    }
+    // from liveDayKeys, and groups and legs run the same split, so it
+    // doubles as the leg key — clamped in case an edit staled it mid-jump.
+    // Bookings lenses and the Budget view keep the places set whole, so the
+    // pre-exit derivation's groups are the post-exit ones too.
+    final legKey = d.legIndexOf(cityKey) == null ? null : cityKey;
     // Whether the target section still has layout work to settle before
     // the scroll can measure it (a collapsed group/day opening, or the
     // lens swap rebuilding the list).
@@ -809,19 +782,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// All chip (null) resets the MAP only — the list is untouched, since
   /// expansion is decoupled from focus.
   ///
-  /// Under a places lens the leg may belong to a merged group
-  /// ([TripDerivation.groupKeyForLeg]) — that group is the un-collapse and
-  /// scroll target — or to none (the lens dropped the leg's items): the MAP
-  /// stays right regardless, content comes from the full leg's position
-  /// set. Under a bookings lens no city headers exist at all: the chip
-  /// drives the map only and the lens is NOT exited (unlike _scrollToDay,
-  /// whose whole job is list navigation).
+  /// Under a bookings lens no city headers exist at all: the chip drives
+  /// the map only and the lens is NOT exited (unlike _scrollToDay, whose
+  /// whole job is list navigation).
   void _setFocusedLeg(TripDerivation d, String? key) {
     if (d.legs.length < 2) return; // single-leg trips have no focus
     _setMapFocus(d, key);
     if (key == null) return; // All: map overview only, list untouched
     final groupKey = d.groupKeyForLeg(key);
-    if (groupKey == null) return; // lens dropped the leg: nothing to rest
+    if (groupKey == null) return; // stale key: nothing to rest
     if (_collapsedGroups.remove(groupKey)) setState(() {});
     // Post-frame so a freshly expanded section has laid out first (the
     // _scrollToDay pattern); on phones the chips ride the scroll-away
@@ -3127,19 +3096,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// One contiguous batch of item tiles as an inline-draggable sliver. Drag is
   /// confined to the batch, a subset of _sectionOf's boundary (items rendered
   /// apart can't be dragged past each other — the menu's "Reorder section"
-  /// sheet still covers the full section). Handles hide under a category
-  /// filter: the rendered rows are then a non-contiguous subset, so batch
-  /// indexes no longer map onto the trip's item order.
+  /// sheet still covers the full section).
   Widget _batchReorderableSliver(
       List<ItineraryItem> batch, double indent, ThemeData theme) {
     // Narrow first: phones reorder via the kebab (Move up/down + Reorder
     // section), so no handle is built at all — the same null-handle path
-    // filters/offline/singleton batches already take.
-    final canDrag = !_narrow &&
-        !_readOnly &&
-        !_isOffline &&
-        _itemFilter == 'all' &&
-        batch.length > 1;
+    // offline/singleton batches already take.
+    final canDrag =
+        !_narrow && !_readOnly && !_isOffline && batch.length > 1;
     return SliverReorderableList(
       itemCount: batch.length,
       // Unlike ReorderableListView, the sliver variant doesn't wrap the
@@ -3223,11 +3187,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// A small "↓ 12 min · 4.3 km" row shown between two consecutive itinerary
   /// tiles, but only for within-city hops (same hub, truly adjacent in the
-  /// itinerary order). Returns null when it shouldn't render — including while a
-  /// category filter is active, since filtered tiles aren't globally adjacent.
+  /// itinerary order). Returns null when it shouldn't render.
   Widget? _travelConnector(ItineraryItem from, ItineraryItem to,
       double indentLeft, ThemeData theme) {
-    if (_itemFilter != 'all') return null;
     if (to.position != from.position + 1) return null;
     if (_hubOf(from) != _hubOf(to)) return null;
     final timing = _travelByPos[from.position];
@@ -3255,9 +3217,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   }
 
   /// Total within-city travel time (minutes) across the consecutive legs of a
-  /// day's run. Zero while a category filter is active (legs aren't adjacent).
+  /// day's run.
   int _runTravelMin(List<ItineraryItem> run) {
-    if (_itemFilter != 'all') return 0;
     var total = 0;
     for (var k = 0; k < run.length - 1; k++) {
       final a = run[k];
@@ -3274,10 +3235,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Travel time from the hub city to a day trip, e.g. "45 min from Paris",
   /// taken from the already-computed leg into the day trip's first stop. Null
   /// unless the preceding item is actually in the hub city (so a town-to-town
-  /// or cross-city leg is never mislabeled), or while a category filter is
-  /// active (filtered tiles aren't globally adjacent).
+  /// or cross-city leg is never mislabeled).
   String? _dayTripTravelLabel(ItineraryItem first) {
-    if (_itemFilter != 'all') return null;
     final hub = first.dayTripFrom?.trim();
     if (hub == null || hub.isEmpty) return null;
     ItineraryItem? prev;
@@ -4577,9 +4536,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   focusKey == null ? derivation.mapDestinations : null,
               selectedPosition: _selectedPosition.value,
               // Unfiltered by leg: TripMap's position+1 adjacency guard
-              // already keeps labels within a city, and the category filter
-              // empties this map.
-              segmentLabels: derivation.segmentLabels,
+              // already keeps labels within a city.
+              segmentLabels: _mapSegmentLabels(derivation),
               home: home,
               fitSignature: focusKey,
               // Keep fitted markers clear of the chip row overlaid below.
@@ -4713,7 +4671,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // Home-leg endpoints live in [TripDerivation.homeLegEndpoints] — the
   // trip's first/last location groups, the same derivation the
   // outbound/return booking todos trust — never the first/last mapped pin,
-  // which shifts under leg/category filters.
+  // which shifts under leg focus.
 
   /// Pushes the full-screen interactive map. Root navigator so the map
   /// covers the bottom navigation bar; the closures read the live [_trip] so
@@ -4750,7 +4708,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 ? const <Accommodation>[]
                 : _derive(t).legFilteredStays(k);
           },
-          segmentLabels: derivation.segmentLabels,
+          segmentLabels: _mapSegmentLabels(derivation),
           legChips: derivation.legChips,
           mappedLegKeys: derivation.mappedLegKeys,
           initialLegKey: _clampedLegKey(derivation),
@@ -4969,7 +4927,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       // "Other" sub-group.
                       final legLabels = derivation.legLabels;
                       final grouped = derivation.groupedBookings;
-                      final filtered = derivation.filtered;
                       final groups = derivation.groups;
                       // Shared per-build chip width — see _dateChipWidth's
                       // doc for why this must stay a build-local.
@@ -4988,8 +4945,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       final tripStart = DateTime.tryParse(trip.startDate ?? '');
                       // Map leg chips (specs/map-city-focus) read straight
                       // off the derivation inside _mapCard: legChips and
-                      // mappedLegKeys are trip-wide — the category filter
-                      // never flickers the strip — and a stale focused key
+                      // mappedLegKeys are trip-wide, and a stale focused key
                       // (a refresh can drop a leg) is clamped read-side by
                       // every consumer via _clampedLegKey; build never
                       // writes it.
@@ -5076,10 +5032,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                 ),
                               ),
                           // Itinerary/Bookings tab row; pins beneath the map
-                          // so the view tabs, Today jump, category filter,
-                          // and the view's add button stay reachable while
-                          // scrolling.
-                          // The filter is a popup menu, not a chip row — one
+                          // so the view tabs, Today jump, and the view's add
+                          // button stay reachable while scrolling. One
                           // fixed-height row keeps the pinned chrome (and
                           // the Today scroll math) constant.
                           SliverPersistentHeader(
@@ -5128,55 +5082,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                         ),
                                         const SizedBox(width: 4),
                                       ],
-                                      // Category filter (pure view work, so
-                                      // never offline-gated). Tinted when a
-                                      // places filter is narrowing the
-                                      // list — the bookings states signal
-                                      // through the view tabs instead.
-                                      if ((trip.items ?? const [])
-                                          .isNotEmpty)
-                                        SizedBox(
-                                          width: 36,
-                                          height: 36,
-                                          child: PopupMenuButton<String>(
-                                            tooltip: l10n.tripFilterTooltip,
-                                            padding: EdgeInsets.zero,
-                                            icon: Icon(Icons.filter_list,
-                                                size: 20,
-                                                color: const {
-                                                  'attraction',
-                                                  'restaurant',
-                                                  'local'
-                                                }.contains(_itemFilter)
-                                                    ? theme
-                                                        .colorScheme.primary
-                                                    : theme.colorScheme
-                                                        .onSurfaceVariant),
-                                            onSelected: (f) => setState(() {
-                                              _itemFilter = f;
-                                              _bookingsLensDestination = null;
-                                            }),
-                                            itemBuilder: (_) => [
-                                              for (final f in _menuFilters)
-                                                CheckedPopupMenuItem(
-                                                  value: f,
-                                                  checked: _itemFilter == f,
-                                                  child: Text(
-                                                      _filterLabel(l10n, f)),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
                                       // One add CTA per view: Add place on
                                       // the itinerary, the Add-booking menu
                                       // in the Bookings view (a swap, not an
                                       // addition), NOTHING in the Budget
                                       // view — its body owns the add-expense
                                       // row. Icon-only on phones: the
-                                      // tab trio + Today + filter + a
-                                      // labeled button can't all fit a 390px
-                                      // row with Spanish labels (precedent:
-                                      // the header Refine button becomes the
+                                      // tab trio + Today + a labeled button
+                                      // can't all fit a 390px row with
+                                      // Spanish labels (precedent: the
+                                      // header Refine button becomes the
                                       // app-bar sparkle on narrow).
                                       if (!_readOnly && _inBookingsView)
                                         _addBookingMenu()
@@ -5247,10 +5162,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                             )
                           else if (_itemFilter == 'unbooked')
                             // Bookings view, left-to-book scope: a flat list
-                            // in place of the city groups (whose == 'all'
-                            // guards would hide the booking rows). The scope
-                            // chip renders above BOTH arms — selected atop
-                            // the celebration it says why the list is empty
+                            // in place of the city groups. The scope chip
+                            // renders above BOTH arms — selected atop the
+                            // celebration it says why the list is empty
                             // and is the one-tap way back to every booking.
                             SliverPadding(
                               padding:
@@ -5276,9 +5190,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                             // All-bookings lens: the whole trip's bookings
                             // (booked and unbooked) in place of the city
                             // groups, filterable by destination. One surface
-                            // at a time — the inline rows render only under
-                            // == 'all', so booked-state never shows on two
-                            // surfaces at once (the PR #274 bar).
+                            // at a time — the inline rows render only in the
+                            // itinerary view, so booked-state never shows on
+                            // two surfaces at once (the PR #274 bar).
                             SliverPadding(
                               padding:
                                   EdgeInsets.fromLTRB(gutter, 4, gutter, 0),
@@ -5299,17 +5213,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                 final body => _boxSliver(body),
                               },
                             )
-                          else if (filtered.isEmpty)
-                            SliverPadding(
-                              padding:
-                                  EdgeInsets.symmetric(horizontal: gutter),
-                              sliver: SliverToBoxAdapter(
-                                child: _FilterMissNotice(theme: theme),
-                              ),
-                            )
-                          else
+                          // Explicitly == 'all', not a bare else: a future
+                          // fifth view state renders nothing here (loudly
+                          // missing) instead of the itinerary body — whose
+                          // embedded booking rows under another view would
+                          // re-break the one-surface bar (PR #274).
+                          else if (_itemFilter == 'all')
                             // Each city is a MultiSliver whose header pins
-                            // beneath the filter bar while the city's items
+                            // beneath the tab row while the city's items
                             // scroll past, then is pushed off by the next city;
                             // day headers nest the same way within each city.
                             SliverPadding(
@@ -5370,12 +5281,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                                     trip, group, theme,
                                                     dateChipWidth,
                                                     cityCollapsed: false))),
-                                        // Embedded bookings render only in the
-                                        // unfiltered view: a category filter can
-                                        // merge adjacent same-label runs, which
-                                        // would break the slot<->group mapping.
-                                        if (_itemFilter == 'all' &&
-                                            gi < grouped.slots.length)
+                                        // The city's embedded booking rows —
+                                        // slots are index-aligned with groups.
+                                        if (gi < grouped.slots.length)
                                           _boxSliver(_bookingRowWidgets(
                                               grouped.slots[gi],
                                               departureOnly: false)),
@@ -5391,19 +5299,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                         // Curated local recommendations for this
                                         // city — the "legit info you can't
                                         // google" surface. Leads the events
-                                        // section; only in the unfiltered view.
-                                        if (_itemFilter == 'all')
-                                          _localIntelSliver(group.label, theme),
-                                        // Local events for this city's dates —
-                                        // only in the unfiltered view, where
-                                        // group labels map 1:1 to date ranges.
-                                        if (_itemFilter == 'all')
-                                          _eventsSliver(
-                                              group.label,
-                                              groupRanges[group.label],
-                                              theme),
-                                        if (_itemFilter == 'all' &&
-                                            gi == groups.length - 1 &&
+                                        // section.
+                                        _localIntelSliver(group.label, theme),
+                                        // Local events for this city's dates.
+                                        _eventsSliver(
+                                            group.label,
+                                            groupRanges[group.label],
+                                            theme),
+                                        if (gi == groups.length - 1 &&
                                             gi < grouped.slots.length)
                                           _boxSliver(_bookingRowWidgets(
                                               grouped.slots[gi],
@@ -5413,9 +5316,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                               ]),
                             ),
                           // Residual bookings, at the tail of the
-                          // itinerary. Only in the unfiltered view, like
-                          // the embedded booking rows above — a category
-                          // filter is a places lens, not a bookings one.
+                          // itinerary — itinerary view only (the Bookings
+                          // and Budget views swap in their own bodies
+                          // above).
                           if (_itemFilter == 'all')
                             if (_otherBookingsArea(theme, (
                               residual: grouped.residual,
@@ -5879,37 +5782,6 @@ class _AddBookingTodoDialogState extends ConsumerState<_AddBookingTodoDialog> {
               : Text(l10n.commonSave),
         ),
       ],
-    );
-  }
-}
-
-/// Compact, centered notice shown when a category filter hides every item — a
-/// lighter touch than the full empty state since the fix (clearing the filter)
-/// is right above it.
-class _FilterMissNotice extends StatelessWidget {
-  final ThemeData theme;
-  const _FilterMissNotice({required this.theme});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-      child: Column(
-        children: [
-          Icon(
-            Icons.filter_alt_off_outlined,
-            size: 32,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            context.l10n.tripFilterNoMatch,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

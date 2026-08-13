@@ -28,7 +28,6 @@ import 'support/l10n_test_app.dart';
 //   * a destination (region) pin tap on the All overview scrolls the list
 //     to the region's group — no focus write, the camera never moves;
 //   * bookings lenses (no city headers) get map-only chips, lens kept;
-//     places lenses resolve legs onto merged groups (groupKeyForLeg);
 //   * revisited cities focus per RUN key; single-leg trips have no focus.
 
 class _FakeTripsApiService extends TripsApiService {
@@ -453,73 +452,7 @@ void main() {
     expect(_map(tester).items.map((i) => i.name), ['Louvre']);
   });
 
-  testWidgets(
-      'places lens: a merged group opens for either of its legs '
-      '(groupKeyForLeg)', (tester) async {
-    _useSurface(tester, const Size(1200, 2200));
-    await _pump(
-      tester,
-      Trip(
-        id: 't1',
-        title: 'Paris twice',
-        createdAt: '2026-06-01',
-        updatedAt: '2026-06-01',
-        startDate: '2026-09-01',
-        endDate: '2026-09-03',
-        items: [
-          _item(0, 'Louvre', 'Paris', 48.8606, 2.3376, 1),
-          ItineraryItem(
-            id: 'i1',
-            position: 1,
-            name: 'Osteria',
-            latitude: 41.8902,
-            longitude: 12.4922,
-            category: 'restaurant',
-            day: 2,
-            city: 'Rome',
-          ),
-          _item(2, 'Marmottan', 'Paris', 48.8592, 2.2670, 3),
-        ],
-      ),
-    );
-
-    // The Attractions lens drops Rome's only item: the two Paris runs merge
-    // into ONE group keyed 'Paris', while the chips stay trip-wide (All +
-    // Paris + Rome + Paris).
-    await tester.tap(find.byIcon(Icons.filter_list));
-    await tester.pumpAndSettle();
-    await tester.tap(find.ancestor(
-        of: find.text('Attractions'),
-        matching: find.byWidgetPredicate((w) => w is CheckedPopupMenuItem)));
-    await tester.pumpAndSettle();
-
-    // Collapse the merged group first, so the chip tap's un-collapse must
-    // resolve the leg onto it (groupKeyForLeg) rather than find it open.
-    await collapseCity(tester, 'Paris');
-    expect(find.text('Louvre'), findsNothing);
-
-    // Selecting the SECOND Paris run focuses its leg — and re-opens the one
-    // merged group both runs resolve to.
-    final parisChips = find.descendant(
-        of: find.byType(MapLegChips), matching: find.text('Paris'));
-    await tester.tap(parisChips.at(1));
-    await tester.pumpAndSettle();
-    expect(_map(tester).fitSignature, 'Paris#2');
-    expect(_map(tester).items.map((i) => i.name), ['Marmottan']);
-    expect(find.text('Louvre'), findsOneWidget,
-        reason: 'the merged Paris group holds both runs\' attractions');
-    expect(find.text('Marmottan'), findsWidgets);
-
-    // Selecting the first run refocuses the map; the same merged group
-    // simply stays open.
-    await tester.tap(parisChips.at(0));
-    await tester.pumpAndSettle();
-    expect(_map(tester).fitSignature, 'Paris');
-    expect(_map(tester).items.map((i) => i.name), ['Louvre']);
-    expect(find.text('Louvre'), findsOneWidget);
-  });
-
-  testWidgets('adding a place focuses the added city on the map',
+testWidgets('adding a place focuses the added city on the map',
       (tester) async {
     _useSurface(tester, const Size(1200, 2200));
     final v1 = _threeCityTrip();
