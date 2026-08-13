@@ -153,14 +153,21 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Whether the Budget view (third header tab) is active.
   bool get _inBudgetView => _itemFilter == 'budget';
+
+  /// Travel-time labels for whichever map is being built: empty in the
+  /// Bookings/Budget views, whose map stays label-free (the pre-existing
+  /// behavior from when the derivation view-gated these). The ONE gate for
+  /// both map call sites — inline card and full-screen.
+  Map<int, String> _mapSegmentLabels(TripDerivation d) =>
+      (_inBookingsView || _inBudgetView) ? const {} : d.segmentLabels;
   // Focused leg on the map; null = All. MAP-ONLY state (chips, camera fit,
   // per-leg item/stay filtering) — group expansion is _collapsedGroups,
   // fully decoupled. Keyed by the FULL-itinerary run key (leg.key,
-  // `#2`-suffixed on revisits) — never the lens-dependent group key. A
-  // ValueNotifier consumed solely by the map card's ListenableBuilder, so a
-  // focus write never rebuilds the screen and a same-value write is dropped.
-  // May hold a stale key after an edit removes the leg — readers clamp via
-  // _clampedLegKey (read-side, so build never mutates state).
+  // `#2`-suffixed on revisits). A ValueNotifier consumed solely by the map
+  // card's ListenableBuilder, so a focus write never rebuilds the screen
+  // and a same-value write is dropped. May hold a stale key after an edit
+  // removes the leg — readers clamp via _clampedLegKey (read-side, so
+  // build never mutates state).
   final ValueNotifier<String?> _focusedLegKey = ValueNotifier<String?>(null);
   // Whether the map renders as the wide layout's pinned header (true) or the
   // phone layout's scroll-away tap-to-expand card (false). Assigned each
@@ -4529,13 +4536,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   focusKey == null ? derivation.mapDestinations : null,
               selectedPosition: _selectedPosition.value,
               // Unfiltered by leg: TripMap's position+1 adjacency guard
-              // already keeps labels within a city. Emptied in the
-              // Bookings/Budget views, whose map stays label-free (the
-              // pre-existing behavior from when the derivation view-gated
-              // these).
-              segmentLabels: (_inBookingsView || _inBudgetView)
-                  ? const <int, String>{}
-                  : derivation.segmentLabels,
+              // already keeps labels within a city.
+              segmentLabels: _mapSegmentLabels(derivation),
               home: home,
               fitSignature: focusKey,
               // Keep fitted markers clear of the chip row overlaid below.
@@ -4706,10 +4708,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 ? const <Accommodation>[]
                 : _derive(t).legFilteredStays(k);
           },
-          // Same Bookings/Budget label-free gate as the inline card's.
-          segmentLabels: (_inBookingsView || _inBudgetView)
-              ? const <int, String>{}
-              : derivation.segmentLabels,
+          segmentLabels: _mapSegmentLabels(derivation),
           legChips: derivation.legChips,
           mappedLegKeys: derivation.mappedLegKeys,
           initialLegKey: _clampedLegKey(derivation),
@@ -5214,7 +5213,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                 final body => _boxSliver(body),
                               },
                             )
-                          else
+                          // Explicitly == 'all', not a bare else: a future
+                          // fifth view state renders nothing here (loudly
+                          // missing) instead of the itinerary body — whose
+                          // embedded booking rows under another view would
+                          // re-break the one-surface bar (PR #274).
+                          else if (_itemFilter == 'all')
                             // Each city is a MultiSliver whose header pins
                             // beneath the tab row while the city's items
                             // scroll past, then is pushed off by the next city;
