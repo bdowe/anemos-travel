@@ -7,6 +7,7 @@ import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trip_review_api_service.dart';
 import 'package:travel_route_planner/providers/trip_review_provider.dart';
 import 'package:travel_route_planner/widgets/trip_review_section.dart';
+import 'package:travel_route_planner/widgets/collapsible_section.dart';
 import 'package:travel_route_planner/widgets/empty_state.dart';
 
 import 'support/l10n_test_app.dart';
@@ -76,7 +77,7 @@ Future<_FakeTripReviewApiService> _pump(
 
 void main() {
   testWidgets(
-      'renders findings ordered worst-first with severity chips + count pill',
+      'partitions findings: attention visible worst-first, suggestions collapsed',
       (tester) async {
     await _pump(tester, [
       _f('info', 'packing', 'Consider a rain jacket'),
@@ -85,19 +86,51 @@ void main() {
     ]);
 
     expect(find.text('Trip health'), findsOneWidget);
-    // Count pill.
-    expect(find.text('3 to review'), findsOneWidget);
-    // Severity chips.
+    // The count pill frames the attention tier, not the total.
+    expect(find.text('Mostly ready — 2 to fix'), findsOneWidget);
+    // Attention severity chips render; the info row starts collapsed.
     expect(find.text('Critical'), findsOneWidget);
     expect(find.text('Warning'), findsOneWidget);
-    expect(find.text('Info'), findsOneWidget);
-    // Messages present.
-    expect(find.text('Trip has no dates set'), findsOneWidget);
+    expect(find.text('Info'), findsNothing);
+    expect(find.text('Consider a rain jacket'), findsNothing);
 
-    // Worst-first ordering: critical message sits above the info message.
+    // Worst-first within attention; the Suggestions header sits below.
+    final header = tester.getTopLeft(find.text('Needs attention')).dy;
     final critical = tester.getTopLeft(find.text('Trip has no dates set')).dy;
-    final info = tester.getTopLeft(find.text('Consider a rain jacket')).dy;
-    expect(critical, lessThan(info));
+    final warn = tester.getTopLeft(find.text('No lodging on day 2')).dy;
+    final suggestions = tester.getTopLeft(find.text('Suggestions')).dy;
+    expect(header, lessThan(critical));
+    expect(critical, lessThan(warn));
+    expect(warn, lessThan(suggestions));
+
+    // One tap opens the suggestions tier.
+    await tester.tap(find.text('Suggestions'));
+    await tester.pumpAndSettle();
+    expect(find.text('Info'), findsOneWidget);
+    expect(find.text('Consider a rain jacket'), findsOneWidget);
+  });
+
+  testWidgets('info-only: calm framing, count pill, and re-collapse',
+      (tester) async {
+    await _pump(tester, [
+      _f('info', 'weather', 'Pack an umbrella'),
+      _f('info', 'bookings', 'Stay not booked yet'),
+    ]);
+
+    expect(find.text('In good shape — 2 suggestions'), findsOneWidget);
+    expect(find.text('Needs attention'), findsNothing);
+    expect(
+        find.descendant(
+            of: find.byType(CollapsibleSection), matching: find.text('2')),
+        findsOneWidget);
+
+    await tester.tap(find.text('Suggestions'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pack an umbrella'), findsOneWidget);
+
+    await tester.tap(find.text('Suggestions'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pack an umbrella'), findsNothing);
   });
 
   testWidgets('empty findings shows the positive "Looks good" empty state',
@@ -106,7 +139,8 @@ void main() {
 
     expect(find.byType(EmptyState), findsOneWidget);
     expect(find.text('Looks good'), findsOneWidget);
-    expect(find.text('3 to review'), findsNothing);
+    expect(find.textContaining('to fix'), findsNothing);
+    expect(find.text('Suggestions'), findsNothing);
   });
 
   testWidgets('tapping a finding with a day invokes the scroll callback',
@@ -147,6 +181,10 @@ void main() {
       [_f('info', 'budget', 'Budget looks tight')],
       onScrollToDay: (_) => scrollCount++,
     );
+
+    // Info rows live behind the collapsed Suggestions tier.
+    await tester.tap(find.text('Suggestions'));
+    await tester.pumpAndSettle();
 
     // Not tappable (no day/item) — the message renders and nothing scrolls.
     await tester.tap(find.text('Budget looks tight'));
@@ -208,6 +246,10 @@ void main() {
       ],
       onApplyFix: (_) async {},
     );
+
+    // The info-severity fixes sit behind the collapsed Suggestions tier.
+    await tester.tap(find.text('Suggestions'));
+    await tester.pumpAndSettle();
 
     for (final label in const [
       'Add a stay',
