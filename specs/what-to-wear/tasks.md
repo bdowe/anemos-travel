@@ -35,3 +35,30 @@
 - [ ] Manual end-to-end via this lane's gateway (`make docker-dev` →
       http://localhost:3001): every acceptance criterion in `spec.md`
 - [ ] `ship pr` (lane stops at PR-open; integrator merges)
+
+## Amendment 2026-08-13 — app-bar icon + sheet
+
+- [x] `lib/widgets/wear_pack_sheet.dart`: `showWearPackSheet` shell (560px
+      cap, 0.8 height, keyboard-inset padding, no Scaffold) +
+      `WearPackSheetBody` (header title · summary · pill; rows; live
+      checklist)
+- [x] `checklist_section.dart`: `isOffline` bool → live callback
+- [x] `trip_detail_screen.dart`: `_wearAppBarAction` next to health; cluster
+      scaffolding + row + visibility gate deleted; 96px FAB spacer keeps the
+      `!_inBudgetView` gate (Budget pads its own)
+- [x] Tests: wear-section file reworked to tooltip finders + sheet scoping;
+      new Escape / breakpoints / live-pill / Budget-view cases; fix-actions
+      layout contract; checklist callback call site
+- [x] Spec + friction log amended
+
+## Verification (2026-08-13)
+
+- [x] `make flutter-analyze` clean (3 pre-existing route_response infos only)
+- [x] Affected test files green (64 tests)
+- [x] `make flutter-test` full suite (933 passing; sticky-headers offsets
+      retuned for the 8px tail-extent change)
+- [x] Manual via this lane's gateway (http://localhost:3011): icon next to
+      health, sheet content, add-item with keyboard, live pill, Escape,
+      Budget view, viewer gating
+- [ ] `ship pr` (lane stops at PR-open; integrator merges — NOTE: PR #356
+      also touches the trip-detail app bar; hub-file resolve expected)

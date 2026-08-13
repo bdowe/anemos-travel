@@ -784,7 +784,9 @@ void main() {
     expect(tester.widget<Text>(find.text('Budget')).style?.fontWeight,
         FontWeight.w700);
     expect(find.text('Hotel'), findsOneWidget);
-    // The city groups and the packing cluster row are swapped out.
+    // The city groups are swapped out. (Wear & pack left the body for the
+    // app-bar icon — its title text appears in NEITHER view now; the
+    // positive Budget-view icon pin lives in trip_detail_wear_section_test.)
     expect(find.text('Louvre'), findsNothing);
     expect(find.text('What to wear & pack'), findsNothing);
   });

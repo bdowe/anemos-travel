@@ -60,8 +60,6 @@ import '../widgets/booking_sheets.dart';
 import '../widgets/booking_todo_card.dart';
 import '../widgets/budget_section.dart';
 import '../widgets/budget_target_dialog.dart';
-import '../widgets/checklist_section.dart';
-import '../widgets/collapsible_section.dart';
 import '../widgets/trip_health_sheet.dart';
 import '../widgets/trip_review_section.dart';
 import '../widgets/empty_state.dart';
@@ -75,7 +73,7 @@ import '../widgets/source_links_card.dart';
 import '../widgets/status_pill.dart';
 import '../widgets/trip_map.dart';
 import '../widgets/trip_refine_panel.dart';
-import '../widgets/wear_recs.dart';
+import '../widgets/wear_pack_sheet.dart';
 import 'flight_search_screen.dart';
 import 'local_guide_detail_screen.dart';
 import 'trip_detail_derivation.dart';
@@ -239,11 +237,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   String? _unfocusedOpenLegKey;
   final Set<String> _collapsedDays = {};
   bool _citySeedConsumed = false;
-  // Trailing sections (Packing/Budget) render as collapsed one-line
-  // summaries; this holds the ones the user opened. Session-only, like the
-  // city/day sets, and held HERE (not in the section widgets) so expansion
-  // survives silent refreshes and the offline-banner reparent.
-  final Set<String> _expandedSections = {};
   String?
       _homeAirport; // traveler's saved home airport (IATA), for outbound/return flights
   // todo_key -> flight leg, so a transport booking item can open Find Flights
@@ -4217,39 +4210,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// reorders to "mié, 15 jul" on its own.
   String _fmtDayHeader(DateTime d) => mmmed().format(d);
 
-  // ── Trailing collapsed sections ─────────────────────────────────────────
-  // Packing ends the page as a one-line summary row, closed by default.
-  // Summary data comes from watches HERE in the parent — the section widget
-  // is only mounted while expanded, so a child-side watch could never feed
-  // a collapsed row's counts. (Trip health left this cluster for the
-  // app-bar icon + sheet — see _healthAppBarAction; Budget left it for the
-  // header tab — see _budgetTabVisible.)
-
-  bool _sectionExpanded(String id) => _expandedSections.contains(id);
-
-  void _toggleSection(String id) => setState(() {
-        if (!_expandedSections.add(id)) _expandedSections.remove(id);
-      });
-
-  /// Lays out the trailing section rows in a settings-list rhythm: hairline
-  /// dividers between the rows that are present. Hidden rows are null, so a
-  /// divider never renders against a missing neighbor.
-  Widget _sectionCluster(List<Widget?> rows) {
-    final present = rows.whereType<Widget>().toList();
-    if (present.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: AppSpacing.md),
-        const Divider(height: 1),
-        for (final (i, row) in present.indexed) ...[
-          if (i > 0) const Divider(height: 1),
-          row,
-        ],
-      ],
-    );
-  }
-
   /// The itinerary's trailing "Other bookings" area — the home for
   /// everything the retired Bookings section held that has no city slot:
   /// residual todos (custom bookings, stale autos) and confirmed records
@@ -4289,7 +4249,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  /// Per-leg what-to-wear derivations for the merged section
+  /// Per-leg what-to-wear derivations for the wear/pack sheet
   /// (specs/what-to-wear). Weather queries stay on rawLegRanges — the
   /// doc-pinned range source shared with the day chips (leg_ranges.dart) —
   /// while the DISPLAYED dates come from the index-aligned visibleLegRanges
@@ -4304,12 +4264,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// per-visit rows. Loading or failed reports derive null and drop out;
   /// offline this is simply empty. Consecutive same-guidance recs fold into
   /// one displayed row inside [WearRecsList] ([groupWearRegions]) — a
-  /// display-layer concern only, so the watches and [_wearSummary] stay
-  /// per-leg here.
+  /// display-layer concern only, so the watches and the sheet header's
+  /// summary stay per-leg here.
   List<WearRegionRec> _legClothingRecs(Trip trip, WidgetRef ref) {
-    // NOTE: [ref] is the packing row's Consumer ref, NOT the State's — the
-    // weather watches here must subscribe that row, never the whole screen
-    // (the screen-scope visibility gate is [_legClothingRecsVisible]).
+    // NOTE: [ref] is the app-bar wear action's Consumer ref, NOT the
+    // State's — the weather watches here must subscribe that icon, never
+    // the whole screen (see _wearAppBarAction).
     final derivation = _derive(trip);
     final raw = derivation.rawRanges;
     final visible = derivation.visibleRanges; // 1:1 by index with raw
@@ -4337,104 +4297,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       ));
     }
     return recs;
-  }
-
-  /// Collapsed one-liner for the merged row: the cross-region temperature
-  /// envelope plus the rain signal. Kind-neutral by design — the "typical"
-  /// qualifier lives in the expanded block's single footnote.
-  String _wearSummary(List<WearRegionRec> recs) {
-    final s = clothingSummary([for (final r in recs) r.rec]);
-    // Spaced dash like the date ranges ("Sep 15 – Sep 20"), so a negative low
-    // never collides with it ("-6° – 2°").
-    final range = '${s.loC}° – ${s.hiC}°';
-    return s.rainLikely ? '$range · ${context.l10n.wearSummaryRain}' : range;
-  }
-
-  Widget? _packingSectionRow(Trip trip, ThemeData theme) {
-    // Merged "What to wear & pack" (specs/what-to-wear): weather-derived
-    // recommendations on top, the editable checklist below. Recommendations
-    // alone can show the row (read-only viewers get guidance even with an
-    // empty checklist); without weather the gate reduces exactly to the old
-    // checklist-only rule, which mirrors ChecklistSection's own gates
-    // (nothing until loaded; viewers with an empty list get no checklist).
-    // The parent (whole-screen) watch is VISIBILITY only — narrow bool
-    // selects, so the screen rebuilds when the row appears or disappears
-    // (preserving _sectionCluster's null-counting divider contract) while
-    // content updates (checks ticked, weather details) rebuild only the
-    // Consumer below.
-    final showChecklistGate = ref.watch(checklistProvider(trip.id).select((a) {
-      final items = a.valueOrNull;
-      return items != null && !(items.isEmpty && _readOnly);
-    }));
-    if (!showChecklistGate && !_legClothingRecsVisible(trip)) return null;
-    return Consumer(
-      builder: (context, ref, _) {
-        final items = ref.watch(checklistProvider(trip.id)).valueOrNull;
-        final recs = _legClothingRecs(trip, ref);
-        final showChecklist = items != null && !(items.isEmpty && _readOnly);
-        // The parent gate and this content can disagree for one frame while
-        // a provider flips; render nothing rather than dereference a state
-        // the gate no longer justifies.
-        if (recs.isEmpty && !showChecklist) return const SizedBox.shrink();
-        final checked = items?.where((i) => i.checked).length ?? 0;
-        // With recs in the summary slot, the checked-count stays glanceable
-        // via the pill (same chrome as ChecklistSection's standalone header).
-        final summary = recs.isNotEmpty
-            ? _wearSummary(recs)
-            : context.l10n.checklistSummary(checked, items!.length);
-        return CollapsibleSection(
-          title: context.l10n.wearSectionTitle,
-          icon: Icons.luggage_outlined,
-          summary: summary,
-          pill: (recs.isEmpty || items == null || items.isEmpty)
-              ? null
-              : StatusPill.custom(
-                  label: '$checked/${items.length}',
-                  background: theme.colorScheme.surfaceContainerHighest,
-                  foreground: theme.colorScheme.onSurfaceVariant,
-                ),
-          expanded: _sectionExpanded('packing'),
-          onToggle: () => _toggleSection('packing'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (recs.isNotEmpty) WearRecsList(regions: recs),
-              if (recs.isNotEmpty && showChecklist) const Divider(height: 24),
-              ChecklistSection(
-                tripId: trip.id,
-                canEdit: !_readOnly,
-                isOffline: _isOffline,
-                showHeader: false,
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  /// Visibility half of [_legClothingRecs]: does ANY leg currently have a
-  /// clothing recommendation? Watched at screen scope with per-leg bool
-  /// selects, so a weather report resolving flips this at most once — the
-  /// full recommendation content is watched only inside the packing row's
-  /// Consumer. The early return is deliberate: once one leg says visible,
-  /// later legs don't need subscriptions to answer the question.
-  bool _legClothingRecsVisible(Trip trip) {
-    for (final r in _derive(trip).rawRanges) {
-      if (r.label == _kOtherPlaces || r.start == null || r.end == null) {
-        continue;
-      }
-      final has = ref.watch(weatherByCityProvider(WeatherQuery(
-        city: r.label,
-        startDate: _fmt(r.start!),
-        endDate: _fmt(r.end!),
-      )).select((a) {
-        final report = a.valueOrNull;
-        return report != null && clothingRec(report) != null;
-      }));
-      if (has) return true;
-    }
-    return false;
   }
 
   /// Whether the Budget header tab renders. Editors/owners: always — tab
@@ -4502,6 +4364,47 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   label: Text('${findings.length}'),
                   child: icon,
                 ),
+        );
+      },
+    );
+  }
+
+  /// The app-bar "What to wear & pack" entry: the luggage icon, opening the
+  /// wear/pack sheet. Replaced the trailing-cluster row (friction-log
+  /// 2026-08-13) — the last of the trailing sections, so the cluster
+  /// scaffolding left with it. No count badge: health's severity count sits
+  /// next door and two adjacent numbers would compete; the checked/total
+  /// pill lives in the sheet header instead.
+  ///
+  /// One Consumer scopes every watch to this icon, collapsing the old
+  /// two-tier gate split (screen-scope bool selects + row-scope content
+  /// watches): full watches here repaint the icon alone — the cost class
+  /// the old row's Consumer already paid. Hidden while neither half has
+  /// data (checklist unresolved or viewer-empty, and no leg with weather),
+  /// matching the old row's gate. Not _inBudgetView-gated: that gate
+  /// belonged to the scroll body, and health set the precedent that
+  /// app-bar icons stay put across views.
+  Widget _wearAppBarAction(Trip trip) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final items = ref.watch(checklistProvider(trip.id)).valueOrNull;
+        final showChecklist = items != null && !(items.isEmpty && _readOnly);
+        final recs = _legClothingRecs(trip, ref);
+        if (recs.isEmpty && !showChecklist) return const SizedBox.shrink();
+        return IconButton(
+          tooltip: context.l10n.wearSectionTitle,
+          icon: const Icon(Icons.luggage_outlined),
+          onPressed: () => showWearPackSheet(
+            context,
+            tripId: trip.id,
+            // Snapshot: regions freeze at open (reopen refreshes); the
+            // checklist half stays live via its own provider watch.
+            regions: recs,
+            canEdit: !_readOnly,
+            // Live read, not a captured bool: the sheet route never
+            // rebuilds on this screen's connectivity setState.
+            isOffline: () => _isOffline,
+          ),
         );
       },
     );
@@ -4917,8 +4820,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           // Contextual icons lead; share/delete/leave keep the outer-edge
           // spots for every role. Health goes first: its severity count
           // badge is glanceable state, worth the leading slot on every
-          // breakpoint (it replaced the trailing-cluster row).
+          // breakpoint. Wear & pack rides beside it — both replaced
+          // trailing-cluster rows, and neither is breakpoint-gated.
           if (trip != null) _healthAppBarAction(trip, theme),
+          if (trip != null) _wearAppBarAction(trip),
           // Narrow: the header card drops its Refine button (one clean chip
           // row), so the trip-level refine entry moves up here.
           // Same gates as the button it replaces: editors only
@@ -5532,24 +5437,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                     gutter, AppSpacing.sm, gutter, 0),
                                 sliver: SliverToBoxAdapter(child: other),
                               ),
-                          // Trailing section (Packing), collapsed to a
-                          // one-line summary row (settings-list rhythm);
-                          // the 96px bottom padding keeps the chat FAB off
-                          // the last row. The row hides itself exactly when
-                          // its expanded section would (see the builder).
-                          // Suppressed in the Budget view — packing under
-                          // the budget body would be noise. (Budget's own
-                          // row left this cluster for the header tab.)
+                          // Keeps the chat FAB off the last row. Stays
+                          // gated: the Budget view's sliver above pads its
+                          // own 96, so an unconditional spacer would
+                          // double-pad it. The trailing section cluster
+                          // that lived here is gone — Wear & pack was its
+                          // last row and now opens from the app bar
+                          // (_wearAppBarAction).
                           if (!_inBudgetView)
-                            SliverPadding(
-                              padding: EdgeInsets.fromLTRB(
-                                  gutter, AppSpacing.sm, gutter, 96),
-                              sliver: SliverToBoxAdapter(
-                                child: _sectionCluster([
-                                  _packingSectionRow(trip, theme),
-                                ]),
-                              ),
-                            ),
+                            const SliverToBoxAdapter(
+                                child: SizedBox(height: 96)),
                         ],
                       );
 
