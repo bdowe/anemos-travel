@@ -2261,7 +2261,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       {required bool cityCollapsed}) {
     final l10n = context.l10n;
     final chipStyle = _chipTextStyle(theme);
-    return HoverReveal(
+    final header = HoverReveal(
       builder: (context, revealed) => Material(
         color: theme.scaffoldBackgroundColor,
         child: InkWell(
@@ -2418,6 +2418,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         ),
       ),
     );
+    // Repaint-isolate the header: the open city's header rides pinned over
+    // the scrolling list (and collapsed ones scroll with it), and the hover
+    // setState + InkWell highlight must repaint this header's own layer, not
+    // re-record the viewport picture. Covers pinned and collapsed branches.
+    return RepaintBoundary(child: header);
   }
 
   /// Curated, locally-sourced recommendations for a city group — vetted picks
@@ -3339,7 +3344,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         ? _fmtDayHeader(tripStart.add(Duration(days: day - 1)))
         : l10n.tripDayN(day);
     final muted = theme.colorScheme.onSurfaceVariant;
-    return HoverReveal(
+    final header = HoverReveal(
       builder: (context, revealed) => Material(
         key: headerKey,
         color: isToday
@@ -3417,6 +3422,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         ),
       ),
     );
+    // Repaint-isolate like _cityHeader: open days pin their header over the
+    // scrolling list; hover/InkWell repaints must stay in this layer.
+    return RepaintBoundary(child: header);
   }
 
   /// Per-day weather chip (specs/weather-in-itinerary): hi/lo temp + a
@@ -4659,7 +4667,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // leg-filtered lists come from the derivation's lazy per-leg caches, so
     // a selection-only rebuild passes TripMap the identical lists and its
     // marker cache skips re-clustering.
-    return ListenableBuilder(
+    final card = ListenableBuilder(
       listenable: Listenable.merge([_focusedLegKey, _selectedPosition]),
       builder: (context, _) {
         final focusKey = _clampedLegKey(derivation);
@@ -4775,6 +4783,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         );
       },
     );
+    // Repaint-isolate the card: on the wide layout it sits pinned over the
+    // scrolling itinerary, and without a boundary its picture (card chrome +
+    // chip strip — flutter_map keeps its own internal boundary) is
+    // re-recorded every scroll frame. The boundary also keeps tap-time card
+    // rebuilds from dirtying the page layer. Inside the method so both call
+    // sites (pinned wide band, scroll-away phone card) are covered.
+    return RepaintBoundary(child: card);
   }
 
   /// Read-side clamp for [_focusedLegKey]: a refresh can remove the focused
@@ -6051,10 +6066,17 @@ class _PinnedHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(
           BuildContext context, double shrinkOffset, bool overlapsContent) =>
-      Container(
-        color: backgroundColor,
-        padding: padding,
-        child: child,
+      // Repaint-isolate the pinned chrome (map band, tab row): while pinned
+      // it would otherwise re-record into the viewport picture every scroll
+      // frame. Child identity is what keeps the layer valid — this method
+      // runs per shrinkOffset change, so never build the child inside it;
+      // always construct it once and pass it in by instance.
+      RepaintBoundary(
+        child: Container(
+          color: backgroundColor,
+          padding: padding,
+          child: child,
+        ),
       );
 
   @override

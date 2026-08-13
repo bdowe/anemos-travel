@@ -5,10 +5,15 @@ import 'package:flutter/rendering.dart';
 /// pointer hovers the row, and ALWAYS true when no mouse is connected, so
 /// touch devices keep their controls permanently visible and lose nothing.
 ///
-/// Consumers must hide controls with `AnimatedOpacity` + `IgnorePointer`
-/// (never `Visibility`): opacity preserves layout, so trailing widths don't
-/// jump on hover, drag handles keep stable geometry for reorderable lists,
-/// and widget-test finders still see the icons.
+/// Consumers must hide controls with plain `Opacity` + `IgnorePointer`
+/// (never `Visibility`, never `AnimatedOpacity`): opacity preserves layout,
+/// so trailing widths don't jump on hover, drag handles keep stable geometry
+/// for reorderable lists, and widget-test finders still see the icons. The
+/// INSTANT 0/1 swap is a hard perf requirement, not polish: a mid-fade
+/// fractional opacity forces a saveLayer per row per frame on CanvasKit, and
+/// with a fade every row crossing under a parked cursor during a scroll
+/// starts one — the overlapping fades were the trip-detail progressive
+/// scroll-slowdown bug.
 class HoverReveal extends StatefulWidget {
   final Widget Function(BuildContext context, bool revealed) builder;
 
@@ -52,9 +57,10 @@ class _HoverRevealState extends State<HoverReveal> {
   }
 }
 
-/// The standard wrapper for a hover-revealed control: fades to invisible and
-/// ignores pointers while hidden, but keeps its layout slot (see
-/// [HoverReveal] for why layout must be preserved).
+/// The standard wrapper for a hover-revealed control: instantly invisible and
+/// pointer-ignoring while hidden, but keeps its layout slot (see
+/// [HoverReveal] for why layout must be preserved and why the swap must be
+/// an instant 0/1 — never an animated fade).
 class HoverRevealed extends StatelessWidget {
   final bool revealed;
   final Widget child;
@@ -65,9 +71,8 @@ class HoverRevealed extends StatelessWidget {
   Widget build(BuildContext context) {
     return IgnorePointer(
       ignoring: !revealed,
-      child: AnimatedOpacity(
+      child: Opacity(
         opacity: revealed ? 1 : 0,
-        duration: const Duration(milliseconds: 120),
         child: child,
       ),
     );
