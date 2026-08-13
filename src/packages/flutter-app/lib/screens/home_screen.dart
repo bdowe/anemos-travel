@@ -171,11 +171,11 @@ class HomeScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.lg),
 
                 _GreetingHeader(displayName: displayName),
 
-                const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: AppSpacing.xl),
 
                 // AI Travel Agent entry: the full photo hero sells the
                 // product to a brand-new account; returning users get a slim
@@ -184,7 +184,7 @@ class HomeScreen extends ConsumerWidget {
                   _PlanStrip(onStart: startPlanning),
                   // The strip row is width-starved on phones, so the near-me
                   // starter sits on its own line beneath it.
-                  const SizedBox(height: AppSpacing.sm),
+                  const SizedBox(height: AppSpacing.md),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: NearMeChip(
@@ -195,7 +195,7 @@ class HomeScreen extends ConsumerWidget {
                 ] else
                   _AgentHeroCard(onStart: startPlanning),
 
-                SizedBox(height: returning ? AppSpacing.lg : AppSpacing.xl),
+                const SizedBox(height: AppSpacing.xl),
 
                 // The trip happening today (specs/happening-now).
                 if (liveTrip != null) ...[
@@ -205,7 +205,7 @@ class HomeScreen extends ConsumerWidget {
                     // item highlights and back lands on the trips list.
                     onTap: () => openTripOnTripsTab(ref, liveTrip.id),
                   ),
-                  const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(height: AppSpacing.xl),
                 ],
                 // One "Continue where you left off" section: the most
                 // recently viewed trip (hidden when it *is* the live trip,
