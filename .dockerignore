@@ -59,3 +59,16 @@ docs/
 # Temporary files
 tmp/
 temp/
+
+# The repo root is the build context ONLY for the gateway image
+# (dockerize/deployment/Dockerfile), which reads just
+# src/packages/flutter-app sources, dockerize/deployment/nginx, and
+# dockerize/static. Everything below is dead weight in that context.
+# (Patterns are root-anchored: the `main`/`travel-route-planner` entries
+# above only match at the context root, which is why the api tree needs
+# its own entry — and the api image has its own .dockerignore, since its
+# context is src/packages/api where this file never applies.)
+src/packages/api/
+src/packages/flutter-app/build/
+src/packages/flutter-app/.dart_tool/
+.claude/

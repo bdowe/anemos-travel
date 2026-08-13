@@ -18,8 +18,20 @@ ARG FLUTTER_VERSION=3.35.4
 RUN git clone https://github.com/flutter/flutter.git /flutter --depth 1 --branch ${FLUTTER_VERSION}
 ENV PATH="/flutter/bin:/flutter/bin/cache/dart-sdk/bin:${PATH}"
 
-RUN flutter doctor -v
-RUN flutter config --enable-web
+# Bootstrap the Dart SDK (`--version` is the cheapest trigger and logs the
+# toolchain), disable analytics, then fetch ONLY web artifacts: the previous
+# `flutter doctor -v` precached every platform's engine (~900 MB this stage
+# never used). The --no-enable-* config stops later commands (pub get, build
+# web) from lazily pulling other platforms back in. Guard rail: assert the
+# web SDK actually landed, so a Flutter upgrade that changes precache layout
+# fails the build loudly instead of silently re-downloading at build time.
+RUN flutter --version \
+    && flutter --disable-analytics \
+    && flutter config --enable-web \
+        --no-enable-android --no-enable-ios \
+        --no-enable-linux-desktop --no-enable-macos-desktop --no-enable-windows-desktop \
+    && flutter precache --web \
+    && [ -d /flutter/bin/cache/flutter_web_sdk ]
 
 WORKDIR /app
 
@@ -77,8 +89,14 @@ RUN sed -i 's/origin\.length + 1/origin.length + 5/g' build/web/flutter_service_
     && grep -q 'origin.length + 5' build/web/flutter_service_worker.js \
     && ! grep -q 'origin\.length + 1' build/web/flutter_service_worker.js
 
-# Serve static files and proxy API via nginx
-FROM nginx:alpine
+# Serve static files and proxy API via nginx. alpine-slim is the base the
+# stock nginx:alpine image is built FROM by adding a ~50 MB dynamic-module
+# layer (xslt, geoip, image-filter, njs, acme) that no config here loads —
+# verified zero load_module/xslt/njs/geoip/image_filter references across
+# dockerize/*/nginx/. busybox wget (healthchecks) and the envsubst
+# entrypoint are both retained in -slim. Minor-version pinned: 1.31.x is
+# what production already runs; bumps are explicit, reviewable edits.
+FROM nginx:1.31-alpine-slim
 
 # default.conf is the local :80 server shell; the production stack
 # volume-mounts dockerize/production/nginx/prod.conf over it. The shared
