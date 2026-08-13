@@ -55,7 +55,12 @@
 
   <title>Golden Tempo Travel</title>
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#00695C">
+  <!-- Browser chrome tint (specs/dark-mode). Follows the OS preference only —
+       deliberately not synced to the in-app choice. Both metas carry a media
+       query: an unqualified meta matches every environment and, being first in
+       tree order, would shadow the dark one. -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#00695C">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#004D40">
 
   <!--
     Boot splash shown while flutter_bootstrap.js + main.dart.js download and

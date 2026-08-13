@@ -28,6 +28,18 @@ class AppLocalizationsEs extends AppLocalizations {
   String get languageMenuTooltip => 'Cambiar idioma';
 
   @override
+  String get appearanceSectionTitle => 'Apariencia';
+
+  @override
+  String get appearanceSystem => 'Usar la configuración del dispositivo';
+
+  @override
+  String get appearanceLight => 'Claro';
+
+  @override
+  String get appearanceDark => 'Oscuro';
+
+  @override
   String get commonSave => 'Guardar';
 
   @override
