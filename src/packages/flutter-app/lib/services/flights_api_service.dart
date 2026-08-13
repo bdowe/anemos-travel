@@ -38,21 +38,15 @@ class FlightsApiService {
   Future<List<Airport>> nearestAirports(double lat, double lng) =>
       _airports({'lat': '$lat', 'lng': '$lng'});
 
+  /// Boot-critical (home-airport resolution feeds the trip map): rides
+  /// [ApiClient.send] for its timeout + bounded retry; non-2xx surfaces as
+  /// [ApiException] exactly as before.
   Future<List<Airport>> _airports(Map<String, String> params) async {
-    final uri = Uri.parse('${apiClient.baseUrl}/flights/airports')
-        .replace(queryParameters: params);
-    final res = await apiClient.httpClient.get(uri, headers: apiClient.jsonHeaders());
-    if (res.statusCode == 200) {
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      final list = (body['results'] as List<dynamic>? ?? []);
-      return list
-          .map((e) => Airport.fromJson(e as Map<String, dynamic>))
-          .toList();
-    }
-    throw ApiException(
-      statusCode: res.statusCode,
-      message: 'Failed to search airports: ${res.body}',
-      endpoint: 'flights/airports',
-    );
+    final res = await apiClient.send('GET', '/flights/airports', query: params);
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = (body['results'] as List<dynamic>? ?? []);
+    return list
+        .map((e) => Airport.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

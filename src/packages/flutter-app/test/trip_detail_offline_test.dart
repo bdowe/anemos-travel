@@ -307,4 +307,57 @@ void main() {
     final refine = _labeledButton<FilledButton>(tester, 'Refine with AI');
     expect(refine.onPressed, isNotNull, reason: 'back online — re-enabled');
   });
+
+  testWidgets(
+      'a transient 429 with a cached copy falls back to it read-only '
+      'instead of dead-ending', (WidgetTester tester) async {
+    final cache = TripCache('u1');
+    await cache.writeTrip(_trip('Athens Trip'));
+    final service = _QueuedTripsApiService([
+      ApiException(
+          statusCode: 429, message: 'rate limited', endpoint: '/trips/t1'),
+    ]);
+
+    await _pumpDetail(tester, service, cache);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Acropolis'), findsOneWidget);
+    expect(find.textContaining('Offline — showing saved copy from'),
+        findsOneWidget);
+    expect(find.text('Could not load this trip'), findsNothing);
+  });
+
+  testWidgets('a typed 404 shows the error page, never the cached copy',
+      (WidgetTester tester) async {
+    final cache = TripCache('u1');
+    await cache.writeTrip(_trip('Athens Trip'));
+    final service = _QueuedTripsApiService([
+      ApiException(statusCode: 404, message: 'gone', endpoint: '/trips/t1'),
+    ]);
+
+    await _pumpDetail(tester, service, cache);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not load this trip'), findsOneWidget);
+    expect(find.text('Acropolis'), findsNothing);
+    expect(find.textContaining('Offline — showing saved copy from'),
+        findsNothing);
+  });
+
+  testWidgets('a 429 with no cached copy shows the rate-limit subtitle',
+      (WidgetTester tester) async {
+    final service = _QueuedTripsApiService([
+      ApiException(
+          statusCode: 429, message: 'rate limited', endpoint: '/trips/t1'),
+    ]);
+
+    await _pumpDetail(tester, service, TripCache('u1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not load this trip'), findsOneWidget);
+    expect(
+        find.text(
+            "You're going a little too fast — wait a moment and try again."),
+        findsOneWidget);
+  });
 }

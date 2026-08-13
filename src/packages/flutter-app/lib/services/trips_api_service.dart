@@ -65,13 +65,13 @@ class TripsApiService {
     throw Exception('Failed to load trip status (${res.statusCode})');
   }
 
+  /// The boot-critical read: rides [ApiClient.send] (timeout + bounded retry)
+  /// and throws a typed [ApiException] on HTTP failure, so the trip screen
+  /// can distinguish a transient 429/503 (cached-copy fallback) from a stable
+  /// 403/404 (never resurrect) and render a status-aware message.
   Future<Trip> getTrip(String id) async {
-    final res = await apiClient.httpClient
-        .get(Uri.parse('${apiClient.baseUrl}/trips/$id'), headers: apiClient.jsonHeaders());
-    if (res.statusCode == 200) {
-      return Trip.fromJson(jsonDecode(res.body));
-    }
-    throw Exception('Failed to load trip (${res.statusCode})');
+    final res = await apiClient.send('GET', '/trips/$id');
+    return Trip.fromJson(jsonDecode(res.body));
   }
 
   Future<Trip> patchTrip(

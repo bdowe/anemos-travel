@@ -11,20 +11,17 @@ class TripReviewApiService {
 
   TripReviewApiService(this.apiClient);
 
+  /// Boot-critical (the health app-bar icon watches this): [ApiClient.send]
+  /// gives it a timeout + bounded retry; HTTP failures — including the
+  /// viewer's stable 404 — throw a typed [ApiException].
   Future<List<TripFinding>> getReview(String tripId,
       {bool checkHours = false}) async {
-    final res = await apiClient.httpClient.get(
-      Uri.parse(
-          '${apiClient.baseUrl}/trips/$tripId/review?check_hours=$checkHours'),
-      headers: apiClient.jsonHeaders(),
-    );
-    if (res.statusCode == 200) {
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      final list = (body['findings'] as List<dynamic>?) ?? const [];
-      return list
-          .map((e) => TripFinding.fromJson(e as Map<String, dynamic>))
-          .toList();
-    }
-    throw Exception('Failed to load trip review (${res.statusCode})');
+    final res = await apiClient.send('GET', '/trips/$tripId/review',
+        query: {'check_hours': '$checkHours'});
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = (body['findings'] as List<dynamic>?) ?? const [];
+    return list
+        .map((e) => TripFinding.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }
