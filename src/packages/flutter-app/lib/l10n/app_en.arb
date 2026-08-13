@@ -781,17 +781,6 @@
   "tripFilterAllBooked": "Everything's booked",
   "tripFilterAllBookedMessage": "Nothing left to book on this trip — you're all set.",
   "tripTabBookings": "Bookings",
-  "tripTabBookingsCounted": "Bookings · {booked}/{total}",
-  "@tripTabBookingsCounted": {
-    "placeholders": {
-      "booked": {
-        "type": "int"
-      },
-      "total": {
-        "type": "int"
-      }
-    }
-  },
   "tripBookingsLensEmptyTitle": "No bookings yet",
   "tripBookingsLensEmptyMessage": "Flights, stays, and reservations for this trip will show up here.",
   "tripBookingsLensNoneForDestination": "No bookings for this destination.",

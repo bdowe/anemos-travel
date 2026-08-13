@@ -2408,12 +2408,6 @@ abstract class AppLocalizations {
   /// **'Bookings'**
   String get tripTabBookings;
 
-  /// No description provided for @tripTabBookingsCounted.
-  ///
-  /// In en, this message translates to:
-  /// **'Bookings · {booked}/{total}'**
-  String tripTabBookingsCounted(int booked, int total);
-
   /// No description provided for @tripBookingsLensEmptyTitle.
   ///
   /// In en, this message translates to:

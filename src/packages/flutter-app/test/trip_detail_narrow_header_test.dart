@@ -151,10 +151,14 @@ void main() {
     addTearDown(tester.platformDispatcher.clearAllTestValues);
     await _pump(tester, _trip(todos: oneTodo), surface: phone);
 
-    for (final label in ['Itinerary', 'Bookings · 0/1', 'Budget']) {
+    for (final label in ['Itinerary', 'Bookings', 'Budget']) {
       expect(find.text(label), findsOneWidget);
       expectNoTruncation(tester, label);
     }
+    // Narrow drops the booked-progress pill from the Bookings tab — the
+    // trio + pill is what genuinely shrank the FittedBox at phone widths;
+    // the count is one tap away inside the view.
+    expect(find.text('0/1'), findsNothing);
     expect(find.text('Add place'), findsNothing);
     expect(find.byTooltip('Add place'), findsOneWidget);
   });
@@ -165,14 +169,12 @@ void main() {
     await _pump(tester, _trip(todos: oneTodo),
         surface: phone, locale: const Locale('es'));
 
-    // minScale 0.95: the square test font at 0.5 overshoots real glyph
-    // widths by a few percent on the long Spanish trio (every glyph is
-    // fontSize/2 wide; real 'i'/'r'/'l' are narrower), so the cluster may
-    // sit a hair into the FittedBox's scale-down here while fitting whole
-    // in a real browser at 390px (verified 2026-08-13). Anything below
-    // ~0.95 would be a genuinely visible shrink — that's the tripwire for
-    // dropping the Bookings counter on narrow.
-    for (final label in ['Itinerario', 'Reservas · 0/1', 'Presupuesto']) {
+    // The counter tripwire fired (2026-08-13): the Bookings counter is now
+    // dropped on narrow, which shortens the Spanish trio. The 0.95 hedge
+    // stays only for the square test font's overshoot (every glyph is
+    // fontSize/2 wide; real 'i'/'r'/'l' are narrower) — the cluster fits
+    // whole in a real browser at 390px.
+    for (final label in ['Itinerario', 'Reservas', 'Presupuesto']) {
       expect(find.text(label), findsOneWidget);
       expectNoTruncation(tester, label, minScale: 0.95);
     }
@@ -203,7 +205,7 @@ void main() {
       (tester) async {
     await _pump(tester, _trip(todos: oneTodo), surface: phone);
 
-    await tester.tap(find.text('Bookings · 0/1'));
+    await tester.tap(find.text('Bookings'));
     await tester.pumpAndSettle();
 
     // Same icon-only rule as Add place, same row-must-fit reason; the swap

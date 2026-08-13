@@ -22,6 +22,7 @@ import 'package:travel_route_planner/providers/transport_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/booking_detail_row.dart';
+import 'package:travel_route_planner/widgets/status_pill.dart';
 import 'package:travel_route_planner/widgets/booking_sheets.dart';
 import 'package:travel_route_planner/widgets/booking_todo_card.dart';
 
@@ -176,12 +177,19 @@ Future<void> _selectFilter(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
-/// Taps the Bookings header tab by its exact label — callers pass the
-/// counted form ('Bookings · 1/2') so every use also pins the label the
-/// booked-progress count renders as (or the plain 'Bookings' when the
-/// trip has no todos).
-Future<void> _openBookingsTab(WidgetTester tester, String label) async {
-  await tester.tap(find.text(label));
+/// Taps the Bookings header tab; when [count] is given, first pins the
+/// booked-progress pill riding the tab ('1/2' etc.) — the counter is a
+/// [StatusPill] beside the label now, not part of it (dropped entirely on
+/// narrow; these tests run wide at 800). Pass no count for a trip whose
+/// todos are empty (viewer trips included): the tab renders bare.
+Future<void> _openBookingsTab(WidgetTester tester, [String? count]) async {
+  if (count != null) {
+    expect(
+        find.descendant(
+            of: find.byType(StatusPill), matching: find.text(count)),
+        findsOneWidget);
+  }
+  await tester.tap(find.text('Bookings'));
   await tester.pumpAndSettle();
 }
 
@@ -244,7 +252,7 @@ void main() {
           ],
         ));
 
-    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await _openBookingsTab(tester, '1/2');
     await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
     await tester.pumpAndSettle();
 
@@ -287,7 +295,7 @@ void main() {
               booked: true),
         ]));
 
-    await _openBookingsTab(tester, 'Bookings · 1/1');
+    await _openBookingsTab(tester, '1/1');
     expect(find.widgetWithText(BookingTodoRow, 'Stay in Paris'),
         findsOneWidget);
 
@@ -391,7 +399,7 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await _openBookingsTab(tester, '1/2');
 
     expect(find.text('Louvre'), findsNothing);
     expect(find.text('Café de Flore'), findsNothing);
@@ -412,7 +420,7 @@ void main() {
     _useTallViewport(tester);
     final (todosApi, accApi) = await _pump(tester, mixedTrip());
 
-    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await _openBookingsTab(tester, '1/2');
     await tester.tap(find.descendant(
         of: find.widgetWithText(BookingTodoRow, 'Stay in Paris'),
         matching: find.byType(Checkbox)));
@@ -432,7 +440,7 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, twoCityTrip());
 
-    await _openBookingsTab(tester, 'Bookings · 0/2');
+    await _openBookingsTab(tester, '0/2');
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
     expect(
@@ -472,7 +480,7 @@ void main() {
               auto: false),
         ]));
 
-    await _openBookingsTab(tester, 'Bookings · 0/2');
+    await _openBookingsTab(tester, '0/2');
     expect(
         find.widgetWithText(BookingTodoCard, 'Museum tickets'), findsOneWidget);
 
@@ -498,15 +506,15 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    // 'Bookings · 1/2' — one booked custom todo of two todos. The count
-    // rides the tab label (this tab replaced the old one-way counter).
-    await _openBookingsTab(tester, 'Bookings · 1/2');
+    // Pill '1/2' — one booked custom todo of two todos. The count rides
+    // the tab as a StatusPill (this tab replaced the old one-way counter).
+    await _openBookingsTab(tester, '1/2');
 
     expect(find.text('Louvre'), findsNothing);
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
     // The selected tab is bold; the unselected one isn't.
-    expect(tester.widget<Text>(find.text('Bookings · 1/2')).style?.fontWeight,
+    expect(tester.widget<Text>(find.text('Bookings')).style?.fontWeight,
         FontWeight.w700);
     expect(tester.widget<Text>(find.text('Itinerary')).style?.fontWeight,
         FontWeight.w500);
@@ -558,7 +566,7 @@ void main() {
           ],
         ));
 
-    await _openBookingsTab(tester, 'Bookings · 0/2');
+    await _openBookingsTab(tester, '0/2');
     expect(find.widgetWithText(ChoiceChip, 'Paris'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Paris'));
@@ -590,7 +598,7 @@ void main() {
     // carries no count.
     expect(find.textContaining('booked'), findsNothing);
 
-    await _openBookingsTab(tester, 'Bookings');
+    await _openBookingsTab(tester);
     expect(
         find.widgetWithText(BookingDetailRow, 'Hotel Lutetia'), findsOneWidget);
     expect(find.text('Louvre'), findsNothing);
@@ -602,7 +610,7 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, _trip());
 
-    await _openBookingsTab(tester, 'Bookings');
+    await _openBookingsTab(tester);
     expect(find.text('No bookings yet'), findsOneWidget);
     expect(find.byType(ChoiceChip), findsNothing);
     // No scope chip in the nothing-at-all state — scoping an empty list is
@@ -651,7 +659,7 @@ void main() {
     expect(find.text('Add transport'), findsNothing);
 
     // Bookings view: the swap, not an addition.
-    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await _openBookingsTab(tester, '1/2');
     expect(find.text('Add booking'), findsOneWidget);
     expect(find.text('Add place'), findsNothing);
 
@@ -667,7 +675,7 @@ void main() {
       'custom-booking dialog', (tester) async {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
-    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await _openBookingsTab(tester, '1/2');
 
     Future<void> pick(String item) async {
       await tester.tap(find.text('Add booking'));
@@ -696,7 +704,7 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await _openBookingsTab(tester, '1/2');
     await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
     await tester.pumpAndSettle();
     expect(find.text('Add booking'), findsOneWidget);
@@ -714,7 +722,7 @@ void main() {
 
     // Entering the Bookings view drops the places filter (as the menu and
     // counter always did)...
-    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await _openBookingsTab(tester, '1/2');
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
 
@@ -751,13 +759,13 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    await _openBookingsTab(tester, 'Bookings · 1/2');
+    await _openBookingsTab(tester, '1/2');
     await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(BookingTodoRow, 'Stay in Paris'),
         findsOneWidget);
-    expect(tester.widget<Text>(find.text('Bookings · 1/2')).style?.fontWeight,
+    expect(tester.widget<Text>(find.text('Bookings')).style?.fontWeight,
         FontWeight.w700);
 
     // Itinerary exits the whole Bookings view, scope included.

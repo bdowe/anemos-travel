@@ -2930,16 +2930,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  /// One header view tab ("Itinerary" / "Bookings · 2/21"). The selected tab
-  /// doesn't take taps — re-tap is a no-op, which also keeps an idle tap on
-  /// the already-selected Itinerary tab from clearing an active places
-  /// filter. The 2px underline is reserved (transparent) when unselected so
-  /// selection never shifts layout; Center(widthFactor: 1) hugs the label's
-  /// width while filling the header row's height for a real touch target.
+  /// One header view tab ("Itinerary" / "Bookings" + count pill). The
+  /// selected tab doesn't take taps — re-tap is a no-op, which also keeps an
+  /// idle tap on the already-selected Itinerary tab from clearing an active
+  /// places filter. The 2px underline is reserved (transparent) when
+  /// unselected so selection never shifts layout; Center(widthFactor: 1)
+  /// hugs the label's width while filling the header row's height for a real
+  /// touch target. [trailing] renders inside the underlined region so the
+  /// underline spans label + pill as one tab.
   Widget _headerTab(ThemeData theme,
       {required String label,
       required bool selected,
-      required VoidCallback onTap}) {
+      required VoidCallback onTap,
+      Widget? trailing}) {
     return Semantics(
       button: true,
       selected: selected,
@@ -2961,16 +2964,25 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 ),
               ),
             ),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected
-                    ? theme.colorScheme.onSurface
-                    : theme.colorScheme.onSurfaceVariant,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? theme.colorScheme.onSurface
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: AppSpacing.xs),
+                  trailing,
+                ],
+              ],
             ),
           ),
         ),
@@ -3027,16 +3039,24 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             ),
             if (!itemsEmpty) ...[
               SizedBox(width: tabGap),
-              // The booking progress count rides the tab label — this tab
-              // replaced the counter that was the old (one-way) door into
-              // this view.
+              // The booking progress count rides the tab as a pill — the
+              // same checked/total chrome as the wear-sheet header and the
+              // checklist header, so every count reads as one language.
+              // (This tab replaced the counter that was the old one-way
+              // door into this view.) Dropped on narrow: three tabs +
+              // pill is what genuinely shrinks the FittedBox trio at
+              // 390px, and the count is one tap away inside the view.
               _headerTab(
                 theme,
-                label: _bookingTodos.isEmpty
-                    ? l10n.tripTabBookings
-                    : l10n.tripTabBookingsCounted(
-                        _bookingTodos.where((t) => t.booked).length,
-                        _bookingTodos.length),
+                label: l10n.tripTabBookings,
+                trailing: (_narrow || _bookingTodos.isEmpty)
+                    ? null
+                    : StatusPill.custom(
+                        label:
+                            '${_bookingTodos.where((t) => t.booked).length}/${_bookingTodos.length}',
+                        background: theme.colorScheme.surfaceContainerHighest,
+                        foreground: theme.colorScheme.onSurfaceVariant,
+                      ),
                 selected: _inBookingsView,
                 onTap: () => setState(() {
                   _itemFilter = 'bookings';
