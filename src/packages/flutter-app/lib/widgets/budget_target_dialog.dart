@@ -55,8 +55,12 @@ Future<bool> showBudgetTargetDialog(
           children: [
             Row(
               children: [
+                // 112 fits the code + dropdown arrow inside the theme's
+                // filled-field padding (16px per side) in the 1em-per-glyph
+                // FlutterTest font too ("USD" + arrow = ~104px); 96 overflowed
+                // under the themed test harness.
                 SizedBox(
-                  width: 96,
+                  width: 112,
                   child: DropdownButtonFormField<String>(
                     initialValue: currency,
                     decoration:

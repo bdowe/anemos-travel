@@ -522,25 +522,32 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        DropdownButton<String>(
-          value: _addCategory,
-          underline: const SizedBox.shrink(),
-          onChanged: widget.isOffline
-              ? null
-              : (v) => setState(() => _addCategory = v ?? 'general'),
-          // Closed state stays icon-only (the add row is width-tight on
-          // phones); the open menu spells out each category.
-          selectedItemBuilder: (context) => [
+        // Closed state stays icon-compact (the add row is width-tight on
+        // phones); the open menu spells out each category. A popup menu (not
+        // a DropdownButton) because a dropdown's menu is hard-constrained to
+        // the trigger's width — an icon-only trigger would clip every label.
+        PopupMenuButton<String>(
+          tooltip: context.l10n.budgetCategoryLabel,
+          enabled: !widget.isOffline,
+          position: PopupMenuPosition.under,
+          color: theme.colorScheme.surface,
+          elevation: 3,
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+          icon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_categoryIcons[_addCategory],
+                  size: 18, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.arrow_drop_down,
+                  size: 18, color: theme.colorScheme.onSurfaceVariant),
+            ],
+          ),
+          onSelected: (v) => setState(() => _addCategory = v),
+          itemBuilder: (_) => [
             for (final cat in _categoryOrder)
-              Center(
-                child: Icon(_categoryIcons[cat],
-                    size: 18, color: theme.colorScheme.onSurfaceVariant),
-              ),
-          ],
-          items: [
-            for (final cat in _categoryOrder)
-              DropdownMenuItem(
+              CheckedPopupMenuItem<String>(
                 value: cat,
+                checked: cat == _addCategory,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -565,8 +572,13 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           ),
         ),
         const SizedBox(width: AppSpacing.sm),
+        // 136 leaves a 104px interior after the theme's filled-field content
+        // padding (16px per side) — fits "Amount"/"Importe" in Inter with
+        // text-scale headroom, and fits the 1em-per-glyph FlutterTest font
+        // ("Amount" = 99px incl. letter-spacing) the regression test
+        // measures with.
         SizedBox(
-          width: 88,
+          width: 136,
           child: TextField(
             controller: _amountController,
             textInputAction: TextInputAction.done,

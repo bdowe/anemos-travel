@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +8,7 @@ import 'package:travel_route_planner/models/expense.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/budget_api_service.dart';
 import 'package:travel_route_planner/providers/budget_provider.dart';
+import 'package:travel_route_planner/theme/app_theme.dart';
 import 'package:travel_route_planner/utils/money_format.dart';
 import 'package:travel_route_planner/widgets/budget_section.dart';
 
@@ -107,7 +109,10 @@ Future<_FakeBudgetApiService> _pump(
       overrides: [
         budgetApiServiceProvider.overrideWithValue(fake),
       ],
+      // The real app theme (filled + outline fields, Inter metrics) — an
+      // unthemed harness is exactly how the truncated-hint bug escaped.
       child: MaterialApp(
+      theme: AppTheme.light,
       localizationsDelegates: testLocalizationsDelegates,
         home: Scaffold(
           body: SingleChildScrollView(
@@ -267,5 +272,75 @@ void main() {
     final addButton =
         tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.add));
     expect(addButton.onPressed, isNull);
+    final categoryButton = tester.widget<PopupMenuButton<String>>(find.ancestor(
+        of: find.byTooltip('Category'),
+        matching: find.byType(PopupMenuButton<String>)));
+    expect(categoryButton.enabled, isFalse);
+  });
+
+  testWidgets(
+      'amount hint renders un-truncated under the app theme at phone width',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 690));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pump(tester, [_exp('a', 'food', 'Lunch', 20)]);
+
+    // A too-narrow hint ellipsizes (never throws), so "no exception" proves
+    // nothing: the full string's intrinsic width must fit in the width the
+    // field gave the hint. (Compared against constraints, not painted size —
+    // painted width excludes trailing letter-spacing that intrinsic width
+    // includes.) English only on purpose — the 1em-per-glyph FlutterTest
+    // font inflates "Importe" past any realistic width, while Inter fits it
+    // easily at the shipped 136px.
+    final hint = find.text('Amount');
+    expect(hint, findsOneWidget);
+    final paragraph = tester.renderObject<RenderParagraph>(hint);
+    expect(
+      paragraph.getMaxIntrinsicWidth(double.infinity),
+      lessThanOrEqualTo(paragraph.constraints.maxWidth),
+      reason: 'the Amount hint is being ellipsized — widen the amount field',
+    );
+  });
+
+  testWidgets(
+      'category menu opens with every label visible, checks the current '
+      'category, and the selection flows into the add', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 690));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // Empty list: category labels would otherwise collide with group headers.
+    final fake = await _pump(tester, []);
+
+    await tester.tap(find.byTooltip('Category'));
+    await tester.pumpAndSettle();
+
+    for (final label in [
+      'Flights', 'Lodging', 'Food', 'Activities', //
+      'Transport', 'Shopping', 'General',
+    ]) {
+      expect(find.text(label), findsOneWidget);
+    }
+    // Current selection is checked (language_menu_button convention).
+    expect(
+      tester
+          .widget<CheckedPopupMenuItem<String>>(find.widgetWithText(
+              CheckedPopupMenuItem<String>, 'General'))
+          .checked,
+      isTrue,
+    );
+
+    // Tap the item, not its Text — CheckedPopupMenuItem wraps its ListTile
+    // in an IgnorePointer (the item's own InkWell handles the tap), so the
+    // Text itself never hit-tests.
+    await tester
+        .tap(find.widgetWithText(CheckedPopupMenuItem<String>, 'Flights'));
+    await tester.pumpAndSettle();
+    // The trigger now shows the selected category's icon.
+    expect(find.byIcon(Icons.flight_outlined), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'JFK→CDG');
+    await tester.enterText(find.byType(TextField).last, '400');
+    await tester.tap(find.byTooltip('Add expense'));
+    await tester.pumpAndSettle();
+    expect(fake.expenses.last.category, 'flights');
   });
 }
