@@ -13,6 +13,8 @@ Expense _$ExpenseFromJson(Map<String, dynamic> json) => Expense(
       amount: (json['amount'] as num).toDouble(),
       position: (json['position'] as num?)?.toInt() ?? 0,
       auto: json['auto'] as bool? ?? false,
+      sourceKind: json['source_kind'] as String?,
+      sourceId: json['source_id'] as String?,
     );
 
 Map<String, dynamic> _$ExpenseToJson(Expense instance) => <String, dynamic>{
@@ -22,4 +24,6 @@ Map<String, dynamic> _$ExpenseToJson(Expense instance) => <String, dynamic>{
       'amount': instance.amount,
       'position': instance.position,
       'auto': instance.auto,
+      'source_kind': instance.sourceKind,
+      'source_id': instance.sourceId,
     };

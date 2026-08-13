@@ -8,6 +8,7 @@ import '../models/expense.dart';
 import '../providers/budget_provider.dart';
 import '../theme/spacing.dart';
 import '../utils/money_format.dart';
+import 'budget_categories.dart';
 import 'budget_target_dialog.dart';
 import 'empty_state.dart';
 
@@ -35,45 +36,8 @@ class BudgetSection extends ConsumerStatefulWidget {
   ConsumerState<BudgetSection> createState() => _BudgetSectionState();
 }
 
-// Display order for the category groups. These are canonical API values sent to
-// the server, so they are NEVER translated — only their display labels are
-// (specs/i18n-spanish). The server bounds category to this exact set (default
-// "general"); anything unexpected falls under "general".
-const List<String> _categoryOrder = [
-  'flights',
-  'lodging',
-  'food',
-  'activities',
-  'transport',
-  'shopping',
-  'general',
-];
-
-String _categoryLabel(AppLocalizations l10n, String value) => switch (value) {
-      'flights' => l10n.budgetCategoryFlights,
-      'lodging' => l10n.budgetCategoryLodging,
-      'food' => l10n.budgetCategoryFood,
-      'activities' => l10n.budgetCategoryActivities,
-      'transport' => l10n.budgetCategoryTransport,
-      'shopping' => l10n.budgetCategoryShopping,
-      'general' => l10n.budgetCategoryGeneral,
-      _ => value,
-    };
-
-const Map<String, IconData> _categoryIcons = {
-  'flights': Icons.flight_outlined,
-  'lodging': Icons.hotel_outlined,
-  'food': Icons.restaurant_outlined,
-  'activities': Icons.local_activity_outlined,
-  'transport': Icons.directions_bus_outlined,
-  'shopping': Icons.shopping_bag_outlined,
-  'general': Icons.receipt_long_outlined,
-};
-
-String _normalizeCategory(String raw) {
-  final c = raw.trim().toLowerCase();
-  return _categoryOrder.contains(c) ? c : 'general';
-}
+// Category vocabulary/labels/icons live in budget_categories.dart, shared
+// with the booked-flip expense prompt.
 
 class _BudgetSectionState extends ConsumerState<BudgetSection> {
   final TextEditingController _labelController = TextEditingController();
@@ -142,7 +106,7 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     final labelController = TextEditingController(text: expense.label);
     final amountController =
         TextEditingController(text: _trimAmount(expense.amount));
-    var category = _normalizeCategory(expense.category);
+    var category = normalizeExpenseCategory(expense.category);
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -156,9 +120,9 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
                 decoration: InputDecoration(labelText: l10n.budgetCategoryLabel),
                 onChanged: (v) => setLocal(() => category = v ?? 'general'),
                 items: [
-                  for (final cat in _categoryOrder)
+                  for (final cat in kExpenseCategories)
                     DropdownMenuItem(
-                        value: cat, child: Text(_categoryLabel(l10n, cat))),
+                        value: cat, child: Text(expenseCategoryLabel(l10n, cat))),
                 ],
               ),
               TextField(
@@ -392,10 +356,10 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
       ThemeData theme, List<Expense> expenses, String currency) {
     final byCategory = <String, List<Expense>>{};
     for (final e in expenses) {
-      byCategory.putIfAbsent(_normalizeCategory(e.category), () => []).add(e);
+      byCategory.putIfAbsent(normalizeExpenseCategory(e.category), () => []).add(e);
     }
     final widgets = <Widget>[];
-    for (final cat in _categoryOrder) {
+    for (final cat in kExpenseCategories) {
       final group = byCategory[cat];
       if (group == null || group.isEmpty) continue;
       final subtotal = group.fold<double>(0, (sum, e) => sum + e.amount);
@@ -404,12 +368,12 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
             const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
         child: Row(
           children: [
-            Icon(_categoryIcons[cat],
+            Icon(kExpenseCategoryIcons[cat],
                 size: 16, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: AppSpacing.xs),
             Expanded(
               child: Text(
-                _categoryLabel(context.l10n, cat),
+                expenseCategoryLabel(context.l10n, cat),
                 style: theme.textTheme.labelLarge
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
@@ -536,7 +500,7 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           icon: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(_categoryIcons[_addCategory],
+              Icon(kExpenseCategoryIcons[_addCategory],
                   size: 18, color: theme.colorScheme.onSurfaceVariant),
               Icon(Icons.arrow_drop_down,
                   size: 18, color: theme.colorScheme.onSurfaceVariant),
@@ -544,17 +508,17 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           ),
           onSelected: (v) => setState(() => _addCategory = v),
           itemBuilder: (_) => [
-            for (final cat in _categoryOrder)
+            for (final cat in kExpenseCategories)
               CheckedPopupMenuItem<String>(
                 value: cat,
                 checked: cat == _addCategory,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(_categoryIcons[cat],
+                    Icon(kExpenseCategoryIcons[cat],
                         size: 18, color: theme.colorScheme.onSurfaceVariant),
                     const SizedBox(width: AppSpacing.sm),
-                    Text(_categoryLabel(context.l10n, cat)),
+                    Text(expenseCategoryLabel(context.l10n, cat)),
                   ],
                 ),
               ),

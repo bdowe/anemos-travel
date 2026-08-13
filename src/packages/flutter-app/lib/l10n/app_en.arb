@@ -347,6 +347,25 @@
     }
   },
   "budgetSummaryNoTarget": "no target",
+  "budgetPromptTitle": "Add to budget?",
+  "budgetPromptSkip": "Skip",
+  "budgetPromptAmountLabel": "Amount ({currency})",
+  "@budgetPromptAmountLabel": {
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPromptAdded": "{amount} added to Budget",
+  "@budgetPromptAdded": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPromptLimitReached": "Expense limit reached — remove one in Budget first",
   "budgetEmptyTitle": "No budget yet",
   "budgetEmptyMessage": "Set a target above, or add expenses below to track your spending.",
   "budgetTargetSet": "Target: {amount} ({currency})",

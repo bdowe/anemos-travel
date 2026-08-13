@@ -1556,6 +1556,36 @@ abstract class AppLocalizations {
   /// **'no target'**
   String get budgetSummaryNoTarget;
 
+  /// No description provided for @budgetPromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to budget?'**
+  String get budgetPromptTitle;
+
+  /// No description provided for @budgetPromptSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get budgetPromptSkip;
+
+  /// No description provided for @budgetPromptAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount ({currency})'**
+  String budgetPromptAmountLabel(String currency);
+
+  /// No description provided for @budgetPromptAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} added to Budget'**
+  String budgetPromptAdded(String amount);
+
+  /// No description provided for @budgetPromptLimitReached.
+  ///
+  /// In en, this message translates to:
+  /// **'Expense limit reached — remove one in Budget first'**
+  String get budgetPromptLimitReached;
+
   /// No description provided for @budgetEmptyTitle.
   ///
   /// In en, this message translates to:
