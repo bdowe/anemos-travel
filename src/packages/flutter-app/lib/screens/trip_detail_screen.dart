@@ -4248,10 +4248,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return hasTarget || !expensesEmpty;
   }
 
-  /// The app-bar Trip health entry: fact-check icon with a severity-colored
-  /// count badge, opening the findings sheet. Replaced the trailing-cluster
-  /// row (friction-log 2026-08-12) — the badge is now the ONLY glanceable
+  /// The app-bar Trip health entry: fact-check icon with a calm badge,
+  /// opening the findings sheet. Replaced the trailing-cluster row
+  /// (friction-log 2026-08-12) — the badge is now the ONLY glanceable
   /// health surface, so it stays visible on every breakpoint.
+  ///
+  /// The number counts only the attention tier (critical + warn) — a raw
+  /// total read as "27 problems" when most rows were gentle info suggestions
+  /// (friction-log 2026-08-13). Info-only trips get a small neutral dot
+  /// (presence without a shouting number); all-clear stays a plain icon.
   ///
   /// Base provider key (checkHours: false): the sheet's internal opt-in hours
   /// check flips ITS key to the slower variant, so this badge can briefly lag
@@ -4266,13 +4271,17 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             .valueOrNull;
         if (findings == null) return const SizedBox.shrink();
         const icon = Icon(Icons.fact_check_outlined);
+        final l10n = context.l10n;
         // Severity → color derived only via the shared statics; badgeColors
-        // is the opaque on-gradient variant of the pill pair.
-        final worst = TripReviewSection.worstSeverity(findings);
-        final colors =
-            worst == null ? null : TripReviewSection.badgeColors(theme, worst);
+        // is the opaque on-gradient variant of the pill pair, and partition
+        // is the same tier split the sheet renders — badge and sheet can
+        // never disagree.
+        final (:attention, :suggestions) =
+            TripReviewSection.partition(findings);
+        final colors = TripReviewSection.badgeColors(
+            theme, attention.isEmpty ? 'info' : attention.first.severity);
         return IconButton(
-          tooltip: context.l10n.reviewSectionTitle,
+          tooltip: l10n.reviewSectionTitle,
           onPressed: () => showTripHealthSheet(
             context,
             tripId: trip.id,
@@ -4285,12 +4294,28 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           ),
           icon: findings.isEmpty
               ? icon
-              : Badge(
-                  backgroundColor: colors!.bg,
-                  textColor: colors.fg,
-                  label: Text('${findings.length}'),
-                  child: icon,
-                ),
+              : attention.isNotEmpty
+                  ? Badge(
+                      backgroundColor: colors.bg,
+                      textColor: colors.fg,
+                      label: Text(
+                        '${attention.length}',
+                        semanticsLabel: l10n
+                            .reviewBadgeAttentionSemantics(attention.length),
+                      ),
+                      child: icon,
+                    )
+                  : Semantics(
+                      label: l10n
+                          .reviewBadgeSuggestionsSemantics(suggestions.length),
+                      child: Badge(
+                        // No label → Material's small-dot variant; 8 over the
+                        // M3 default 6 for legibility on the gradient.
+                        smallSize: 8,
+                        backgroundColor: colors.bg,
+                        child: icon,
+                      ),
+                    ),
         );
       },
     );

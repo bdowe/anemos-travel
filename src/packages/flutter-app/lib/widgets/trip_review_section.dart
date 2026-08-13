@@ -6,13 +6,16 @@ import '../models/trip_finding.dart';
 import '../providers/trip_review_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
+import 'collapsible_section.dart';
 import 'empty_state.dart';
 import 'section_header.dart';
 import 'status_pill.dart';
 
 /// The "Trip health" findings list: surfaces the read-only review from
-/// `GET /trips/{id}/review` as an ordered list of findings, worst-severity
-/// first. Self-contained — it owns its data via [tripReviewProvider], keyed on
+/// `GET /trips/{id}/review` in two tiers via [partition] — "Needs attention"
+/// (critical + warn, worst first, always visible) and "Suggestions" (info,
+/// collapsed by default so a big trip's unbooked-row pile can't dominate).
+/// Self-contained — it owns its data via [tripReviewProvider], keyed on
 /// (tripId, checkHours). Rendered as the body of the trip-detail health sheet
 /// (`showTripHealthSheet`), which the app-bar health icon opens.
 ///
@@ -95,16 +98,22 @@ class TripReviewSection extends ConsumerStatefulWidget {
     return (bg: p.solidBg, fg: p.solidFg);
   }
 
-  /// Worst severity in [findings] ("critical" > "warn" > "info"), or null
-  /// when the list is empty. Shared with the app-bar badge.
-  static String? worstSeverity(Iterable<TripFinding> findings) {
-    String? worst;
+  /// Splits findings into the two presentation tiers: "attention" (critical +
+  /// warn, worst-first — the badge number and the always-visible sheet
+  /// section) and "suggestions" (info and anything unrecognized, server order
+  /// — the collapsed sheet section / neutral dot). The single
+  /// severity-partition definition shared by the app-bar badge and the sheet.
+  static ({List<TripFinding> attention, List<TripFinding> suggestions})
+      partition(Iterable<TripFinding> findings) {
+    final attention = <TripFinding>[];
+    final suggestions = <TripFinding>[];
     for (final f in findings) {
-      if (worst == null || _rankOf(f.severity) < _rankOf(worst)) {
-        worst = f.severity;
-      }
+      (_rankOf(f.severity) <= _severityRank['warn']! ? attention : suggestions)
+          .add(f);
     }
-    return worst;
+    attention
+        .sort((a, b) => _rankOf(a.severity).compareTo(_rankOf(b.severity)));
+    return (attention: attention, suggestions: suggestions);
   }
 
   @override
@@ -143,6 +152,12 @@ int _rankOf(String severity) => _severityRank[severity] ?? 3;
 class _TripReviewSectionState extends ConsumerState<TripReviewSection> {
   // Opt-in opening-hours check: flips the provider key to the slower variant.
   bool _checkHours = false;
+
+  // Suggestions (info findings) start collapsed — the calm default. Ephemeral
+  // per sheet open (showTripHealthSheet builds a fresh widget), but survives
+  // provider refetches after a fix so the section stays open while its rows
+  // decrement.
+  bool _suggestionsExpanded = false;
 
   // A failed hours check reverted [_checkHours]; shown as an inline caption
   // by the toggle (a snackbar would render behind the sheet). Cleared on the
@@ -221,9 +236,12 @@ class _TripReviewSectionState extends ConsumerState<TripReviewSection> {
       return const SizedBox.shrink();
     }
 
-    final sorted = [...findings]
-      ..sort((a, b) => _rankOf(a.severity).compareTo(_rankOf(b.severity)));
-    final worst = sorted.isEmpty ? null : sorted.first.severity;
+    final (:attention, :suggestions) = TripReviewSection.partition(findings);
+    // Header framing follows the attention tier, not the total: warns read
+    // "N to fix" in the worst severity's colors; info-only reads as a calm
+    // neutral. Success-green stays reserved for the zero-findings EmptyState.
+    final headerColors = _severityColors(
+        theme, attention.isEmpty ? 'info' : attention.first.severity);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -233,9 +251,11 @@ class _TripReviewSectionState extends ConsumerState<TripReviewSection> {
           action: findings.isEmpty
               ? null
               : StatusPill.custom(
-                  label: l10n.reviewCountToReview(findings.length),
-                  background: _severityColors(theme, worst!).bg,
-                  foreground: _severityColors(theme, worst).fg,
+                  label: attention.isEmpty
+                      ? l10n.reviewHeaderSuggestionsOnly(suggestions.length)
+                      : l10n.reviewHeaderAttention(attention.length),
+                  background: headerColors.bg,
+                  foreground: headerColors.fg,
                 ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -247,8 +267,36 @@ class _TripReviewSectionState extends ConsumerState<TripReviewSection> {
             title: l10n.reviewEmptyTitle,
             message: l10n.reviewEmptyMessage,
           )
-        else
-          for (final f in sorted) _buildRow(theme, f),
+        else ...[
+          if (attention.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+              child: Text(
+                l10n.reviewNeedsAttentionHeader,
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+            for (final f in attention) _buildRow(theme, f),
+          ],
+          if (suggestions.isNotEmpty)
+            CollapsibleSection(
+              title: l10n.reviewSuggestionsHeader,
+              icon: Icons.lightbulb_outline,
+              pill: StatusPill.custom(
+                label: '${suggestions.length}',
+                background: _severityColors(theme, 'info').bg,
+                foreground: _severityColors(theme, 'info').fg,
+              ),
+              expanded: _suggestionsExpanded,
+              onToggle: () => setState(
+                  () => _suggestionsExpanded = !_suggestionsExpanded),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [for (final f in suggestions) _buildRow(theme, f)],
+              ),
+            ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         _buildCheckHoursAction(theme, async.isLoading),
       ],

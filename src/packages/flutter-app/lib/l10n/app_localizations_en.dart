@@ -1903,8 +1903,53 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reviewSectionTitle => 'Trip health';
 
   @override
-  String reviewCountToReview(int count) {
-    return '$count to review';
+  String reviewHeaderAttention(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Mostly ready — $count to fix',
+      one: 'Mostly ready — 1 to fix',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String reviewHeaderSuggestionsOnly(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'In good shape — $count suggestions',
+      one: 'In good shape — 1 suggestion',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get reviewNeedsAttentionHeader => 'Needs attention';
+
+  @override
+  String get reviewSuggestionsHeader => 'Suggestions';
+
+  @override
+  String reviewBadgeAttentionSemantics(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items need attention',
+      one: '1 item needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String reviewBadgeSuggestionsSemantics(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count suggestions available',
+      one: '1 suggestion available',
+    );
+    return '$_temp0';
   }
 
   @override

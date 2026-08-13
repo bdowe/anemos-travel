@@ -3404,11 +3404,41 @@ abstract class AppLocalizations {
   /// **'Trip health'**
   String get reviewSectionTitle;
 
-  /// No description provided for @reviewCountToReview.
+  /// No description provided for @reviewHeaderAttention.
   ///
   /// In en, this message translates to:
-  /// **'{count} to review'**
-  String reviewCountToReview(int count);
+  /// **'{count, plural, one{Mostly ready — 1 to fix} other{Mostly ready — {count} to fix}}'**
+  String reviewHeaderAttention(int count);
+
+  /// No description provided for @reviewHeaderSuggestionsOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{In good shape — 1 suggestion} other{In good shape — {count} suggestions}}'**
+  String reviewHeaderSuggestionsOnly(int count);
+
+  /// No description provided for @reviewNeedsAttentionHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get reviewNeedsAttentionHeader;
+
+  /// No description provided for @reviewSuggestionsHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggestions'**
+  String get reviewSuggestionsHeader;
+
+  /// No description provided for @reviewBadgeAttentionSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 item needs attention} other{{count} items need attention}}'**
+  String reviewBadgeAttentionSemantics(int count);
+
+  /// No description provided for @reviewBadgeSuggestionsSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 suggestion available} other{{count} suggestions available}}'**
+  String reviewBadgeSuggestionsSemantics(int count);
 
   /// No description provided for @reviewEmptyTitle.
   ///

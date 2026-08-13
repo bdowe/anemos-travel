@@ -21,9 +21,10 @@ import 'package:travel_route_planner/widgets/trip_review_section.dart';
 
 import 'support/l10n_test_app.dart';
 
-/// The app-bar Trip health icon + severity count badge and the bottom-sheet
-/// modal it opens (showTripHealthSheet) — the surface that replaced the
-/// trailing-cluster row (friction-log 2026-08-12).
+/// The app-bar Trip health icon + calm attention badge (warn/critical count,
+/// info-only dot) and the bottom-sheet modal it opens (showTripHealthSheet) —
+/// the surface that replaced the trailing-cluster row (friction-log
+/// 2026-08-12; calmed 2026-08-13).
 
 class _FakeTripsApiService extends TripsApiService {
   final Trip trip;
@@ -33,12 +34,15 @@ class _FakeTripsApiService extends TripsApiService {
   Future<Trip> getTrip(String id) async => trip;
 }
 
-/// Review fake: serves [findings] until [resolved], then empty; [error]
-/// makes every fetch throw (the viewer-404 analog — provider has no value);
-/// [hoursError] fails only the checkHours variant (flaky hours backend).
+/// Review fake: serves [findings] until [resolved], then [resolvedFindings]
+/// (default all-clear — tests that fix one finding among several set the
+/// residual list instead); [error] makes every fetch throw (the viewer-404
+/// analog — provider has no value); [hoursError] fails only the checkHours
+/// variant (flaky hours backend).
 class _FakeReviewApiService extends TripReviewApiService {
   final List<TripFinding> findings;
   bool resolved = false;
+  List<TripFinding> resolvedFindings = const [];
   bool error = false;
   bool hoursError = false;
 
@@ -50,7 +54,7 @@ class _FakeReviewApiService extends TripReviewApiService {
       {bool checkHours = false}) async {
     if (error) throw Exception('403');
     if (checkHours && hoursError) throw Exception('hours backend down');
-    return resolved ? const [] : List.of(findings);
+    return List.of(resolved ? resolvedFindings : findings);
   }
 }
 
@@ -144,7 +148,7 @@ Future<void> _pumpScreen(
 Finder _healthIcon() => find.byTooltip('Trip health');
 
 void main() {
-  testWidgets('badge carries the count, colored by the worst severity',
+  testWidgets('badge counts only the attention tier, colored by its severity',
       (tester) async {
     final review = _FakeReviewApiService([
       _finding('warn', 'No transport booked from Athens to Naxos.'),
@@ -154,12 +158,60 @@ void main() {
     await _pumpScreen(tester, review: review);
 
     expect(_healthIcon(), findsOneWidget);
+    // 2 warns + 1 info → the badge reads 2, never the raw total.
+    expect(
+        find.descendant(of: find.byType(Badge), matching: find.text('2')),
+        findsOneWidget);
     expect(
         find.descendant(of: find.byType(Badge), matching: find.text('3')),
-        findsOneWidget);
+        findsNothing);
     // Worst severity is warn → the solid amber on-gradient pair.
     expect(tester.widget<Badge>(find.byType(Badge)).backgroundColor,
         AppColors.warningSolid);
+  });
+
+  testWidgets('info-only findings show a neutral dot, not a number',
+      (tester) async {
+    final review = _FakeReviewApiService([
+      _finding('info', 'Day 2 has nothing scheduled.'),
+      _finding('info', 'Hotel Delfini not booked yet.'),
+    ]);
+    await _pumpScreen(tester, review: review);
+
+    // No label → Material renders the small-dot variant.
+    final badge = tester.widget<Badge>(find.byType(Badge));
+    expect(badge.label, isNull);
+    expect(badge.backgroundColor, AppColors.neutralSolid);
+    expect(
+        find.descendant(of: find.byType(Badge), matching: find.text('2')),
+        findsNothing);
+  });
+
+  testWidgets('badge semantics announce the tier, not a bare number',
+      (tester) async {
+    final handle = tester.ensureSemantics();
+    final review = _FakeReviewApiService([
+      _finding('warn', 'No transport booked from Athens to Naxos.'),
+      _finding('warn', 'No lodging for the night of Aug 3.'),
+    ]);
+    await _pumpScreen(tester, review: review);
+    // RegExp: the button's tooltip semantics may merge with the label node.
+    expect(find.bySemanticsLabel(RegExp('2 items need attention')),
+        findsOneWidget);
+    handle.dispose();
+  });
+
+  testWidgets('dot badge semantics announce the suggestion count',
+      (tester) async {
+    final handle = tester.ensureSemantics();
+    final review = _FakeReviewApiService([
+      _finding('info', 'Day 2 has nothing scheduled.'),
+      _finding('info', 'Hotel Delfini not booked yet.'),
+    ]);
+    await _pumpScreen(tester, review: review);
+    expect(find.bySemanticsLabel(RegExp('2 suggestions available')),
+        findsOneWidget);
+    handle.dispose();
   });
 
   testWidgets('a critical finding turns the badge red', (tester) async {
@@ -210,10 +262,30 @@ void main() {
 
     expect(find.byType(TripReviewSection), findsOneWidget);
     expect(find.text('Trip health'), findsOneWidget);
-    expect(find.text('3 to review'), findsOneWidget);
+    expect(find.text('Mostly ready — 2 to fix'), findsOneWidget);
+    expect(find.text('Needs attention'), findsOneWidget);
     expect(
         find.text('No transport booked from Athens to Naxos.'), findsOneWidget);
+    // The info row starts collapsed behind the Suggestions header…
+    expect(find.text('Day 2 has nothing scheduled.'), findsNothing);
+    await tester.tap(find.text('Suggestions'));
+    await tester.pumpAndSettle();
+    // …and one tap reveals it.
     expect(find.text('Day 2 has nothing scheduled.'), findsOneWidget);
+  });
+
+  testWidgets('info-only sheet header reads as in-good-shape', (tester) async {
+    final review = _FakeReviewApiService([
+      _finding('info', 'Day 2 has nothing scheduled.'),
+      _finding('info', 'Hotel Delfini not booked yet.'),
+    ]);
+    await _pumpScreen(tester, review: review);
+
+    await tester.tap(_healthIcon());
+    await tester.pumpAndSettle();
+
+    expect(find.text('In good shape — 2 suggestions'), findsOneWidget);
+    expect(find.text('Needs attention'), findsNothing);
   });
 
   testWidgets('tapping a day-anchored finding closes the sheet and scrolls',
@@ -263,6 +335,77 @@ void main() {
     // Sheet stays open and re-renders empty; the badge behind it clears too.
     expect(find.byType(EmptyState), findsOneWidget);
     expect(find.byType(Badge), findsNothing);
+  });
+
+  testWidgets('fixing an info inside the expanded Suggestions live-updates',
+      (tester) async {
+    final review = _FakeReviewApiService([
+      TripFinding(
+        severity: 'info',
+        category: 'bookings',
+        message: 'Stay not booked',
+        tripId: 't1',
+        fix: const FindingFix(
+            action: 'mark_booked',
+            label: 'Mark booked',
+            itemId: 'acc-1',
+            entityType: 'accommodation'),
+      ),
+    ]);
+    final accommodations = _FakeAccommodationsApiService();
+    await _pumpScreen(tester, review: review, accommodations: accommodations);
+    expect(tester.widget<Badge>(find.byType(Badge)).label, isNull);
+
+    await tester.tap(_healthIcon());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Suggestions'));
+    await tester.pumpAndSettle();
+
+    review.resolved = true; // the server now considers it booked
+    await tester.tap(find.widgetWithText(FilledButton, 'Mark booked'));
+    await tester.pumpAndSettle();
+
+    expect(accommodations.patches, hasLength(1));
+    expect(find.byType(EmptyState), findsOneWidget);
+    expect(find.byType(Badge), findsNothing);
+  });
+
+  testWidgets('badge and framing flip to suggestions-only after the last warn',
+      (tester) async {
+    final info = _finding('info', 'Day 2 has nothing scheduled.');
+    final review = _FakeReviewApiService([
+      TripFinding(
+        severity: 'warn',
+        category: 'bookings',
+        message: 'Stay not booked',
+        tripId: 't1',
+        fix: const FindingFix(
+            action: 'mark_booked',
+            label: 'Mark booked',
+            itemId: 'acc-1',
+            entityType: 'accommodation'),
+      ),
+      info,
+    ])
+      ..resolvedFindings = [info];
+    final accommodations = _FakeAccommodationsApiService();
+    await _pumpScreen(tester, review: review, accommodations: accommodations);
+    expect(
+        find.descendant(of: find.byType(Badge), matching: find.text('1')),
+        findsOneWidget);
+
+    await tester.tap(_healthIcon());
+    await tester.pumpAndSettle();
+    expect(find.text('Mostly ready — 1 to fix'), findsOneWidget);
+
+    review.resolved = true;
+    await tester.tap(find.widgetWithText(FilledButton, 'Mark booked'));
+    await tester.pumpAndSettle();
+
+    // The sheet reframes to the calm info-only reading and the badge behind
+    // it becomes the dot.
+    expect(find.text('In good shape — 1 suggestion'), findsOneWidget);
+    expect(tester.widget<Badge>(find.byType(Badge)).label, isNull);
   });
 
   testWidgets('a failed fix closes the sheet so the error snackbar is seen',

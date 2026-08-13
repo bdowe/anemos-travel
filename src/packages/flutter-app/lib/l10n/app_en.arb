@@ -1238,8 +1238,34 @@
   },
   "healthDegradedTitle": "System degraded",
   "reviewSectionTitle": "Trip health",
-  "reviewCountToReview": "{count} to review",
-  "@reviewCountToReview": {
+  "reviewHeaderAttention": "{count, plural, one{Mostly ready — 1 to fix} other{Mostly ready — {count} to fix}}",
+  "@reviewHeaderAttention": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reviewHeaderSuggestionsOnly": "{count, plural, one{In good shape — 1 suggestion} other{In good shape — {count} suggestions}}",
+  "@reviewHeaderSuggestionsOnly": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reviewNeedsAttentionHeader": "Needs attention",
+  "reviewSuggestionsHeader": "Suggestions",
+  "reviewBadgeAttentionSemantics": "{count, plural, one{1 item needs attention} other{{count} items need attention}}",
+  "@reviewBadgeAttentionSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reviewBadgeSuggestionsSemantics": "{count, plural, one{1 suggestion available} other{{count} suggestions available}}",
+  "@reviewBadgeSuggestionsSemantics": {
     "placeholders": {
       "count": {
         "type": "int"
