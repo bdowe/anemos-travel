@@ -46,6 +46,7 @@ import '../utils/calendar_links.dart';
 import '../utils/clothing_recs.dart';
 import '../utils/date_formats.dart';
 import '../utils/leg_parity.dart';
+import '../utils/money_format.dart';
 import '../utils/share_link.dart';
 import '../utils/tracked_launch.dart';
 import '../utils/trip_days.dart';
@@ -54,6 +55,8 @@ import '../utils/trip_legs.dart';
 import '../widgets/add_itinerary_item_dialog.dart';
 import '../widgets/add_to_trip_sheet.dart';
 import '../widgets/app_map.dart';
+import '../services/api_client.dart' show ApiException;
+import '../widgets/booked_expense_prompt.dart';
 import '../widgets/booking_detail_row.dart';
 import '../widgets/booking_sheets.dart';
 import '../widgets/booking_todo_card.dart';
@@ -1220,7 +1223,124 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         });
       }
       _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
+      return;
     }
+    // Budget autopopulate rides the flip only AFTER the server accepted it
+    // (a rolled-back optimistic flip must never create or delete money).
+    if (!mounted) return;
+    if (booked) {
+      await _maybePromptBudgetExpense(todo: todo, stay: stay, segment: segment);
+    } else {
+      await _removeLinkedAutoExpense([
+        if (todo != null) todo.id,
+        if (stay != null) stay.id,
+        if (segment != null) segment.id,
+      ]);
+    }
+  }
+
+  /// Booked-flip budget autopopulate (specs/budget-v2): right after a
+  /// false→true flip lands, offer to record the price — the moment the
+  /// traveler actually has it in hand. Dedupe first: a linked expense for
+  /// ANY of the flip's row ids (todo + matched stay/segment flip together)
+  /// means this booking is already in the budget — a re-book after a manual
+  /// takeover stays silent; the server's upsert-by-source is the backstop
+  /// when the read fails. The link rides the most durable row
+  /// (stay ?? segment ?? todo). Undo on the confirmation snackbar deletes
+  /// the expense it just created — the booked state itself stays (the
+  /// checkbox is one tap away; Undo here is about the money).
+  Future<void> _maybePromptBudgetExpense(
+      {BookingTodo? todo, Accommodation? stay, TripSegment? segment}) async {
+    if (!mounted || _readOnly) return;
+    final l10n = context.l10n;
+    var currency = 'USD';
+    try {
+      currency =
+          (await ref.read(budgetProvider(widget.tripId).future)).currency;
+    } catch (_) {} // prompt still works; USD is the budget default
+    final ids = {
+      if (todo != null) todo.id,
+      if (stay != null) stay.id,
+      if (segment != null) segment.id,
+    };
+    try {
+      final expenses = await ref.read(expensesProvider(widget.tripId).future);
+      if (expenses.any((e) => ids.contains(e.sourceId))) return;
+    } catch (_) {}
+    if (!mounted) return;
+    final draft = await showBookedExpensePrompt(
+      context,
+      currency: currency,
+      prefill:
+          deriveBookedExpensePrefill(todo: todo, stay: stay, segment: segment),
+    );
+    if (draft == null || !mounted) return;
+    final source = stay != null
+        ? (kind: 'accommodation', id: stay.id)
+        : segment != null
+            ? (kind: 'segment', id: segment.id)
+            : (kind: 'booking_todo', id: todo!.id);
+    try {
+      final added = await ref.read(budgetApiServiceProvider).addExpense(
+            widget.tripId,
+            category: draft.category,
+            label: draft.label,
+            amount: draft.amount,
+            sourceKind: source.kind,
+            sourceId: source.id,
+          );
+      _invalidateBudget();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text(l10n.budgetPromptAdded(formatMoney(draft.amount, currency))),
+        action: SnackBarAction(
+          label: l10n.tripUndo,
+          onPressed: () async {
+            try {
+              await ref
+                  .read(budgetApiServiceProvider)
+                  .deleteExpense(widget.tripId, added.id);
+              _invalidateBudget();
+            } catch (e) {
+              _showSnack(l10n.tripUndoFailed(friendlyError(l10n, e)));
+            }
+          },
+        ),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      if (e is ApiException && e.statusCode == 422) {
+        _showSnack(l10n.budgetPromptLimitReached);
+      } else {
+        _showSnack(friendlyError(l10n, e));
+      }
+    }
+  }
+
+  /// Unbook cleanup: delete the auto (system-managed) expense linked to any
+  /// of [ids]. Best-effort — never rolls back a successful unbook; a
+  /// taken-over (auto=false) expense is the traveler's and stays
+  /// (migration 00058's contract).
+  Future<void> _removeLinkedAutoExpense(List<String> ids) async {
+    try {
+      final expenses = await ref.read(expensesProvider(widget.tripId).future);
+      var removed = false;
+      for (final e in expenses) {
+        if (e.auto && e.sourceId != null && ids.contains(e.sourceId)) {
+          await ref
+              .read(budgetApiServiceProvider)
+              .deleteExpense(widget.tripId, e.id);
+          removed = true;
+        }
+      }
+      if (removed) _invalidateBudget();
+    } catch (_) {}
+  }
+
+  void _invalidateBudget() {
+    ref.invalidate(budgetProvider(widget.tripId));
+    ref.invalidate(expensesProvider(widget.tripId));
   }
 
   /// Persists a drag-reorder of the Bookings section's residual "Other" cards.
@@ -4029,12 +4149,31 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           await _setEntityBooked(isAccommodation, itemId, true);
           await _afterFix();
           if (!mounted) return;
+          // Same ask as the row checkbox (the price is in hand right now);
+          // the dialog resolves before the Undo snackbar shows.
+          Accommodation? stay;
+          TripSegment? segment;
+          if (isAccommodation) {
+            for (final a in _stays) {
+              if (a.id == itemId) stay = a;
+            }
+          } else {
+            for (final s in _segments) {
+              if (s.id == itemId) segment = s;
+            }
+          }
+          if (stay != null || segment != null) {
+            await _maybePromptBudgetExpense(stay: stay, segment: segment);
+          }
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(l10n.tripMarkedAsBooked),
             action: SnackBarAction(
               label: l10n.tripUndo,
               onPressed: () async {
                 await _setEntityBooked(isAccommodation, itemId, false);
+                // Un-booking takes the system-managed expense with it.
+                await _removeLinkedAutoExpense([itemId]);
                 await _afterFix();
               },
             ),

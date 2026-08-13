@@ -694,6 +694,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get budgetSummaryNoTarget => 'no target';
 
   @override
+  String get budgetPromptTitle => 'Add to budget?';
+
+  @override
+  String get budgetPromptSkip => 'Skip';
+
+  @override
+  String budgetPromptAmountLabel(String currency) {
+    return 'Amount ($currency)';
+  }
+
+  @override
+  String budgetPromptAdded(String amount) {
+    return '$amount added to Budget';
+  }
+
+  @override
+  String get budgetPromptLimitReached =>
+      'Expense limit reached — remove one in Budget first';
+
+  @override
   String get budgetEmptyTitle => 'No budget yet';
 
   @override

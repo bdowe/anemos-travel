@@ -55,13 +55,18 @@ class _FakeBudgetApiService extends BudgetApiService {
   Future<Expense> addExpense(String tripId,
       {required String category,
       required String label,
-      required double amount}) async {
+      required double amount,
+      String? sourceKind,
+      String? sourceId}) async {
     addCount++;
     final e = Expense(
         id: 'new-$addCount',
         category: category,
         label: label,
-        amount: amount);
+        amount: amount,
+        auto: sourceKind != null, // server rule mirrored
+        sourceKind: sourceKind,
+        sourceId: sourceId);
     expenses.add(e);
     return e;
   }

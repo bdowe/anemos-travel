@@ -201,6 +201,14 @@ void main() {
     expect(accApi.updates, hasLength(1));
     expect(accApi.updates.single.$1, 'acc1');
     expect(accApi.updates.single.$2, {'booked': true});
+
+    // The successful flip is followed by the budget prompt (specs/budget-v2;
+    // its own coverage lives in trip_detail_booked_expense_prompt_test) —
+    // Skip it so the row underneath is unambiguous to the text finder.
+    expect(find.text('Add to budget?'), findsOneWidget);
+    await tester.tap(find.text('Skip'));
+    await tester.pumpAndSettle();
+
     // Optimistic strike-through on the detail row too (record flipped).
     final detailTitle = tester.widget<Text>(find.text('Hotel Lutetia'));
     expect(detailTitle.style?.decoration, TextDecoration.lineThrough);

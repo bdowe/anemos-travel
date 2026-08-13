@@ -48,10 +48,17 @@ class BudgetApiService {
     throw Exception('Failed to load expenses (${res.statusCode})');
   }
 
+  /// Adds an expense. [sourceKind]/[sourceId] (both or neither) link it to
+  /// the booking row that spawned it — the server then treats the POST as an
+  /// upsert-by-source (200 on a refresh/no-op, 201 on create) and marks the
+  /// row auto. Throws [ApiException] so callers can tell the 422 per-trip
+  /// cap apart from other failures.
   Future<Expense> addExpense(String tripId,
       {required String category,
       required String label,
-      required double amount}) async {
+      required double amount,
+      String? sourceKind,
+      String? sourceId}) async {
     final res = await apiClient.httpClient.post(
       Uri.parse('${apiClient.baseUrl}/trips/$tripId/budget/expenses'),
       headers: apiClient.jsonHeaders(json: true),
@@ -59,12 +66,17 @@ class BudgetApiService {
         'category': category,
         'label': label,
         'amount': amount,
+        if (sourceKind != null) 'source_kind': sourceKind,
+        if (sourceId != null) 'source_id': sourceId,
       }),
     );
-    if (res.statusCode == 201) {
+    if (res.statusCode == 201 || res.statusCode == 200) {
       return Expense.fromJson(jsonDecode(res.body));
     }
-    throw Exception('Failed to add expense (${res.statusCode})');
+    throw ApiException(
+        statusCode: res.statusCode,
+        message: res.body,
+        endpoint: 'budget/expenses');
   }
 
   /// Partial update — pass only the fields to change (category / label / amount
