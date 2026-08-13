@@ -113,7 +113,6 @@ TripDerivation _compute({
   List<Accommodation>? stays,
   List<TripSegment>? segments,
   Map<int, LocationTiming>? travelByPos,
-  String itemFilter = 'all',
   AppLocalizationsEn? l10n,
   int itemOrderEpoch = 0,
 }) =>
@@ -123,7 +122,6 @@ TripDerivation _compute({
       stays: stays ?? const [],
       segments: segments ?? const [],
       travelByPos: travelByPos ?? const {},
-      itemFilter: itemFilter,
       l10n: l10n ?? _l10n,
       itemOrderEpoch: itemOrderEpoch,
     );
@@ -151,7 +149,6 @@ void main() {
           stays: stays,
           segments: segments,
           travelByPos: travel,
-          itemFilter: 'all',
           l10n: _l10n,
           itemOrderEpoch: 0,
         ),
@@ -178,7 +175,6 @@ void main() {
         List<Accommodation>? newStays,
         List<TripSegment>? newSegments,
         Map<int, LocationTiming>? newTravel,
-        String itemFilter = 'all',
         Object? newL10n,
         int epoch = 0,
       }) =>
@@ -188,7 +184,6 @@ void main() {
             stays: newStays ?? stays,
             segments: newSegments ?? segments,
             travelByPos: newTravel ?? travel,
-            itemFilter: itemFilter,
             l10n: (newL10n ?? _l10n) as AppLocalizationsEn,
             itemOrderEpoch: epoch,
           );
@@ -205,8 +200,6 @@ void main() {
           reason: 'segments flip');
       expect(matchesWith(newTravel: <int, LocationTiming>{}), isFalse,
           reason: 'travelByPos flip');
-      expect(matchesWith(itemFilter: 'attraction'), isFalse,
-          reason: 'filter flip');
       expect(matchesWith(newL10n: AppLocalizationsEn()), isFalse,
           reason: 'l10n flip (locale switch delivers a new instance)');
       expect(matchesWith(epoch: 1), isFalse,
@@ -320,23 +313,6 @@ void main() {
       };
       final d = _compute(travelByPos: travel);
       expect(d.segmentLabels, {0: '30 min', 2: '1h 30m'});
-      // A category filter empties the labels (legs aren't globally adjacent).
-      final filtered =
-          _compute(travelByPos: travel, itemFilter: 'attraction');
-      expect(filtered.segmentLabels, isEmpty);
-    });
-
-    test('places lenses filter items; bookings lenses keep the whole set', () {
-      expect(
-        [for (final i in _compute(itemFilter: 'attraction').filtered) i.name],
-        ['Louvre', 'Colosseum', 'Trevi', 'Louvre Again'],
-      );
-      expect(
-        [for (final i in _compute(itemFilter: 'local').filtered) i.name],
-        ['Le Comptoir'],
-      );
-      expect(_compute(itemFilter: 'unbooked').filtered.length, 5);
-      expect(_compute(itemFilter: 'bookings').filtered.length, 5);
     });
 
     test('map inputs: shown gate, destinations, endpoints', () {
@@ -431,36 +407,17 @@ void main() {
       expect(withStay.mappedLegKeys, {'Paris', 'Rome'});
     });
 
-    test('legFilteredItems: position-set of the full leg ∩ lens', () {
+    test('legFilteredItems: the leg\'s own run, All = the whole set', () {
       final d = _compute();
+      expect(d.items.length, 5, reason: 'the full itinerary, always');
       expect([for (final i in d.legFilteredItems('Rome')) i.name],
           ['Colosseum', 'Trevi']);
       expect([for (final i in d.legFilteredItems('Paris#2')) i.name],
           ['Louvre Again']);
       expect(d.legFilteredItems('Nowhere'), isEmpty);
-      expect(identical(d.legFilteredItems(null), d.filtered), isTrue);
+      expect(identical(d.legFilteredItems(null), d.items), isTrue);
       expect(identical(d.legFilteredItems('Rome'), d.legFilteredItems('Rome')),
           isTrue, reason: 'stable identity per (derivation, key)');
-
-      // A lens that drops the middle city merges the two Paris runs in
-      // GROUPS — but the full-leg position set keeps focus correct for the
-      // second visit, which no longer exists as a group key.
-      final merged = [
-        _item(0, 'Louvre', city: 'Paris', day: 1, lat: 48.86, lng: 2.35),
-        _item(1, 'Osteria',
-            city: 'Rome', day: 2, lat: 41.89, lng: 12.49,
-            category: 'restaurant'),
-        _item(2, 'Louvre Again', city: 'Paris', day: 3, lat: 48.86, lng: 2.35),
-      ];
-      final lensed =
-          _compute(trip: _trip(items: merged), itemFilter: 'attraction');
-      expect([for (final g in lensed.groups) g.key], ['Paris']);
-      expect(
-          [for (final l in lensed.legs) l.key], ['Paris', 'Rome', 'Paris#2']);
-      expect([for (final i in lensed.legFilteredItems('Paris#2')) i.name],
-          ['Louvre Again']);
-      expect(lensed.legFilteredItems('Rome'), isEmpty,
-          reason: 'the lens dropped the leg\'s only item');
     });
 
     test('legFilteredStays: raw-range night overlap, checkout-exclusive', () {
@@ -554,35 +511,14 @@ void main() {
       expect(dayless.dayForLeg('Rome'), 4);
     });
 
-    test('groupKeyForLeg: identity without a lens, merged key under one', () {
-      // No places lens → groups run the same split as legs: identity.
+    test('groupKeyForLeg: identity for live keys, null for stale ones', () {
+      // Groups run the same split as legs: identity, clamped.
       final d = _compute();
       expect(d.groupKeyForLeg('Paris'), 'Paris');
       expect(d.groupKeyForLeg('Rome'), 'Rome');
       expect(d.groupKeyForLeg('Paris#2'), 'Paris#2');
       expect(d.groupKeyForLeg('Nowhere'), isNull, reason: 'stale keys clamp');
       expect(d.groupKeyForLeg(null), isNull);
-
-      // Bookings lenses keep the places set whole → still identity.
-      final bookings = _compute(itemFilter: 'bookings');
-      expect(bookings.groupKeyForLeg('Paris#2'), 'Paris#2');
-
-      // An attractions lens drops Rome's only item and merges the two Paris
-      // runs into ONE group keyed 'Paris': both legs map to it, and the
-      // fully-filtered-out leg maps to nothing (its items aren't in the
-      // list, so nothing should render open).
-      final merged = [
-        _item(0, 'Louvre', city: 'Paris', day: 1, lat: 48.86, lng: 2.35),
-        _item(1, 'Osteria',
-            city: 'Rome', day: 2, lat: 41.89, lng: 12.49,
-            category: 'restaurant'),
-        _item(2, 'Louvre Again', city: 'Paris', day: 3, lat: 48.86, lng: 2.35),
-      ];
-      final lensed =
-          _compute(trip: _trip(items: merged), itemFilter: 'attraction');
-      expect(lensed.groupKeyForLeg('Paris'), 'Paris');
-      expect(lensed.groupKeyForLeg('Paris#2'), 'Paris');
-      expect(lensed.groupKeyForLeg('Rome'), isNull);
     });
 
     test('city fillers keep their group but drop their day keys', () {

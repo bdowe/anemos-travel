@@ -166,17 +166,6 @@ Future<(_FakeBookingTodosApiService, _FakeAccommodationsApiService)> _pump(
   return (todosApi, accApi);
 }
 
-Future<void> _selectFilter(WidgetTester tester, String label) async {
-  await tester.tap(find.byIcon(Icons.filter_list));
-  await tester.pumpAndSettle();
-  // Tap the menu item, not its Text: the checked item's label can sit under
-  // the check-mark overlay, which trips tap()'s hit-test warning.
-  await tester.tap(find.ancestor(
-      of: find.text(label),
-      matching: find.byWidgetPredicate((w) => w is CheckedPopupMenuItem)));
-  await tester.pumpAndSettle();
-}
-
 /// Taps the Bookings header tab; when [count] is given, first pins the
 /// booked-progress pill riding the tab ('1/2' etc.) — the counter is a
 /// [StatusPill] beside the label now, not part of it (dropped entirely on
@@ -194,31 +183,6 @@ Future<void> _openBookingsTab(WidgetTester tester, [String? count]) async {
 }
 
 void main() {
-  testWidgets("Locals' picks lens shows only credited items", (tester) async {
-    _useTallViewport(tester);
-    await _pump(
-        tester,
-        _trip(todos: const [
-          BookingTodo(
-              id: 'td-stay',
-              kind: 'stay',
-              todoKey: 'stay:paris',
-              title: 'Stay in Paris'),
-        ]));
-
-    // Unfiltered view: both items plus the inline booking row.
-    expect(find.text('Louvre'), findsOneWidget);
-    expect(find.text('Café de Flore'), findsOneWidget);
-    expect(find.byType(BookingTodoRow), findsOneWidget);
-
-    await _selectFilter(tester, "Locals' picks");
-
-    // Only the credited item survives; booking rows hide like any places lens.
-    expect(find.text('Café de Flore'), findsOneWidget);
-    expect(find.text('Louvre'), findsNothing);
-    expect(find.byType(BookingTodoRow), findsNothing);
-  });
-
   testWidgets(
       'unbooked lens lists only unbooked booking rows and no item tiles',
       (tester) async {
@@ -624,24 +588,6 @@ void main() {
     expect(find.text('Louvre'), findsOneWidget);
   });
 
-  testWidgets('the filter menu is places-only — no lens entries, no divider',
-      (tester) async {
-    _useTallViewport(tester);
-    await _pump(tester, mixedTrip());
-
-    await tester.tap(find.byIcon(Icons.filter_list));
-    await tester.pumpAndSettle();
-
-    expect(find.byWidgetPredicate((w) => w is CheckedPopupMenuItem),
-        findsNWidgets(4));
-    for (final label in ['All', 'Attractions', 'Restaurants', "Locals' picks"]) {
-      expect(find.text(label), findsOneWidget);
-    }
-    expect(find.text('All bookings'), findsNothing);
-    expect(find.text('Not booked yet'), findsNothing);
-    expect(find.byType(PopupMenuDivider), findsNothing);
-  });
-
   // ——— The Bookings view's single add CTA: one "+ Add booking" menu in the
   // header (the view's "Add place"), which replaced the itinerary-tail
   // Add stay / Add transport / Add booking trio.
@@ -710,47 +656,20 @@ void main() {
     expect(find.text('Add booking'), findsOneWidget);
   });
 
-  testWidgets(
-      'a places filter round-trips through the Bookings tab back to All',
+  testWidgets('re-tapping the selected Itinerary tab is a no-op',
       (tester) async {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    await _selectFilter(tester, 'Restaurants');
-    expect(find.text('Café de Flore'), findsOneWidget);
-    expect(find.text('Louvre'), findsNothing);
-
-    // Entering the Bookings view drops the places filter (as the menu and
-    // counter always did)...
-    await _openBookingsTab(tester, '1/2');
-    expect(
-        find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
-
-    // ...so returning lands on the full itinerary, not the stale filter.
-    await tester.tap(find.text('Itinerary'));
-    await tester.pumpAndSettle();
     expect(find.text('Louvre'), findsOneWidget);
     expect(find.text('Café de Flore'), findsOneWidget);
-  });
-
-  testWidgets(
-      're-tapping the selected Itinerary tab is a no-op that preserves an '
-      'active places filter', (tester) async {
-    _useTallViewport(tester);
-    await _pump(tester, mixedTrip());
-
-    await _selectFilter(tester, "Locals' picks");
-    expect(find.text('Café de Flore'), findsOneWidget);
-    expect(find.text('Louvre'), findsNothing);
-    // A places filter is an Itinerary-view state: the tab stays selected...
     expect(tester.widget<Text>(find.text('Itinerary')).style?.fontWeight,
         FontWeight.w700);
 
-    // ...and an idle tap on it doesn't clear the filter.
     await tester.tap(find.text('Itinerary'), warnIfMissed: false);
     await tester.pumpAndSettle();
+    expect(find.text('Louvre'), findsOneWidget);
     expect(find.text('Café de Flore'), findsOneWidget);
-    expect(find.text('Louvre'), findsNothing);
   });
 
   testWidgets(
@@ -808,29 +727,24 @@ void main() {
     expect(find.text('Budget'), findsOneWidget);
   });
 
-  testWidgets('a places filter round-trips through the Budget tab back to All',
+  testWidgets('the Budget tab round-trips back to the full itinerary',
       (tester) async {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip(), budget: _FakeBudgetApiService());
 
-    await _selectFilter(tester, 'Restaurants');
-    expect(find.text('Café de Flore'), findsOneWidget);
-    expect(find.text('Louvre'), findsNothing);
-
     await tester.tap(find.text('Budget'));
     await tester.pumpAndSettle();
     expect(find.text('No budget yet'), findsOneWidget);
+    expect(find.text('Louvre'), findsNothing);
 
-    // Returning lands on the full itinerary, not the stale filter.
     await tester.tap(find.text('Itinerary'));
     await tester.pumpAndSettle();
     expect(find.text('Louvre'), findsOneWidget);
     expect(find.text('Café de Flore'), findsOneWidget);
   });
 
-  testWidgets(
-      're-tapping the selected Budget tab is a no-op; a category-menu pick '
-      'exits the view', (tester) async {
+  testWidgets('re-tapping the selected Budget tab is a no-op',
+      (tester) async {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip(), budget: _FakeBudgetApiService());
 
@@ -839,12 +753,6 @@ void main() {
     await tester.tap(find.text('Budget'), warnIfMissed: false);
     await tester.pumpAndSettle();
     expect(find.text('No budget yet'), findsOneWidget);
-
-    // The places filter menu stays reachable and its pick exits Budget —
-    // every _itemFilter writer keeps the tabs honest for free.
-    await _selectFilter(tester, 'Restaurants');
-    expect(find.text('No budget yet'), findsNothing);
-    expect(find.text('Café de Flore'), findsOneWidget);
   });
 
   testWidgets('viewer with an empty budget gets no Budget tab',

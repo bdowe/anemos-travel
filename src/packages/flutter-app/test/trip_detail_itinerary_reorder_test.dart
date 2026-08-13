@@ -185,30 +185,6 @@ void main() {
     expect(find.textContaining('Could not reorder'), findsOneWidget);
   });
 
-  testWidgets('category filter hides the drag handles',
-      (WidgetTester tester) async {
-    _useTallViewport(tester);
-    await _pump(
-      tester,
-      _tripWith([
-        _item(0, 'Louvre', 'attraction', day: 1, city: 'Paris'),
-        _item(1, 'Orsay', 'attraction', day: 1, city: 'Paris'),
-        _item(2, 'Le Comptoir', 'restaurant', day: 1, city: 'Paris'),
-      ]),
-    );
-    expect(find.byIcon(Icons.drag_indicator), findsNWidgets(3));
-
-    // The category filter lives in a popup menu in the itinerary header.
-    await tester.tap(find.byIcon(Icons.filter_list));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Attractions'));
-    await tester.pumpAndSettle();
-
-    // Filtered rows are a non-contiguous subset — no inline drag.
-    expect(find.text('Louvre'), findsOneWidget);
-    expect(find.byIcon(Icons.drag_indicator), findsNothing);
-  });
-
   testWidgets('a single-item batch gets no drag handle',
       (WidgetTester tester) async {
     _useTallViewport(tester);
