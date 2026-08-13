@@ -39,13 +39,13 @@ class ContinueChatsSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionHeader(title: context.l10n.continueChatsTitle),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.md),
         if (leading != null) ...[
           leading!,
           const SizedBox(height: AppSpacing.sm),
         ],
         for (final c in resumable) ContinueChatCard(chat: c),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.xl),
       ],
     );
   }
