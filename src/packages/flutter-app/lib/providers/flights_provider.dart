@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/airport.dart';
 import '../models/flight_offer.dart';
 import '../models/flight_search_request.dart';
+import '../services/api_client.dart';
 import '../services/flights_api_service.dart';
 import 'api_client_provider.dart';
 
@@ -18,10 +21,17 @@ final airportSearchProvider =
 });
 
 /// Resolves a saved home-airport IATA code to map coordinates (a record, not
-/// LatLng, so the providers layer stays free of map imports). Errors resolve
-/// to null rather than surfacing: the one contract callers rely on is
-/// "no coordinates → no home legs on the map", and a session-cached errored
-/// family provider would otherwise pin the failure until restart.
+/// LatLng, so the providers layer stays free of map imports).
+///
+/// `null` means CONFIRMED empty — the lookup succeeded and found no
+/// coordinates for the code — and is correctly cached for the session.
+/// Transport/HTTP failures surface as AsyncError instead (the map renders
+/// them identically via `valueOrNull`), and transient ones arm a one-shot
+/// 30s `invalidateSelf` so the overlay self-heals while watched. Without
+/// that, this non-autoDispose family would pin one bad boot-time request —
+/// and an empty home overlay — for the whole session; autoDispose alone
+/// can't help because the map watches continuously, so a cached error is
+/// never released.
 final homeAirportPointProvider =
     FutureProvider.family<({double lat, double lng})?, String>(
         (ref, iata) async {
@@ -30,8 +40,12 @@ final homeAirportPointProvider =
   final List<Airport> results;
   try {
     results = await ref.watch(flightsApiServiceProvider).searchAirports(code);
-  } catch (_) {
-    return null;
+  } catch (e) {
+    if (isTransientError(e)) {
+      final retry = Timer(const Duration(seconds: 30), ref.invalidateSelf);
+      ref.onDispose(retry.cancel);
+    }
+    rethrow;
   }
   Airport? match;
   for (final a in results) {

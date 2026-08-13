@@ -34,6 +34,37 @@ class _FakeTripsApiService extends TripsApiService {
   Future<Trip> getTrip(String id) async => trip;
 }
 
+/// First getPreferences call fails transiently; later calls return EWR. The
+/// A4 regression fixture: a prefs value that lands only after the first
+/// build must reach the map through the screen's own guarded setState, not
+/// an incidental rebuild from an unrelated code path.
+class _QueuedPrefsApi implements PreferencesApiService {
+  int calls = 0;
+
+  @override
+  ApiClient get apiClient => throw UnsupportedError('unused in tests');
+
+  @override
+  Future<TravelerPreferences> getPreferences() async {
+    calls++;
+    if (calls == 1) {
+      throw ApiException(
+          statusCode: 429, message: 'rate limited', endpoint: '/preferences');
+    }
+    return const TravelerPreferences(homeAirport: 'EWR');
+  }
+
+  @override
+  Future<TravelerPreferences> savePreferences({
+    String? budget,
+    String? pace,
+    required List<String> interests,
+    String? homeAirport,
+    String? profileNotes,
+  }) async =>
+      const TravelerPreferences(homeAirport: 'EWR');
+}
+
 class _FakePrefsApi implements PreferencesApiService {
   @override
   ApiClient get apiClient => throw UnsupportedError('unused in tests');
@@ -180,6 +211,46 @@ void main() {
 
     expect(map(tester).home, isNull);
     expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'prefs failing on boot and succeeding on a quiet refresh still reach '
+      'the map (guarded setState, not an incidental rebuild)',
+      (WidgetTester tester) async {
+    final prefsApi = _QueuedPrefsApi();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          tripsApiServiceProvider.overrideWithValue(_FakeTripsApiService(trip)),
+          preferencesApiServiceProvider.overrideWithValue(prefsApi),
+          homeAirportPointProvider('EWR')
+              .overrideWith((ref) async => homePoint),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: testLocalizationsDelegates,
+          home: const TripDetailScreen(tripId: 't1'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Boot: the prefs fetch 429'd — no home overlay yet.
+    expect(map(tester).home, isNull);
+
+    // Quiet refresh (drive RefreshIndicator.onRefresh directly — the fling
+    // path is covered by the offline tests; over the pinned map card the
+    // gesture is unreliable): loadIfNeeded retries the still-null prefs and
+    // succeeds; the change-guarded setState must rebuild the map. On the
+    // quiet path there is no incidental full-screen setState to hide behind.
+    final indicator =
+        tester.widget<RefreshIndicator>(find.byType(RefreshIndicator));
+    await indicator.onRefresh();
+    await tester.pumpAndSettle();
+
+    expect(prefsApi.calls, 2);
+    expect(map(tester).home, isNotNull);
+    expect(map(tester).home!.label, 'EWR');
     expect(tester.takeException(), isNull);
   });
 }

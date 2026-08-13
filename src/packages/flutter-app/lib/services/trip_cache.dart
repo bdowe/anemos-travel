@@ -39,9 +39,13 @@ class TripCache {
   /// opposed to an HTTP error response. `package:http` >=1.0 wraps socket/IO
   /// failures in [http.ClientException] on every platform; the string check
   /// is belt-and-braces for raw dart:io SocketExceptions (dart:io itself is
-  /// not importable on web). HTTP non-200s in TripsApiService are thrown as
-  /// plain `Exception('... (status)')` and therefore never match — a
-  /// 403/404/500 must NOT fall back to the cache.
+  /// not importable on web). HTTP failures never match: `getTrip` throws a
+  /// typed [ApiException] (and other TripsApiService methods plain
+  /// `Exception('... (status)')`), neither of which is a transport type — a
+  /// 403/404/500 must NOT fall back to the cache here. The trip screen's
+  /// loud-load path separately opts transient HTTP statuses (429/502/503)
+  /// into the fallback via `isTransientError`; that gate is the caller's,
+  /// deliberately not this predicate's.
   static bool isNetworkError(Object e) =>
       e is http.ClientException ||
       e is TimeoutException ||

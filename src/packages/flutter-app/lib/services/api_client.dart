@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:http/http.dart' as http;
 import '../models/route_request.dart';
 import '../models/route_response.dart';
@@ -45,6 +47,97 @@ class ApiClient {
     final token = authToken;
     if (token != null) h['Authorization'] = 'Bearer $token';
     return h;
+  }
+
+  /// One shared request path for boot-critical JSON calls: a per-attempt
+  /// [timeout] plus a small bounded retry, so one transient hiccup (a
+  /// rate-limit 429, a load-shed 503, a dropped keepalive connection) doesn't
+  /// become a dead screen or a session-pinned provider error.
+  ///
+  /// Retry rules, explicit by design:
+  /// - **429/503 retry for any method**: this API emits them only from the
+  ///   rate limiter and the concurrency shedder, both of which reject BEFORE
+  ///   the handler runs, so the request provably had no effect. If a handler
+  ///   ever emits its own 429/503, revisit this rule.
+  /// - **502 and transport failures** ([http.ClientException],
+  ///   [TimeoutException]) **retry GETs only** — whether the handler ran is
+  ///   unknowable.
+  /// - Any other status fails immediately (no retry).
+  /// Delays honor `Retry-After` clamped to 4s, else 500ms·2ⁿ plus jitter.
+  ///
+  /// Exhausted attempts: HTTP failures throw [ApiException] with the status;
+  /// transport failures rethrow the ORIGINAL exception unwrapped — callers
+  /// like `TripCache.isNetworkError` classify on the concrete type.
+  Future<http.Response> send(
+    String method,
+    String path, {
+    Map<String, String>? query,
+    Object? jsonBody,
+    Duration timeout = const Duration(seconds: 12),
+    int attempts = 3,
+  }) async {
+    var uri = Uri.parse('$_baseUrl$path');
+    if (query != null) uri = uri.replace(queryParameters: query);
+    final headers = jsonHeaders(json: jsonBody != null);
+    final body = jsonBody == null ? null : jsonEncode(jsonBody);
+
+    http.Response? res;
+    for (var attempt = 0; attempt < attempts; attempt++) {
+      final lastAttempt = attempt == attempts - 1;
+      try {
+        res = await _issue(method, uri, headers, body).timeout(timeout);
+      } on Exception catch (e) {
+        final transport = e is http.ClientException || e is TimeoutException;
+        if (!transport || lastAttempt || method != 'GET') rethrow;
+        await Future<void>.delayed(_retryDelay(attempt, null));
+        continue;
+      }
+      final code = res.statusCode;
+      if (code >= 200 && code < 300) return res;
+      final retryable =
+          code == 429 || code == 503 || (code == 502 && method == 'GET');
+      if (!retryable || lastAttempt) break;
+      await Future<void>.delayed(
+          _retryDelay(attempt, res.headers['retry-after']));
+    }
+    final failed = res!;
+    final snippet = failed.body.length > 200
+        ? failed.body.substring(0, 200)
+        : failed.body;
+    throw ApiException(
+      statusCode: failed.statusCode,
+      message: 'Request failed: $snippet',
+      endpoint: path,
+    );
+  }
+
+  Future<http.Response> _issue(
+      String method, Uri uri, Map<String, String> headers, String? body) {
+    switch (method) {
+      case 'GET':
+        return _client.get(uri, headers: headers);
+      case 'POST':
+        return _client.post(uri, headers: headers, body: body);
+      case 'PUT':
+        return _client.put(uri, headers: headers, body: body);
+      case 'PATCH':
+        return _client.patch(uri, headers: headers, body: body);
+      case 'DELETE':
+        return _client.delete(uri, headers: headers, body: body);
+      default:
+        throw ArgumentError.value(method, 'method', 'unsupported HTTP method');
+    }
+  }
+
+  static final Random _retryJitter = Random();
+
+  Duration _retryDelay(int attempt, String? retryAfterHeader) {
+    // Retry-After (seconds form) is authoritative but clamped: the UI cannot
+    // hang multiple seconds on a value meant for background clients.
+    final ra = int.tryParse(retryAfterHeader ?? '');
+    if (ra != null) return Duration(seconds: ra.clamp(0, 4));
+    return Duration(
+        milliseconds: 500 * (1 << attempt) + _retryJitter.nextInt(250));
   }
 
   /// Optimize a route for locations
@@ -170,3 +263,18 @@ class ApiException implements Exception {
   /// Whether this is a server error (5xx)
   bool get isServerError => statusCode >= 500;
 }
+
+/// True when [e] describes a transient condition worth an automatic retry or
+/// self-heal: a transport-level failure, or an HTTP status this API emits
+/// only for temporary states (rate limit 429, shed 503, gateway 502/504).
+/// Stable outcomes (401/403/404/422…) never match — retrying them can only
+/// mask a real bug or resurrect revoked data.
+bool isTransientError(Object e) =>
+    e is http.ClientException ||
+    e is TimeoutException ||
+    (e is ApiException &&
+        (e.statusCode == 0 ||
+            e.statusCode == 429 ||
+            e.statusCode == 502 ||
+            e.statusCode == 503 ||
+            e.statusCode == 504));

@@ -8,13 +8,11 @@ class PreferencesApiService {
 
   PreferencesApiService(this.apiClient);
 
+  /// Boot-critical (home airport rides on this): [ApiClient.send] gives it a
+  /// timeout + bounded retry; HTTP failures throw a typed [ApiException].
   Future<TravelerPreferences> getPreferences() async {
-    final res = await apiClient.httpClient
-        .get(Uri.parse('${apiClient.baseUrl}/preferences'), headers: apiClient.jsonHeaders());
-    if (res.statusCode == 200) {
-      return TravelerPreferences.fromJson(jsonDecode(res.body));
-    }
-    throw Exception('Failed to load preferences (${res.statusCode})');
+    final res = await apiClient.send('GET', '/preferences');
+    return TravelerPreferences.fromJson(jsonDecode(res.body));
   }
 
   Future<TravelerPreferences> savePreferences({

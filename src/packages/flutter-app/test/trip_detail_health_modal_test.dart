@@ -54,6 +54,25 @@ class _FakeReviewApiService extends TripReviewApiService {
   }
 }
 
+/// First fetch fails transiently (503); later fetches serve the findings.
+/// The provider's one-shot 30s invalidateSelf must restore the hidden icon
+/// with no user action — the manual retry lives behind the icon itself.
+class _TransientThenOkReviewApi extends _FakeReviewApiService {
+  int calls = 0;
+  _TransientThenOkReviewApi(super.findings);
+
+  @override
+  Future<List<TripFinding>> getReview(String tripId,
+      {bool checkHours = false}) {
+    calls++;
+    if (calls == 1) {
+      return Future.error(ApiException(
+          statusCode: 503, message: 'shed', endpoint: 'review'));
+    }
+    return super.getReview(tripId, checkHours: checkHours);
+  }
+}
+
 class _FakeAccommodationsApiService extends AccommodationsApiService {
   final List<Map<String, dynamic>> patches = [];
   bool failUpdate = false;
@@ -326,5 +345,26 @@ void main() {
     await _pumpScreen(tester,
         review: review, surface: const Size(1200, 800));
     expect(_healthIcon(), findsOneWidget);
+  });
+
+  testWidgets('a transient review failure self-heals and restores the icon',
+      (tester) async {
+    final review = _TransientThenOkReviewApi([
+      _finding('warn', 'No lodging for the night of Aug 3.'),
+    ]);
+    await _pumpScreen(tester, review: review);
+
+    // The 503 hid the icon — previously for the whole session, since the
+    // only retry path (the sheet) opens from the icon itself.
+    expect(_healthIcon(), findsNothing);
+
+    // The provider's one-shot 30s invalidateSelf fires on the fake clock and
+    // the active app-bar watch refetches.
+    await tester.pump(const Duration(seconds: 31));
+    await tester.pumpAndSettle();
+
+    expect(review.calls, 2);
+    expect(_healthIcon(), findsOneWidget);
+    expect(find.byType(Badge), findsOneWidget);
   });
 }

@@ -39,6 +39,7 @@ import '../providers/budget_provider.dart';
 import '../models/trip_finding.dart';
 import '../models/budget.dart';
 import '../navigation/app_nav.dart';
+import '../services/api_client.dart' show isTransientError;
 import '../services/trip_cache.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
@@ -141,7 +142,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     with WidgetsBindingObserver {
   Trip? _trip;
   bool _loading = true;
-  String? _error;
+  // The raw caught load error (not a string): the error screen classifies it
+  // via friendlyError(l10n, ...) so a 429 reads differently from a 500.
+  Object? _error;
   // Non-null while _trip is a cached copy served because the network was
   // unreachable (value = when the copy was saved). The screen is read-only
   // in this mode; a successful live load clears it.
@@ -437,7 +440,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       // helpers self-guard with mounted checks and swallow their own errors.
       Future<void> syncTodosAfterPrefs() async {
         await ref.read(preferencesProvider.notifier).loadIfNeeded();
-        _homeAirport = ref.read(preferencesProvider).prefs?.homeAirport;
+        // Under setState: the map's home overlay reads _homeAirport, and a
+        // prefs load that lands after the first build must trigger its own
+        // rebuild — riding on _syncBookingTodos' setState left the overlay
+        // permanently absent whenever that sync was skipped (empty trip) or
+        // failed.
+        final home = ref.read(preferencesProvider).prefs?.homeAirport;
+        if (mounted && home != _homeAirport) {
+          setState(() => _homeAirport = home);
+        }
         if (mounted && (trip.items ?? const []).isNotEmpty) {
           await _syncBookingTodos(trip);
         }
@@ -449,11 +460,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         syncTodosAfterPrefs(),
       ]);
     } catch (e) {
-      // Loud path + network-level failure: fall back to the cached copy and
-      // render it read-only. HTTP errors (403/404/500) never reach here —
-      // isNetworkError excludes them — so a revoked or deleted trip can't
-      // resurrect from a stale copy.
-      if (mounted && !quiet && TripCache.isNetworkError(e)) {
+      // Loud path: fall back to the cached copy and render it read-only for
+      // network-level failures AND transient HTTP failures (429/502/503/504
+      // surviving send()'s own retries) — a rate-limited boot with a good
+      // cached copy must not dead-end on an error screen. Stable HTTP errors
+      // (403/404/500) never match either predicate, so a revoked or deleted
+      // trip can't resurrect from a stale copy.
+      if (mounted && !quiet &&
+          (TripCache.isNetworkError(e) || isTransientError(e))) {
         final cached = await ref.read(tripCacheProvider).readTrip(widget.tripId);
         if (cached != null && mounted) {
           setState(() {
@@ -496,7 +510,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         }
         return;
       }
-      if (mounted && !quiet) setState(() => _error = e.toString());
+      if (mounted && !quiet) setState(() => _error = e);
     } finally {
       if (mounted && !quiet) setState(() => _loading = false);
       if (mounted) _syncStatusPolling();
@@ -4964,6 +4978,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(l10n.tripLoadFailed),
+                      const SizedBox(height: 4),
+                      // Status-aware subtitle: a residual 429 reads as "slow
+                      // down a moment", offline as a network problem — not
+                      // one opaque dead end for every failure.
+                      Text(
+                        friendlyError(l10n, _error),
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textAlign: TextAlign.center,
+                      ),
                       const SizedBox(height: 8),
                       FilledButton(
                           onPressed: _load, child: Text(l10n.commonRetry)),
