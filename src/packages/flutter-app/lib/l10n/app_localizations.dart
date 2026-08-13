@@ -3404,6 +3404,18 @@ abstract class AppLocalizations {
   /// **'System degraded'**
   String get healthDegradedTitle;
 
+  /// No description provided for @healthRecoveredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'System recovered'**
+  String get healthRecoveredTitle;
+
+  /// No description provided for @notifOpsOpenHealth.
+  ///
+  /// In en, this message translates to:
+  /// **'View system health'**
+  String get notifOpsOpenHealth;
+
   /// No description provided for @reviewSectionTitle.
   ///
   /// In en, this message translates to:

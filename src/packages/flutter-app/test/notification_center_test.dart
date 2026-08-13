@@ -54,7 +54,8 @@ class _FakeNotificationsApiService extends NotificationsApiService {
   }
 
   @override
-  Future<int> unreadCount() async => notifications.where((n) => n.isUnread).length;
+  Future<int> unreadCount() async =>
+      notifications.where((n) => n.isUnread).length;
 }
 
 UserModel _user() => UserModel(
@@ -93,6 +94,30 @@ AppNotification _priceDrop({
       readAt: readAt,
     );
 
+/// An ops health row as the API writes it: the payload carries only
+/// `{degraded, reasons[]}` — no title/message — which is why these rows used to
+/// fall through to the generic body and render a bare "Ops Alert".
+AppNotification _ops({
+  String id = 'ops-1',
+  String type = 'ops_alert',
+  Object? reasons = const [
+    'backups stale',
+    'AI provider failing: credit balance'
+  ],
+  String createdAt = '2026-07-15T12:00:00Z',
+  String? readAt,
+}) =>
+    AppNotification(
+      id: id,
+      type: type,
+      payload: {
+        'degraded': type == 'ops_alert',
+        if (reasons != null) 'reasons': reasons,
+      },
+      createdAt: createdAt,
+      readAt: readAt,
+    );
+
 Future<_FakeNotificationsApiService> _pump(
   WidgetTester tester,
   List<AppNotification> notifications,
@@ -105,7 +130,8 @@ Future<_FakeNotificationsApiService> _pump(
         notificationsApiServiceProvider.overrideWithValue(service),
       ],
       child: MaterialApp(
-      localizationsDelegates: testLocalizationsDelegates,home: NotificationCenterScreen()),
+          localizationsDelegates: testLocalizationsDelegates,
+          home: NotificationCenterScreen()),
     ),
   );
   await tester.pumpAndSettle();
@@ -233,6 +259,67 @@ void main() {
       ),
     ]);
     expect(find.text('Weekly Digest'), findsOneWidget);
+  });
+
+  testWidgets('ops_alert names what is wrong instead of a bare type name',
+      (tester) async {
+    await _pump(tester, [_ops()]);
+    expect(find.text('System degraded'), findsOneWidget);
+    expect(find.text('• backups stale'), findsOneWidget);
+    expect(find.text('• AI provider failing: credit balance'), findsOneWidget);
+    // The regression this whole change exists to prevent.
+    expect(find.text('Ops Alert'), findsNothing);
+  });
+
+  testWidgets('ops_recovered reads as all clear', (tester) async {
+    await _pump(tester, [_ops(type: 'ops_recovered', reasons: const [])]);
+    expect(find.text('System recovered'), findsOneWidget);
+    expect(find.textContaining('•'), findsNothing);
+    expect(find.text('Ops Recovered'), findsNothing);
+  });
+
+  testWidgets('an ops row with a missing reasons list still renders',
+      (tester) async {
+    await _pump(tester, [_ops(reasons: null)]);
+    expect(find.text('System degraded'), findsOneWidget);
+    expect(find.text('View system health'), findsOneWidget);
+  });
+
+  testWidgets('an ops row with a malformed reasons payload still renders',
+      (tester) async {
+    // Not a list, and a list with non-string members: neither may throw in a
+    // feed row.
+    await _pump(tester, [
+      _ops(id: 'ops-a', reasons: 'backups stale'),
+      _ops(id: 'ops-b', reasons: const [42, 'backups stale']),
+    ]);
+    expect(find.text('System degraded'), findsNWidgets(2));
+    expect(find.text('• backups stale'), findsOneWidget);
+  });
+
+  testWidgets('ops rows are tappable; other rows are not', (tester) async {
+    // The affordance is what this screen lacked; the destination is asserted
+    // in admin_metrics_screen_test.dart, since pushOnActiveTab needs mounted
+    // tab navigators this harness deliberately doesn't build.
+    await _pump(tester, [_ops()]);
+    expect(
+      find.byWidgetPredicate((w) => w is InkWell && w.onTap != null),
+      findsOneWidget,
+    );
+
+    await _pump(tester, [_priceDrop()]);
+    expect(
+      find.byWidgetPredicate((w) => w is InkWell && w.onTap != null),
+      findsNothing,
+    );
+  });
+
+  testWidgets('tapping an ops row does not throw without a nav host',
+      (tester) async {
+    await _pump(tester, [_ops()]);
+    await tester.tap(find.text('System degraded'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('empty feed shows the how-to empty state', (tester) async {

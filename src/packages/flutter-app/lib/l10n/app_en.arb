@@ -1241,6 +1241,8 @@
     }
   },
   "healthDegradedTitle": "System degraded",
+  "healthRecoveredTitle": "System recovered",
+  "notifOpsOpenHealth": "View system health",
   "reviewSectionTitle": "Trip health",
   "reviewHeaderAttention": "{count, plural, one{Mostly ready — 1 to fix} other{Mostly ready — {count} to fix}}",
   "@reviewHeaderAttention": {
