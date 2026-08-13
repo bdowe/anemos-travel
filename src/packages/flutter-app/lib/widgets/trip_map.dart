@@ -291,7 +291,7 @@ class _TripMapState extends State<TripMap> {
         _controller.move(points.first, 13);
       } else {
         _controller.fitCamera(
-          CameraFit.bounds(
+          AppCameraFitBounds(
             bounds: LatLngBounds.fromPoints(points),
             padding: _fitPadding,
           ),
@@ -642,7 +642,7 @@ class _TripMapState extends State<TripMap> {
                     interactionOptions: interaction,
                   )
                 : appMapOptions(
-                    initialCameraFit: CameraFit.bounds(
+                    initialCameraFit: AppCameraFitBounds(
                       bounds: LatLngBounds.fromPoints(fitPoints),
                       padding: _fitPadding,
                     ),
