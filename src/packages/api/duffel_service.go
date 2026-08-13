@@ -287,7 +287,14 @@ func (d *DuffelService) placeSuggestions(ctx context.Context, params url.Values)
 			Longitude: p.Longitude,
 		})
 	}
-	d.placesCache.set(cacheKey, airports)
+	// Only cache non-empty results: entries live 24h, so a transient Duffel
+	// hiccup that answers 200-with-empty (or with only IATA-less entries,
+	// filtered above) must not pin "no such airport" for a day — that reads
+	// as a missing home-airport pin for every user resolving that code.
+	// Genuine no-match queries are rare and cheap to re-ask.
+	if len(airports) > 0 {
+		d.placesCache.set(cacheKey, airports)
+	}
 	return airports, nil
 }
 

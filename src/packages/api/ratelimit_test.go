@@ -51,12 +51,64 @@ func TestRateLimitMiddlewareReturns429(t *testing.T) {
 		t.Fatalf("first request status = %d, want 200", first.Code)
 	}
 
+	before := rateLimited429s.Load()
 	second := httptest.NewRecorder()
 	handler.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/", nil))
 	if second.Code != http.StatusTooManyRequests {
 		t.Fatalf("second request status = %d, want 429", second.Code)
 	}
-	if second.Header().Get("Retry-After") == "" {
-		t.Fatal("429 response should carry Retry-After")
+	// 60/min refills one token per second — Retry-After must say so, not the
+	// old blanket "60".
+	if got := second.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After = %q, want \"1\"", got)
+	}
+	if rateLimited429s.Load() != before+1 {
+		t.Fatal("a served 429 must increment rateLimited429s")
+	}
+}
+
+// TestGeneralLimiterAbsorbsColdBootBurst pins the general bucket's sizing to
+// the load it exists to absorb (see the generalRate* comment in main.go): two
+// back-to-back hard refreshes of a 10-city trip-detail page ≈ 175 requests
+// with no meaningful refill in between. If this fails after a resize, the
+// boot fan-out no longer fits and real page loads will shed.
+func TestGeneralLimiterAbsorbsColdBootBurst(t *testing.T) {
+	l := newIPRateLimiter(generalRatePerMinute, generalRateBurst)
+	for i := 0; i < 175; i++ {
+		if !l.allow("203.0.113.1") {
+			t.Fatalf("request %d of a double cold boot should pass (burst %d)",
+				i+1, generalRateBurst)
+		}
+	}
+	// The abuse backstop must still exist: a sustained flood past the burst
+	// gets shed.
+	blocked := false
+	for i := 0; i < 30; i++ {
+		if !l.allow("203.0.113.1") {
+			blocked = true
+			break
+		}
+	}
+	if !blocked {
+		t.Fatal("sustained flood past the burst must eventually be rate limited")
+	}
+}
+
+// Retry-After must reflect each bucket's actual refill rate: seconds until
+// one token becomes available.
+func TestRetryAfterDerivedFromRefillRate(t *testing.T) {
+	cases := []struct {
+		perMinute float64
+		want      string
+	}{
+		{120, "1"}, // general (2 tokens/s)
+		{40, "2"},  // photo tier
+		{10, "6"},  // transcribe / anon-events tiers
+		{5, "12"},  // strict tier
+	}
+	for _, c := range cases {
+		if got := newIPRateLimiter(c.perMinute, 1).retryAfter; got != c.want {
+			t.Fatalf("retryAfter(%v/min) = %q, want %q", c.perMinute, got, c.want)
+		}
 	}
 }

@@ -239,6 +239,51 @@ func TestUpstreamCountsIncludeAIHealth(t *testing.T) {
 	}
 }
 
+func TestUpstreamCountsIncludeRateLimitedTotal(t *testing.T) {
+	before := upstreamCountsSnapshot()["rate_limited_total"]
+	rateLimited429s.Add(1)
+	if after := upstreamCountsSnapshot()["rate_limited_total"]; after != before+1 {
+		t.Fatalf("rate_limited_total = %d then %d, want +1", before, after)
+	}
+}
+
+// Shed 503s must be visible in ops metrics: buildRouter registers
+// metricsMiddleware BEFORE the concurrency shedder, so a request rejected by
+// the semaphore is still timed and recorded. This mirrors that order.
+func TestShed503IsRecordedByMetricsMiddleware(t *testing.T) {
+	router := mux.NewRouter()
+	router.Use(metricsMiddleware)
+	router.Use(newConcurrencyLimiter(1).middleware)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	parked := make(chan struct{})
+	router.HandleFunc("/api/v1/busy", func(w http.ResponseWriter, r *http.Request) {
+		entered <- struct{}{}
+		<-release
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Occupy the single slot with a request parked inside the handler.
+	go func() {
+		defer close(parked)
+		router.ServeHTTP(httptest.NewRecorder(),
+			httptest.NewRequest(http.MethodGet, "/api/v1/busy", nil))
+	}()
+	<-entered
+
+	before := opsMetrics.snapshot().Requests.ByClass["5xx"]
+	shed := httptest.NewRecorder()
+	router.ServeHTTP(shed, httptest.NewRequest(http.MethodGet, "/api/v1/busy", nil))
+	if shed.Code != http.StatusServiceUnavailable {
+		t.Fatalf("second request = %d, want 503", shed.Code)
+	}
+	if after := opsMetrics.snapshot().Requests.ByClass["5xx"]; after != before+1 {
+		t.Fatalf("5xx count = %d then %d; the shed 503 must be recorded", before, after)
+	}
+	close(release)
+	<-parked
+}
+
 // TestOpsMetricsEndpoint is the DB-backed admin auth path: an admin token gets
 // 200 + the expected shape; a non-admin gets 403.
 func TestOpsMetricsEndpoint(t *testing.T) {

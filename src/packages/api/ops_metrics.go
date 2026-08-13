@@ -306,6 +306,9 @@ func upstreamCountsSnapshot() map[string]int64 {
 		m["serpapi_flights_upstream"] = serpapiFlights.calls.upstream.Load()
 		m["serpapi_flights_cache_hits"] = serpapiFlights.calls.cacheHits.Load()
 	}
+	// The only 429-specific signal: per-route request counts fold 429 into
+	// the generic 4xx class (ratelimit.go).
+	m["rate_limited_total"] = rateLimited429s.Load()
 	ai := aiHealth.state()
 	m["ai_success_total"] = ai.SuccessTotal
 	m["ai_transient_total"] = ai.TransientTotal

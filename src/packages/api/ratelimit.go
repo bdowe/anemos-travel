@@ -2,10 +2,13 @@ package main
 
 import (
 	"log"
+	"math"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -25,17 +28,28 @@ type ipRateLimiter struct {
 	entries map[string]*ipLimiterEntry
 	rate    rate.Limit
 	burst   int
+	// Seconds until one token refills at this bucket's rate — the honest
+	// Retry-After for a 429. A blanket "60" taught clients to give up on
+	// buckets that refill in a second.
+	retryAfter string
 }
 
 func newIPRateLimiter(perMinute float64, burst int) *ipRateLimiter {
 	l := &ipRateLimiter{
-		entries: make(map[string]*ipLimiterEntry),
-		rate:    rate.Limit(perMinute / 60.0),
-		burst:   burst,
+		entries:    make(map[string]*ipLimiterEntry),
+		rate:       rate.Limit(perMinute / 60.0),
+		burst:      burst,
+		retryAfter: strconv.Itoa(int(math.Max(1, math.Ceil(60.0/perMinute)))),
 	}
 	go l.janitor()
 	return l
 }
+
+// rateLimited429s counts every 429 served across all buckets. It is the only
+// unambiguous "the limiter fired" signal in /admin/ops/metrics
+// (rate_limited_total): the per-route request counts fold 429 into a generic
+// 4xx class alongside 401/404.
+var rateLimited429s atomic.Int64
 
 func (l *ipRateLimiter) allow(ip string) bool {
 	l.mu.Lock()
@@ -88,8 +102,9 @@ func rateLimitMiddleware(l *ipRateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !l.allow(clientIP(r)) {
+				rateLimited429s.Add(1)
 				log.Printf("rate limited %s %s from %s", r.Method, r.URL.Path, clientIP(r))
-				w.Header().Set("Retry-After", "60")
+				w.Header().Set("Retry-After", l.retryAfter)
 				writeJSONError(w, http.StatusTooManyRequests, "rate limited; retry shortly")
 				return
 			}
