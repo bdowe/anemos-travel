@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -16,20 +17,23 @@ import 'package:travel_route_planner/providers/checklist_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/providers/weather_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
-import 'package:travel_route_planner/widgets/collapsible_section.dart';
+import 'package:travel_route_planner/widgets/wear_pack_sheet.dart';
 import 'package:travel_route_planner/widgets/wear_recs.dart';
 
 import 'support/l10n_test_app.dart';
 
-/// The merged "What to wear & pack" section (specs/what-to-wear): collapsed
-/// summary = cross-region temperature envelope + rain signal; expanded =
-/// deterministic phrase rows above the intact checklist, with consecutive
-/// same-guidance legs folded into ONE grouped row (groupWearRegions);
-/// historical data yields a single trailing footnote, never a per-row
-/// qualifier; a revisited city keeps per-visit weather queries (distinct
-/// guidance keeps its rows separate); a leg whose report is empty drops out
-/// without hiding the section; recommendations alone show the row for
-/// read-only viewers; without weather the old checklist gating holds.
+/// "What to wear & pack" (specs/what-to-wear), now an app-bar luggage icon
+/// opening a modal sheet (the Trip health precedent): the sheet header shows
+/// the cross-region temperature envelope + rain signal and the checked/total
+/// pill; the body is deterministic phrase rows above the intact checklist,
+/// with consecutive same-guidance legs folded into ONE grouped row
+/// (groupWearRegions); historical data yields a single trailing footnote,
+/// never a per-row qualifier; a revisited city keeps per-visit weather
+/// queries (distinct guidance keeps its rows separate); a leg whose report is
+/// empty drops out without hiding the icon; recommendations alone show the
+/// icon for read-only viewers; without weather the old checklist gating
+/// holds. The checklist stays LIVE inside the sheet (its provider), while
+/// the regions are a press-time snapshot.
 
 class _FakeTripsApiService extends TripsApiService {
   final Trip trip;
@@ -76,6 +80,29 @@ class _FakeChecklistApiService extends ChecklistApiService {
 
   @override
   Future<List<ChecklistItem>> list(String tripId) async => items;
+}
+
+/// Mutable checklist fake: update() patches in place so the reconcile-by-
+/// invalidate round trip (toggle → PATCH → list) is observable — pins the
+/// live-checklist half of the sheet's snapshot/live split.
+class _MutableChecklistApiService extends ChecklistApiService {
+  final List<ChecklistItem> items;
+  _MutableChecklistApiService(this.items)
+      : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<List<ChecklistItem>> list(String tripId) async => List.of(items);
+
+  @override
+  Future<ChecklistItem> update(
+      String tripId, String itemId, Map<String, dynamic> body) async {
+    final i = items.indexWhere((e) => e.id == itemId);
+    items[i] = items[i].copyWith(
+      checked: body['checked'] as bool?,
+      title: body['title'] as String?,
+    );
+    return items[i];
+  }
 }
 
 ItineraryItem _item(int pos, String name, int day, {String city = 'Paris'}) =>
@@ -135,10 +162,12 @@ Future<void> _pump(
   WeatherReport? report,
   WeatherApiService? weather,
   List<ChecklistItem> checklist = const [],
+  ChecklistApiService? checklistApi,
   Locale? locale,
+  Size size = const Size(800, 3000),
 }) async {
-  // Tall viewport so the trailing cluster lays out without scrolling.
-  tester.view.physicalSize = const Size(800, 3000);
+  // Tall default viewport so the whole page lays out without scrolling.
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
@@ -147,8 +176,8 @@ Future<void> _pump(
         tripsApiServiceProvider.overrideWithValue(_FakeTripsApiService(trip)),
         weatherApiServiceProvider
             .overrideWithValue(weather ?? _FakeWeatherApiService(report!)),
-        checklistApiServiceProvider
-            .overrideWithValue(_FakeChecklistApiService(checklist)),
+        checklistApiServiceProvider.overrideWithValue(
+            checklistApi ?? _FakeChecklistApiService(checklist)),
       ],
       child: localizedTestApp(
           home: TripDetailScreen(tripId: 't1'), locale: locale),
@@ -157,10 +186,14 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-Future<void> _expand(WidgetTester tester,
-    {String title = 'What to wear & pack'}) async {
-  await tester.ensureVisible(find.text(title));
-  await tester.tap(find.text(title));
+Finder _wearIcon({String tooltip = 'What to wear & pack'}) =>
+    find.byTooltip(tooltip);
+
+/// Taps the app-bar luggage icon (always on screen — no ensureVisible) and
+/// settles with the sheet open.
+Future<void> _openSheet(WidgetTester tester,
+    {String tooltip = 'What to wear & pack'}) async {
+  await tester.tap(_wearIcon(tooltip: tooltip));
   await tester.pumpAndSettle();
 }
 
@@ -169,12 +202,11 @@ Future<void> _expand(WidgetTester tester,
 Finder _inRecs(String text) => find.descendant(
     of: find.byType(WearRecsList), matching: find.textContaining(text));
 
-Finder _wearSectionDividers() => find.descendant(
-    of: find.widgetWithText(CollapsibleSection, 'What to wear & pack'),
-    matching: find.byType(Divider));
+Finder _sheetDividers() => find.descendant(
+    of: find.byType(WearPackSheetBody), matching: find.byType(Divider));
 
 void main() {
-  testWidgets('collapsed row shows the envelope summary and the checked pill',
+  testWidgets('icon opens the sheet; header shows the summary and the pill',
       (tester) async {
     await _pump(
       tester,
@@ -187,16 +219,22 @@ void main() {
       ],
     );
 
+    // The entry is the app-bar icon: no body row, no summary, no content
+    // until the sheet opens.
+    expect(_wearIcon(), findsOneWidget);
+    expect(find.text('What to wear & pack'), findsNothing);
+    expect(find.text('15° – 24° · rain likely'), findsNothing);
+    expect(find.textContaining('Warm —'), findsNothing);
+    expect(find.text('Umbrella'), findsNothing);
+
+    await _openSheet(tester);
     expect(find.text('What to wear & pack'), findsOneWidget);
     expect(find.text('15° – 24° · rain likely'), findsOneWidget);
     // Checked count stays glanceable via the pill while recs own the summary.
     expect(find.text('1/2'), findsOneWidget);
-    // Collapsed: no phrases, no checklist rows.
-    expect(find.textContaining('Warm —'), findsNothing);
-    expect(find.text('Umbrella'), findsNothing);
   });
 
-  testWidgets('expanded: per-region phrase rows above the intact checklist',
+  testWidgets('sheet body: per-region phrase rows above the intact checklist',
       (tester) async {
     await _pump(
       tester,
@@ -206,7 +244,7 @@ void main() {
         ChecklistItem(id: 'c1', category: 'general', title: 'Umbrella'),
       ],
     );
-    await _expand(tester);
+    await _openSheet(tester);
 
     // Region line: label · dates · envelope.
     expect(_inRecs('Paris · Sep 15 – Sep 16 · 15° – 24°'), findsOneWidget);
@@ -220,7 +258,7 @@ void main() {
     // All-forecast trip: no historical footnote either.
     expect(_inRecs('Beyond the 16-day forecast'), findsNothing);
     // Recs and checklist both present → exactly one separating divider.
-    expect(_wearSectionDividers(), findsOneWidget);
+    expect(_sheetDividers(), findsOneWidget);
     // The checklist renders below, still editable: item row + add field.
     expect(find.text('Umbrella'), findsOneWidget);
     expect(find.byType(Checkbox), findsOneWidget);
@@ -237,7 +275,7 @@ void main() {
         ChecklistItem(id: 'c1', category: 'general', title: 'Umbrella'),
       ],
     );
-    await _expand(tester);
+    await _openSheet(tester);
 
     expect(_inRecs('Warm — summer clothes'), findsOneWidget);
     // The old per-row tail is gone. Scoped to the wear block: the day chips
@@ -278,7 +316,7 @@ void main() {
       ]),
       weather: weather,
     );
-    await _expand(tester);
+    await _openSheet(tester);
 
     // Two Paris rows with their own visit windows and temps, Nice between.
     // Displayed dates are the VISIBLE ranges (arrival-inclusive, matching the
@@ -289,7 +327,7 @@ void main() {
     // Both Paris visit windows were genuinely queried (per-visit keys).
     expect(weather.calls, contains('Paris|2026-09-15'));
     expect(weather.calls, contains('Paris|2026-09-17'));
-    // Collapsed summary spans all three legs: 8..25, no rain.
+    // Header summary spans all three legs: 8..25, no rain.
     expect(find.text('8° – 25°'), findsOneWidget);
   });
 
@@ -297,8 +335,9 @@ void main() {
       (tester) async {
     // Paris and Nice both derive warm with no advisories → one row with the
     // joined labels and the merged envelope. Exactly one band phrase pins the
-    // fold (a regression to per-leg rows would find two). The collapsed
-    // summary is computed from the UNGROUPED per-leg recs and must agree.
+    // fold (a regression to per-leg rows would find two). The header summary
+    // is computed from the UNGROUPED per-leg recs and must agree (exact-text
+    // match: the grouped row's longer string can't satisfy it).
     final weather = _MapWeatherApiService({
       'Paris|2026-09-15': const WeatherReport(kind: 'forecast', days: [
         WeatherDay(date: '2026-09-15', tempMinC: 16, tempMaxC: 24),
@@ -315,9 +354,9 @@ void main() {
       ]),
       weather: weather,
     );
+    await _openSheet(tester);
 
     expect(find.text('15° – 24°'), findsOneWidget);
-    await _expand(tester);
     expect(
         _inRecs('Paris, Nice · Sep 15 – Sep 16 · 15° – 24°'), findsOneWidget);
     expect(_inRecs('Warm — summer clothes, a light evening layer'),
@@ -348,7 +387,7 @@ void main() {
       ]),
       weather: weather,
     );
-    await _expand(tester);
+    await _openSheet(tester);
 
     expect(
         _inRecs('Paris, Nice · Sep 15 – Sep 16 · 15° – 24°'), findsOneWidget);
@@ -375,10 +414,10 @@ void main() {
       ]),
       weather: weather,
     );
+    await _openSheet(tester);
 
     // Summary is Paris's envelope alone — the unresolved leg can't zero it.
     expect(find.text('16° – 24°'), findsOneWidget);
-    await _expand(tester);
     expect(_inRecs('Paris · Sep 15'), findsOneWidget);
     expect(_inRecs('Nice'), findsNothing);
   });
@@ -391,32 +430,34 @@ void main() {
       report: _warmRainyForecast,
     );
 
+    expect(_wearIcon(), findsOneWidget);
+    await _openSheet(tester);
+
     expect(find.text('What to wear & pack'), findsOneWidget);
     expect(find.text('15° – 24° · rain likely'), findsOneWidget);
     // No checked pill for an empty checklist.
     expect(find.text('0/0'), findsNothing);
-
-    await _expand(tester);
     expect(_inRecs('Warm — summer clothes'), findsOneWidget);
     // Viewer + empty checklist: no add affordance, no checkboxes, and no
     // dangling divider under the recs (the checklist rendered nothing).
     expect(find.byType(Checkbox), findsNothing);
     expect(find.textContaining('Add an item'), findsNothing);
-    expect(_wearSectionDividers(), findsNothing);
+    expect(_sheetDividers(), findsNothing);
   });
 
   testWidgets('no weather: gating is exactly the old checklist behavior',
       (tester) async {
-    // Viewer + empty checklist + empty weather → no section at all.
+    // Viewer + empty checklist + empty weather → no icon at all.
     await _pump(
       tester,
       trip: _trip(access: 'viewer'),
       report: const WeatherReport(),
     );
+    expect(_wearIcon(), findsNothing);
     expect(find.text('What to wear & pack'), findsNothing);
   });
 
-  testWidgets('no weather, owner: checklist-only row with the count summary',
+  testWidgets('no weather, owner: checklist-only sheet with the count summary',
       (tester) async {
     await _pump(
       tester,
@@ -427,11 +468,98 @@ void main() {
       ],
     );
 
+    // The checklist gate alone shows the icon.
+    expect(_wearIcon(), findsOneWidget);
+    await _openSheet(tester);
+
     expect(find.text('What to wear & pack'), findsOneWidget);
     // Old summary shape (checked of total), no envelope text anywhere.
     expect(find.textContaining('° – '), findsNothing);
     expect(find.textContaining('0/1'), findsNothing); // count is not a pill…
     expect(find.textContaining('0 of 1'), findsOneWidget); // …but the summary
+  });
+
+  testWidgets('ticking a checkbox in the sheet live-updates the header pill',
+      (tester) async {
+    // Pins the sheet's snapshot/live split: regions freeze at open, but the
+    // checklist half (rows AND the header pill) watches the provider the
+    // toggle invalidates, so an edit made inside the sheet lands live.
+    final api = _MutableChecklistApiService([
+      const ChecklistItem(id: 'c1', category: 'general', title: 'Umbrella'),
+      const ChecklistItem(
+          id: 'c2', category: 'clothing', title: 'Jacket', checked: true),
+    ]);
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: _warmRainyForecast,
+      checklistApi: api,
+    );
+    await _openSheet(tester);
+    expect(find.text('1/2'), findsOneWidget);
+
+    await tester.tap(find
+        .byWidgetPredicate((w) => w is Checkbox && w.value == false));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2/2'), findsOneWidget);
+    // The weather half kept its snapshot — summary unchanged.
+    expect(find.text('15° – 24° · rain likely'), findsOneWidget);
+  });
+
+  testWidgets('Escape dismisses the sheet', (tester) async {
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: _warmRainyForecast,
+      checklist: const [
+        ChecklistItem(id: 'c1', category: 'general', title: 'Umbrella'),
+      ],
+    );
+    await _openSheet(tester);
+    expect(find.byType(WearPackSheetBody), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(WearPackSheetBody), findsNothing);
+  });
+
+  testWidgets('icon shows on phone and desktop widths (not narrow-gated)',
+      (tester) async {
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: _warmRainyForecast,
+      size: const Size(390, 800),
+    );
+    expect(_wearIcon(), findsOneWidget);
+
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: _warmRainyForecast,
+      size: const Size(1200, 800),
+    );
+    expect(_wearIcon(), findsOneWidget);
+  });
+
+  testWidgets('the icon stays put in the Budget view', (tester) async {
+    // The old body row was suppressed under Budget; the app-bar icon is not
+    // view-gated (the health precedent) — packing stays one tap away.
+    await _pump(
+      tester,
+      trip: _trip(),
+      report: _warmRainyForecast,
+      checklist: const [
+        ChecklistItem(id: 'c1', category: 'general', title: 'Umbrella'),
+      ],
+    );
+    await tester.tap(find.text('Budget'));
+    await tester.pumpAndSettle();
+
+    expect(_wearIcon(), findsOneWidget);
+    await _openSheet(tester);
+    expect(find.text('15° – 24° · rain likely'), findsOneWidget);
   });
 
   testWidgets('renders the Spanish strings under the es locale',
@@ -449,9 +577,10 @@ void main() {
       locale: const Locale('es'),
     );
 
+    expect(_wearIcon(tooltip: 'Qué ponerte y qué llevar'), findsOneWidget);
+    await _openSheet(tester, tooltip: 'Qué ponerte y qué llevar');
     expect(find.text('Qué ponerte y qué llevar'), findsOneWidget);
     expect(find.textContaining('lluvia probable'), findsWidgets);
-    await _expand(tester, title: 'Qué ponerte y qué llevar');
     expect(
         find.descendant(
             of: find.byType(WearRecsList),
@@ -471,7 +600,7 @@ void main() {
       report: _dryHistorical,
       locale: const Locale('es'),
     );
-    await _expand(tester, title: 'Qué ponerte y qué llevar');
+    await _openSheet(tester, tooltip: 'Qué ponerte y qué llevar');
 
     expect(
         find.descendant(

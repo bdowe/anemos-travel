@@ -76,7 +76,7 @@ Future<_FakeChecklistApiService> _pump(
         home: Scaffold(
           body: SingleChildScrollView(
             child: ChecklistSection(
-                tripId: 't1', canEdit: canEdit, isOffline: isOffline),
+                tripId: 't1', canEdit: canEdit, isOffline: () => isOffline),
           ),
         ),
       ),

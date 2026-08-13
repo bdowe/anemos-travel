@@ -150,3 +150,27 @@ Go-twin contract", `leg_ranges.dart:227`).
   with chip umbrella days; far trip = "typical" per row; read-only viewer;
   agent `add_packing_item` + Trip-health one-tap fix land in the merged
   section; print packet unchanged; Spanish spot-check).
+
+## Amendment 2026-08-13 — surface move: app-bar icon + modal sheet
+
+The trailing-cluster row retired; the entry is now an app-bar luggage icon
+opening a modal bottom sheet (the Trip health precedent, friction-log
+2026-08-13). Design decisions: no count badge on the icon (health's numeric
+badge sits next door; the checked/total pill moved into the sheet header);
+weather regions are a press-time snapshot passed into the sheet
+(`_legClothingRecs` stays the one producer) while the checklist stays live
+via its own provider; the old two-tier visibility gate collapsed into the
+icon's single Consumer (`_legClothingRecsVisible` deleted); the sheet pads
+its scrollable by `viewInsets.bottom` because it hosts the add-item
+TextField (the health sheet has no input).
+
+Files: new `lib/widgets/wear_pack_sheet.dart` (`showWearPackSheet` +
+`WearPackSheetBody`); `lib/screens/trip_detail_screen.dart`
+(`_wearAppBarAction`, cluster scaffolding `_sectionCluster` /
+`_expandedSections` / `_packingSectionRow` / `_wearSummary` /
+`_legClothingRecsVisible` deleted, packing sliver → plain 96px FAB spacer);
+`lib/widgets/checklist_section.dart` (`isOffline` bool → live callback);
+tests: `trip_detail_wear_section_test.dart` reworked to the icon/sheet
+surface + new cases (Escape, breakpoints, live pill, Budget-view icon),
+`trip_detail_fix_actions_test.dart` layout contract, `checklist_section_test.dart`
+callback form, `trip_detail_filter_lenses_test.dart` comment.

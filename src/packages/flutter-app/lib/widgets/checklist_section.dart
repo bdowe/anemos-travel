@@ -11,15 +11,24 @@ import 'status_pill.dart';
 
 /// The per-trip packing checklist: a lightweight list the AI assistant seeds
 /// (add_packing_item) and the traveler edits freely. On trip detail it renders
-/// body-only (showHeader: false) inside the merged "What to wear & pack" row
-/// (specs/what-to-wear), below the weather-derived recommendations; standalone
-/// it keeps its own "Packing & prep" header. Self-contained — it owns its data
-/// via [checklistProvider] and reconciles mutations by invalidating that
-/// family key.
+/// body-only (showHeader: false) inside the "What to wear & pack" sheet
+/// (specs/what-to-wear, wear_pack_sheet.dart), below the weather-derived
+/// recommendations; standalone it keeps its own "Packing & prep" header.
+/// Self-contained — it owns its data via [checklistProvider] and reconciles
+/// mutations by invalidating that family key.
 class ChecklistSection extends ConsumerStatefulWidget {
   final String tripId;
   final bool canEdit;
-  final bool isOffline;
+
+  /// Live read, not a captured bool: this widget's host is a modal sheet
+  /// route that never rebuilds on the screen's connectivity setState. The
+  /// action guards read it at call time; the add row's disabled VISUAL only
+  /// reflects the last build, so it can stay stale until something else
+  /// rebuilds the sheet body (a connectivity flip alone never does) — the
+  /// TripReviewSection trade. A guarded tap while stale-enabled shows the
+  /// offline snackbar behind the sheet barrier (known debt, friction-log
+  /// 2026-08-13); the mutation itself never fires.
+  final bool Function() isOffline;
 
   /// False when a parent (trip detail's collapsed-section row) already
   /// renders the divider/title/count, so this widget is body-only.
@@ -83,7 +92,7 @@ class _ChecklistSectionState extends ConsumerState<ChecklistSection> {
   }
 
   bool _guard() {
-    if (widget.isOffline) {
+    if (widget.isOffline()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.l10n.commonOffline)),
       );
@@ -294,7 +303,7 @@ class _ChecklistSectionState extends ConsumerState<ChecklistSection> {
         DropdownButton<String>(
           value: _addCategory,
           underline: const SizedBox.shrink(),
-          onChanged: widget.isOffline
+          onChanged: widget.isOffline()
               ? null
               : (v) => setState(() => _addCategory = v ?? 'general'),
           items: [
@@ -321,7 +330,7 @@ class _ChecklistSectionState extends ConsumerState<ChecklistSection> {
         IconButton(
           icon: const Icon(Icons.add),
           tooltip: context.l10n.checklistAddItemTooltip,
-          onPressed: widget.isOffline ? null : _add,
+          onPressed: widget.isOffline() ? null : _add,
         ),
       ],
     );

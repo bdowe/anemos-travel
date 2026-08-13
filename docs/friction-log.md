@@ -5,6 +5,34 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-13 — trip-detail dogfooding (wear & pack → app-bar icon)
+
+- **[app] Friction → fixed (packing dropdown → app-bar icon + sheet):**
+  "What to wear and pack shouldn't be a separate dropdown" — with health in
+  the app bar and Budget a header tab, the lone collapsed row at the page
+  tail read as leftover chrome. It followed health's exact path: an
+  **app-bar luggage icon** (right of health, every breakpoint, still there
+  in the Budget view) opening a **bottom-sheet modal**
+  (`showWearPackSheet`); the trailing-cluster scaffolding
+  (`_sectionCluster`/`_expandedSections`) retired with its last row. The
+  old collapsed summary (temp envelope · rain) and checked/total pill
+  moved into the sheet header. Deliberately **no badge** on the icon —
+  health's severity count sits next door, and two adjacent numbers would
+  compete for the glance. Two mechanics diverge from the health sheet:
+  weather **regions are a press-time snapshot** (the screen's
+  `_legClothingRecs` stays the one producer; the checklist half stays
+  live via its provider — a checkbox ticked in the sheet updates the
+  header pill in place), and the scrollable pads by `viewInsets.bottom`
+  because this sheet hosts a TextField (the add-item row) and
+  `showModalBottomSheet` applies no keyboard insets itself.
+  `ChecklistSection.isOffline` became a live callback (the
+  TripReviewSection trade). Known debt carried over, slightly widened:
+  the checklist's offline/error snackbars render behind the sheet barrier
+  — for health only success-path snackbars were affected; here errors
+  are too. Accepted because the live list is the primary feedback (a
+  failed toggle visibly doesn't stick); a sheet-local inline note like the
+  hours-check revert is the named follow-up if it bites.
+
 ## 2026-08-12 — trip-detail dogfooding (trip health modal)
 
 - **[app] Friction → fixed (health row → app-bar icon + badge, the 08-03

@@ -18,6 +18,19 @@ these dates" qualifier became a single trailing footnote — on real trips the
 repetition read as noise, and three near-identical "Warm — …" rows said
 nothing the fold doesn't.
 
+Amended 2026-08-13 (direction picked by Brian): the surface moved. The
+trailing-cluster dropdown row retired; the section is now an **app-bar
+luggage icon** (next to Trip health, no breakpoint gate, visible in the
+Budget view too) opening a **modal bottom sheet** (`wear_pack_sheet.dart`) —
+the Trip health precedent. The sheet header carries the title, the old
+collapsed summary, and the checked/total pill; the body is unchanged
+(guidance rows, footnote, checklist). The icon has **no** count badge —
+health's numeric badge sits next door — so the envelope/checked-count are
+now one tap away instead of glanceable in the body. The icon hides exactly
+when the old row did (no resolved checklist and no leg with weather).
+Weather regions are a press-time snapshot; the checklist stays live inside
+the sheet.
+
 ## User Stories
 
 - As a **traveler planning a trip**, I want **to see what kind of clothes suit
@@ -31,10 +44,12 @@ nothing the fold doesn't.
 
 ## Acceptance Criteria
 
-- [ ] The trailing-cluster row is titled "What to wear & pack" and, when
-      weather is available, its collapsed summary shows the cross-region
-      temperature envelope and rain signal (e.g. "21°–31° · rain likely").
-- [ ] Expanded, the section lists one row per run of consecutive same-guidance
+- [ ] The app-bar luggage icon (tooltip "What to wear & pack") opens a modal
+      sheet whose header shows the title and, when weather is available, the
+      cross-region temperature envelope and rain signal (e.g. "21°–31° ·
+      rain likely"). *(2026-08-13: was the trailing-cluster row's collapsed
+      summary.)*
+- [ ] The sheet lists one row per run of consecutive same-guidance
       legs: legs merge when the temperature band and the surviving advisory
       phrases match AND the date ranges are adjacent (≤1 day apart). A row
       shows the joined region labels, the merged date span, the merged
@@ -52,12 +67,13 @@ nothing the fold doesn't.
 - [ ] The editable packing checklist renders below the recommendations, fully
       intact: add/edit/check/delete, AI-seeded items, Trip-health one-tap
       fixes, export and print packet are all unchanged.
-- [ ] The checked-count stays glanceable while collapsed (pill on the row).
-- [ ] A read-only viewer with an empty checklist sees the section when weather
-      resolves (recommendations only, no add affordance).
+- [ ] The checked-count renders as the pill in the sheet header (2026-08-13:
+      was on the collapsed row) and live-updates with edits made in the sheet.
+- [ ] A read-only viewer with an empty checklist sees the icon and sheet when
+      weather resolves (recommendations only, no add affordance).
 - [ ] When no weather resolves (offline, undated trip, provider failure), the
-      section gates exactly as today: nothing until the checklist loads,
-      hidden for viewers with an empty checklist.
+      icon gates exactly as the old row did: nothing until the checklist
+      loads, hidden for viewers with an empty checklist.
 - [ ] Recommendations never contradict Trip-health weather findings shown on
       the same screen (shared edges: extreme heat, freezing, rain-likely).
 

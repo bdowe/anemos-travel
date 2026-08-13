@@ -353,13 +353,13 @@ void main() {
   });
 
   testWidgets(
-      'health lives in the app bar; Budget is a header tab and the cluster '
-      'is packing-only', (tester) async {
-    // Layout contract (friction-log 2026-08-12, evolving 2026-08-04): Trip
+      'health and packing live in the app bar; Budget is a header tab',
+      (tester) async {
+    // Layout contract (friction-log 2026-08-13, evolving 2026-08-04): Trip
     // health left the trailing cluster for the always-visible app-bar icon
-    // (its count badge is the glanceable state), and Budget left it for the
-    // third header tab — the cluster is What to wear & pack only, with no
-    // health row in the body.
+    // (its count badge is the glanceable state), Budget left it for the
+    // third header tab, and What to wear & pack — the cluster's last row —
+    // left for the app-bar luggage icon, retiring the cluster entirely.
     final review = _FakeReviewApiService([
       _finding('packing', 'No umbrella for rainy Athens',
           const FindingFix(
@@ -375,22 +375,21 @@ void main() {
         budget: _FakeBudgetApiService(),
         openSheet: false);
 
-    // The health entry is the app-bar icon; no "Trip health" row in the body.
+    // Both contextual entries are app-bar icons; neither renders a body row.
     expect(find.byTooltip('Trip health'), findsOneWidget);
     expect(find.text('Trip health'), findsNothing);
+    expect(find.byTooltip('What to wear & pack'), findsOneWidget);
+    expect(find.text('What to wear & pack'), findsNothing);
 
-    // Budget renders exactly once — as the tab, above the packing row (the
-    // tall test viewport lays the whole page out in one frame).
+    // Budget renders exactly once — as the tab.
     final budgetTab = find.text('Budget');
     expect(budgetTab, findsOneWidget);
-    expect(tester.getTopLeft(budgetTab).dy,
-        lessThan(tester.getTopLeft(find.text('What to wear & pack')).dy));
 
-    // Tapping it swaps the body for the budget view: the empty state
-    // arrives, the packing cluster row goes.
+    // Tapping it swaps the body for the budget view; the app-bar icons are
+    // not view-gated and stay put.
     await tester.tap(budgetTab);
     await tester.pumpAndSettle();
     expect(find.text('No budget yet'), findsOneWidget);
-    expect(find.text('What to wear & pack'), findsNothing);
+    expect(find.byTooltip('What to wear & pack'), findsOneWidget);
   });
 }
