@@ -182,6 +182,50 @@ void main() {
     expect(pillDy, lessThan(viewportTop + 100 + 120));
   });
 
+  testWidgets('the Today chip from deep in the list scrolls monotonically',
+      (WidgetTester tester) async {
+    await _pumpScreen(
+        tester, _FakeTripsApiService(_liveTrip(startDate: start, endDate: end)));
+
+    // Park at the very bottom; today's (day 2) header sits well above it.
+    // This is the map-hidden chrome configuration (56px tab row only) —
+    // the phone-reachable scroll path.
+    final position = _position(tester);
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    final parked = position.pixels;
+
+    // Tap WITHOUT settling and sample the scroll frame by frame: double-
+    // subtracting the pinned chrome animated 56px past the target and let
+    // the correction pass snap back down — a direction reversal.
+    await tester.tap(_todayChip());
+    final samples = <double>[];
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      samples.add(position.pixels);
+    }
+    await tester.pumpAndSettle();
+    samples.add(position.pixels);
+
+    expect(samples.last, lessThan(parked),
+        reason: "premise: today's rest offset must sit above the parked "
+            'bottom position — otherwise this scenario went vacuous');
+    var maxRise = 0.0;
+    for (var i = 1; i < samples.length; i++) {
+      final rise = samples[i] - samples[i - 1];
+      if (rise > maxRise) maxRise = rise;
+    }
+    expect(maxRise, lessThanOrEqualTo(2),
+        reason: 'a net-upward scroll must never move back down '
+            '(up-then-down jank); from $parked: $samples');
+
+    // And it still lands in the resting window the first test pins down.
+    final viewportTop = tester.getTopLeft(find.byType(CustomScrollView)).dy;
+    final pillDy = tester.getTopLeft(_todayPill()).dy;
+    expect(pillDy, greaterThan(viewportTop + 100));
+    expect(pillDy, lessThan(viewportTop + 100 + 120));
+  });
+
   testWidgets('a trip that ended yesterday gets no Today behavior',
       (WidgetTester tester) async {
     final trip = _liveTrip(
