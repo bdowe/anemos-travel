@@ -17,7 +17,6 @@ import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/booking_detail_row.dart';
 import 'package:travel_route_planner/widgets/booking_todo_card.dart';
 
-import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 // Alignment contracts for the itinerary's booking surface.
@@ -151,10 +150,8 @@ void main() {
 
     double dx(Finder f) => tester.getTopLeft(f).dx;
 
-    // City groups are an accordion — only one can be open — so measure the
-    // Paris surfaces first, then swap to Rome and compare against the
-    // captured x (same gutter both times).
-    await expandCity(tester, 'Paris');
+    // Groups default EXPANDED, so both cities' surfaces are measured in one
+    // rendered pass (same gutter throughout).
 
     // The stay row leads with the bare kind icon (the same branch
     // menu-suppressed transport rows take, so it stands in for both).
@@ -180,8 +177,6 @@ void main() {
             dx(_inRow('Stay in Paris', find.byIcon(Icons.hotel))),
             epsilon: 0.1));
 
-    await expandCity(tester, 'Rome');
-
     // Sanity: the leg row carries the icon+caret mode menu...
     expect(_inRow('Paris → Rome', find.byIcon(Icons.arrow_drop_down)),
         findsOneWidget);
@@ -199,14 +194,12 @@ void main() {
     // The _inRow scoping is load-bearing: the Paris group also renders an
     // EventCard with its own bare open_in_new, and the matched stay's
     // BookingDetailRow carries trailing IconButtons.
-    await expandCity(tester, 'Paris');
     // Differing label widths are what make the dx equality meaningful.
     expect(_inRow('Stay in Paris', find.text('Open in Airbnb')),
         findsOneWidget);
     final iconDx =
         dx(_inRow('Stay in Paris', find.byIcon(Icons.open_in_new)));
 
-    await expandCity(tester, 'Rome');
     expect(_inRow('Paris → Rome', find.text('Find flights')), findsOneWidget);
     expect(dx(_inRow('Paris → Rome', find.byIcon(Icons.open_in_new))),
         moreOrLessEquals(iconDx, epsilon: 0.1));

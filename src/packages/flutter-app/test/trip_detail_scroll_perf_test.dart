@@ -111,7 +111,7 @@ void main() {
       reason: 'the pinned map card must repaint in its own layer',
     );
 
-    // City headers (collapsed at boot) are individually boundaried.
+    // City headers (expanded at boot) are individually boundaried.
     expect(
       directlyBoundaried(
           tester,
@@ -124,11 +124,11 @@ void main() {
       reason: 'city headers must repaint in their own layer',
     );
 
-    // Expanding a city mounts its pinned day headers — those are
-    // boundaried too (city header + ≥1 day header ⇒ ≥2 direct wraps; item
-    // tiles rely on the reorderable list's automatic row boundaries and are
-    // deliberately NOT double-wrapped).
-    await expandCity(tester, 'Paris');
+    // Every group defaults expanded, so all pinned day headers mount at
+    // boot — those are boundaried too. Census: 3 city headers + 4 day
+    // headers (Paris days 1-2, Rome day 3, Berlin day 4) = 7 direct wraps;
+    // item tiles rely on the reorderable list's automatic row boundaries
+    // and are deliberately NOT double-wrapped.
     final directWraps = find
         .byType(HoverReveal)
         .evaluate()
@@ -141,8 +141,8 @@ void main() {
       });
       return parent is RepaintBoundary;
     }).length;
-    expect(directWraps, greaterThanOrEqualTo(2),
-        reason: 'city and day headers must both carry direct boundaries');
+    expect(directWraps, 7,
+        reason: 'every city and day header must carry a direct boundary');
 
     // The regression guard for the fade itself. Scoped to HoverReveal
     // subtrees: flutter_map legitimately keeps a couple of idle
@@ -185,7 +185,6 @@ void main() {
       (tester) async {
     useSurface(tester, const Size(1200, 2200));
     await pump(tester, threeCityTrip());
-    await expandCity(tester, 'Paris');
 
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer(location: Offset.zero);

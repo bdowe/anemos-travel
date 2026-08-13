@@ -41,6 +41,7 @@ const _legChips = [
 Widget _app({
   EdgeInsets viewPadding = EdgeInsets.zero,
   void Function(String? legKey)? onAddPlace,
+  void Function(String? legKey)? onLegSelected,
   String title = 'Paris getaway',
   String? homeAirport,
   LatLng? firstCityPoint,
@@ -64,7 +65,7 @@ Widget _app({
         staysForLeg: (_) => const <Accommodation>[],
         segmentLabels: const {},
         legChips: _legChips,
-        onLegSelected: (_) {},
+        onLegSelected: onLegSelected ?? (_) {},
         onAddPlace: onAddPlace,
         homeAirport: homeAirport,
         firstCityPoint: firstCityPoint,
@@ -216,9 +217,19 @@ void main() {
   });
 
   group('destination pins (trip overview)', () {
+    // Leg keys match the chip keys, as trip detail passes them — the pins on
+    // this screen are navigable (see the chip-equivalent test below).
     const dests = [
-      TripMapDestination(label: 'Paris', point: LatLng(48.8566, 2.3522)),
-      TripMapDestination(label: 'Rome', point: LatLng(41.9028, 12.4964)),
+      TripMapDestination(
+        label: 'Paris',
+        point: LatLng(48.8566, 2.3522),
+        legKey: 'Paris',
+      ),
+      TripMapDestination(
+        label: 'Rome',
+        point: LatLng(41.9028, 12.4964),
+        legKey: 'Rome',
+      ),
     ];
 
     Finder inMap(String text) =>
@@ -243,6 +254,37 @@ void main() {
       expect(find.byType(MarkerClusterLayerWidget), findsNothing);
       expect(inMap('1'), findsOneWidget);
       expect(inMap('2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'a destination-pin tap is the chip-equivalent: leg selected in '
+        'place and reported back', (tester) async {
+      String? reported = 'sentinel';
+      await tester.pumpWidget(
+        _app(destinations: dests, onLegSelected: (k) => reported = k),
+      );
+      await tester.pumpAndSettle();
+
+      // Drive the wired callback directly (the robust screen-level pattern;
+      // pin tap geometry is covered in trip_map_test).
+      tester.widget<TripMap>(find.byType(TripMap)).onDestinationTap!('Rome');
+      await tester.pumpAndSettle();
+
+      // In place: the camera-refit signal flips to the leg, the overview
+      // pins hand off to per-item pins, and the chip row follows — no pop.
+      final map = tester.widget<TripMap>(find.byType(TripMap));
+      expect(map.fitSignature, 'Rome');
+      expect(map.destinations, isNull);
+      expect(find.byType(MarkerClusterLayerWidget), findsOneWidget);
+      expect(
+        tester.widget<MapLegChips>(find.byType(MapLegChips)).selected,
+        'Rome',
+      );
+
+      // Trip detail hears about it (it pre-scrolls the list behind the
+      // modal so closing lands on the region).
+      expect(reported, 'Rome');
       expect(tester.takeException(), isNull);
     });
   });

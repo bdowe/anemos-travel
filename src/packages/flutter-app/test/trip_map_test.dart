@@ -794,6 +794,122 @@ void main() {
       );
       expect(find.byType(MarkerClusterLayerWidget), findsOneWidget);
     });
+
+    // [dests] with leg keys wired — what the trip detail screen passes when
+    // it makes the overview pins navigable via onDestinationTap.
+    const navDests = [
+      TripMapDestination(
+        label: 'Paris',
+        point: LatLng(48.8566, 2.3522),
+        dates: 'Jun 10 – Jun 12',
+        legKey: 'Paris',
+      ),
+      TripMapDestination(
+        label: 'Rome',
+        point: LatLng(41.9028, 12.4964),
+        dates: 'Jun 12 – Jun 14',
+        legKey: 'Rome',
+      ),
+      TripMapDestination(
+        label: 'Athens',
+        point: LatLng(37.9838, 23.7275),
+        legKey: 'Athens',
+      ),
+    ];
+
+    testWidgets('tapping a navigable pin fires onDestinationTap with its key', (
+      WidgetTester tester,
+    ) async {
+      String? tapped;
+      await tester.pumpWidget(
+        _host(
+          TripMap(
+            items: const [],
+            destinations: navDests,
+            onDestinationTap: (k) => tapped = k,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Destination pins never cluster, so a real tap is reliable — on the
+      // mid-map pin (the SE-most pin sits under the zoom/reset column, where
+      // a tap would hit the buttons instead).
+      await tester.tap(inMap('2'));
+      expect(tapped, 'Rome');
+
+      // Navigation, not a tooltip affair: the tap must not raise the overlay.
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Rome\nJun 12 – Jun 14'), findsNothing);
+    });
+
+    testWidgets('a navigable pin keeps its tooltip message (hover/long-press)',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        _host(
+          TripMap(
+            items: const [],
+            destinations: navDests,
+            onDestinationTap: (_) {},
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final rome = tester.widget<Tooltip>(
+        find.ancestor(of: inMap('2'), matching: find.byType(Tooltip)),
+      );
+      expect(rome.message, 'Rome\nJun 12 – Jun 14');
+      // The tap trigger is gone — tap navigates now; the tooltip stays
+      // reachable via hover (desktop) and long-press.
+      expect(rome.triggerMode, isNot(TooltipTriggerMode.tap));
+    });
+
+    testWidgets('a null legKey keeps its pin inert under onDestinationTap', (
+      WidgetTester tester,
+    ) async {
+      // Mixed list: only some legs navigable — the key-less pin must fall
+      // back to the tooltip-only widget instead of crashing on tap.
+      const mixed = [
+        TripMapDestination(
+          label: 'Paris',
+          point: LatLng(48.8566, 2.3522),
+          legKey: 'Paris',
+        ),
+        TripMapDestination(
+          label: 'Rome',
+          point: LatLng(41.9028, 12.4964),
+          dates: 'Jun 12 – Jun 14',
+        ),
+        TripMapDestination(
+          label: 'Athens',
+          point: LatLng(37.9838, 23.7275),
+          legKey: 'Athens',
+        ),
+      ];
+      String? tapped;
+      await tester.pumpWidget(
+        _host(
+          TripMap(
+            items: const [],
+            destinations: mixed,
+            onDestinationTap: (k) => tapped = k,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Tap shows the old self-contained tooltip; the callback never fires.
+      await tester.tap(inMap('2'));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tapped, isNull);
+      expect(find.text('Rome\nJun 12 – Jun 14'), findsOneWidget);
+
+      // Let the tap-triggered tooltip's show timer elapse and fade out so
+      // the test ends without pending timers.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
   });
 
   group('single world fills a wide map band (no background side bars)', () {

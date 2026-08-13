@@ -224,6 +224,18 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
                       }
                     }
                   },
+                  // A region pin tap focuses that city in place — the
+                  // chip-equivalent (there is no list here to scroll to):
+                  // the map flips from the overview to the leg's item pins,
+                  // and the report-back lets trip detail pre-scroll the
+                  // list behind the modal so closing lands on the region.
+                  onDestinationTap: (legKey) {
+                    setState(() {
+                      _legKey = legKey;
+                      _selectedPosition = null;
+                    });
+                    widget.onLegSelected(legKey);
+                  },
                 ),
               ),
               // Above the map's gesture layer, so chip taps and row scrolls never

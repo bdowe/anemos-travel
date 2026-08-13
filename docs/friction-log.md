@@ -5,6 +5,41 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-13 — trip-detail dogfooding (expanded groups + navigable map)
+
+- **[app] Friction → fixed (decoupled expansion, supersedes the 08-1x
+  "accordion city focus" contract):** the single-open accordion didn't
+  survive daily use either — landing on a trip showed a wall of collapsed
+  headers, and because the open group WAS the map selection, every list
+  action moved the camera and vice versa. Third iteration of this contract
+  (08-11 partial coupling → accordion full coupling → now full
+  DEcoupling), and this one is directional: **expansion is list-only
+  state; focus is map-only state; the map's region pins are how the map
+  drives the list.** Concretely: all city groups land EXPANDED
+  (`_collapsedGroups`, inverted like `_collapsedDays` — empty set = the
+  default, so new cities from a refine arrive open and keys staled by a
+  lens switch fail safe as expanded); a header tap toggles only its own
+  group and never touches the map; `_focusedLegKey` survives as
+  notifier-only map state (chips, camera fit, per-leg pin filtering) with
+  one slim writer (`_setMapFocus`); chip taps keep the combined gesture
+  (focus map + un-collapse + desktop rest-under-chrome scroll) while the
+  All chip resets the map ONLY; and destination pins on the All overview
+  became navigation — tap scrolls the list to that region's group, with
+  deliberately NO focus write (focusing would swap the overview to
+  per-item pins and delete the very pin under the pointer). In the
+  full-screen map a region-pin tap focuses that city in place (the
+  chip-equivalent — there's no list to scroll), and the report-back now
+  pre-scrolls the list on phones too, so closing the modal lands on the
+  region. The accordion machinery went with the contract: the derived
+  `_openGroupKey`, the reveal-only `_unfocusedOpenLegKey` hatch, the
+  sole-group seed, and the one-writer assert are all deleted. N groups now
+  pin N city headers concurrently — safe because each group's containing
+  `MultiSliver` pushes its own header off at the group's end
+  (contacts-style handoff; verified against sliver_tools 0.2.12 source):
+  the OUTER groups `MultiSliver` must stay non-containing or every header
+  would pin to the itinerary's end and stack. The zero-body pinned-header
+  rule below (2026-08-0x entry) still governs collapsed rows verbatim.
+
 ## 2026-08-13 — trip-detail dogfooding (wear & pack → app-bar icon)
 
 - **[app] Friction → fixed (packing dropdown → app-bar icon + sheet):**

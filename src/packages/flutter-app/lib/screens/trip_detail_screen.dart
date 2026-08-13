@@ -172,16 +172,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Whether the Budget view (third header tab) is active.
   bool get _inBudgetView => _itemFilter == 'budget';
-  // Focused leg on the map (specs/map-city-focus); null = All. Keyed by the
-  // FULL-itinerary run key (leg.key, `#2`-suffixed on revisits) — never the
-  // lens-dependent group key. A ValueNotifier so re-focusing the SAME leg
-  // (a re-tap of the selected chip) rebuilds only the map card's
-  // ListenableBuilder — the notifier drops the same-value write. A focus
-  // CHANGE also flips the derived open group, so _setCityFocus setStates
-  // the screen for the accordion; the notifier scope still spares the
-  // whole-screen rebuild on the no-op re-tap. May hold a stale key after
-  // an edit removes the leg — readers clamp via _clampedLegKey (read-side,
-  // so build never mutates state).
+  // Focused leg on the map; null = All. MAP-ONLY state (chips, camera fit,
+  // per-leg item/stay filtering) — group expansion is _collapsedGroups,
+  // fully decoupled. Keyed by the FULL-itinerary run key (leg.key,
+  // `#2`-suffixed on revisits) — never the lens-dependent group key. A
+  // ValueNotifier consumed solely by the map card's ListenableBuilder, so a
+  // focus write never rebuilds the screen and a same-value write is dropped.
+  // May hold a stale key after an edit removes the leg — readers clamp via
+  // _clampedLegKey (read-side, so build never mutates state).
   final ValueNotifier<String?> _focusedLegKey = ValueNotifier<String?>(null);
   // Whether the map renders as the wide layout's pinned header (true) or the
   // phone layout's scroll-away tap-to-expand card (false). Assigned each
@@ -203,8 +201,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   int? _pendingTodayScroll;
   // Stable identities for the pinned headers so the Today scroller can find
   // their render objects. Days share the `'$cityKey#$day'` scheme with
-  // _collapsedDays; cities are keyed by run key (group.key) like
-  // _openGroupKey resolves.
+  // _collapsedDays; cities are keyed by run key (group.key), the same
+  // keyspace as _collapsedGroups.
   final Map<String, GlobalKey> _dayHeaderKeys = {};
   final Map<String, GlobalKey> _cityHeaderKeys = {};
   // Position of the place focused via a map pin / list tap. A ValueNotifier
@@ -219,24 +217,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // every consumer filters on !auto.
   List<Accommodation> _stays = [];
   List<TripSegment> _segments = [];
-  // Accordion city focus (specs/map-city-focus): at most ONE city group is
-  // open, and it is DERIVED from the focused leg at read time
-  // (_openGroupKey) — never stored as its own set (docs/zen.md: derived
-  // state is computed in exactly one place; the hand-synced set drifted).
-  // _unfocusedOpenLegKey is the narrow escape hatch — a group open in the
-  // list while the map stays on All: the pin-tap reveal (a focus write
-  // would refit the camera out from under the zoom-to-pin move), the
-  // sole-group seed (a one-city trip collapsed to a single header line is
-  // an empty screen; one-shot via _citySeedConsumed so later groups arrive
-  // collapsed), and every toggle on a <2-leg trip (focus is disabled
-  // there). FULL-itinerary leg key like _focusedLegKey and mutually
-  // exclusive with it (asserted in _setCityFocus, the one writer of both);
-  // stale keys clamp read-side in groupKeyForLeg, never write-side. Days
-  // stay inverted — _collapsedDays empty => open within the open group,
-  // keyed "<cityKey>#<day>" since day numbers repeat across cities.
-  String? _unfocusedOpenLegKey;
+  // Group expansion is LIST-ONLY state, fully decoupled from map focus
+  // (this supersedes the specs/map-city-focus accordion, where the open
+  // group was derived from the focused leg): _collapsedGroups is inverted
+  // like _collapsedDays — empty = ALL groups expanded, the landing default —
+  // and keyed by GROUP key (group.key run keys, `#2`-suffixed on revisits;
+  // the _cityHeaderKeys keyspace). A header tap toggles only its group and
+  // never touches the map; chip taps and map region-pin taps un-collapse
+  // their target on the way to it. Session-only, never pruned: a key staled
+  // by a lens switch or an edit just misses contains() and the group renders
+  // expanded — the safe default. Days stay inverted the same way, keyed
+  // "<cityKey>#<day>" since day numbers repeat across cities.
+  final Set<String> _collapsedGroups = {};
   final Set<String> _collapsedDays = {};
-  bool _citySeedConsumed = false;
   String?
       _homeAirport; // traveler's saved home airport (IATA), for outbound/return flights
   // todo_key -> flight leg, so a transport booking item can open Find Flights
@@ -639,15 +632,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       return;
     }
     _autoScrolledToday = true;
-    // Selection preselect: the leg holding today's items, set before the
-    // first paint so the camera doesn't hop All → today one frame later.
-    // Exact-day match only — an untagged today leaves the default (All /
-    // collapsed) and the pending scroll's nearest-day fallback selects.
-    // On a <2-leg trip the writer routes this through the reveal-only
-    // hatch (focus is disabled there).
+    // Map preselect: the leg holding today's items, set before the first
+    // paint so the camera doesn't hop All → today one frame later.
+    // Exact-day match only — an untagged today leaves the default (All)
+    // and the pending scroll's nearest-day fallback selects. Map-only:
+    // groups land expanded by default, so there is nothing to open.
     final d = _derive(trip);
     final todayLeg = d.legKeyForDay(today);
-    if (todayLeg != null) _setCityFocus(d, todayLeg);
+    if (todayLeg != null) _setMapFocus(d, todayLeg);
     // The scroll itself waits for the first build that actually shows the
     // scroll view: this setState still renders the loading spinner (the
     // loud path clears _loading later, in its finally), so a post-frame
@@ -671,16 +663,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final cityKey = dayKey.substring(0, dayKey.lastIndexOf('#'));
     final inAltView = _inBookingsView || _inBudgetView;
     final d = _derive(trip);
-    // "Show me that day" SELECTS that day's leg (accordion: its group
-    // becomes the one open group and the map focuses it) — even when the
-    // group is already open reveal-only, so the map always follows the
-    // jump. cityKey is a GROUP key from liveDayKeys; resolve the leg
-    // through an item actually tagged the landed-on day, NOT the group's
-    // first item — under a places lens a merged group spans several runs,
-    // and the first item can belong to an earlier run than the day we're
-    // jumping to (the map would then fit the wrong run). Bookings lenses
-    // and the Budget view keep the places set whole, so the pre-exit
-    // derivation's groups are the post-exit ones too.
+    // "Show me that day" focuses the MAP on that day's leg and un-collapses
+    // its group/day so the header can be measured. cityKey is a GROUP key
+    // from liveDayKeys; resolve the leg through an item actually tagged the
+    // landed-on day, NOT the group's first item — under a places lens a
+    // merged group spans several runs, and the first item can belong to an
+    // earlier run than the day we're jumping to (the map would then fit the
+    // wrong run). Bookings lenses and the Budget view keep the places set
+    // whole, so the pre-exit derivation's groups are the post-exit ones too.
     final dayNum = int.tryParse(dayKey.substring(dayKey.lastIndexOf('#') + 1));
     String? legKey;
     for (final g in d.groups) {
@@ -693,21 +683,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       break;
     }
     // Whether the target section still has layout work to settle before
-    // the scroll can measure it (a closed group opening, a collapsed day
-    // opening, or the lens swap rebuilding the list).
+    // the scroll can measure it (a collapsed group/day opening, or the
+    // lens swap rebuilding the list).
     final needsLayout = inAltView ||
-        _openGroupKey(d) != cityKey ||
+        _collapsedGroups.contains(cityKey) ||
         _collapsedDays.contains(dayKey);
-    if (inAltView || _collapsedDays.contains(dayKey)) {
+    if (needsLayout) {
       setState(() {
         if (inAltView) {
           _itemFilter = 'all';
           _bookingsLensDestination = null;
         }
+        _collapsedGroups.remove(cityKey);
         _collapsedDays.remove(dayKey);
       });
     }
-    if (legKey != null) _setCityFocus(d, legKey); // no-op if already selected
+    if (legKey != null) _setMapFocus(d, legKey); // no-op if already selected
     if (needsLayout) {
       // Continue once the expanded section has laid out.
       WidgetsBinding.instance
@@ -797,100 +788,66 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
   }
 
-  /// The ONE open city group, derived from the selection at read time
-  /// (specs/map-city-focus accordion): the current-filter group holding the
-  /// focused leg's items, else the reveal-only open leg's — null means
-  /// everything is collapsed. Stale keys clamp inside
-  /// [TripDerivation.groupKeyForLeg], so build never writes focus state.
-  String? _openGroupKey(TripDerivation d) =>
-      d.groupKeyForLeg(_focusedLegKey.value ?? _unfocusedOpenLegKey);
-
-  /// THE writer for city focus + list expansion (specs/map-city-focus
-  /// accordion): at most one group open ⇔ the map focused on its leg;
-  /// null collapses everything and returns the map to the All overview.
-  ///
-  /// [keepCamera] opens the run in the list WITHOUT a focus write or a
-  /// selection clear — the pin-tap invariant: a focus write would refit the
-  /// camera out from under the zoom-to-pin move, and the tap just set the
-  /// selection. It can only diverge from focus on the All view (a focused
-  /// map renders its own leg's pins alone), so it no-ops when a live focus
-  /// exists.
-  void _setCityFocus(TripDerivation d, String? legKey,
-      {bool keepCamera = false}) {
-    final beforeFocus = _focusedLegKey.value;
-    final beforeOpen = _unfocusedOpenLegKey;
-    if (keepCamera && legKey != null) {
-      if (_clampedLegKey(d) != null) return; // focused: its own pins only
-      // Clear a stale focus key (clamped to All by the guard above) so the
-      // hatch is the one live truth. This write DOES notify when the old
-      // key was non-null-but-stale, but the camera is unaffected:
-      // fitSignature reads _clampedLegKey, which already resolved to null,
-      // so the null write doesn't change it — no refit over the pin move.
-      _focusedLegKey.value = null;
-      _unfocusedOpenLegKey = legKey;
-    } else if (legKey != null && d.legs.length >= 2) {
-      // Clear the pin selection with the focus change: a lingering
-      // selection would suppress later content refits and keep a ghost
-      // highlight from another leg.
-      _selectedPosition.value = null;
-      _unfocusedOpenLegKey = null;
-      // Same-value writes are dropped by the notifier: re-selecting the
-      // focused leg (or a places-lens sibling run whose group is already
-      // open) never bumps the camera.
-      _focusedLegKey.value = legKey;
-    } else {
-      // Collapse → All, and every open/close on a <2-leg trip, where focus
-      // is disabled (a fit bump would snap a user-panned camera for no
-      // visible change).
-      _selectedPosition.value = null;
-      _unfocusedOpenLegKey = legKey;
-      _focusedLegKey.value = null;
-    }
-    assert(_focusedLegKey.value == null || _unfocusedOpenLegKey == null,
-        'reveal-only open must not coexist with a focused leg');
-    if (_focusedLegKey.value != beforeFocus ||
-        _unfocusedOpenLegKey != beforeOpen) {
-      setState(() {});
-    }
+  /// THE writer for map focus, and ONLY map focus — group expansion is
+  /// [_collapsedGroups], never touched here. No setState: the chips and
+  /// camera both render inside the map card's ListenableBuilder, and the
+  /// notifier drops same-value writes (re-selecting the focused leg never
+  /// bumps the camera). Focus is disabled below two legs (a fit bump would
+  /// snap a user-panned camera for no visible change).
+  void _setMapFocus(TripDerivation d, String? legKey) {
+    if (legKey != null && d.legs.length < 2) return;
+    // Clear the pin selection with the focus change: a lingering selection
+    // would suppress later content refits and keep a ghost highlight from
+    // another leg.
+    _selectedPosition.value = null;
+    _focusedLegKey.value = legKey;
   }
 
-  /// THE selection write for a chip tap (inline strip and the full-screen
-  /// map's report-back) and header expands: accordion focus via
-  /// [_setCityFocus], plus the wide layout's rest-under-the-pinned-map
-  /// scroll (specs/map-city-focus). The All chip (null) deselects
-  /// everywhere — map to the overview AND the open group closed: chips and
-  /// headers are two views of one selection. Header taps pass
-  /// [revealHeader] false — the user is already at the header.
+  /// The combined chip action (inline strip and the full-screen map's
+  /// report-back): focus the map on the leg via [_setMapFocus], un-collapse
+  /// its group, and rest the header under the pinned map (wide layout). The
+  /// All chip (null) resets the MAP only — the list is untouched, since
+  /// expansion is decoupled from focus.
   ///
-  /// Under a places lens the focused leg may belong to a merged group
-  /// ([TripDerivation.groupKeyForLeg]) — that group opens and the desktop
-  /// scroll targets it — or to none (the lens dropped the leg's items): the
-  /// MAP stays right regardless, content comes from the full leg's position
+  /// Under a places lens the leg may belong to a merged group
+  /// ([TripDerivation.groupKeyForLeg]) — that group is the un-collapse and
+  /// scroll target — or to none (the lens dropped the leg's items): the MAP
+  /// stays right regardless, content comes from the full leg's position
   /// set. Under a bookings lens no city headers exist at all: the chip
   /// drives the map only and the lens is NOT exited (unlike _scrollToDay,
   /// whose whole job is list navigation).
-  void _setFocusedLeg(TripDerivation d, String? key,
-      {bool revealHeader = true}) {
+  void _setFocusedLeg(TripDerivation d, String? key) {
     if (d.legs.length < 2) return; // single-leg trips have no focus
-    _setCityFocus(d, key);
-    if (key == null || !revealHeader || !_mapPinned) return;
+    _setMapFocus(d, key);
+    if (key == null) return; // All: map overview only, list untouched
     final groupKey = d.groupKeyForLeg(key);
     if (groupKey == null) return; // lens dropped the leg: nothing to rest
-    // Post-frame so the freshly expanded section has laid out first (the
+    if (_collapsedGroups.remove(groupKey)) setState(() {});
+    // Post-frame so a freshly expanded section has laid out first (the
     // _scrollToDay pattern); on phones the chips ride the scroll-away
     // preview card, so scrolling the list would hide the very map being
     // focused — desktop only.
+    if (!_mapPinned) return;
+    _revealCityHeader(groupKey);
+  }
+
+  /// Scrolls [groupKey]'s header under the chrome on the frame after next —
+  /// post-frame so any un-collapse this tap made has laid out first.
+  /// addPostFrameCallback does NOT itself request a frame, and with groups
+  /// expanded by default the common case (tap on an already-expanded,
+  /// already-focused target) changes no state at all — on a quiescent UI no
+  /// frame would ever come and the scroll would silently stall until
+  /// unrelated activity. ensureVisualUpdate guarantees the frame.
+  void _revealCityHeader(String groupKey) {
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _scrollToCityHeader(groupKey));
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   /// Offset-reveal scroll resting [cityKey]'s header just below the pinned
   /// chrome — [_scrollToDayHeader] minus the city-header term (this header
   /// IS the target; the chrome rests via getOffsetToReveal's own
-  /// obstruction handling, see there). Same one-correction contract. The
-  /// accordion collapse of the previously open group in the same tap frame
-  /// is deliberately uncompensated: with the animation running straight at
-  /// the target it reads as a collapse, not as scroll misbehavior.
+  /// obstruction handling, see there). Same one-correction contract.
   Future<void> _scrollToCityHeader(String cityKey) async {
     final trip = _trip;
     if (!mounted || trip == null || !_scroll.hasClients) return;
@@ -1460,11 +1417,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
   }
 
-  /// Groups default collapsed, so a place added into a collapsed run would
-  /// vanish with zero visible feedback — select the run holding the first
-  /// item that wasn't in the trip before the add: its group becomes the one
-  /// open group and the map focuses it, so the new pin is immediately
-  /// visible (specs/map-city-focus accordion).
+  /// Focus the map on the run holding the first item that wasn't in the
+  /// trip before the add, so the new pin is immediately visible. Groups
+  /// default expanded now, so the un-collapse only matters when the user
+  /// manually collapsed the target group — a place added into a collapsed
+  /// run would otherwise land with zero visible feedback.
   void _expandRunsOfNewItems(Set<String> beforeIds) {
     final trip = _trip;
     if (trip == null) return;
@@ -1472,7 +1429,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     for (final i in trip.items ?? const <ItineraryItem>[]) {
       if (beforeIds.contains(i.id)) continue;
       final legKey = d.legKeyOfPosition(i.position);
-      if (legKey != null) _setCityFocus(d, legKey);
+      if (legKey == null) return;
+      _setMapFocus(d, legKey);
+      final groupKey = d.groupKeyForLeg(legKey);
+      if (groupKey != null && _collapsedGroups.remove(groupKey)) {
+        setState(() {});
+      }
       return;
     }
   }
@@ -2262,7 +2224,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// City group header: name, date range, refine + collapse controls. Pinned
   /// at the top of the scroll area while its group scrolls past; the opaque
   /// Material keeps items from showing through while pinned. [cityCollapsed]
-  /// comes from the caller's render branch — the one _openGroupKey read.
+  /// comes from the caller's render branch — the one _collapsedGroups read.
   Widget _cityHeader(Trip trip, CityGroup group, ThemeData theme,
       double dateChipWidth,
       {required bool cityCollapsed}) {
@@ -2273,29 +2235,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         color: theme.scaffoldBackgroundColor,
         child: InkWell(
           onTap: () {
-            // Accordion (specs/map-city-focus): expanding a section IS
-            // selecting it — the previously open group closes and the map
-            // focuses this leg (resolved through the item position: under a
-            // places lens the group key may name a merged run that isn't a
-            // full-itinerary leg). Collapsing the open group always returns
-            // the map to All — only one group can ever be open, so there is
-            // no focused/non-focused asymmetry. No scroll here — the user
-            // is already at the header.
-            final d = _derive(trip);
-            if (!cityCollapsed) {
-              _setCityFocus(d, null);
-              return;
-            }
-            if (group.items.isEmpty) return;
-            final legKey = d.legKeyOfPosition(group.items.first.position);
-            if (legKey == null) return;
-            if (d.legs.length >= 2) {
-              _setFocusedLeg(d, legKey, revealHeader: false);
-            } else {
-              // Sole-group toggle: focus is disabled below two legs, so
-              // this opens through the reveal-only hatch.
-              _setCityFocus(d, legKey);
-            }
+            // A pure list toggle: expansion is decoupled from the map, so a
+            // header tap never writes focus, never moves the camera, and
+            // never touches any other group. No scroll either — the user is
+            // already at the header.
+            setState(() {
+              cityCollapsed
+                  ? _collapsedGroups.remove(group.key)
+                  : _collapsedGroups.add(group.key);
+            });
           },
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -4642,19 +4590,39 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                           trip.items!.firstWhere((i) => i.position == pos);
                       _selectedPosition.value = pos;
                       // The highlighted row can only be seen if its run
-                      // renders: groups default collapsed, so open the
-                      // tapped item's run — reveal-only ([keepCamera]),
-                      // never a focus write, which would refit the camera
-                      // out from under the zoom-to-pin move. The writer
-                      // setStates only when the open group actually
-                      // changed (the one thing the wider screen must
-                      // re-render — selection itself is notifier-driven).
+                      // renders: un-collapse the tapped item's group in
+                      // case the user closed it. Never a focus write —
+                      // that would refit the camera out from under the
+                      // zoom-to-pin move (the invariant holds by
+                      // construction: nothing here touches
+                      // _focusedLegKey). Selection itself is
+                      // notifier-driven, so setState only on a real
+                      // un-collapse.
                       final d = _derive(trip);
-                      final legKey = d.legKeyOfPosition(pos);
-                      if (legKey != null) {
-                        _setCityFocus(d, legKey, keepCamera: true);
+                      final groupKey =
+                          d.groupKeyForLeg(d.legKeyOfPosition(pos));
+                      if (groupKey != null &&
+                          _collapsedGroups.remove(groupKey)) {
+                        setState(() {});
                       }
                       _showSnack(it.name);
+                    },
+              // Region-pin navigation (All overview only — that's the only
+              // mode destination pins render in): scroll the list to the
+              // region's group. Deliberately NO focus write: focusing
+              // would swap the map to per-item pins and delete the very
+              // pins under the pointer; the camera must not move either.
+              onDestinationTap: expandable
+                  ? null // phone preview: AbsorbPointer'd, tap opens full map
+                  : (legKey) {
+                      final d = _derive(trip);
+                      final groupKey = d.groupKeyForLeg(legKey);
+                      if (groupKey == null) return; // lens dropped the leg
+                      if (_collapsedGroups.remove(groupKey)) setState(() {});
+                      // Under a bookings/budget lens no header builds and
+                      // the scroll no-ops harmlessly (the chip-tap stance:
+                      // no lens exit).
+                      _revealCityHeader(groupKey);
                     },
               onExpand: expandable ? null : () => _openFullMap(trip),
             );
@@ -4766,13 +4734,23 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           legChips: derivation.legChips,
           mappedLegKeys: derivation.mappedLegKeys,
           initialLegKey: _clampedLegKey(derivation),
-          // The full-screen chip tap reports here: the embedded card's
-          // ListenableBuilder keeps its own chips in sync live, and
-          // _setFocusedLeg pre-selects (opens the group exclusively; on
-          // desktop pre-scrolls) behind the modal, so focus survives close.
+          // A full-screen chip or region-pin tap reports here: the embedded
+          // card's ListenableBuilder keeps its own chips in sync live, and
+          // _setFocusedLeg pre-selects (un-collapses the target; on desktop
+          // pre-scrolls) behind the modal, so focus survives close. On
+          // phones _setFocusedLeg skips its scroll (the inline chips ride
+          // the scroll-away preview), but a selection made INSIDE the full
+          // map should land the list on that region when the modal closes —
+          // there is no visible list to disturb — so pre-scroll here too.
           onLegSelected: (k) {
             final t = _trip;
-            if (t != null) _setFocusedLeg(_derive(t), k);
+            if (t == null) return;
+            final d = _derive(t);
+            _setFocusedLeg(d, k);
+            if (k == null || _mapPinned) return;
+            final groupKey = d.groupKeyForLeg(k);
+            if (groupKey == null) return;
+            _revealCityHeader(groupKey);
           },
           onAddPlace: (_isOffline || _readOnly)
               ? null
@@ -4976,29 +4954,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       // Shared per-build chip width — see _dateChipWidth's
                       // doc for why this must stay a build-local.
                       final dateChipWidth = _dateChipWidth(groups, theme);
-                      // Groups default collapsed (no selection); a sole
-                      // group is seeded open once — a one-city trip
-                      // collapsed to a single header line is an empty screen.
-                      // One-shot so later groups (refine adds a city) arrive
-                      // collapsed and the seeded one stays re-collapsible.
-                      // A plain field write, NOT _setCityFocus: we're
-                      // mid-build (no setState) and the value is consumed
-                      // later this same build; guarded on a null focus so
-                      // the reveal-hatch/focus exclusivity holds (a today
-                      // preselect from the load path wins).
-                      if (!_citySeedConsumed && groups.isNotEmpty) {
-                        _citySeedConsumed = true;
-                        if (groups.length == 1 &&
-                            groups.first.items.isNotEmpty &&
-                            _focusedLegKey.value == null) {
-                          _unfocusedOpenLegKey ??= derivation.legKeyOfPosition(
-                              groups.first.items.first.position);
-                        }
-                      }
-                      // The one open group this build renders expanded —
-                      // derived from the selection AFTER the seed above so
-                      // a seeded sole group opens on its first frame.
-                      final openGroupKey = _openGroupKey(derivation);
                       // Day-header GlobalKeys for the CURRENT groups' day
                       // keys, not just whatever happens to be built: a
                       // collapsed group's day headers don't exist yet, but
@@ -5145,8 +5100,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                           // scroll): allowed offline and
                                           // while the refine panel is
                                           // open. _scrollToDay owns the
-                                          // selection write (accordion:
-                                          // the landed-on day's leg) — no
+                                          // map-focus write (the
+                                          // landed-on day's leg) — no
                                           // duplicate focus write here.
                                           onPressed: () =>
                                               _scrollToDay(todayDay),
@@ -5354,7 +5309,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                   // in. (pushPinnedChildren: false is no
                                   // fix either — the header would pin
                                   // forever and overlay the next group.)
-                                  if (group.key != openGroupKey)
+                                  // An expanded group always has a body (a
+                                  // CityGroup exists only because its leg
+                                  // has items, and _buildGroupItemSlivers
+                                  // emits at least the day rows), so the
+                                  // pinned branch can never go zero-body.
+                                  // N groups expand at once now (all, by
+                                  // default): each inner containing
+                                  // MultiSliver pushes its own header off
+                                  // at its group's end, so headers hand off
+                                  // edge-to-edge and exactly one obstructs
+                                  // at rest — the outer MultiSliver must
+                                  // stay NON-containing (no
+                                  // pushPinnedChildren), or every header
+                                  // would pin to the end of the itinerary
+                                  // and stack.
+                                  if (_collapsedGroups.contains(group.key))
                                     SliverToBoxAdapter(
                                         child: KeyedSubtree(
                                             // Keyed by the run, not the city:
