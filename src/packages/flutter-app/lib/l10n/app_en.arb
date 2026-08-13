@@ -317,7 +317,6 @@
     }
   },
   "budgetSummaryNoTarget": "no target",
-  "budgetSummaryEmpty": "Not tracked yet",
   "budgetEmptyTitle": "No budget yet",
   "budgetEmptyMessage": "Set a target above, or add expenses below to track your spending.",
   "budgetTargetSet": "Target: {amount} ({currency})",
@@ -933,16 +932,6 @@
       }
     }
   },
-  "tripSetBudgetTarget": "Set budget target",
-  "tripBudgetTargetLabel": "Target ({currency})",
-  "@tripBudgetTargetLabel": {
-    "placeholders": {
-      "currency": {
-        "type": "String"
-      }
-    }
-  },
-  "tripBudgetTargetHint": "Leave blank to just track spending",
   "tripRename": "Rename",
   "tripAddDates": "Add dates",
   "tripCoPlanningWith": "Co-planning with {name} — your changes save for everyone.",

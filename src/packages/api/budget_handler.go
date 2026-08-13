@@ -13,8 +13,10 @@ import (
 )
 
 // budget_handler.go — the per-trip budget & expense tracker. Mirrors
-// checklist_handler.go conventions exactly: editableTrip gate (owner or active
-// editor-collaborator), the same validation/404 shape, TouchTrip on mutation.
+// checklist_handler.go conventions: the same validation/404 shape, TouchTrip
+// on mutation. Gates are split by verb — the two GETs use viewableTrip (any
+// active collaborator, viewers included, may read the budget) while every
+// mutation stays behind editableTrip (owner or active editor-collaborator).
 //
 // Honest v1 model: ONE budget per trip (a single target_amount + one currency,
 // default USD — there is no trip-level currency to inherit) plus a flat list of
@@ -108,7 +110,7 @@ func buildBudgetResponse(b *store.TripBudget, expenses []store.TripExpense) Budg
 }
 
 func getBudgetHandler(w http.ResponseWriter, r *http.Request) {
-	trip, ok := editableTrip(w, r)
+	trip, ok := viewableTrip(w, r)
 	if !ok {
 		return
 	}
@@ -177,7 +179,7 @@ func putBudgetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func listExpensesHandler(w http.ResponseWriter, r *http.Request) {
-	trip, ok := editableTrip(w, r)
+	trip, ok := viewableTrip(w, r)
 	if !ok {
 		return
 	}

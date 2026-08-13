@@ -6,14 +6,18 @@ import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/models/itinerary_item.dart';
 import 'package:travel_route_planner/models/accommodation.dart';
 import 'package:travel_route_planner/models/booking_todo.dart';
+import 'package:travel_route_planner/models/budget.dart';
+import 'package:travel_route_planner/models/expense.dart';
 import 'package:travel_route_planner/models/trip_segment.dart';
 import 'package:travel_route_planner/services/accommodations_api_service.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/booking_todos_api_service.dart';
+import 'package:travel_route_planner/services/budget_api_service.dart';
 import 'package:travel_route_planner/services/transport_api_service.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/accommodations_provider.dart';
 import 'package:travel_route_planner/providers/booking_todos_provider.dart';
+import 'package:travel_route_planner/providers/budget_provider.dart';
 import 'package:travel_route_planner/providers/transport_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
@@ -72,6 +76,23 @@ class _FakeTransportApiService extends TransportApiService {
       TripSegment(id: segmentId, mode: 'flight');
 }
 
+class _FakeBudgetApiService extends BudgetApiService {
+  final List<Expense> expenses;
+  final double? targetAmount;
+  _FakeBudgetApiService({this.expenses = const [], this.targetAmount})
+      : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<Budget> getBudget(String tripId) async => Budget(
+        targetAmount: targetAmount,
+        currency: 'USD',
+        spent: expenses.fold<double>(0, (s, e) => s + e.amount),
+      );
+
+  @override
+  Future<List<Expense>> listExpenses(String tripId) async => expenses;
+}
+
 ItineraryItem _item(int pos, String name,
         {String? category = 'attraction', String? localSourceName}) =>
     ItineraryItem(
@@ -118,7 +139,8 @@ void _useTallViewport(WidgetTester tester) {
 }
 
 Future<(_FakeBookingTodosApiService, _FakeAccommodationsApiService)> _pump(
-    WidgetTester tester, Trip trip) async {
+    WidgetTester tester, Trip trip,
+    {BudgetApiService? budget}) async {
   final todosApi = _FakeBookingTodosApiService();
   final accApi = _FakeAccommodationsApiService();
   await tester.pumpWidget(
@@ -129,6 +151,10 @@ Future<(_FakeBookingTodosApiService, _FakeAccommodationsApiService)> _pump(
         accommodationsApiServiceProvider.overrideWithValue(accApi),
         transportApiServiceProvider
             .overrideWithValue(_FakeTransportApiService()),
+        // Un-overridden, the budget providers fail (no network in widget
+        // tests) — the owner's Budget tab renders regardless (presence must
+        // not depend on load state), a viewer's does not.
+        if (budget != null) budgetApiServiceProvider.overrideWithValue(budget),
       ],
       child: MaterialApp(
           localizationsDelegates: testLocalizationsDelegates,
@@ -738,5 +764,119 @@ void main() {
     await tester.tap(find.text('Itinerary'));
     await tester.pumpAndSettle();
     expect(find.text('Louvre'), findsOneWidget);
+  });
+
+  // ── Budget tab (third header tab; selection derives from _itemFilter) ──
+
+  testWidgets('the Budget tab selects and swaps the body for the budget view',
+      (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, mixedTrip(),
+        budget: _FakeBudgetApiService(
+            expenses: const [
+              Expense(id: 'e1', category: 'lodging', label: 'Hotel', amount: 80)
+            ],
+            targetAmount: 200));
+
+    await tester.tap(find.text('Budget'));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<Text>(find.text('Budget')).style?.fontWeight,
+        FontWeight.w700);
+    expect(find.text('Hotel'), findsOneWidget);
+    // The city groups and the packing cluster row are swapped out.
+    expect(find.text('Louvre'), findsNothing);
+    expect(find.text('What to wear & pack'), findsNothing);
+  });
+
+  testWidgets('the owner Budget tab renders even when the budget load fails',
+      (tester) async {
+    _useTallViewport(tester);
+    // No budget override: both providers error. The tab must not pop in and
+    // out with load state for an editor.
+    await _pump(tester, mixedTrip());
+    expect(find.text('Budget'), findsOneWidget);
+  });
+
+  testWidgets('a places filter round-trips through the Budget tab back to All',
+      (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, mixedTrip(), budget: _FakeBudgetApiService());
+
+    await _selectFilter(tester, 'Restaurants');
+    expect(find.text('Café de Flore'), findsOneWidget);
+    expect(find.text('Louvre'), findsNothing);
+
+    await tester.tap(find.text('Budget'));
+    await tester.pumpAndSettle();
+    expect(find.text('No budget yet'), findsOneWidget);
+
+    // Returning lands on the full itinerary, not the stale filter.
+    await tester.tap(find.text('Itinerary'));
+    await tester.pumpAndSettle();
+    expect(find.text('Louvre'), findsOneWidget);
+    expect(find.text('Café de Flore'), findsOneWidget);
+  });
+
+  testWidgets(
+      're-tapping the selected Budget tab is a no-op; a category-menu pick '
+      'exits the view', (tester) async {
+    _useTallViewport(tester);
+    await _pump(tester, mixedTrip(), budget: _FakeBudgetApiService());
+
+    await tester.tap(find.text('Budget'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Budget'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(find.text('No budget yet'), findsOneWidget);
+
+    // The places filter menu stays reachable and its pick exits Budget —
+    // every _itemFilter writer keeps the tabs honest for free.
+    await _selectFilter(tester, 'Restaurants');
+    expect(find.text('No budget yet'), findsNothing);
+    expect(find.text('Café de Flore'), findsOneWidget);
+  });
+
+  testWidgets('viewer with an empty budget gets no Budget tab',
+      (tester) async {
+    _useTallViewport(tester);
+    await _pump(
+        tester,
+        Trip(
+          id: 't1',
+          title: 'Paris',
+          access: 'viewer',
+          createdAt: '2026-06-01',
+          updatedAt: '2026-06-01',
+          items: [_item(0, 'Louvre')],
+        ),
+        budget: _FakeBudgetApiService());
+
+    expect(find.text('Budget'), findsNothing);
+  });
+
+  testWidgets('viewer with expenses gets a read-only Budget tab',
+      (tester) async {
+    _useTallViewport(tester);
+    await _pump(
+        tester,
+        Trip(
+          id: 't1',
+          title: 'Paris',
+          access: 'viewer',
+          createdAt: '2026-06-01',
+          updatedAt: '2026-06-01',
+          items: [_item(0, 'Louvre')],
+        ),
+        budget: _FakeBudgetApiService(expenses: const [
+          Expense(id: 'e1', category: 'food', label: 'Dinner', amount: 45)
+        ]));
+
+    await tester.tap(find.text('Budget'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dinner'), findsOneWidget);
+    expect(find.byTooltip('Add expense'), findsNothing);
+    expect(find.byTooltip('Set budget target'), findsNothing);
   });
 }

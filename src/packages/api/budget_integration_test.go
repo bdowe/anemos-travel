@@ -188,14 +188,35 @@ func TestBudgetOwnershipAndAccess(t *testing.T) {
 		}
 	}
 
-	// A viewer-collaborator can read but not mutate (editableTrip => 404).
+	// A viewer-collaborator can read (viewableTrip on the GETs) but not
+	// mutate (editableTrip => 404).
 	_, viewerToken := createTestUser(t, "viewer@example.com")
 	shareToken := createShare(t, token, tripID, "viewer")
 	if rec := joinShare(t, viewerToken, shareToken); rec.Code != http.StatusOK {
 		t.Fatalf("viewer join = %d: %s", rec.Code, rec.Body.String())
 	}
-	if rec := doJSON(t, "PATCH", "/api/v1/trips/"+tripID+"/budget/expenses/"+expenseID, viewerToken, map[string]any{"amount": 5}); rec.Code != http.StatusNotFound {
-		t.Fatalf("viewer patch = %d, want 404", rec.Code)
+	rec = doJSON(t, "GET", "/api/v1/trips/"+tripID+"/budget", viewerToken, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("viewer get budget = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if spent := decode(t, rec)["spent"].(float64); spent != 100 {
+		t.Fatalf("viewer get budget spent = %v, want 100", spent)
+	}
+	if rec := doJSON(t, "GET", "/api/v1/trips/"+tripID+"/budget/expenses", viewerToken, nil); rec.Code != http.StatusOK {
+		t.Fatalf("viewer list expenses = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	for _, m := range []struct {
+		method, path string
+		body         map[string]any
+	}{
+		{"PUT", "/budget", map[string]any{"target_amount": 1}},
+		{"POST", "/budget/expenses", map[string]any{"label": "sneak", "amount": 1}},
+		{"PATCH", "/budget/expenses/" + expenseID, map[string]any{"amount": 5}},
+		{"DELETE", "/budget/expenses/" + expenseID, nil},
+	} {
+		if rec := doJSON(t, m.method, "/api/v1/trips/"+tripID+m.path, viewerToken, m.body); rec.Code != http.StatusNotFound {
+			t.Fatalf("viewer %s %s = %d, want 404", m.method, m.path, rec.Code)
+		}
 	}
 
 	// An editor-collaborator can mutate.

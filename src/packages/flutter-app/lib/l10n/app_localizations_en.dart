@@ -694,9 +694,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get budgetSummaryNoTarget => 'no target';
 
   @override
-  String get budgetSummaryEmpty => 'Not tracked yet';
-
-  @override
   String get budgetEmptyTitle => 'No budget yet';
 
   @override
@@ -1439,17 +1436,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String tripAddedToPacking(String item) {
     return 'Added \"$item\" to packing';
   }
-
-  @override
-  String get tripSetBudgetTarget => 'Set budget target';
-
-  @override
-  String tripBudgetTargetLabel(String currency) {
-    return 'Target ($currency)';
-  }
-
-  @override
-  String get tripBudgetTargetHint => 'Leave blank to just track spending';
 
   @override
   String get tripRename => 'Rename';

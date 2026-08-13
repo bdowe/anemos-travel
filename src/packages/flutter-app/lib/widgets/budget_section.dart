@@ -8,31 +8,27 @@ import '../models/expense.dart';
 import '../providers/budget_provider.dart';
 import '../theme/spacing.dart';
 import '../utils/money_format.dart';
+import 'budget_target_dialog.dart';
 import 'empty_state.dart';
-import 'section_header.dart';
-import 'status_pill.dart';
 
-/// The trip-detail "Budget" section: a single per-trip budget (one target in one
-/// currency) plus a flat list of manual expense line-items grouped by category
-/// with per-category subtotals, a running total, and a remaining footer.
+/// The Budget tab's body: a single per-trip budget (one target in one
+/// currency) with a spend headline + progress toward the target, a flat list
+/// of expense line-items grouped by category with per-category subtotals, a
+/// running total, and a remaining footer.
 /// Self-contained — it owns its data via [budgetProvider] + [expensesProvider]
-/// and reconciles mutations by invalidating both family keys. Mirrors
-/// [ChecklistSection] structure.
+/// and reconciles mutations by invalidating both family keys. (The
+/// `showHeader` knob died with the collapsed cluster row this tab replaced —
+/// precedent: [TripReviewSection]'s knob retiring with the health sheet.)
 class BudgetSection extends ConsumerStatefulWidget {
   final String tripId;
   final bool canEdit;
   final bool isOffline;
-
-  /// False when a parent (trip detail's collapsed-section row) already
-  /// renders the divider/title/spend pill, so this widget is body-only.
-  final bool showHeader;
 
   const BudgetSection({
     super.key,
     required this.tripId,
     required this.canEdit,
     required this.isOffline,
-    this.showHeader = true,
   });
 
   @override
@@ -73,27 +69,6 @@ const Map<String, IconData> _categoryIcons = {
   'shopping': Icons.shopping_bag_outlined,
   'general': Icons.receipt_long_outlined,
 };
-
-// The currency codes formatMoney knows a symbol for — offered in the target
-// dialog's dropdown. USD is the default.
-const List<String> _currencyCodes = [
-  'USD',
-  'EUR',
-  'GBP',
-  'JPY',
-  'CNY',
-  'AUD',
-  'CAD',
-  'NZD',
-  'HKD',
-  'SGD',
-  'MXN',
-  'BRL',
-  'INR',
-  'KRW',
-  'THB',
-  'TRY',
-];
 
 String _normalizeCategory(String raw) {
   final c = raw.trim().toLowerCase();
@@ -232,89 +207,9 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
 
   Future<void> _editTarget(Budget budget) async {
     if (_guard()) return;
-    final l10n = context.l10n;
-    final amountController = TextEditingController(
-        text: budget.targetAmount == null
-            ? ''
-            : _trimAmount(budget.targetAmount!));
-    var currency = _currencyCodes.contains(budget.currency)
-        ? budget.currency
-        : 'USD';
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: Text(l10n.budgetSetTargetTitle),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  SizedBox(
-                    width: 96,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: currency,
-                      decoration:
-                          InputDecoration(labelText: l10n.budgetCurrencyLabel),
-                      onChanged: (v) => setLocal(() => currency = v ?? 'USD'),
-                      items: [
-                        for (final code in _currencyCodes)
-                          DropdownMenuItem(value: code, child: Text(code)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: TextField(
-                      controller: amountController,
-                      autofocus: true,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                      ],
-                      decoration: InputDecoration(
-                        labelText: l10n.budgetTargetLabel,
-                        hintText: l10n.budgetTargetHint,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                l10n.budgetTargetHelp,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: Text(l10n.commonCancel)),
-            FilledButton(
-              onPressed: () {
-                final raw = amountController.text.trim();
-                final amount = raw.isEmpty ? null : double.tryParse(raw);
-                if (raw.isNotEmpty && (amount == null || amount < 0)) return;
-                Navigator.of(ctx).pop({
-                  'target_amount': amount,
-                  'currency': currency,
-                });
-              },
-              child: Text(l10n.commonSave),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (result != null) {
-      _run(() => ref.read(budgetApiServiceProvider).upsertBudget(
-            widget.tripId,
-            targetAmount: result['target_amount'] as double?,
-            currency: result['currency'] as String,
-          ));
-    }
+    // The shared dialog saves, invalidates both providers, and snacks on
+    // failure itself (one dialog with the raise_budget health fix).
+    await showBudgetTargetDialog(context, ref, widget.tripId, budget);
   }
 
   // Whole units for editing (prices are quoted that way); drop a trailing ".0".
@@ -325,48 +220,44 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
   Widget build(BuildContext context) {
     final budgetAsync = ref.watch(budgetProvider(widget.tripId));
     final expensesAsync = ref.watch(expensesProvider(widget.tripId));
-    // Best-effort: render nothing until both loads have data — a utility
-    // section shouldn't shout an error or flash a spinner.
+    // Best-effort: render nothing until both loads have data — the tab body
+    // shouldn't shout an error or flash a spinner.
     final budget = budgetAsync.valueOrNull;
     final expenses = expensesAsync.valueOrNull;
     if (budget == null || expenses == null) return const SizedBox.shrink();
 
     final hasTarget = budget.targetAmount != null;
-    // Viewers with nothing to show (no expenses and no target) get no section.
-    if (expenses.isEmpty && !hasTarget && !widget.canEdit) {
-      return const SizedBox.shrink();
-    }
-
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final currency = budget.currency;
 
+    // Viewers with nothing to show still get the (read-only) empty state —
+    // the Budget tab keeps itself visible while open (anti-stranding), so
+    // its body must never go blank.
+    if (expenses.isEmpty && !hasTarget && !widget.canEdit) {
+      return EmptyState(
+        compact: true,
+        icon: Icons.account_balance_wallet_outlined,
+        title: l10n.budgetEmptyTitle,
+        message: l10n.budgetEmptyMessage,
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.showHeader) ...[
-          const Divider(height: 32),
-          SectionHeader(
-            title: l10n.budgetTitle,
-            action: StatusPill.custom(
-              label: hasTarget
-                  ? '${formatMoney(budget.spent, currency)} / ${formatMoney(budget.targetAmount!, currency)}'
-                  : formatMoney(budget.spent, currency),
-              background: theme.colorScheme.surfaceContainerHighest,
-              foreground: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
-        if (widget.canEdit) _buildTargetControl(theme, budget),
-        if (expenses.isEmpty && !hasTarget)
+        if (expenses.isEmpty && !hasTarget) ...[
+          // Nothing tracked yet (editor): the target affordance + an invite;
+          // the add row below is the other on-ramp.
+          _buildTargetControl(theme, budget),
           EmptyState(
             compact: true,
             icon: Icons.account_balance_wallet_outlined,
             title: l10n.budgetEmptyTitle,
             message: l10n.budgetEmptyMessage,
-          )
-        else ...[
+          ),
+        ] else ...[
+          _buildHeadline(theme, budget),
           ..._buildGroups(theme, expenses, currency),
           _buildTotals(theme, budget, expenses),
         ],
@@ -375,6 +266,90 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           _buildAddRow(theme),
         ],
       ],
+    );
+  }
+
+  /// The spend headline the collapsed cluster row used to carry, now the tab
+  /// body's first line: "$120 / $2,000" when a target is set (with a
+  /// progress bar underneath, error-colored once over), or
+  /// "$120 spent · No target set" while tracking spend only. The pencil
+  /// opens the shared target dialog.
+  Widget _buildHeadline(ThemeData theme, Budget budget) {
+    final l10n = context.l10n;
+    final currency = budget.currency;
+    final target = budget.targetAmount;
+    final over = target != null && budget.spent > target;
+    final headline = target != null
+        ? '${formatMoney(budget.spent, currency)} / ${formatMoney(target, currency)}'
+        : '${l10n.budgetSummarySpent(formatMoney(budget.spent, currency))}'
+            ' · ${l10n.budgetSummaryNoTarget}';
+    final pct = target != null && target > 0
+        ? (budget.spent / target * 100).round()
+        : null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  headline,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: over
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              if (widget.canEdit)
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  color: theme.colorScheme.onSurfaceVariant,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: l10n.budgetSetTargetTitle,
+                  onPressed: () => _editTarget(budget),
+                ),
+            ],
+          ),
+          if (pct != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      // Clamped: the bar caps at full; "over" signals through
+                      // the error color (bar + headline) and the negative
+                      // Remaining line below.
+                      value: (budget.spent / budget.targetAmount!)
+                          .clamp(0.0, 1.0)
+                          .toDouble(),
+                      minHeight: 6,
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
+                      color: over
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.primary,
+                      semanticsLabel: l10n.budgetTitle,
+                      semanticsValue: '$pct%',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  '$pct%',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -553,12 +528,28 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           onChanged: widget.isOffline
               ? null
               : (v) => setState(() => _addCategory = v ?? 'general'),
+          // Closed state stays icon-only (the add row is width-tight on
+          // phones); the open menu spells out each category.
+          selectedItemBuilder: (context) => [
+            for (final cat in _categoryOrder)
+              Center(
+                child: Icon(_categoryIcons[cat],
+                    size: 18, color: theme.colorScheme.onSurfaceVariant),
+              ),
+          ],
           items: [
             for (final cat in _categoryOrder)
               DropdownMenuItem(
                 value: cat,
-                child: Icon(_categoryIcons[cat],
-                    size: 18, color: theme.colorScheme.onSurfaceVariant),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(_categoryIcons[cat],
+                        size: 18, color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(_categoryLabel(context.l10n, cat)),
+                  ],
+                ),
               ),
           ],
         ),

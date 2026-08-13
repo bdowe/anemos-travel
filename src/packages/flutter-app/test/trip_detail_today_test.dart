@@ -182,6 +182,30 @@ void main() {
     expect(pillDy, lessThan(viewportTop + 100 + 120));
   });
 
+  testWidgets(
+      'the Today chip force-exits the Budget view back to the itinerary',
+      (WidgetTester tester) async {
+    await _pumpScreen(tester,
+        _FakeTripsApiService(_liveTrip(startDate: start, endDate: end)));
+
+    // Enter the Budget view — it swaps the city groups (and their day
+    // headers) out entirely, so a Today jump has nothing to scroll to
+    // until the view force-exits (same contract as the bookings lenses).
+    await tester.tap(find.text('Budget'));
+    await tester.pumpAndSettle();
+    expect(find.text('Today stop 0'), findsNothing);
+
+    await tester.tap(_todayChip());
+    await tester.pumpAndSettle();
+
+    // Back on the itinerary, rested on today's header.
+    expect(find.text('Today stop 0'), findsOneWidget);
+    final viewportTop = tester.getTopLeft(find.byType(CustomScrollView)).dy;
+    final pillDy = tester.getTopLeft(_todayPill()).dy;
+    expect(pillDy, greaterThan(viewportTop + 100));
+    expect(pillDy, lessThan(viewportTop + 100 + 120));
+  });
+
   testWidgets('the Today chip from deep in the list scrolls monotonically',
       (WidgetTester tester) async {
     await _pumpScreen(
