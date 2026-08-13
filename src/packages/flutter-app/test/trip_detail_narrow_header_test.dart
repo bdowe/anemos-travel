@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -108,30 +109,86 @@ void main() {
   });
 
   // Itinerary-header half: the view tabs must fit a phone row whole, which
-  // is what the icon-only Add place buys (a labeled button + both tabs +
-  // the filter can't share 358px, especially in Spanish). An overflowing
-  // row would fail these pumps outright.
+  // is what the icon-only Add place buys (a labeled button + all three tabs
+  // + the filter can't share 358px, especially in Spanish). An overflowing
+  // row would fail these pumps outright — but an ellipsized Flexible tab
+  // would NOT (find.text still matches truncated text), so the fit is
+  // asserted by measurement: the rendered paragraph must be at least the
+  // label's intrinsic single-line width.
   const oneTodo = [
     BookingTodo(id: 'td1', kind: 'stay', todoKey: 'stay:sevilla', title: 'S'),
   ];
 
-  testWidgets('narrow: whole view tabs, icon-only Add place',
+  // minScale: 1.0 = the label must paint at full size; slightly below 1.0
+  // tolerates the FittedBox's uniform scale-down where the square-test-font
+  // approximation overshoots real glyph widths (see the Spanish test).
+  void expectNoTruncation(WidgetTester tester, String label,
+      {double minScale = 1.0}) {
+    final paragraph = tester.renderObject<RenderParagraph>(find.text(label));
+    final painter = TextPainter(
+      text: paragraph.text,
+      textDirection: TextDirection.ltr,
+      textScaler: paragraph.textScaler,
+    )..layout();
+    // getRect (not getSize): the global rect includes any FittedBox
+    // scale-down transform, so this catches BOTH an ellipsized label and a
+    // shrunken tab cluster. Small epsilon for float transforms.
+    expect(tester.getRect(find.text(label)).width,
+        greaterThanOrEqualTo(painter.width * minScale - 0.1),
+        reason: '"$label" painted narrower than its text — the tab row '
+            'no longer fits this surface');
+  }
+
+  // The fit is measured at textScale 0.5: the square test font renders
+  // every glyph fontSize wide (~2× a real proportional font), so at scale
+  // 1.0 even the shipped two-tab Spanish row "truncates" in tests while
+  // fitting on real phones — 0.5 approximates real glyph widths (same
+  // rationale as the wide-fit tests in overview-clip and the chip-geometry
+  // tests in leg-nights).
+  testWidgets('narrow: all three view tabs whole, icon-only Add place',
       (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 0.5;
+    addTearDown(tester.platformDispatcher.clearAllTestValues);
     await _pump(tester, _trip(todos: oneTodo), surface: phone);
 
-    expect(find.text('Itinerary'), findsOneWidget);
-    expect(find.text('Bookings · 0/1'), findsOneWidget);
+    for (final label in ['Itinerary', 'Bookings · 0/1', 'Budget']) {
+      expect(find.text(label), findsOneWidget);
+      expectNoTruncation(tester, label);
+    }
     expect(find.text('Add place'), findsNothing);
     expect(find.byTooltip('Add place'), findsOneWidget);
   });
 
   testWidgets('narrow Spanish: tabs render whole too', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 0.5;
+    addTearDown(tester.platformDispatcher.clearAllTestValues);
     await _pump(tester, _trip(todos: oneTodo),
         surface: phone, locale: const Locale('es'));
 
-    expect(find.text('Itinerario'), findsOneWidget);
-    expect(find.text('Reservas · 0/1'), findsOneWidget);
+    // minScale 0.95: the square test font at 0.5 overshoots real glyph
+    // widths by a few percent on the long Spanish trio (every glyph is
+    // fontSize/2 wide; real 'i'/'r'/'l' are narrower), so the cluster may
+    // sit a hair into the FittedBox's scale-down here while fitting whole
+    // in a real browser at 390px (verified 2026-08-13). Anything below
+    // ~0.95 would be a genuinely visible shrink — that's the tripwire for
+    // dropping the Bookings counter on narrow.
+    for (final label in ['Itinerario', 'Reservas · 0/1', 'Presupuesto']) {
+      expect(find.text(label), findsOneWidget);
+      expectNoTruncation(tester, label, minScale: 0.95);
+    }
     expect(find.byTooltip('Añadir lugar'), findsOneWidget);
+  });
+
+  testWidgets('Budget view has no header add CTA', (tester) async {
+    await _pump(tester, _trip(todos: oneTodo), surface: phone);
+
+    await tester.tap(find.text('Budget'));
+    await tester.pumpAndSettle();
+
+    // The budget body owns its add-expense row; the header slot is empty.
+    expect(find.byTooltip('Add place'), findsNothing);
+    expect(find.byTooltip('Add booking'), findsNothing);
+    expect(find.text('Add place'), findsNothing);
   });
 
   testWidgets('wide keeps the labeled Add place button', (tester) async {

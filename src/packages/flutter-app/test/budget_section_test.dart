@@ -137,7 +137,14 @@ void main() {
       currency: 'EUR',
     );
 
-    expect(find.text('Budget'), findsOneWidget);
+    // Headline shows spent / target with the progress bar underneath.
+    expect(
+        find.text('${formatMoney(500, 'EUR')} / ${formatMoney(1000, 'EUR')}'),
+        findsOneWidget);
+    final bar = tester.widget<LinearProgressIndicator>(
+        find.byType(LinearProgressIndicator));
+    expect(bar.value, 0.5);
+    expect(find.text('50%'), findsOneWidget);
     // Category group headers.
     expect(find.text('Flights'), findsOneWidget);
     expect(find.text('Food'), findsOneWidget);
@@ -149,10 +156,29 @@ void main() {
     expect(find.text(formatMoney(500, 'EUR')), findsWidgets);
     // Remaining = 1000 - 500 = 500.
     expect(find.text('Remaining'), findsOneWidget);
-    // Pill shows spent / target.
-    expect(
-        find.text('${formatMoney(500, 'EUR')} / ${formatMoney(1000, 'EUR')}'),
-        findsOneWidget);
+  });
+
+  testWidgets('over target: bar caps at full and turns error-colored',
+      (tester) async {
+    await _pump(
+      tester,
+      [_exp('a', 'lodging', 'Hotel', 150)],
+      targetAmount: 100,
+    );
+
+    final bar = tester.widget<LinearProgressIndicator>(
+        find.byType(LinearProgressIndicator));
+    expect(bar.value, 1.0); // clamped — "over" signals through color
+    final context = tester.element(find.byType(LinearProgressIndicator));
+    expect(bar.color, Theme.of(context).colorScheme.error);
+    expect(find.text('150%'), findsOneWidget);
+  });
+
+  testWidgets('no target: spend headline, no progress bar', (tester) async {
+    await _pump(tester, [_exp('a', 'food', 'Lunch', 20)]);
+
+    expect(find.textContaining('spent'), findsWidgets);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 
   testWidgets('adding an expense posts to the service', (tester) async {
@@ -188,8 +214,8 @@ void main() {
   testWidgets('setting a target calls PUT', (tester) async {
     final fake = await _pump(tester, [_exp('a', 'food', 'Lunch', 20)]);
 
-    // Tap the target control (shows the "no target" hint text).
-    await tester.tap(find.text('No target set — tracking spend only'));
+    // The headline pencil opens the shared target dialog.
+    await tester.tap(find.byTooltip('Set budget target'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -211,11 +237,11 @@ void main() {
     expect(find.byTooltip('Add expense'), findsOneWidget);
   });
 
-  testWidgets('viewer with no expenses and no target renders nothing',
-      (tester) async {
+  testWidgets('viewer with no expenses and no target sees the read-only '
+      'empty state (never a blank tab body)', (tester) async {
     await _pump(tester, [], canEdit: false);
 
-    expect(find.text('Budget'), findsNothing);
+    expect(find.text('No budget yet'), findsOneWidget);
     expect(find.byTooltip('Add expense'), findsNothing);
   });
 
@@ -224,13 +250,15 @@ void main() {
     await _pump(tester, [_exp('a', 'food', 'Lunch', 20)],
         targetAmount: 100, canEdit: false);
 
-    // The section renders with its data...
-    expect(find.text('Budget'), findsOneWidget);
+    // The section renders with its data (headline + row)...
+    expect(
+        find.text('${formatMoney(20, 'USD')} / ${formatMoney(100, 'USD')}'),
+        findsOneWidget);
     expect(find.text('Lunch'), findsOneWidget);
-    // ...but no add row, per-expense menu, or target control.
+    // ...but no add row, per-expense menu, or target pencil.
     expect(find.byTooltip('Add expense'), findsNothing);
     expect(find.byTooltip('Expense options'), findsNothing);
-    expect(find.text('No target set — tracking spend only'), findsNothing);
+    expect(find.byTooltip('Set budget target'), findsNothing);
   });
 
   testWidgets('offline disables the add affordance', (tester) async {

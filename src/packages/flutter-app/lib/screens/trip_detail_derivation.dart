@@ -413,7 +413,9 @@ class TripDerivation {
     final items = trip.items ?? const <ItineraryItem>[];
 
     final filtered = switch (itemFilter) {
-      'all' || 'unbooked' || 'bookings' => items.toList(),
+      // The bookings lenses and the Budget view keep the item set whole —
+      // the map, leg chips, and Today math stay itinerary-shaped there.
+      'all' || 'unbooked' || 'bookings' || 'budget' => items.toList(),
       'local' => items
           .where((i) => (i.localSourceName ?? '').trim().isNotEmpty)
           .toList(),

@@ -352,12 +352,14 @@ void main() {
     expect(inSheet('2026-08-03'), findsOneWidget);
   });
 
-  testWidgets('health lives in the app bar; cluster orders packing → budget',
-      (tester) async {
+  testWidgets(
+      'health lives in the app bar; Budget is a header tab and the cluster '
+      'is packing-only', (tester) async {
     // Layout contract (friction-log 2026-08-12, evolving 2026-08-04): Trip
     // health left the trailing cluster for the always-visible app-bar icon
-    // (its count badge is the glanceable state), so the cluster is now
-    // What to wear & pack → Budget only, with no health row in the body.
+    // (its count badge is the glanceable state), and Budget left it for the
+    // third header tab — the cluster is What to wear & pack only, with no
+    // health row in the body.
     final review = _FakeReviewApiService([
       _finding('packing', 'No umbrella for rainy Athens',
           const FindingFix(
@@ -377,9 +379,18 @@ void main() {
     expect(find.byTooltip('Trip health'), findsOneWidget);
     expect(find.text('Trip health'), findsNothing);
 
-    // The tall test viewport lays out the whole cluster in one frame.
-    final packingY = tester.getTopLeft(find.text('What to wear & pack')).dy;
-    final budgetY = tester.getTopLeft(find.text('Budget')).dy;
-    expect(packingY, lessThan(budgetY));
+    // Budget renders exactly once — as the tab, above the packing row (the
+    // tall test viewport lays the whole page out in one frame).
+    final budgetTab = find.text('Budget');
+    expect(budgetTab, findsOneWidget);
+    expect(tester.getTopLeft(budgetTab).dy,
+        lessThan(tester.getTopLeft(find.text('What to wear & pack')).dy));
+
+    // Tapping it swaps the body for the budget view: the empty state
+    // arrives, the packing cluster row goes.
+    await tester.tap(budgetTab);
+    await tester.pumpAndSettle();
+    expect(find.text('No budget yet'), findsOneWidget);
+    expect(find.text('What to wear & pack'), findsNothing);
   });
 }

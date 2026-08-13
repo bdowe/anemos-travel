@@ -1394,12 +1394,6 @@ abstract class AppLocalizations {
   /// **'no target'**
   String get budgetSummaryNoTarget;
 
-  /// No description provided for @budgetSummaryEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'Not tracked yet'**
-  String get budgetSummaryEmpty;
-
   /// No description provided for @budgetEmptyTitle.
   ///
   /// In en, this message translates to:
@@ -2617,24 +2611,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Added \"{item}\" to packing'**
   String tripAddedToPacking(String item);
-
-  /// No description provided for @tripSetBudgetTarget.
-  ///
-  /// In en, this message translates to:
-  /// **'Set budget target'**
-  String get tripSetBudgetTarget;
-
-  /// No description provided for @tripBudgetTargetLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Target ({currency})'**
-  String tripBudgetTargetLabel(String currency);
-
-  /// No description provided for @tripBudgetTargetHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Leave blank to just track spending'**
-  String get tripBudgetTargetHint;
 
   /// No description provided for @tripRename.
   ///

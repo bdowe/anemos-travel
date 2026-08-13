@@ -46,7 +46,6 @@ import '../utils/calendar_links.dart';
 import '../utils/clothing_recs.dart';
 import '../utils/date_formats.dart';
 import '../utils/leg_parity.dart';
-import '../utils/money_format.dart';
 import '../utils/share_link.dart';
 import '../utils/tracked_launch.dart';
 import '../utils/trip_days.dart';
@@ -59,6 +58,7 @@ import '../widgets/booking_detail_row.dart';
 import '../widgets/booking_sheets.dart';
 import '../widgets/booking_todo_card.dart';
 import '../widgets/budget_section.dart';
+import '../widgets/budget_target_dialog.dart';
 import '../widgets/checklist_section.dart';
 import '../widgets/collapsible_section.dart';
 import '../widgets/trip_health_sheet.dart';
@@ -153,7 +153,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // The active view/filter state. 'all' plus the _menuFilters place kinds
   // render the grouped itinerary; 'bookings' and 'unbooked' are the Bookings
   // view (entered from the header tab) and its left-to-book scope (the chip
-  // inside that view) — both replace the city groups with flat booking rows.
+  // inside that view) — both replace the city groups with flat booking rows;
+  // 'budget' is the Budget view (third header tab), which replaces them with
+  // the budget body. Tab selection is DERIVED from this one string every
+  // build — never stored as its own field (PR #335's invariant).
   String _itemFilter = 'all';
   // Destination chip selection inside the 'bookings' lens (null = All).
   // Reset on every lens change so the lens always opens at All; clamped in
@@ -165,6 +168,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// highlight and the Today-scroll force-exit treat them as one view.
   bool get _inBookingsView =>
       _itemFilter == 'unbooked' || _itemFilter == 'bookings';
+
+  /// Whether the Budget view (third header tab) is active.
+  bool get _inBudgetView => _itemFilter == 'budget';
   // Focused leg on the map (specs/map-city-focus); null = All. Keyed by the
   // FULL-itinerary run key (leg.key, `#2`-suffixed on revisits) — never the
   // lens-dependent group key. A ValueNotifier so re-focusing the SAME leg
@@ -531,6 +537,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final future = () async {
       do {
         _refreshQueued = false;
+        // The budget lives outside the trip payload in its own two
+        // providers; refetch it alongside so pull-to-refresh (and the
+        // trip_updated bump a collaborator's budget edit fires via
+        // TouchTrip) picks up spend changes. skipLoadingOnReload keeps the
+        // current values on screen — no flash.
+        ref.invalidate(budgetProvider(widget.tripId));
+        ref.invalidate(expensesProvider(widget.tripId));
         await _load(silent: true);
       } while (mounted && _refreshQueued);
       _refreshFuture = null;
@@ -578,7 +591,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Map card height on phones, where the map scrolls away instead of
   /// pinning (a preview — the full-screen map is one tap away).
   static const double _mapHeightNarrow = 180;
-  // Itinerary/Bookings tab row (44 — real touch targets for the view tabs)
+  // Itinerary/Bookings/Budget tab row (44 — real touch targets for the view
+  // tabs)
   // + bottom padding (8) + breathing room (4); the category filter lives in
   // a popup menu inside the tab row, so the header is one fixed-height row
   // whether or not the trip has items.
@@ -637,17 +651,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Scrolls the itinerary so [day]'s header rests just below the pinned
   /// chrome (map + title + city header). Missing headers fall back to the
   /// nearest prior day, then the nearest following; a collapsed city/day is
-  /// expanded first, and a bookings lens (which swaps the city groups out
-  /// entirely, so no day header could ever build) is exited back to the full
-  /// itinerary — the Today chip and health day-links read as "show me that
-  /// day". Pure view work — safe offline and with the panel open.
+  /// expanded first, and a bookings lens or the Budget view (both swap the
+  /// city groups out entirely, so no day header could ever build) is exited
+  /// back to the full itinerary — the Today chip and health day-links read
+  /// as "show me that day". Pure view work — safe offline and with the
+  /// panel open.
   void _scrollToDay(int day) {
     final trip = _trip;
     if (trip == null) return;
     final dayKey = _resolveDayHeaderKey(day);
     if (dayKey == null) return;
     final cityKey = dayKey.substring(0, dayKey.lastIndexOf('#'));
-    final inBookingsLens = _inBookingsView;
+    final inAltView = _inBookingsView || _inBudgetView;
     final d = _derive(trip);
     // "Show me that day" SELECTS that day's leg (accordion: its group
     // becomes the one open group and the map focuses it) — even when the
@@ -657,8 +672,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // first item — under a places lens a merged group spans several runs,
     // and the first item can belong to an earlier run than the day we're
     // jumping to (the map would then fit the wrong run). Bookings lenses
-    // keep the places set whole, so the pre-exit derivation's groups are
-    // the post-exit ones too.
+    // and the Budget view keep the places set whole, so the pre-exit
+    // derivation's groups are the post-exit ones too.
     final dayNum = int.tryParse(dayKey.substring(dayKey.lastIndexOf('#') + 1));
     String? legKey;
     for (final g in d.groups) {
@@ -673,12 +688,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // Whether the target section still has layout work to settle before
     // the scroll can measure it (a closed group opening, a collapsed day
     // opening, or the lens swap rebuilding the list).
-    final needsLayout = inBookingsLens ||
+    final needsLayout = inAltView ||
         _openGroupKey(d) != cityKey ||
         _collapsedDays.contains(dayKey);
-    if (inBookingsLens || _collapsedDays.contains(dayKey)) {
+    if (inAltView || _collapsedDays.contains(dayKey)) {
       setState(() {
-        if (inBookingsLens) {
+        if (inAltView) {
           _itemFilter = 'all';
           _bookingsLensDestination = null;
         }
@@ -3003,6 +3018,90 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
+  /// The header view-tab cluster: Itinerary | Bookings | Budget. Selection
+  /// derives from _itemFilter at each call site — the tap handlers only
+  /// write the filter (PR #335's invariant). Bookings needs itinerary items
+  /// (the items-empty body branch shadows its view, so the tab would open a
+  /// view that can never render — same gate as the filter menu); Budget's
+  /// view renders regardless, so a place-less trip still gets an
+  /// Itinerary | Budget pair (the collapsed cluster row this tab replaced
+  /// was reachable there too). With no second tab to offer (place-less trip
+  /// and the Budget tab gated off) the plain title keeps the old look. The
+  /// inter-tab gap tightens on narrow so three tabs fit a 390px phone in
+  /// Spanish.
+  Widget _viewTabs(Trip trip, ThemeData theme) {
+    final l10n = context.l10n;
+    final itemsEmpty = (trip.items ?? const <ItineraryItem>[]).isEmpty;
+    final showBudgetTab = _budgetTabVisible();
+    if (itemsEmpty && !showBudgetTab) {
+      return Text(l10n.tripItinerary,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleMedium);
+    }
+    final tabGap = _narrow ? AppSpacing.sm : AppSpacing.md;
+    // Natural-width tabs inside a scale-down FittedBox. The previous
+    // Flexible-per-tab layout split the row into EQUAL shares, so the
+    // widest tab (the counted Bookings label) ellipsized while its
+    // neighbors sat on slack — with three tabs the thirds starve it even
+    // in English. Scale-down only engages when the whole cluster genuinely
+    // can't fit (tiny windows, giant accessibility text) and shrinks the
+    // trio uniformly instead of eating one label. The inner SizedBox keeps
+    // the 44px tap-target height the pinned header row provides.
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        height: 44,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _headerTab(
+              theme,
+              label: l10n.tripItinerary,
+              selected: !_inBookingsView && !_inBudgetView,
+              onTap: () => setState(() {
+                _itemFilter = 'all';
+                _bookingsLensDestination = null;
+              }),
+            ),
+            if (!itemsEmpty) ...[
+              SizedBox(width: tabGap),
+              // The booking progress count rides the tab label — this tab
+              // replaced the counter that was the old (one-way) door into
+              // this view.
+              _headerTab(
+                theme,
+                label: _bookingTodos.isEmpty
+                    ? l10n.tripTabBookings
+                    : l10n.tripTabBookingsCounted(
+                        _bookingTodos.where((t) => t.booked).length,
+                        _bookingTodos.length),
+                selected: _inBookingsView,
+                onTap: () => setState(() {
+                  _itemFilter = 'bookings';
+                  _bookingsLensDestination = null;
+                }),
+              ),
+            ],
+            if (showBudgetTab) ...[
+              SizedBox(width: tabGap),
+              _headerTab(
+                theme,
+                label: l10n.budgetTitle,
+                selected: _inBudgetView,
+                onTap: () => setState(() {
+                  _itemFilter = 'budget';
+                  _bookingsLensDestination = null;
+                }),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Batches consecutive day-trip places (by town) under an indented
   /// "Day trip · <town>" sub-header so nearby towns read as excursions from the
   /// hub city rather than separate stops. Each contiguous batch (hub run or
@@ -4036,8 +4135,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
   }
 
-  /// Screen-level budget-target editor for the raise_budget fix. Reuses the
-  /// budget provider/service; keeps the trip's existing currency.
+  /// Screen-level budget-target editor for the raise_budget fix — a thin
+  /// wrapper over the shared [showBudgetTargetDialog] (the same dialog the
+  /// Budget tab's pencil opens, so the fix gets currency editing too and the
+  /// two paths can't drift). The helper saves, invalidates both budget
+  /// providers, and snacks on save failure itself.
   Future<void> _editBudgetTarget() async {
     if (_guardOffline()) return;
     final l10n = context.l10n;
@@ -4049,53 +4151,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       return;
     }
     if (!mounted) return;
-    final currency = budget.currency;
-    final controller = TextEditingController(
-      text: budget.targetAmount == null
-          ? ''
-          : budget.targetAmount!.toStringAsFixed(0),
-    );
-    final result = await showDialog<Map<String, double?>>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.tripSetBudgetTarget),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: l10n.tripBudgetTargetLabel(currency),
-            hintText: l10n.tripBudgetTargetHint,
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(l10n.commonCancel)),
-          FilledButton(
-            onPressed: () {
-              final raw = controller.text.trim();
-              final amount = raw.isEmpty ? null : double.tryParse(raw);
-              if (raw.isNotEmpty && (amount == null || amount < 0)) return;
-              Navigator.of(ctx).pop(<String, double?>{'amount': amount});
-            },
-            child: Text(l10n.commonSave),
-          ),
-        ],
-      ),
-    );
-    if (result == null) return; // cancelled
-    try {
-      await ref.read(budgetApiServiceProvider).upsertBudget(
-            widget.tripId,
-            targetAmount: result['amount'],
-            currency: currency,
-          );
-      ref.invalidate(budgetProvider(widget.tripId));
-      await _afterFix();
-    } catch (e) {
-      _showSnack(l10n.tripUpdateBudgetFailed(friendlyError(l10n, e)));
-    }
+    final saved =
+        await showBudgetTargetDialog(context, ref, widget.tripId, budget);
+    if (saved) await _afterFix();
   }
 
   /// Google Maps deep link for a place: prefer place_id, then coordinates, then a
@@ -4138,11 +4196,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   String _fmtDayHeader(DateTime d) => mmmed().format(d);
 
   // ── Trailing collapsed sections ─────────────────────────────────────────
-  // Packing / Budget end the page as one-line summary rows, closed by
-  // default. Summary data comes from watches HERE in the parent — the
-  // section widgets are only mounted while expanded, so a child-side watch
-  // could never feed a collapsed row's counts. (Trip health left this
-  // cluster for the app-bar icon + sheet — see _healthAppBarAction.)
+  // Packing ends the page as a one-line summary row, closed by default.
+  // Summary data comes from watches HERE in the parent — the section widget
+  // is only mounted while expanded, so a child-side watch could never feed
+  // a collapsed row's counts. (Trip health left this cluster for the
+  // app-bar icon + sheet — see _healthAppBarAction; Budget left it for the
+  // header tab — see _budgetTabVisible.)
 
   bool _sectionExpanded(String id) => _expandedSections.contains(id);
 
@@ -4356,54 +4415,26 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return false;
   }
 
-  Widget? _budgetSectionRow(Trip trip, ThemeData theme) {
-    // Mirrors BudgetSection's own gates, like _packingSectionRow.
-    // Parent watch = VISIBILITY atoms only (loaded? target set? any
-    // expenses?) so spend/target edits rebuild the Consumer below, not the
-    // screen; null atoms mean not-loaded, which hides the row as before.
-    final hasTarget = ref.watch(budgetProvider(trip.id).select((a) {
+  /// Whether the Budget header tab renders. Editors/owners: always — tab
+  /// presence must never depend on provider load state (a tab popping in
+  /// after a slow load reads as flicker, and the derived selection would
+  /// briefly point at a view with no tab). Viewers: only a non-empty budget
+  /// earns the tab (target set or any expenses — the old collapsed row's
+  /// gate), OR the Budget view is already open — the anti-stranding term: a
+  /// refresh that empties the budget keeps the tab until the viewer leaves
+  /// it. Watches are visibility atoms only, so spend edits repaint the
+  /// budget body, not the screen.
+  bool _budgetTabVisible() {
+    if (!_readOnly) return true;
+    if (_inBudgetView) return true;
+    final hasTarget = ref.watch(budgetProvider(widget.tripId).select((a) {
       final b = a.valueOrNull;
       return b == null ? null : b.targetAmount != null;
     }));
-    final expensesEmpty = ref.watch(
-        expensesProvider(trip.id).select((a) => a.valueOrNull?.isEmpty));
-    if (hasTarget == null || expensesEmpty == null) return null;
-    if (expensesEmpty && !hasTarget && _readOnly) return null;
-    return Consumer(
-      builder: (context, ref, _) {
-        final budget = ref.watch(budgetProvider(trip.id)).valueOrNull;
-        final expenses = ref.watch(expensesProvider(trip.id)).valueOrNull;
-        if (budget == null || expenses == null) {
-          return const SizedBox.shrink();
-        }
-        final hasTarget = budget.targetAmount != null;
-        final l10n = context.l10n;
-        final String summary;
-        if (hasTarget) {
-          summary = '${formatMoney(budget.spent, budget.currency)}'
-              ' / ${formatMoney(budget.targetAmount!, budget.currency)}';
-        } else if (expenses.isNotEmpty) {
-          summary =
-              '${l10n.budgetSummarySpent(formatMoney(budget.spent, budget.currency))}'
-              ' · ${l10n.budgetSummaryNoTarget}';
-        } else {
-          summary = l10n.budgetSummaryEmpty;
-        }
-        return CollapsibleSection(
-          title: l10n.budgetTitle,
-          icon: Icons.account_balance_wallet_outlined,
-          summary: summary,
-          expanded: _sectionExpanded('budget'),
-          onToggle: () => _toggleSection('budget'),
-          child: BudgetSection(
-            tripId: trip.id,
-            canEdit: !_readOnly,
-            isOffline: _isOffline,
-            showHeader: false,
-          ),
-        );
-      },
-    );
+    final expensesEmpty = ref.watch(expensesProvider(widget.tripId)
+        .select((a) => a.valueOrNull?.isEmpty));
+    if (hasTarget == null || expensesEmpty == null) return false;
+    return hasTarget || !expensesEmpty;
   }
 
   /// The app-bar Trip health entry: fact-check icon with a severity-colored
@@ -5129,76 +5160,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                     children: [
                                       Expanded(
                                         // View tabs (pure view work, so not
-                                        // offline-gated). Hidden on a
-                                        // place-less trip: the items-empty
-                                        // branch shadows every lens there,
-                                        // so a Bookings tab would open a
-                                        // view that can never render — the
-                                        // plain title keeps the same gate
-                                        // as the filter menu.
-                                        child: (trip.items ??
-                                                    const <ItineraryItem>[])
-                                                .isEmpty
-                                            ? Text(l10n.tripItinerary,
-                                                maxLines: 1,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
-                                                style: theme
-                                                    .textTheme.titleMedium)
-                                            : Row(
-                                                children: [
-                                                  Flexible(
-                                                    child: _headerTab(
-                                                      theme,
-                                                      label:
-                                                          l10n.tripItinerary,
-                                                      selected:
-                                                          !_inBookingsView,
-                                                      onTap: () =>
-                                                          setState(() {
-                                                        _itemFilter = 'all';
-                                                        _bookingsLensDestination =
-                                                            null;
-                                                      }),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(
-                                                      width: AppSpacing.md),
-                                                  // The booking progress
-                                                  // count rides the tab
-                                                  // label — this tab
-                                                  // replaced the counter
-                                                  // that was the old
-                                                  // (one-way) door into
-                                                  // this view.
-                                                  Flexible(
-                                                    child: _headerTab(
-                                                      theme,
-                                                      label: _bookingTodos
-                                                              .isEmpty
-                                                          ? l10n
-                                                              .tripTabBookings
-                                                          : l10n
-                                                              .tripTabBookingsCounted(
-                                                                  _bookingTodos
-                                                                      .where((t) =>
-                                                                          t.booked)
-                                                                      .length,
-                                                                  _bookingTodos
-                                                                      .length),
-                                                      selected:
-                                                          _inBookingsView,
-                                                      onTap: () =>
-                                                          setState(() {
-                                                        _itemFilter =
-                                                            'bookings';
-                                                        _bookingsLensDestination =
-                                                            null;
-                                                      }),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                        // offline-gated). Composition and
+                                        // per-tab gating live in _viewTabs.
+                                        child: _viewTabs(trip, theme),
                                       ),
                                       if (hasTodayTarget) ...[
                                         ActionChip(
@@ -5266,15 +5230,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                       // One add CTA per view: Add place on
                                       // the itinerary, the Add-booking menu
                                       // in the Bookings view (a swap, not an
-                                      // addition). Icon-only on phones: the
-                                      // tab pair + Today + filter + a
+                                      // addition), NOTHING in the Budget
+                                      // view — its body owns the add-expense
+                                      // row. Icon-only on phones: the
+                                      // tab trio + Today + filter + a
                                       // labeled button can't all fit a 390px
                                       // row with Spanish labels (precedent:
                                       // the header Refine button becomes the
                                       // app-bar sparkle on narrow).
                                       if (!_readOnly && _inBookingsView)
                                         _addBookingMenu()
-                                      else if (!_readOnly && _narrow)
+                                      else if (!_readOnly &&
+                                          !_inBudgetView &&
+                                          _narrow)
                                         IconButton(
                                           onPressed: _isOffline
                                               ? null
@@ -5285,7 +5253,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                           icon:
                                               const Icon(Icons.add, size: 20),
                                         )
-                                      else if (!_readOnly)
+                                      else if (!_readOnly && !_inBudgetView)
                                         TextButton.icon(
                                           onPressed: _isOffline
                                               ? null
@@ -5304,7 +5272,25 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                               ),
                             ),
                           ),
-                          if ((trip.items ?? []).isEmpty)
+                          // Budget view: one plain box sliver (no pinned
+                          // header, so the zero-body pinned-sliver hazard
+                          // can never arise). First so it wins over the
+                          // items-empty branch — the Budget tab is offered
+                          // on place-less trips. Bottom pad clears the chat
+                          // FAB like the trailing cluster's.
+                          if (_inBudgetView)
+                            SliverPadding(
+                              padding:
+                                  EdgeInsets.fromLTRB(gutter, 4, gutter, 96),
+                              sliver: SliverToBoxAdapter(
+                                child: BudgetSection(
+                                  tripId: trip.id,
+                                  canEdit: !_readOnly,
+                                  isOffline: _isOffline,
+                                ),
+                              ),
+                            )
+                          else if ((trip.items ?? []).isEmpty)
                             SliverPadding(
                               padding:
                                   EdgeInsets.symmetric(horizontal: gutter),
@@ -5486,22 +5472,24 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                     gutter, AppSpacing.sm, gutter, 0),
                                 sliver: SliverToBoxAdapter(child: other),
                               ),
-                          // Trailing sections, collapsed to one-line summary
-                          // rows (settings-list rhythm: hairline dividers).
-                          // One sliver for both; the 96px bottom padding
-                          // keeps the chat FAB off the last row. Each _xxx
-                          // SectionRow hides itself exactly when its expanded
-                          // section would (see the builders).
-                          SliverPadding(
-                            padding: EdgeInsets.fromLTRB(
-                                gutter, AppSpacing.sm, gutter, 96),
-                            sliver: SliverToBoxAdapter(
-                              child: _sectionCluster([
+                          // Trailing section (Packing), collapsed to a
+                          // one-line summary row (settings-list rhythm);
+                          // the 96px bottom padding keeps the chat FAB off
+                          // the last row. The row hides itself exactly when
+                          // its expanded section would (see the builder).
+                          // Suppressed in the Budget view — packing under
+                          // the budget body would be noise. (Budget's own
+                          // row left this cluster for the header tab.)
+                          if (!_inBudgetView)
+                            SliverPadding(
+                              padding: EdgeInsets.fromLTRB(
+                                  gutter, AppSpacing.sm, gutter, 96),
+                              sliver: SliverToBoxAdapter(
+                                child: _sectionCluster([
                                   _packingSectionRow(trip, theme),
-                                  _budgetSectionRow(trip, theme),
                                 ]),
+                              ),
                             ),
-                          ),
                         ],
                       );
 
