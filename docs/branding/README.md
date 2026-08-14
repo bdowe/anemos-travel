@@ -9,8 +9,10 @@ the equine nod.
 
 `mark.svg` is the icon and the **single source of truth** — `lockup.svg`
 references it (`<image href="mark.svg">`) and adds the "Anemos" wordmark as
-live Playfair Display SemiBold text (font declared *inside* the SVG, loaded
-from `src/packages/flutter-app/assets/fonts/`). Because of that external
+live Cinzel SemiBold text — a static w600 instance of the variable font,
+subsetted (font declared *inside* the SVG, loaded from
+`src/packages/flutter-app/assets/fonts/`). Cinzel has no true lowercase, so
+the wordmark paints as small-caps "ANEMOS". Because of that external
 reference + live text, always render via the pipeline below, never by loading
 lockup.svg as a plain `<img>`.
 

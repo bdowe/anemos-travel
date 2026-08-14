@@ -129,11 +129,13 @@ class HomeScreen extends ConsumerWidget {
               child: Text(
                 AppInfo.name,
                 overflow: TextOverflow.ellipsis,
+                // Cinzel has no true lowercase — "Anemos" paints as small-caps
+                // ANEMOS. Caps run wide, hence the tighter size + open tracking.
                 style: TextStyle(
-                  fontFamily: 'Playfair Display',
+                  fontFamily: 'Cinzel',
                   fontWeight: FontWeight.w600,
-                  fontSize: 20,
-                  letterSpacing: 0.5,
+                  fontSize: 19,
+                  letterSpacing: 1.0,
                   color: Colors.white,
                 ),
               ),

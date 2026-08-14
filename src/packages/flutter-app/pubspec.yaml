@@ -151,11 +151,12 @@ flutter:
   assets:
     - assets/images/
 
-  # Playfair Display wordmark font (OFL-licensed), used for display headings.
+  # Cinzel wordmark font (OFL-licensed) — the brand wordmark only; static w600
+  # instance of the variable font, subsetted (see docs/branding/README.md).
   fonts:
-    - family: Playfair Display
+    - family: Cinzel
       fonts:
-        - asset: assets/fonts/PlayfairDisplay-SemiBold.ttf
+        - asset: assets/fonts/Cinzel-SemiBold.ttf
           weight: 600
     # Inter (OFL) — app-wide UI font; hierarchy via weight, not size.
     - family: Inter
