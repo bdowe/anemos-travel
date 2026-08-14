@@ -1,24 +1,22 @@
 import 'package:flutter/material.dart';
 import '../theme/spacing.dart';
 
-/// Anemos brand mark: a horse head inside an omega-shaped gold horseshoe
-/// (originally drawn for "Golden Tempo", the horse whose Derby win funded the
-/// company; retained until the new Anemos art lands — the in-app agent
-/// persona "Ferdinand" keeps the equine nod).
-/// NOTE: the PNG artwork still carries the old "GOLDEN TEMPO" wordmark until
-/// the new art lands — only the text layer here has been renamed.
+/// Anemos brand mark: an 8-point wind rose (άνεμος = wind) — teal cardinal
+/// points, gold intercardinals. Source SVGs live in docs/branding/; PNGs are
+/// rendered by scripts/brand-render.sh. (The old horse mark retired with the
+/// Golden Tempo name; the agent persona "Ferdinand" keeps the equine nod.)
 /// Two forms:
-/// - [BrandLogo.lockup] — the full horseshoe + wordmark image, for spots with
-///   horizontal room (app-bar titles).
-/// - [BrandLogo.mark] — the horseshoe icon only, for tight spots (nav rail,
+/// - [BrandLogo.lockup] — the full rose + "Anemos" wordmark image, for spots
+///   with horizontal room (app-bar titles).
+/// - [BrandLogo.mark] — the rose icon only, for tight spots (nav rail,
 ///   hero badge).
 ///
-/// The artwork is black + gold on a transparent background, so it needs a light
+/// The artwork is teal + gold on a transparent background, so it needs a light
 /// surface behind it on teal app bars / dark photos. Wrap either form in
 /// [BrandBadge] for that.
 class BrandLogo extends StatelessWidget {
-  static const String _lockupAsset = 'assets/images/golden_tempo_logo.png';
-  static const String _markAsset = 'assets/images/golden_tempo_mark.png';
+  static const String _lockupAsset = 'assets/images/anemos_logo.png';
+  static const String _markAsset = 'assets/images/anemos_mark.png';
 
   final String _asset;
   final double _height;
