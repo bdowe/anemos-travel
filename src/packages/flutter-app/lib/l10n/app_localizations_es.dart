@@ -9,7 +9,7 @@ class AppLocalizationsEs extends AppLocalizations {
   AppLocalizationsEs([String locale = 'es']) : super(locale);
 
   @override
-  String get appTitle => 'Golden Tempo Travel';
+  String get appTitle => 'Anemos';
 
   @override
   String get languageSectionTitle => 'Idioma';
@@ -1681,7 +1681,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String connectTitle(String app) {
-    return '¿Conectar $app a Golden Tempo?';
+    return '¿Conectar $app a Anemos?';
   }
 
   @override
@@ -1697,11 +1697,11 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get connectScopeRecsRead =>
-      'Buscar las recomendaciones locales de Golden Tempo';
+      'Buscar las recomendaciones locales de Anemos';
 
   @override
   String get connectSignInPrompt =>
-      'Inicia sesión en tu cuenta de Golden Tempo para continuar.';
+      'Inicia sesión en tu cuenta de Anemos para continuar.';
 
   @override
   String get connectSignInCta => 'Iniciar sesión';
@@ -2553,7 +2553,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get agentScreenEmptyMessage =>
-      'Buscaré lugares y crearé un itinerario día a día para ti.';
+      'Soy Ferdinand: buscaré lugares y crearé un itinerario día a día para ti.';
 
   @override
   String get agentScreenSuggestionParis => '2 días en París';

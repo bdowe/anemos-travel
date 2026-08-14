@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// Product name. Not translated — it is a brand name.
   ///
   /// In en, this message translates to:
-  /// **'Golden Tempo Travel'**
+  /// **'Anemos'**
   String get appTitle;
 
   /// Label of the language dropdown in account settings.
@@ -2981,7 +2981,7 @@ abstract class AppLocalizations {
   /// No description provided for @connectTitle.
   ///
   /// In en, this message translates to:
-  /// **'Connect {app} to Golden Tempo?'**
+  /// **'Connect {app} to Anemos?'**
   String connectTitle(String app);
 
   /// No description provided for @connectUnverifiedCaution.
@@ -3005,13 +3005,13 @@ abstract class AppLocalizations {
   /// No description provided for @connectScopeRecsRead.
   ///
   /// In en, this message translates to:
-  /// **'Search Golden Tempo\'s local recommendations'**
+  /// **'Search Anemos\'s local recommendations'**
   String get connectScopeRecsRead;
 
   /// No description provided for @connectSignInPrompt.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to your Golden Tempo account to continue.'**
+  /// **'Sign in to your Anemos account to continue.'**
   String get connectSignInPrompt;
 
   /// No description provided for @connectSignInCta.
@@ -4343,7 +4343,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentScreenEmptyMessage.
   ///
   /// In en, this message translates to:
-  /// **'I\'ll search for places and build you a day-by-day itinerary.'**
+  /// **'I\'m Ferdinand — I\'ll search for places and build you a day-by-day itinerary.'**
   String get agentScreenEmptyMessage;
 
   /// No description provided for @agentScreenSuggestionParis.
