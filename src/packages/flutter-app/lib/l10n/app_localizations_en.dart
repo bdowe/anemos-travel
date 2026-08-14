@@ -1730,6 +1730,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripsListTravelMap => 'Your travel map';
 
   @override
+  String get tripsListStatsTraveled => 'Traveled';
+
+  @override
+  String get tripsListStatsPlanned => 'Planned';
+
+  @override
   String tripsListStatTrips(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

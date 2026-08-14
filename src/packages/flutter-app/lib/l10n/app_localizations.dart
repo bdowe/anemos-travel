@@ -3104,6 +3104,18 @@ abstract class AppLocalizations {
   /// **'Your travel map'**
   String get tripsListTravelMap;
 
+  /// No description provided for @tripsListStatsTraveled.
+  ///
+  /// In en, this message translates to:
+  /// **'Traveled'**
+  String get tripsListStatsTraveled;
+
+  /// No description provided for @tripsListStatsPlanned.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned'**
+  String get tripsListStatsPlanned;
+
   /// No description provided for @tripsListStatTrips.
   ///
   /// In en, this message translates to:

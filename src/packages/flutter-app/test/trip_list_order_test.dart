@@ -171,6 +171,6 @@ void main() {
   });
 
   // The old upcomingStats group moved with its derivation: the header line it
-  // fed was replaced by the all-time "Your travels" band, so its cases now
-  // live in trip_list_insights_test.dart against lifetimeStats.
+  // fed was replaced by the "Your travels" band, so its cases now live in
+  // trip_list_insights_test.dart against travelStats.
 }

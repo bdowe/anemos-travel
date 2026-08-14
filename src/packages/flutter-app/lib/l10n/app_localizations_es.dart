@@ -1742,6 +1742,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripsListTravelMap => 'Tu mapa de viajes';
 
   @override
+  String get tripsListStatsTraveled => 'Viajado';
+
+  @override
+  String get tripsListStatsPlanned => 'Planeado';
+
+  @override
   String tripsListStatTrips(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

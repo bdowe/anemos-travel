@@ -1121,6 +1121,8 @@
   "tripsListNewTrip": "New trip",
   "tripsListYourTravels": "Your travels",
   "tripsListTravelMap": "Your travel map",
+  "tripsListStatsTraveled": "Traveled",
+  "tripsListStatsPlanned": "Planned",
   "tripsListStatTrips": "{count, plural, one{Trip} other{Trips}}",
   "@tripsListStatTrips": {
     "placeholders": {

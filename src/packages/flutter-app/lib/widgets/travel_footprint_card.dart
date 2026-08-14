@@ -6,15 +6,31 @@ import 'package:latlong2/latlong.dart';
 
 import '../l10n/l10n.dart';
 import '../theme/spacing.dart';
+import '../utils/trip_list_insights.dart';
 import 'app_map.dart';
 import 'stat_tile_row.dart';
 
+/// Handles for the two stat groups. Locale-free on purpose: "is the traveled
+/// group on screen?" is the invariant this card turns on, and a test that
+/// asked by label would answer it differently in Spanish.
+const kTraveledStatsKey = ValueKey('travelStats.traveled');
+const kPlannedStatsKey = ValueKey('travelStats.planned');
+
 /// The body of the "Your travels" section on the trips list: a world map
-/// pinning every hub city across the user's owned trips, with lifetime stat
+/// pinning every hub city across the user's owned trips, with the travel stat
 /// tiles beneath. One merged card (not separate stats + map bands) so the
 /// sparse one-trip-each-way page gains a single substantial scroll stop, and
 /// so the whole block shares one gating story: with no located cities the map
 /// sub-band collapses and the card degrades to a bare stats strip.
+///
+/// **Traveled and planned are separate, labeled groups**, and the map says
+/// which pins are which (filled = been there, hollow = still ahead). The band
+/// reported one all-time total until 2026-08-14, which counted a trip starting
+/// next month as travel already taken — 40 "travel days" when 2 had happened.
+/// This card sits exactly where the page turns from plans to history, so its
+/// numbers have to name which of the two they are. A group whose trip count is
+/// zero does not render at all: that one rule is why a brand-new planner never
+/// meets a row of zeros, and why nothing here needs a second display mode.
 ///
 /// **Unlabeled by design** — the "Your travels" title is a page-level
 /// SectionHeader the caller renders directly above, under the same gate.
@@ -31,13 +47,15 @@ import 'stat_tile_row.dart';
 /// per-trip detail cache — unlike TripMapBand this band must render for
 /// trips never opened on this device.
 class TravelFootprintCard extends StatelessWidget {
-  final List<({String city, double lat, double lng})> pins;
-  final ({int trips, int travelDays, int cities}) stats;
+  final List<FootprintPin> pins;
+  final TravelStats traveled;
+  final TravelStats planned;
 
   const TravelFootprintCard({
     super.key,
     required this.pins,
-    required this.stats,
+    required this.traveled,
+    required this.planned,
   });
 
   /// Slightly shorter than TripMapBand's 160 hero band so the retrospective
@@ -47,10 +65,87 @@ class TravelFootprintCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    // Every trip lands on exactly one side (travelStats), and the caller gates
+    // the card on >= 2 owned trips, so at least one group always survives.
+    final groups = [
+      if (traveled.trips > 0)
+        (
+          key: kTraveledStatsKey,
+          label: l10n.tripsListStatsTraveled,
+          stats: traveled,
+        ),
+      if (planned.trips > 0)
+        (
+          key: kPlannedStatsKey,
+          label: l10n.tripsListStatsPlanned,
+          stats: planned,
+        ),
+    ];
+    return Card(
+      // The map tiles paint square corners; the card's own clip rounds them.
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (pins.isNotEmpty)
+            SizedBox(
+              height: _bandHeight,
+              child: Semantics(
+                label: l10n.tripsListTravelMap,
+                child: _FootprintMap(
+                  pins: pins,
+                  tooltipFor: (p) => '${p.city} · '
+                      '${p.visited ? l10n.tripsListStatsTraveled : l10n.tripsListStatsPlanned}',
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < groups.length; i++) ...[
+                  // xl, not md: an eyebrow sits ~26px above its own numbers,
+                  // so a 12px seam left it equidistant between the two groups
+                  // and it read as floating between them rather than heading
+                  // the one below. A group label has to be nearer its group
+                  // than its neighbour by a visible margin.
+                  if (i > 0) const SizedBox(height: AppSpacing.xl),
+                  _StatGroup(
+                    key: groups[i].key,
+                    label: groups[i].label,
+                    stats: groups[i].stats,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One labeled side of the split: a quiet eyebrow over the shared stat tiles.
+///
+/// The eyebrow borrows UpNextTripCard's treatment but stays **sentence case**
+/// where that one is caps — the same l10n string labels the map's pin tooltips
+/// ("Kraków · Planned"), and one string beats a second key plus a
+/// locale-unsafe toUpperCase(). It must also read quieter than the page-level
+/// "Your travels" SectionHeader above the card: header > eyebrow > tile label.
+class _StatGroup extends StatelessWidget {
+  final String label;
+  final TravelStats stats;
+
+  const _StatGroup({super.key, required this.label, required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
     // Zero-valued tiles drop out segment-wise (undated trips contribute no
-    // travel days, city-less legacy rows no cities), same rule the old
-    // upcoming-only stats line used. Trips is never zero here — the caller
-    // gates the card on >= 2 owned trips.
+    // travel days, city-less legacy rows no cities), the rule this card has
+    // always used. Trips is never zero — the caller drops the whole group.
     final tiles = [
       StatTileData(
         value: '${stats.trips}',
@@ -67,26 +162,22 @@ class TravelFootprintCard extends StatelessWidget {
           label: l10n.tripsListStatCities(stats.cities),
         ),
     ];
-    return Card(
-      // The map tiles paint square corners; the card's own clip rounds them.
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (pins.isNotEmpty)
-            SizedBox(
-              height: _bandHeight,
-              child: Semantics(
-                label: l10n.tripsListTravelMap,
-                child: _FootprintMap(pins: pins),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: StatTileRow(tiles: tiles),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.8,
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        StatTileRow(tiles: tiles),
+      ],
     );
   }
 }
@@ -97,11 +188,14 @@ class TravelFootprintCard extends StatelessWidget {
 /// fit once over all pins. Static camera: a mid-list band that pans would
 /// steal the page's scroll gesture. Pins keep tap-tooltips ("what city is
 /// that?" costs nothing), which is also why there is no AbsorbPointer and no
-/// ExcludeSemantics — the tooltips carry the city names for screen readers.
+/// ExcludeSemantics — the tooltips carry the city names for screen readers,
+/// and now the traveled/planned state too: the two dot styles are the fast
+/// read, the tooltip is the one that can't be misread.
 class _FootprintMap extends StatefulWidget {
-  final List<({String city, double lat, double lng})> pins;
+  final List<FootprintPin> pins;
+  final String Function(FootprintPin) tooltipFor;
 
-  const _FootprintMap({required this.pins});
+  const _FootprintMap({required this.pins, required this.tooltipFor});
 
   @override
   State<_FootprintMap> createState() => _FootprintMapState();
@@ -180,7 +274,10 @@ class _FootprintMapState extends State<_FootprintMap> {
                     point: LatLng(p.lat, p.lng),
                     width: _pinHitBox,
                     height: _pinHitBox,
-                    child: _FootprintPin(city: p.city),
+                    child: _FootprintPin(
+                      tooltip: widget.tooltipFor(p),
+                      visited: p.visited,
+                    ),
                   ),
               ],
             ),
@@ -196,22 +293,36 @@ class _FootprintMapState extends State<_FootprintMap> {
 /// over satellite imagery, brand primary, no ordinal. The tooltip's tap
 /// detector fills the marker's hit box, so the whole transparent halo around
 /// the 12px dot triggers it.
+///
+/// [visited] changes only the FILL — brand primary for a city already
+/// travelled, hollow (a dark translucent core) for one still ahead: the
+/// filled-vs-empty idiom, and the same reading as a ticked box. The white ring
+/// and shadow stay on both so the two are equally findable on busy imagery.
+///
+/// Swapping the ring colour instead was tried first and inverted the emphasis:
+/// at 12px a primary ring on a white core just reads "white dot", which shouts
+/// louder than the teal one — the trips you HAVEN'T taken became the loud
+/// pins in a section headed by the ones you have. Both stay hardcoded white
+/// rather than a surface token: these sit on satellite imagery, which looks
+/// the same in either app theme, so a theme-following ring would vanish.
 class _FootprintPin extends StatelessWidget {
-  final String city;
+  final String tooltip;
+  final bool visited;
 
-  const _FootprintPin({required this.city});
+  const _FootprintPin({required this.tooltip, required this.visited});
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
     return Tooltip(
-      message: city,
+      message: tooltip,
       triggerMode: TooltipTriggerMode.tap,
       child: Center(
         child: Container(
           width: 12,
           height: 12,
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary,
+            color: visited ? primary : Colors.black.withValues(alpha: 0.35),
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white, width: 2),
             boxShadow: [

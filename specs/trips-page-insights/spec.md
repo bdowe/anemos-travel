@@ -133,3 +133,42 @@ full trip view they already have access to.
 None — the five surfaces, the shared-with-me exclusion, the confirmed-stays
 rule, the 14-day nudge window, and the 2+-trips footprint gate were all
 decided at approval.
+
+## Amendment 2026-08-14 — "Your travels" splits traveled from planned
+
+**Supersedes the "all-time" wording above** (the lifetime-band user story, its
+acceptance criterion, and the UI-behavior bullet). The band shipped as one
+all-time total over every owned trip, which counted a trip starting next month
+as travel already taken: an account with a 2-day past trip and two upcoming
+ones reported *40 travel days*, of which 2 had happened. The map had the same
+defect — every located city drew the same "been there" dot. Both contradicted
+what this section is placed to be: the retrospective, where the page turns from
+plans to history.
+
+The corrected contract (client-side only — no payload, SQL, or migration
+change; `utils/trip_list_insights.dart` remains the one derivation site):
+
+- **Two labeled groups, traveled and planned**, and a group with **no trips
+  does not render**. That single rule replaces every special case: a planner
+  who has taken no trips yet sees only "Planned" instead of a row of zeros, an
+  account with nothing upcoming sees only "Traveled", and under the unchanged
+  2+-owned-trips gate at least one group always renders because every trip
+  lands on exactly one side.
+- **Bucket** — a trip is traveled once it has *started* (`tripHasStarted`:
+  first day = `start_date ?? end_date`, today or earlier). Future trips and
+  undated drafts are planned. Mirrors `tripIsPast`'s last-day rule, so every
+  trip filed under "Past trips" is also counted as travelled.
+- **Travel days** — traveled counts only days already lived through, so an
+  in-progress trip's counter ticks up daily rather than banking all 35 days on
+  day one; planned counts the full span of trips that haven't started. The
+  remaining days of an in-progress trip are on neither side: each group stays
+  consistent with the trips shown beside it, which is the arithmetic a reader
+  can check, and the old grand total is no longer on screen.
+- **Cities** — traveled wins the overlap, so a city on both a past and a
+  future trip counts once, as visited. The two counts partition.
+- **Map pins** — solid dot = visited, ring = still ahead, with the state in
+  the tap tooltip ("Kraków · Planned") because two dot styles are a fast read,
+  not a precise one. `visited` is taken from the set of cities on started
+  trips, **never** from whichever trip supplied the winning coordinate: server
+  order is newest-created-first, so a planned trip routinely lands ahead of the
+  past trip that earned the dot.
