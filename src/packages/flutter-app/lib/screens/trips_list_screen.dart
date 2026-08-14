@@ -220,18 +220,30 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                     ),
                   for (final t in upcomingCards)
                     _TripCard(trip: t, isAdmin: isAdmin),
-                  // "Your travels": the retrospective band, placed where the
-                  // page turns from plans to history — after the upcoming
-                  // cards, bridging into Past trips. Page gravity stays
-                  // action-first above it.
-                  if (showFootprint)
+                  // "Your travels": the retrospective section, where the page
+                  // turns from plans to history. Its own titled section, not
+                  // a card in the Upcoming run — an unlabeled map over a
+                  // stats panel is the "Up next" hero's silhouette, so at the
+                  // 8px card gap it read as another upcoming trip. The header
+                  // and the card share one gate: a title with nothing under
+                  // it is worse than neither.
+                  //
+                  // AppSpacing.xl is this page's section seam from here down —
+                  // Past trips and Shared with you use the same 24px, so the
+                  // three sections below Upcoming read as peers. Dropping any
+                  // one of them back to sm re-attaches that section to the one
+                  // above it.
+                  if (showFootprint) ...[
                     Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.sm),
-                      child: TravelFootprintCard(pins: pins, stats: stats),
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.xs, AppSpacing.xl, 0, AppSpacing.sm),
+                      child: SectionHeader(title: l10n.tripsListYourTravels),
                     ),
+                    TravelFootprintCard(pins: pins, stats: stats),
+                  ],
                   if (groups.past.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      padding: const EdgeInsets.only(top: AppSpacing.xl),
                       child: CollapsibleSection(
                         title: l10n.tripsListPastTrips,
                         icon: Icons.history,
@@ -267,7 +279,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                   if (sharedOrdered.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.xs, AppSpacing.lg, 0, AppSpacing.sm),
+                          AppSpacing.xs, AppSpacing.xl, 0, AppSpacing.sm),
                       child: SectionHeader(title: l10n.tripsListSharedWithYou),
                     ),
                     for (final t in sharedOrdered)

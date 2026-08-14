@@ -9,13 +9,21 @@ import '../theme/spacing.dart';
 import 'app_map.dart';
 import 'stat_tile_row.dart';
 
-/// The "Your travels" block on the trips list: a world map pinning every hub
-/// city across the user's owned trips, with lifetime stat tiles beneath — the
-/// retrospective bridge between the Upcoming cards above it and the Past
-/// section below. One merged card (not separate stats + map bands) so the
+/// The body of the "Your travels" section on the trips list: a world map
+/// pinning every hub city across the user's owned trips, with lifetime stat
+/// tiles beneath. One merged card (not separate stats + map bands) so the
 /// sparse one-trip-each-way page gains a single substantial scroll stop, and
 /// so the whole block shares one gating story: with no located cities the map
-/// sub-band collapses and the card degrades to a labeled stats strip.
+/// sub-band collapses and the card degrades to a bare stats strip.
+///
+/// **Unlabeled by design** — the "Your travels" title is a page-level
+/// SectionHeader the caller renders directly above, under the same gate.
+/// This card carried its own in-card header until 2026-08-14; that read as
+/// clutter-avoidance at the time but cost more than it saved, because a map
+/// over an info panel IS the "Up next" hero's silhouette. With the only label
+/// tucked *under* the map, the eye hit an unlabeled map inside a run of trip
+/// cards and parsed the whole thing as another upcoming trip. A section's
+/// label has to sit outside and above its visual, not inside it.
 ///
 /// Neutral [Card] chrome on purpose — the brand gradient stays reserved for
 /// the two promoted cards (live spotlight, "Up next" hero). Pins come from
@@ -38,7 +46,6 @@ class TravelFootprintCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = context.l10n;
     // Zero-valued tiles drop out segment-wise (undated trips contribute no
     // travel days, city-less legacy rows no cities), same rule the old
@@ -76,29 +83,7 @@ class TravelFootprintCard extends StatelessWidget {
             ),
           Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // In-card header (not a page-level SectionHeader): a third
-                // header tier between "Upcoming" and "Past trips" would read
-                // as clutter, and the label must stay attached when the map
-                // collapses.
-                Row(
-                  children: [
-                    Icon(Icons.public,
-                        size: 18, color: theme.colorScheme.onSurfaceVariant),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      l10n.tripsListYourTravels,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                StatTileRow(tiles: tiles),
-              ],
-            ),
+            child: StatTileRow(tiles: tiles),
           ),
         ],
       ),
