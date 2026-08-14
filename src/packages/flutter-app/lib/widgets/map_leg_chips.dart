@@ -48,7 +48,9 @@ class MapLegChips extends StatefulWidget {
   static const double mapTopInset = 64;
 
   /// One entry per full-itinerary leg, visit order, labels display-ready.
-  final List<({String key, String label})> legs;
+  /// [qualifier] is set only on labels the strip repeats — build these with
+  /// `mapLegChipEntries`, which owns that rule.
+  final List<({String key, String label, String? qualifier})> legs;
 
   final String? selected;
   final ValueChanged<String?> onSelected;
@@ -126,6 +128,7 @@ class _MapLegChipsState extends State<MapLegChips> {
   Widget _chip({
     required String label,
     required String value,
+    String? qualifier,
     bool muted = false,
   }) {
     final isSelected = widget.selected == value;
@@ -133,7 +136,24 @@ class _MapLegChipsState extends State<MapLegChips> {
     // the ring is what says "you are here"; the map's empty state says empty.
     final dim = muted && !isSelected;
     final chip = ChoiceChip(
-      label: Text(label),
+      // The qualifier rides one weight down from the city so the strip still
+      // scans as a row of place names — it disambiguates, it doesn't compete.
+      label: qualifier == null
+          ? Text(label)
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label),
+                Text(
+                  ' · $qualifier',
+                  style: TextStyle(
+                    color: dim ? Colors.white38 : Colors.white70,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
       selected: isSelected,
       onSelected: (_) => widget.onSelected(value),
       // Compact visual (tight padding, small label) so the row doesn't eat
@@ -220,6 +240,7 @@ class _MapLegChipsState extends State<MapLegChips> {
                   _chip(
                     label: widget.legs[i].label,
                     value: widget.legs[i].key,
+                    qualifier: widget.legs[i].qualifier,
                     muted: widget.mappedLegKeys != null &&
                         !widget.mappedLegKeys!.contains(widget.legs[i].key),
                   ),

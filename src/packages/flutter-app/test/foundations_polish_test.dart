@@ -18,8 +18,8 @@ void main() {
         home: Scaffold(
           body: MapLegChips(
             legs: const [
-              (key: 'Praga', label: 'Praga'),
-              (key: 'Roma', label: 'Roma'),
+              (key: 'Praga', label: 'Praga', qualifier: null),
+              (key: 'Roma', label: 'Roma', qualifier: null),
             ],
             selected: 'Praga',
             onSelected: (_) {},

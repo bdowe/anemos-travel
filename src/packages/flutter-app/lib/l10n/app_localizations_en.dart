@@ -2383,6 +2383,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mapResetMap => 'Reset map';
 
   @override
+  String mapLegVisitNumber(int n) {
+    return 'Visit $n';
+  }
+
+  @override
   String get mapShowAllPlaces => 'Show all places';
 
   @override

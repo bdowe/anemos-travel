@@ -663,6 +663,7 @@
   "mapZoomIn": "Acercar",
   "mapZoomOut": "Alejar",
   "mapResetMap": "Restablecer mapa",
+  "mapLegVisitNumber": "Visita {n}",
   "mapShowAllPlaces": "Mostrar todos los lugares",
   "mapHomeAirport": "Aeropuerto de origen ({code})",
   "accountMenuTooltip": "Cuenta",

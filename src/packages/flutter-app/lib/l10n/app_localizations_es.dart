@@ -2399,6 +2399,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get mapResetMap => 'Restablecer mapa';
 
   @override
+  String mapLegVisitNumber(int n) {
+    return 'Visita $n';
+  }
+
+  @override
   String get mapShowAllPlaces => 'Mostrar todos los lugares';
 
   @override

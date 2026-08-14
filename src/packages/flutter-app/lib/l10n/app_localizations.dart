@@ -4076,6 +4076,12 @@ abstract class AppLocalizations {
   /// **'Reset map'**
   String get mapResetMap;
 
+  /// Qualifier on a map destination chip when a trip visits the same city more than once and the leg dates cannot tell the visits apart (an undated trip, or two runs collapsed onto one day). Renders after the city name, e.g. 'Fira · Visit 2'. Dated trips show the start date instead.
+  ///
+  /// In en, this message translates to:
+  /// **'Visit {n}'**
+  String mapLegVisitNumber(int n);
+
   /// Tooltip on the map's globe button, which clears a destination focus and returns to the whole-trip overview. Deliberately not named mapReset*: mapResetMap sits next to it and means something else — refit the camera over whatever is already shown.
   ///
   /// In en, this message translates to:

@@ -32,9 +32,9 @@ final _items = [
 
 /// Three legs so the home-overlay matrix has a first, a middle, and a last.
 const _legChips = [
-  (key: 'Paris', label: 'Paris'),
-  (key: 'Rome', label: 'Rome'),
-  (key: 'Berlin', label: 'Berlin'),
+  (key: 'Paris', label: 'Paris', qualifier: null),
+  (key: 'Rome', label: 'Rome', qualifier: null),
+  (key: 'Berlin', label: 'Berlin', qualifier: null),
 ];
 
 /// [viewPadding] simulates device chrome (e.g. the 34px iOS home-indicator

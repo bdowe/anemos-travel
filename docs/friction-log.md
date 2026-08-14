@@ -56,9 +56,49 @@ actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
   crashes **after** writing the files — leaving a ~600-line reformatting diff on
   a hub file. Fix: `flutter pub get` on the host first, then regenerate. Check
   the generated diff is scoped before committing, every time.
-- **[app] Still open — two chips can carry the identical label.** A trip that
-  revisits a city renders `Fira … Fira` (`trip_legs.dart`; run keys differ,
-  labels don't). Real ambiguity in the same strip, out of scope here.
+- **[app] Second half of the same defect: two chips carrying the identical
+  label.** A trip that revisits a city rendered `Fira … Fira` — run keys differ,
+  labels don't, so nothing on screen said which stay a tap would focus. Same
+  disease as the All chip: a chip that can't be told from its neighbour isn't
+  identifying anything. Repeated labels — **and only repeated ones**, so the
+  ordinary trip keeps bare city names on a narrow strip — now carry a
+  qualifier: the leg's start date, `Fira · Sep 2` / `Fira · Sep 8`, one weight
+  down so the row still scans as place names. Built in ONE place
+  (`mapLegChipEntries`), replacing the two hand-rolled chip-label loops in the
+  detail derivation and the shared view.
+  - **The date is the VISIBLE range, never the raw one** (leg_ranges.dart
+    doctrine — a chip that names a date promises something about dates on
+    screen). It shows Sep 2, not Sep 3, precisely because Athens's header above
+    it ends Sep 2 and Fira renders from its arrival. A raw-range chip would
+    have disagreed with the header two rows below it — the events-rail bug,
+    re-run.
+  - It degrades to `Visit 1` / `Visit 2` when dates can't do the job, and that
+    is a **whole-strip mode, not a per-chip special case**: an undated trip has
+    null ranges for every leg (the allocation is all-or-nothing off
+    `trip.startDate`), and a dense itinerary can collapse two runs onto one
+    day. A repeated date disambiguates nothing, so it must not be shown as if
+    it did; a partially-dated repeat set falls back wholesale rather than
+    putting a date beside a number.
+  - The qualifier is deliberately NOT baked into the label: `tripNoPlacesInLeg`
+    speaks the label in a sentence and must keep saying "No places pinned in
+    Fira", not "…in Fira · Sep 2".
+  - The shared view keeps its own wording for the unresolved run — it says
+    "Places" where trip detail says "Other places" — so the label mapper is
+    injectable. Passing the default would have put a chip reading "Other
+    places" directly above a header reading "Places".
+- **[dev] A new test FILE can turn a wall-clock test red.** Adding
+  `map_leg_chip_entries_test.dart` pushed `auth_autofill_submit_test.dart`'s
+  "keystroke-simulated burst fill" into failing — deterministically, in the
+  full run, green in isolation and green at `--concurrency=1`. Cause: that test
+  paid a `tester.runAsync` round trip **per character** (each tears down and
+  restores the fake-async zone) to sit "well inside" a 400ms burst window the
+  production heuristic measures with a real `DateTime.now()`. More parallel
+  load → slower host → 13 characters exceed 400ms → the heuristic correctly
+  reads human typing. The delays are now gone (event COUNT was always the
+  point, not the gaps). The companion "slow per-char typing does not
+  auto-submit" test keeps its real delays on purpose: load only ever pushes
+  that one further into passing. **A timing test whose failure mode is "the
+  machine got busier" fails for whoever adds the next test file.**
 
 ## 2026-08-14 — events on the trip page (overwhelming, and asking the wrong dates)
 

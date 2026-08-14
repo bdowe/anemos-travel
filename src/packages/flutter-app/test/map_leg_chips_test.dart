@@ -6,14 +6,15 @@ import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 
 import 'support/l10n_test_app.dart';
 
-List<({String key, String label})> _cities(int n) => [
-      for (var i = 1; i <= n; i++) (key: 'City $i', label: 'City $i'),
+List<({String key, String label, String? qualifier})> _cities(int n) => [
+      for (var i = 1; i <= n; i++)
+        (key: 'City $i', label: 'City $i', qualifier: null),
     ];
 
 /// Hosts the strip at a fixed width, mirroring its real placement as a
 /// Positioned row floating over a map.
 Widget _host({
-  required List<({String key, String label})> legs,
+  required List<({String key, String label, String? qualifier})> legs,
   required String? selected,
   double width = 320,
   ValueChanged<String?>? onSelected,
@@ -257,9 +258,9 @@ void main() {
     await tester.pumpWidget(
       _host(
         legs: const [
-          (key: 'Paris', label: 'Paris'),
-          (key: 'Rome', label: 'Rome'),
-          (key: 'Paris#2', label: 'Paris'),
+          (key: 'Paris', label: 'Paris', qualifier: 'Sep 3'),
+          (key: 'Rome', label: 'Rome', qualifier: null),
+          (key: 'Paris#2', label: 'Paris', qualifier: 'Sep 9'),
         ],
         selected: null,
         width: 600,
@@ -272,6 +273,38 @@ void main() {
     expect(received, 'Paris#2');
     await tester.tap(find.text('Paris').at(0));
     expect(received, 'Paris');
+  });
+
+  testWidgets('a qualifier renders beside its city and only where given', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        legs: const [
+          (key: 'Paris', label: 'Paris', qualifier: 'Sep 3'),
+          (key: 'Rome', label: 'Rome', qualifier: null),
+          (key: 'Paris#2', label: 'Paris', qualifier: 'Sep 9'),
+        ],
+        selected: null,
+        width: 600,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The city stays its own Text so callers that speak it in a sentence
+    // (tripNoPlacesInLeg) keep a bare label; the qualifier rides alongside.
+    expect(find.text('Paris'), findsNWidgets(2));
+    expect(find.text(' · Sep 3'), findsOneWidget);
+    expect(find.text(' · Sep 9'), findsOneWidget);
+    // Rome is unique, so it carries nothing extra.
+    expect(
+      find.descendant(
+        of: find.ancestor(
+            of: find.text('Rome'), matching: find.byType(ChoiceChip)),
+        matching: find.byType(Text),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('opening with a late leg selected scrolls the strip to it', (
