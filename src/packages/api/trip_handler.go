@@ -73,21 +73,54 @@ type TripResponse struct {
 	UpdatedByName *string `json:"updated_by_name,omitempty"`
 	Shared        bool    `json:"shared,omitempty"`
 	// List-row enrichment (the laterals in ListLatestTripsByOwner /
-	// ListLatestCollaboratedTripsForUser): total itinerary items and
-	// booking-todo progress. Pointers so absence (full views, old servers)
-	// is distinct from a real zero — "0/9 booked" must serialize. List
-	// responses only; full views carry the real arrays and clients derive
-	// from those. Booking fields are nil'd for viewers on shared-with-me
-	// (the getTripHandler visibility boundary).
+	// ListLatestCollaboratedTripsForUser): total itinerary items,
+	// booking-todo progress, and the insight fields below
+	// (specs/trips-page-insights). Pointers so absence (full views, old
+	// servers) is distinct from a real zero — "0/9 booked" and "0/2 stays"
+	// must serialize. List responses only; full views carry the real arrays
+	// and clients derive from those. Booking fields are nil'd for viewers
+	// on shared-with-me (the getTripHandler visibility boundary); the
+	// insight fields are owner-list only — shared-with-me rows carry NONE
+	// of them (v1 exclusion, stricter than the viewer boundary).
 	ItemCount     *int `json:"item_count,omitempty"`
 	BookingTotal  *int `json:"booking_total,omitempty"`
 	BookingBooked *int `json:"booking_booked,omitempty"`
+	// Stays are CONFIRMED only (auto=false AND NOT dismissed — the
+	// ListConfirmedAccommodationsByTrip rule; drafts churn with sync).
+	StayTotal    *int `json:"stay_total,omitempty"`
+	StayBooked   *int `json:"stay_booked,omitempty"`
+	PackingTotal *int `json:"packing_total,omitempty"`
+	PackingDone  *int `json:"packing_done,omitempty"`
+	// Budget semantics match buildBudgetResponse: single currency, USD
+	// default when no budget row exists.
+	BudgetTarget   *float64 `json:"budget_target,omitempty"`   // nil = no target set
+	BudgetSpent    *float64 `json:"budget_spent,omitempty"`    // nil = not a list row; 0 = nothing spent
+	BudgetCurrency *string  `json:"budget_currency,omitempty"` // "USD" when no budget row
+	// NextTransportDepart is YYYY-MM-DD, the earliest unbooked future
+	// transport depart date (the booking-urgency nudge); absent when
+	// nothing qualifies.
+	NextTransportDepart *string `json:"next_transport_depart,omitempty"`
+	// CityPins are the located hub cities in first-appearance order — a
+	// subset of Cities: a hub whose items all carry the (0,0) no-location
+	// sentinel is listed in Cities but never pinned.
+	CityPins []CityPinResponse `json:"city_pins,omitempty"`
 	// Legs is the server-computed city-leg view (specs/server-leg-dates):
 	// the rendered date span per contiguous city run, from computeTripLegs —
 	// the one derivation. Attached only on the full trip views (GET
 	// /trips/{id} and the shared view), never on list/stub responses whose
 	// partial data would yield anchor-less legs. Old clients ignore it.
 	Legs []TripLegResponse `json:"legs,omitempty"`
+}
+
+// CityPinResponse is one located hub city on a list row (the travel-
+// footprint map, specs/trips-page-insights). The coordinate is the hub's
+// first item by position with non-(0,0) coords — computed inside the
+// ListLatestTripsByOwner city lateral, the one derivation. A pin without
+// coordinates is never emitted.
+type CityPinResponse struct {
+	City string  `json:"city"`
+	Lat  float64 `json:"lat"`
+	Lng  float64 `json:"lng"`
 }
 
 // TripLegResponse is one rendered city leg. Dates are YYYY-MM-DD; absent
@@ -402,14 +435,38 @@ func listTripsHandler(w http.ResponseWriter, r *http.Request) {
 			StartDate: t.StartDate,
 			EndDate:   t.EndDate,
 			ChatID:    t.ChatID,
+			Summary:   t.Summary,
 		}, nil, nil, nil, nil)
 		resp.VersionCount = int(t.VersionCount)
 		resp.Cities = t.Cities
+		// Explicit-zero pointers: a real 0 must survive omitempty (only
+		// full views / old servers / shared rows leave these nil).
 		itemCount, bookingTotal, bookingBooked :=
 			int(t.ItemCount), int(t.BookingTotal), int(t.BookingBooked)
 		resp.ItemCount = &itemCount
 		resp.BookingTotal = &bookingTotal
 		resp.BookingBooked = &bookingBooked
+		stayTotal, stayBooked := int(t.StayTotal), int(t.StayBooked)
+		resp.StayTotal = &stayTotal
+		resp.StayBooked = &stayBooked
+		packingTotal, packingDone := int(t.PackingTotal), int(t.PackingDone)
+		resp.PackingTotal = &packingTotal
+		resp.PackingDone = &packingDone
+		resp.BudgetTarget = t.BudgetTarget
+		budgetSpent, budgetCurrency := t.BudgetSpent, t.BudgetCurrency
+		resp.BudgetSpent = &budgetSpent
+		resp.BudgetCurrency = &budgetCurrency
+		resp.NextTransportDepart = dateToPtr(t.NextTransportDepart)
+		// jsonb → []byte (the notifications Payload precedent). The query
+		// COALESCEs to '[]', which unmarshals empty and omitempty drops.
+		if len(t.CityPins) > 0 {
+			var pins []CityPinResponse
+			if err := json.Unmarshal(t.CityPins, &pins); err != nil {
+				log.Printf("listTrips: bad city_pins for trip %s: %v", t.ID, err)
+			} else {
+				resp.CityPins = pins
+			}
+		}
 		resp.Shared = t.Shared
 		out = append(out, resp)
 	}

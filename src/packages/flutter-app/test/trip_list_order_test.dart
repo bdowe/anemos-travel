@@ -170,63 +170,7 @@ void main() {
     });
   });
 
-  group('upcomingStats', () {
-    test('sums dated spans and counts distinct hub cities', () {
-      final a = Trip(
-        id: 'a',
-        title: 'a',
-        startDate: '2026-08-20',
-        endDate: '2026-08-24', // 5 days
-        cities: const ['Lisbon', 'Porto'],
-        createdAt: '2026-06-01T00:00:00Z',
-        updatedAt: '2026-06-01T00:00:00Z',
-      );
-      final b = Trip(
-        id: 'b',
-        title: 'b',
-        startDate: '2026-09-01',
-        endDate: '2026-09-03', // 3 days
-        cities: const ['Porto', 'Madrid'], // Porto overlaps — distinct set
-        createdAt: '2026-06-01T00:00:00Z',
-        updatedAt: '2026-06-01T00:00:00Z',
-      );
-      final s = upcomingStats([a, b], _today);
-      expect(s.trips, 2);
-      expect(s.travelDays, 8);
-      expect(s.cities, 3);
-    });
-
-    test('undated and city-less trips contribute zeros, not crashes', () {
-      final s = upcomingStats([_trip('draft')], _today);
-      expect(s.trips, 1);
-      expect(s.travelDays, 0);
-      expect(s.cities, 0);
-    });
-
-    test('in-progress trips are excluded — "upcoming" must not count the '
-        'trip under its own HAPPENING NOW spotlight', () {
-      final live = Trip(
-        id: 'live',
-        title: 'live',
-        startDate: '2026-08-05', // started yesterday, still running
-        endDate: '2026-08-10',
-        cities: const ['Athens'],
-        createdAt: '2026-06-01T00:00:00Z',
-        updatedAt: '2026-06-01T00:00:00Z',
-      );
-      final future = Trip(
-        id: 'future',
-        title: 'future',
-        startDate: '2026-08-20',
-        endDate: '2026-08-23', // 4 days
-        cities: const ['Lisbon'],
-        createdAt: '2026-06-01T00:00:00Z',
-        updatedAt: '2026-06-01T00:00:00Z',
-      );
-      final s = upcomingStats([live, future], _today);
-      expect(s.trips, 1);
-      expect(s.travelDays, 4);
-      expect(s.cities, 1);
-    });
-  });
+  // The old upcomingStats group moved with its derivation: the header line it
+  // fed was replaced by the all-time "Your travels" band, so its cases now
+  // live in trip_list_insights_test.dart against lifetimeStats.
 }

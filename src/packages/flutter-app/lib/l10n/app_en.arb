@@ -1119,11 +1119,67 @@
   },
   "tripsListUpcoming": "Upcoming",
   "tripsListNewTrip": "New trip",
-  "tripsListStatsUpcoming": "{count, plural, one{1 upcoming trip} other{{count} upcoming trips}}",
-  "@tripsListStatsUpcoming": {
+  "tripsListYourTravels": "Your travels",
+  "tripsListTravelMap": "Your travel map",
+  "tripsListStatTrips": "{count, plural, one{Trip} other{Trips}}",
+  "@tripsListStatTrips": {
     "placeholders": {
       "count": {
         "type": "int"
+      }
+    }
+  },
+  "tripsListStatTravelDays": "{count, plural, one{Travel day} other{Travel days}}",
+  "@tripsListStatTravelDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripsListStatCities": "{count, plural, one{City} other{Cities}}",
+  "@tripsListStatCities": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripsListStaysCount": "{count, plural, one{1 stay} other{{count} stays}}",
+  "@tripsListStaysCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripsListPackedCount": "{checked}/{total} packed",
+  "@tripsListPackedCount": {
+    "placeholders": {
+      "checked": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "tripsListBudgetSpentOfTarget": "{spent} of {target}",
+  "@tripsListBudgetSpentOfTarget": {
+    "placeholders": {
+      "spent": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "tripsListBookTransportNudge": "Book transport — first leg departs {date}",
+  "@tripsListBookTransportNudge": {
+    "placeholders": {
+      "date": {
+        "type": "String"
       }
     }
   },

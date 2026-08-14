@@ -19,15 +19,42 @@ SELECT * FROM trips WHERE user_id = $1 ORDER BY created_at DESC;
 -- List-row enrichment invariant: the list payload stays ONE query — anything
 -- added here must be a lateral / correlated subquery over indexed FKs (no
 -- N+1, no per-trip HTTP fanout). Facts that can't be expressed that way
--- (trip health, budget totals) stay off the list. The shared EXISTS is the
--- HasActiveCollaborators predicate — keep the two in sync.
+-- (trip health, the next-step ladder) stay off the list. The shared EXISTS
+-- is the HasActiveCollaborators predicate — keep the two in sync.
+--
+-- Lateral semantics (specs/trips-page-insights):
+--   c  — ONE itinerary scan emits both cities and city_pins, so pins are a
+--        subset of cities in the same first-appearance order structurally.
+--        A hub's pin is its first item by position with non-(0,0) coords —
+--        itinerary_items.latitude/longitude are NOT NULL with (0,0) as the
+--        no-location sentinel (the computeTripLegs rule); a hub with only
+--        sentinel items appears in cities but never in city_pins.
+--   bt — booking-todo progress + next_transport_depart, the earliest
+--        UNBOOKED future TRANSPORT depart date (the booking-urgency nudge).
+--   st — CONFIRMED stays only (auto = false AND NOT dismissed, the
+--        ListConfirmedAccommodationsByTrip rule — drafts churn with the
+--        itinerary sync and would make the count flap).
+--   pk — packing-checklist progress.
+--   tb/ex — budget target+currency and expense sum, joined SEPARATELY so a
+--        trip with expenses but no budget row still reports spent; currency
+--        defaults to USD, matching buildBudgetResponse (single-currency by
+--        design — no FX).
 SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
        latest.title, latest.start_date, latest.end_date,
-       latest.chat_id, latest.version_count,
+       latest.chat_id, latest.summary, latest.version_count,
        COALESCE(c.cities, ARRAY[]::text[])::text[] AS cities,
+       COALESCE(c.city_pins, '[]'::jsonb) AS city_pins,
        COALESCE(ic.item_count, 0)::int AS item_count,
        COALESCE(bt.total, 0)::int AS booking_total,
        COALESCE(bt.booked, 0)::int AS booking_booked,
+       bt.next_transport_depart::date AS next_transport_depart,
+       COALESCE(st.total, 0)::int AS stay_total,
+       COALESCE(st.booked, 0)::int AS stay_booked,
+       COALESCE(pk.total, 0)::int AS packing_total,
+       COALESCE(pk.done, 0)::int AS packing_done,
+       tb.target_amount AS budget_target,
+       COALESCE(ex.spent, 0)::float8 AS budget_spent,
+       COALESCE(tb.currency, 'USD')::text AS budget_currency,
        EXISTS (
          SELECT 1 FROM trip_collaborators tc
          WHERE tc.owner_id = latest.user_id AND tc.chat_id = latest.chat_id
@@ -35,16 +62,23 @@ SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
        )::bool AS shared
 FROM (
   SELECT DISTINCT ON (COALESCE(chat_id, id::text))
-         id, user_id, created_at, updated_at, title, start_date, end_date, chat_id,
+         id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary,
          count(*) OVER (PARTITION BY COALESCE(chat_id, id::text)) AS version_count
   FROM trips WHERE trips.user_id = $1
   ORDER BY COALESCE(chat_id, id::text), created_at DESC
 ) latest
 LEFT JOIN LATERAL (
-  SELECT array_agg(hub.city ORDER BY hub.first_pos) AS cities
+  SELECT array_agg(hub.city ORDER BY hub.first_pos) AS cities,
+         jsonb_agg(jsonb_build_object('city', hub.city, 'lat', hub.lat, 'lng', hub.lng)
+                   ORDER BY hub.first_pos)
+           FILTER (WHERE hub.lat IS NOT NULL) AS city_pins
   FROM (
     SELECT COALESCE(NULLIF(ii.day_trip_from, ''), NULLIF(ii.city, '')) AS city,
-           MIN(ii.position) AS first_pos
+           MIN(ii.position) AS first_pos,
+           (array_agg(ii.latitude ORDER BY ii.position)
+              FILTER (WHERE ii.latitude <> 0 OR ii.longitude <> 0))[1] AS lat,
+           (array_agg(ii.longitude ORDER BY ii.position)
+              FILTER (WHERE ii.latitude <> 0 OR ii.longitude <> 0))[1] AS lng
     FROM itinerary_items ii
     WHERE ii.trip_id = latest.id
       AND COALESCE(NULLIF(ii.day_trip_from, ''), NULLIF(ii.city, '')) IS NOT NULL
@@ -56,9 +90,24 @@ LEFT JOIN LATERAL (
   FROM itinerary_items ii2 WHERE ii2.trip_id = latest.id
 ) ic ON true
 LEFT JOIN LATERAL (
-  SELECT count(*) AS total, count(*) FILTER (WHERE b.booked) AS booked
+  SELECT count(*) AS total, count(*) FILTER (WHERE b.booked) AS booked,
+         min(b.depart_date) FILTER (WHERE NOT b.booked AND b.kind = 'transport'
+                                      AND b.depart_date >= CURRENT_DATE) AS next_transport_depart
   FROM booking_todos b WHERE b.trip_id = latest.id
 ) bt ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS total, count(*) FILTER (WHERE a.booked) AS booked
+  FROM accommodations a
+  WHERE a.trip_id = latest.id AND a.auto = false AND NOT a.dismissed
+) st ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS total, count(*) FILTER (WHERE ck.checked) AS done
+  FROM trip_checklist_items ck WHERE ck.trip_id = latest.id
+) pk ON true
+LEFT JOIN trip_budgets tb ON tb.trip_id = latest.id
+LEFT JOIN LATERAL (
+  SELECT sum(e.amount) AS spent FROM trip_expenses e WHERE e.trip_id = latest.id
+) ex ON true
 ORDER BY latest.created_at DESC;
 
 -- name: CountActiveTripLineagesByOwner :one

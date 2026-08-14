@@ -69,29 +69,6 @@ Trip? upNextTrip(List<Trip> upcoming, DateTime today) {
       : upcoming.first;
 }
 
-/// Aggregate line for the Upcoming section header: trip count, summed dated
-/// travel days, and distinct hub cities. Counts only trips that haven't
-/// started — the `upcoming` group deliberately retains in-progress trips
-/// (the live-trip past-exemption), but a line saying "upcoming" must not
-/// count the trip the user is on right now under its own HAPPENING NOW
-/// spotlight. Undated drafts count (not started), contributing zeros the
-/// caller drops segment-wise. Pure and payload-only.
-({int trips, int travelDays, int cities}) upcomingStats(
-    List<Trip> upcoming, DateTime today) {
-  var trips = 0;
-  var days = 0;
-  final cities = <String>{};
-  for (final t in upcoming) {
-    final started = DateTime.tryParse(t.startDate ?? '') != null &&
-        daysUntilTrip(t.startDate, today) == null;
-    if (started) continue;
-    trips++;
-    days += dayCount(t.startDate, t.endDate, const <int?>[]);
-    cities.addAll(t.cities ?? const <String>[]);
-  }
-  return (trips: trips, travelDays: days, cities: cities.length);
-}
-
 /// Sort key for upcoming trips; null means the trip is undated. Falls back to
 /// [Trip.endDate] so an end-only trip still sorts by date instead of dropping
 /// into the drafts bucket.

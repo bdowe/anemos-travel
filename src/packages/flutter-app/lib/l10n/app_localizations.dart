@@ -3092,11 +3092,59 @@ abstract class AppLocalizations {
   /// **'New trip'**
   String get tripsListNewTrip;
 
-  /// No description provided for @tripsListStatsUpcoming.
+  /// No description provided for @tripsListYourTravels.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one{1 upcoming trip} other{{count} upcoming trips}}'**
-  String tripsListStatsUpcoming(int count);
+  /// **'Your travels'**
+  String get tripsListYourTravels;
+
+  /// No description provided for @tripsListTravelMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Your travel map'**
+  String get tripsListTravelMap;
+
+  /// No description provided for @tripsListStatTrips.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Trip} other{Trips}}'**
+  String tripsListStatTrips(int count);
+
+  /// No description provided for @tripsListStatTravelDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Travel day} other{Travel days}}'**
+  String tripsListStatTravelDays(int count);
+
+  /// No description provided for @tripsListStatCities.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{City} other{Cities}}'**
+  String tripsListStatCities(int count);
+
+  /// No description provided for @tripsListStaysCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 stay} other{{count} stays}}'**
+  String tripsListStaysCount(int count);
+
+  /// No description provided for @tripsListPackedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{checked}/{total} packed'**
+  String tripsListPackedCount(int checked, int total);
+
+  /// No description provided for @tripsListBudgetSpentOfTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'{spent} of {target}'**
+  String tripsListBudgetSpentOfTarget(String spent, String target);
+
+  /// No description provided for @tripsListBookTransportNudge.
+  ///
+  /// In en, this message translates to:
+  /// **'Book transport — first leg departs {date}'**
+  String tripsListBookTransportNudge(String date);
 
   /// No description provided for @tripDurationDays.
   ///

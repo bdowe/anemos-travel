@@ -247,11 +247,14 @@ type ListLatestCollaboratedTripsForUserRow struct {
 	BookingBooked int32       `json:"booking_booked"`
 }
 
-// "Shared with you": one row per collaborated lineage (latest version), same
-// shape as ListLatestTripsByOwner plus the owner's display name. Carries the
-// same item/booking count laterals (no shared EXISTS — a shared-with-me row
-// is by definition shared); the HANDLER nils booking fields for viewers
-// (the getTripHandler boundary), keeping this query role-agnostic.
+// "Shared with you": one row per collaborated lineage (latest version), the
+// core of ListLatestTripsByOwner's shape plus the owner's display name.
+// Carries the same item/booking count laterals (no shared EXISTS — a
+// shared-with-me row is by definition shared); the HANDLER nils booking
+// fields for viewers (the getTripHandler boundary), keeping this query
+// role-agnostic. The owner list's insight fields (stays/packing/budget/
+// pins/next-transport/summary, specs/trips-page-insights) are DELIBERATELY
+// absent here — the owner's private planning state stays off shared rows.
 func (q *Queries) ListLatestCollaboratedTripsForUser(ctx context.Context, userID uuid.UUID) ([]ListLatestCollaboratedTripsForUserRow, error) {
 	rows, err := q.db.Query(ctx, listLatestCollaboratedTripsForUser, userID)
 	if err != nil {

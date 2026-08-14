@@ -163,18 +163,9 @@ void main() {
     expect(find.text('Lisbon'), findsOneWidget);
   });
 
-  testWidgets('a single upcoming trip shows no stats line',
-      (WidgetTester tester) async {
-    await _pumpList(tester, trips: [
-      _trip('t1', 'Weekend Hop',
-          start: _rel(5), end: _rel(6), cities: const ['Porto']),
-    ]);
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('upcoming trip'), findsNothing);
-  });
-
-  testWidgets('stats line appears from two upcoming trips on',
+  testWidgets(
+      'the upcoming-only stats line is gone — lifetime stats moved into the '
+      '"Your travels" band (specs/trips-page-insights)',
       (WidgetTester tester) async {
     await _pumpList(tester, trips: [
       _trip('t1', 'Weekend Hop',
@@ -184,7 +175,11 @@ void main() {
     ]);
     await tester.pumpAndSettle();
 
-    expect(
-        find.text('2 upcoming trips · 5 days · 2 cities'), findsOneWidget);
+    expect(find.textContaining('upcoming trip'), findsNothing);
+    // The all-time band carries the aggregate now: 2 trips, 5 travel days,
+    // 2 cities — as tiles (value and label are separate Texts).
+    expect(find.text('Your travels'), findsOneWidget);
+    expect(find.text('5'), findsOneWidget);
+    expect(find.text('Travel days'), findsOneWidget);
   });
 }

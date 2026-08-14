@@ -17,7 +17,10 @@ import 'support/l10n_test_app.dart';
 
 /// The trips list orders by travel date and folds finished trips into a
 /// collapsed "Past trips" row (utils/trip_list_order.dart): upcoming cards on
-/// top soonest-first, past cards hidden until the row is expanded.
+/// top soonest-first, past cards hidden until the row is expanded. The
+/// collapsed row teases its MOST RECENT trip (specs/trips-page-insights) —
+/// "where you just were" is what earns the expand tap, and the lifetime
+/// aggregate lives in the "Your travels" band one card up.
 class _FixedTripsApiService extends TripsApiService {
   final List<Trip> trips;
   _FixedTripsApiService(this.trips)
@@ -33,11 +36,14 @@ String _iso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
 
 String _rel(int days) => _iso(DateTime.now().add(Duration(days: days)));
 
-Trip _trip(String id, String title, {String? start, String? end}) => Trip(
+Trip _trip(String id, String title,
+        {String? start, String? end, List<String>? cities}) =>
+    Trip(
       id: id,
       title: title,
       startDate: start,
       endDate: end,
+      cities: cities,
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
     );
@@ -124,5 +130,60 @@ void main() {
     await tester.tap(find.text('Past trips'));
     await tester.pumpAndSettle();
     expect(find.text('Old Trip'), findsOneWidget);
+  });
+
+  testWidgets('the collapsed row summarizes the most recent past trip',
+      (WidgetTester tester) async {
+    await _pumpList(tester, [
+      // Finished nine days ago, 12 days long — the newest past trip.
+      _trip('recent', 'Iberia Loop',
+          start: _rel(-20), end: _rel(-9), cities: const ['Lisbon', 'Porto']),
+      // Older and longer: recency picks the tease, not size.
+      _trip('older', 'Andes Trek',
+          start: _rel(-200), end: _rel(-180), cities: const ['Lima', 'Cusco']),
+      _trip('future', 'Prague Trip', start: _rel(18), end: _rel(52)),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lisbon & Porto · 12 days'), findsOneWidget);
+    expect(find.textContaining('Lima & Cusco'), findsNothing);
+    expect(find.text('2 trips'), findsOneWidget);
+  });
+
+  testWidgets('the summarized row still toggles open and closed',
+      (WidgetTester tester) async {
+    await _pumpList(tester, [
+      _trip('recent', 'Iberia Loop',
+          start: _rel(-20), end: _rel(-9), cities: const ['Lisbon', 'Porto']),
+      _trip('future', 'Prague Trip', start: _rel(18), end: _rel(52)),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Iberia Loop'), findsNothing);
+
+    await tester.ensureVisible(find.text('Past trips'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Past trips'));
+    await tester.pumpAndSettle();
+    expect(find.text('Iberia Loop'), findsOneWidget);
+    // The tease rides the row, so it stays put while expanded.
+    expect(find.text('Lisbon & Porto · 12 days'), findsOneWidget);
+
+    await tester.tap(find.text('Past trips'));
+    await tester.pumpAndSettle();
+    expect(find.text('Iberia Loop'), findsNothing);
+  });
+
+  testWidgets('a city-less legacy past trip falls back to its title',
+      (WidgetTester tester) async {
+    // Segments drop out individually: no cities ⇒ the headline carries the
+    // slot, and the day count still trails it.
+    await _pumpList(tester, [
+      _trip('past', 'Old Trip', start: _rel(-9), end: _rel(-2)),
+      _trip('future', 'Prague Trip', start: _rel(18), end: _rel(52)),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Old Trip · 8 days'), findsOneWidget);
   });
 }
