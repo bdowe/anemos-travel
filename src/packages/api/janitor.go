@@ -83,4 +83,9 @@ func janitorTick(ctx context.Context) {
 	} else {
 		slog.Debug("janitor: pruned stale plan chat sessions")
 	}
+	if err := q.DeleteOldHealthSamples(tickCtx); err != nil {
+		slog.Warn("janitor: delete old health samples failed", "error", err)
+	} else {
+		slog.Debug("janitor: pruned old health samples")
+	}
 }

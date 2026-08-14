@@ -909,6 +909,11 @@ func buildRouter() *mux.Router {
 	// freshness (ops_health.go). Also renders in degraded mode; admin auth only.
 	api.Handle("/admin/ops/health", admin(opsHealthHandler)).Methods("GET")
 
+	// 90-day per-component uptime history rolled up from health_samples
+	// (ops_uptime.go, specs/uptime-history). DB-backed, so unlike its two
+	// siblings above it 503s in degraded mode, like /admin/metrics/*.
+	api.Handle("/admin/ops/uptime", admin(opsUptimeHandler)).Methods("GET")
+
 	// Public browse endpoints for published local-sourced content.
 	api.HandleFunc("/local/recommendations", localRecommendationsHandler).Methods("GET")
 	api.HandleFunc("/local/guides", localGuidesHandler).Methods("GET")

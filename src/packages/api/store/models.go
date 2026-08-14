@@ -79,6 +79,17 @@ type EmailToken struct {
 	CreatedAt time.Time          `json:"created_at"`
 }
 
+type HealthSample struct {
+	ObservedAt time.Time `json:"observed_at"`
+	CoversFrom time.Time `json:"covers_from"`
+	Kind       string    `json:"kind"`
+	Release    string    `json:"release"`
+	GapCause   *string   `json:"gap_cause"`
+	DbOk       *bool     `json:"db_ok"`
+	AiOk       *bool     `json:"ai_ok"`
+	BackupsOk  *bool     `json:"backups_ok"`
+}
+
 type ItineraryItem struct {
 	ID                    uuid.UUID   `json:"id"`
 	TripID                uuid.UUID   `json:"trip_id"`
