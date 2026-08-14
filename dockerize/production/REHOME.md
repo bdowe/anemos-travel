@@ -141,8 +141,8 @@ docker compose logs cloudflared | tail # connector registered
 From the laptop (no DNS changes — the tunnel route follows the connector):
 
 ```bash
-curl -s https://goldentempotravel.com/api/v1/health | jq '{database, release}'   # ok + your SHA
-curl -s "https://goldentempotravel.com/app/version.json?d=1" | jq -r .release    # same SHA
+curl -s https://anemos.travel/api/v1/health | jq '{database, release}'   # ok + your SHA
+curl -s "https://anemos.travel/app/version.json?d=1" | jq -r .release    # same SHA
 ```
 
 Log into a real account in a browser: proves restored password hashes and
@@ -201,7 +201,7 @@ Green deploy = tunnel SSH proven → finish Phase 5's public-22 removal.
 - [ ] `docker compose ps`: 4 services healthy, restart `unless-stopped`
 - [ ] Public health + `version.json` both report the pinned SHA; `database: ok`
 - [ ] Real-account browser login; trips visible
-- [ ] `make smoke BASE_URL=https://goldentempotravel.com SMOKE_SEED_MODE=plan SMOKE_MCP_EXPECT=on` → 0 failed
+- [ ] `make smoke BASE_URL=https://anemos.travel SMOKE_SEED_MODE=plan SMOKE_MCP_EXPECT=on` → 0 failed
       (`on` catches the re-home footgun: a `.env` rebuilt from `.env.sample`
       comes up `MCP_ENABLED=false` and silently disables the live connector)
 - [ ] Backup timer scheduled + manual run uploaded to R2

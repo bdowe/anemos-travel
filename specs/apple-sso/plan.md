@@ -58,14 +58,16 @@ mode. Test seams: `APPLE_AUTH_URL` / `APPLE_TOKEN_URL`.
 2. Certificates, Identifiers & Profiles → Identifiers → create an **App ID**
    (primary), then a **Services ID** `com.goldentempotravel.web` with
    "Sign In with Apple" enabled → this is `APPLE_CLIENT_ID`.
-3. Configure the Services ID: register domain `goldentempotravel.com` and
-   Return URL exactly `https://goldentempotravel.com/api/v1/auth/apple/callback`.
+3. Configure the Services ID: register domain `anemos.travel` and
+   Return URL exactly `https://anemos.travel/api/v1/auth/apple/callback`.
+   (The Services ID identifier itself stays `com.goldentempotravel.web` —
+   already registered with Apple; only the domain/return URL are new.)
 4. Keys → create a key with "Sign In with Apple" → download
    `AuthKey_<KEY_ID>.p8` (**one-time download** — store it in the password
    manager), note the Key ID and the Team ID (console top-right).
 5. On the Pi: `base64 -i AuthKey_<KEY_ID>.p8 | tr -d '\n'` → set the four
    `APPLE_*` vars in `/opt/goldentempo/.env`, recreate the api container,
-   confirm `curl https://goldentempotravel.com/api/v1/auth/apple/availability`
+   confirm `curl https://anemos.travel/api/v1/auth/apple/availability`
    → `{"available":true}` and the button appears.
 6. **Email relay**: Certificates → Services → "Sign In with Apple for Email
    Communication" → register the transactional-email sending domain/address

@@ -1,4 +1,4 @@
-# Restore runbook — goldentempotravel.com Postgres
+# Restore runbook — anemos.travel Postgres
 
 Restores a `backup.sh` dump (`pg_dump -Fc | gzip`) into a **fresh volume
 first**, verifies it there, and only then swaps it under the live stack.
@@ -103,10 +103,10 @@ docker compose up -d api      # api boot re-applies any missing migrations
 ```bash
 docker compose ps                                        # postgres healthy, api healthy
 docker compose logs --tail 50 api                        # migrations applied, no errors
-curl -fsS https://goldentempotravel.com/api/v1/health           # "database":"ok"
+curl -fsS https://anemos.travel/api/v1/health           # "database":"ok"
 ```
 
-Then a real user check: log in at <https://goldentempotravel.com/app/> and open a
+Then a real user check: log in at <https://anemos.travel/app/> and open a
 trip.
 
 ## 6. Clean up

@@ -206,7 +206,7 @@ seed-local: ## Bulk-ingest local content via admin API (CONTENT_DIR=./content/lo
 # pass through: SMOKE_SEED_MODE=sql|plan|existing, SMOKE_TRIP_ID, SMOKE_TOKEN,
 # SMOKE_SIGNING_SECRET, SMOKE_DB_CONTAINER (see scripts/smoke.sh header).
 #   make smoke                                         # dev stack, sql seed
-#   make smoke BASE_URL=https://goldentempotravel.com SMOKE_SEED_MODE=plan   # post-deploy
+#   make smoke BASE_URL=https://anemos.travel SMOKE_SEED_MODE=plan   # post-deploy
 smoke: ## Run the end-to-end smoke test (BASE_URL, SMOKE_SEED_MODE, ...)
 	@BASE_URL="$(if $(BASE_URL),$(BASE_URL),$(GATEWAY_URL))" \
 		SMOKE_SEED_MODE="$(SMOKE_SEED_MODE)" SMOKE_TRIP_ID="$(SMOKE_TRIP_ID)" \

@@ -8,7 +8,7 @@ Docker orchestration lives here instead of in individual app packages. A single 
 dockerize/
 ├── development/     # Flutter dev server (hot reload) + Go API + nginx
 ├── deployment/      # Static Flutter build + Go API + nginx
-└── production/      # goldentempotravel.com: prebuilt GHCR images behind a Cloudflare Tunnel (see its README)
+└── production/      # anemos.travel: prebuilt GHCR images behind a Cloudflare Tunnel (see its README)
 ```
 
 ## Quick start

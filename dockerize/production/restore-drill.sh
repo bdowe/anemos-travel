@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Restore drill for the goldentempotravel.com Postgres backups.
+# Restore drill for the anemos.travel Postgres backups.
 #
 # Codifies the "verify a dump into a throwaway volume" half of restore.md
 # (steps 0–3) as a repeatable, non-destructive check: it NEVER touches the live

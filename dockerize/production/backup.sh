@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nightly Postgres backup for the goldentempotravel.com production stack.
+# Nightly Postgres backup for the anemos.travel production stack.
 #
 # Dumps the database from the running postgres container (pg_dump custom
 # format, gzipped), prunes local dumps older than RETENTION_DAYS, and — if

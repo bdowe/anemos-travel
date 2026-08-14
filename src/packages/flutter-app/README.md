@@ -1,6 +1,6 @@
-# Golden Tempo Travel - Flutter App
+# Anemos - Flutter App
 
-The Flutter web/mobile front end for Golden Tempo Travel: an AI travel
+The Flutter web/mobile front end for Anemos: an AI travel
 planner that turns a conversation into a day-by-day itinerary with routes,
 places, bookings, and a live trip view. Route optimization (Nearest
 Neighbor + 2-Opt) is baked into itinerary creation server-side rather than

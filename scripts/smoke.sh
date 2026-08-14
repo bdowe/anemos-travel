@@ -5,7 +5,7 @@
 # hits) and asserts each step, colored PASS/FAIL, non-zero exit on any failure.
 # Built to run TWICE against the same code: as a rehearsal against the local dev
 # stack, and as the go/no-go sanity check against production the moment DNS flips
-# to https://goldentempotravel.com. Pure bash + curl + jq, cloning the api_call idiom
+# to https://anemos.travel. Pure bash + curl + jq, cloning the api_call idiom
 # from scripts/seed_local_content.sh.
 #
 # It registers a THROWAWAY user (unique email), exercises the traveler journey
@@ -578,7 +578,7 @@ ${C_BOLD}MANUAL CHECKS REMAINING (need real DNS/SMTP/crawler)${C_RESET}
       are gone, but a human still owns the "the copy is correct" sign-off.
     - Prod-only edge checks (skipped against the dev gateway): the security
       headers (step 11) and /app/version.json (step 10) must be re-run against
-      the live https://goldentempotravel.com gateway with curl -I / curl.
+      the live https://anemos.travel gateway with curl -I / curl.
     - MCP connector (when MCP_ENABLED=true): link from ChatGPT (Settings ->
       Apps & Connectors -> Developer Mode) and from claude.ai (Settings ->
       Connectors -> add custom connector) against https://<host>/mcp, exercise

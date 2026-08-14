@@ -1,4 +1,4 @@
-# Production stack for https://goldentempotravel.com — same topology as
+# Production stack for https://anemos.travel — same topology as
 # dockerize/deployment/docker-compose.yml, but runs prebuilt images from
 # GHCR (no build:) and reaches the internet exclusively through a
 # Cloudflare Tunnel (the cloudflared service below dials OUT to Cloudflare;
@@ -114,7 +114,8 @@ services:
 
   # Outbound-only connector to the Cloudflare edge. The tunnel's public
   # hostnames (configured in the Zero Trust dashboard) route
-  # goldentempotravel.com → http://gateway:80 and ssh.goldentempotravel.com →
+  # anemos.travel (+ the legacy goldentempotravel.com hostnames, which nginx
+  # 308s to the new apex) → http://gateway:80 and ssh.goldentempotravel.com →
   # ssh://172.28.0.1:22 (the host, via the pinned bridge gateway address;
   # ufw must allow 22 from 172.28.0.0/16) for CI deploys. cloudflared sets
   # CF-Connecting-IP
