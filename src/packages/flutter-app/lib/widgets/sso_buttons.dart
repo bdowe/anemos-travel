@@ -80,11 +80,14 @@ class SsoButtons extends ConsumerWidget {
 }
 
 /// The small print that belongs to [SsoButtons] — informational, because the
-/// provider's own click is the agreement (email sign-up uses the blocking
-/// [LegalConsentCheckbox] instead). It is a separate widget because the
+/// provider's own click is the agreement. It is a separate widget because the
 /// buttons sit at the top of the auth column and this reads as the page
 /// footer at the bottom; it carries the same availability gate so no provider
 /// configured still means no small print.
+///
+/// The auth screen renders this in **sign-in mode only**: sign-up states the
+/// same terms in the blocking [LegalConsentCheckbox] right above its button,
+/// and showing both turns the agreement into boilerplate.
 class SsoLegalAgreement extends ConsumerWidget {
   const SsoLegalAgreement({super.key});
 

@@ -5,6 +5,7 @@ import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/screens/auth_screen.dart';
 import 'package:travel_route_planner/services/auth_service.dart';
 import 'package:travel_route_planner/services/auth_storage.dart';
+import 'package:travel_route_planner/widgets/legal_links.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -37,14 +38,20 @@ class _FakeAuthStorage extends AuthStorage {
   Future<void> clearToken() async {}
 }
 
-Widget _wrap({required bool google, required bool apple}) {
+Widget _wrap({
+  required bool google,
+  required bool apple,
+  bool initialIsLogin = true,
+}) {
   return ProviderScope(
     overrides: [
       authServiceProvider
           .overrideWithValue(_FakeAuthService(google: google, apple: apple)),
       authStorageProvider.overrideWithValue(_FakeAuthStorage()),
     ],
-    child: localizedTestApp(home: const AuthScreen()),
+    child: localizedTestApp(
+      home: AuthScreen(initialIsLogin: initialIsLogin),
+    ),
   );
 }
 
@@ -55,10 +62,12 @@ Future<void> _pumpAuth(
   WidgetTester tester, {
   required bool google,
   required bool apple,
+  bool initialIsLogin = true,
 }) async {
   await tester.binding.setSurfaceSize(const Size(420, 1200));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  await tester.pumpWidget(_wrap(google: google, apple: apple));
+  await tester.pumpWidget(_wrap(
+      google: google, apple: apple, initialIsLogin: initialIsLogin));
   // Drains the availability futures AND the 200ms AnimatedSize; measuring a
   // mid-animation frame would compare clipped positions.
   await tester.pumpAndSettle();
@@ -98,6 +107,36 @@ void main() {
         lessThan(y(tester, find.text('or'))));
     expect(y(tester, find.text('or')), lessThan(y(tester, emailField)));
     expect(y(tester, emailField), lessThan(y(tester, signInButton)));
+  });
+
+  testWidgets('sign-up states the terms once — the checkbox, not the footer',
+      (tester) async {
+    await _pumpAuth(tester, google: true, apple: false, initialIsLogin: false);
+
+    // The blocking consent row is the agreement in sign-up mode; repeating it
+    // as a footer turned the terms into boilerplate.
+    expect(find.byType(LegalConsentCheckbox), findsOneWidget);
+    expect(find.textContaining('Terms of Service'), findsOneWidget);
+    expect(
+        y(tester, find.textContaining('Terms of Service')),
+        lessThan(y(
+            tester,
+            find.ancestor(
+                of: find.text('Create account'),
+                matching: find.byType(FilledButton)))));
+
+    // Still SSO-first, and the checkbox did not eat the Google button.
+    expect(find.text('Continue with Google'), findsOneWidget);
+    expect(y(tester, find.text('Continue with Google')),
+        lessThan(y(tester, find.byType(TextFormField).first)));
+  });
+
+  testWidgets('sign-in keeps the footer — no consent row to carry the terms',
+      (tester) async {
+    await _pumpAuth(tester, google: true, apple: false);
+
+    expect(find.byType(LegalConsentCheckbox), findsNothing);
+    expect(find.textContaining('Terms of Service'), findsOneWidget);
   });
 
   testWidgets('no provider configured leaves the form where it was',

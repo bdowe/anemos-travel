@@ -343,7 +343,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         onPressed: auth.loading ? null : _forgotPassword,
                         child: Text(l10n.authForgotPassword),
                       ),
-                    const SsoLegalAgreement(),
+                    // Sign-in only: sign-up already states the terms in the
+                    // blocking LegalConsentCheckbox above the button, and two
+                    // copies on one screen read as boilerplate.
+                    if (_isLogin) const SsoLegalAgreement(),
                   ],
                 ),
               ),
