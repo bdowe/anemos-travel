@@ -2349,6 +2349,21 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatToolSuggestFerries => 'Buscando ferris...';
 
   @override
+  String get chatToolLocalRecs => 'Buscando recomendaciones locales...';
+
+  @override
+  String get chatToolReviewTrip => 'Revisando tu viaje...';
+
+  @override
+  String get chatToolWeather => 'Consultando el tiempo...';
+
+  @override
+  String get chatToolSearchNearby => 'Buscando cerca...';
+
+  @override
+  String get chatToolWorking => 'Procesando...';
+
+  @override
   String get chatSummarizing => 'Resumiendo la conversación anterior…';
 
   @override

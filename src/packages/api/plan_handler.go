@@ -506,14 +506,37 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 			Messages: messages,
 		}
 
+		// The model is (re)entering a thinking window: nothing will hit the
+		// wire until its first token, which on later iterations sits behind a
+		// full history re-read. The client shows a typing indicator until the
+		// next event of any other type arrives (specs/chat-working-indicator).
+		// Emitting before every call also replaces a stale "summarizing" chip
+		// when compaction failed without sending `compacted`.
+		sendSSE(w, "thinking", map[string]string{})
+
 		callCtx, cancelCall := context.WithTimeout(ctx, planModelCallTimeout)
 		stream := client.Messages.NewStreaming(callCtx, params)
 		resp := anthropic.Message{}
+		// Tool calls announced from content_block_start, keyed by block index,
+		// so the execution loop below doesn't emit a second `tool_call` (the
+		// client counts chips per event; a duplicate would leave one stuck).
+		announced := map[int64]bool{}
 
 		for stream.Next() {
 			event := stream.Current()
 			resp.Accumulate(event)
 
+			if ev, ok := event.AsAny().(anthropic.ContentBlockStartEvent); ok {
+				// Announce the tool the moment its block starts streaming:
+				// large inputs (a full create_itinerary) take tens of seconds
+				// to generate, and this is the only signal during that window.
+				// Registry-gated so an unknown tool never shows a chip that no
+				// tool_result would clear.
+				if block, ok := ev.ContentBlock.AsAny().(anthropic.ToolUseBlock); ok && planToolByName[block.Name] != nil {
+					sendSSE(w, "tool_call", map[string]string{"name": block.Name})
+					announced[ev.Index] = true
+				}
+			}
 			if ev, ok := event.AsAny().(anthropic.ContentBlockDeltaEvent); ok {
 				if delta, ok := ev.Delta.AsAny().(anthropic.TextDelta); ok {
 					text := delta.Text
@@ -581,19 +604,22 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 		messages = append(messages, resp.ToParam())
 		var toolResults []anthropic.ContentBlockParamUnion
 
-		for _, block := range resp.Content {
+		for i, block := range resp.Content {
 			variant, ok := block.AsAny().(anthropic.ToolUseBlock)
 			if !ok {
 				continue
 			}
-			sendSSE(w, "tool_call", map[string]string{"name": variant.Name})
 			planToolCalls++
 
 			entry := planToolByName[variant.Name]
 			if entry == nil {
 				// Matches the old switch's no-case fallthrough: an unknown tool
 				// name gets no result block (the API only calls defined tools).
+				// No tool_call either — nothing would ever clear its chip.
 				continue
+			}
+			if !announced[int64(i)] {
+				sendSSE(w, "tool_call", map[string]string{"name": variant.Name})
 			}
 			result, isErr := entry.run(session, variant.Input)
 			if !entry.noResultEvent {

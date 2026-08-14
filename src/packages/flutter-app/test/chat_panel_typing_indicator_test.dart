@@ -14,7 +14,8 @@ import 'support/l10n_test_app.dart';
 /// The typing indicator appears the instant a turn starts (before any SSE
 /// event) and yields to whichever feedback owns the moment: streamed text,
 /// tool chips, or the compacting chip — returning in the silent gap after a
-/// tool_result.
+/// tool_result, and below already-streamed text whenever the server signals
+/// `thinking` (specs/chat-working-indicator).
 
 const _indicator = Key('typing-indicator');
 
@@ -134,6 +135,74 @@ void main() {
     await tester.pump(const Duration(milliseconds: 60));
     expect(find.byKey(_indicator), findsNothing);
     expect(find.text('Found options.'), findsOneWidget);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('returns below streamed text on thinking, gone at the next token',
+      (WidgetTester tester) async {
+    final afterText = Completer<void>();
+    final afterThinking = Completer<void>();
+    final afterMoreText = Completer<void>();
+    final service = _StagedPlanService([
+      const PlanEvent(type: 'text_delta', data: {'text': 'Step one done.'}),
+      afterText,
+      const PlanEvent(type: 'thinking', data: {}),
+      afterThinking,
+      const PlanEvent(type: 'text_delta', data: {'text': ' And step two.'}),
+      afterMoreText,
+    ]);
+    await _pumpPanel(tester, service);
+
+    await _send(tester);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    // Text streamed and the stream is parked with no thinking signal: this
+    // was the old dead window — dots stay hidden until the server says so.
+    expect(find.text('Step one done.'), findsOneWidget);
+    expect(find.byKey(_indicator), findsNothing);
+
+    afterText.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    // The server is between steps: dots return BELOW the streamed text.
+    expect(find.text('Step one done.'), findsOneWidget);
+    expect(find.byKey(_indicator), findsOneWidget);
+
+    afterThinking.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    // The next token ends the wait — dots never overlap live streaming.
+    expect(find.byKey(_indicator), findsNothing);
+    expect(find.text('Step one done. And step two.'), findsOneWidget);
+    afterMoreText.complete();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('thinking yields to a tool chip', (WidgetTester tester) async {
+    final afterThinking = Completer<void>();
+    final afterToolCall = Completer<void>();
+    final service = _StagedPlanService([
+      const PlanEvent(type: 'text_delta', data: {'text': 'Looking around.'}),
+      const PlanEvent(type: 'thinking', data: {}),
+      afterThinking,
+      const PlanEvent(type: 'tool_call', data: {'name': 'search_flights'}),
+      afterToolCall,
+      const PlanEvent(type: 'tool_result', data: {'name': 'search_flights'}),
+    ]);
+    await _pumpPanel(tester, service);
+
+    await _send(tester);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(find.byKey(_indicator), findsOneWidget);
+
+    afterThinking.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    // The chip owns the feedback; exactly one indicator at a time.
+    expect(find.text('Searching flights...'), findsOneWidget);
+    expect(find.byKey(_indicator), findsNothing);
+    afterToolCall.complete();
     await tester.pumpAndSettle();
   });
 
