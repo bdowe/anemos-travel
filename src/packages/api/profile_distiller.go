@@ -23,8 +23,8 @@ const (
 	distillToolName     = "update_traveler_profile"
 	distillSystemPrompt = "You distill what was learned about a traveler from a trip-planning conversation, so future trips are personalized. " +
 		"Call update_traveler_profile once. Set profile_notes to the COMPLETE traveler profile: the current notes merged with anything new from the conversation, de-duplicated, as short bullet lines (max ~15, under 1800 characters). " +
-		"Keep only durable facts about how this person travels (companions, dietary needs, accommodation style, likes/dislikes, accessibility) — no one-off trip details, no sensitive information (health, religion, politics). " +
-		"Only set budget, pace, interests, home_airport, or work_style if the conversation clearly establishes them; omit any field you are unsure about. If nothing durable was learned, omit profile_notes too."
+		"Keep only durable facts about how this person travels (dietary needs, accommodation style, likes/dislikes, accessibility) — no one-off trip details, no sensitive information (health, religion, politics). " +
+		"Only set budget, pace, interests, home_airport, work_style, fitness_routine, outdoor_intensity, or companions if the conversation clearly establishes them; omit any field you are unsure about. If nothing durable was learned, omit profile_notes too."
 )
 
 // distillTravelerProfile runs one non-streamed Claude call over the chat
@@ -72,6 +72,18 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 				"home_airport":  map[string]any{"type": "string", "description": "IATA code, e.g. BOS"},
 				"profile_notes": map[string]any{"type": "string", "description": "The complete merged profile as short bullet lines"},
 				"work_style":    map[string]any{"type": "string", "enum": []string{"digital_nomad", "workation", "leisure_only"}},
+				"fitness_routine": map[string]any{
+					"type": "string", "enum": []string{"gym", "running", "both", "none"},
+					"description": "The training they keep while away. A routine, not a taste — a one-off class belongs in interests.",
+				},
+				"outdoor_intensity": map[string]any{
+					"type": "string", "enum": []string{"easy", "moderate", "challenging"},
+					"description": "How demanding they want active outings to be. Separate from pace.",
+				},
+				"companions": map[string]any{
+					"type": "string", "enum": []string{"solo", "partner", "friends", "family_with_kids", "varies"},
+					"description": "Who they usually travel with — not who was on this one trip.",
+				},
 			},
 		},
 	}
@@ -96,12 +108,15 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 	}
 
 	var in struct {
-		Budget       *string  `json:"budget"`
-		Pace         *string  `json:"pace"`
-		Interests    []string `json:"interests"`
-		HomeAirport  *string  `json:"home_airport"`
-		ProfileNotes *string  `json:"profile_notes"`
-		WorkStyle    *string  `json:"work_style"`
+		Budget           *string  `json:"budget"`
+		Pace             *string  `json:"pace"`
+		Interests        []string `json:"interests"`
+		HomeAirport      *string  `json:"home_airport"`
+		ProfileNotes     *string  `json:"profile_notes"`
+		WorkStyle        *string  `json:"work_style"`
+		FitnessRoutine   *string  `json:"fitness_routine"`
+		OutdoorIntensity *string  `json:"outdoor_intensity"`
+		Companions       *string  `json:"companions"`
 	}
 	found := false
 	for _, block := range resp.Content {
@@ -121,6 +136,9 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 	budget, _ := normalizeChoice(in.Budget, allowedBudgets, "budget")
 	pace, _ := normalizeChoice(in.Pace, allowedPaces, "pace")
 	workStyle, _ := normalizeChoice(in.WorkStyle, allowedWorkStyles, "work_style")
+	fitnessRoutine, _ := normalizeChoice(in.FitnessRoutine, allowedFitnessRoutines, "fitness_routine")
+	outdoorIntensity, _ := normalizeChoice(in.OutdoorIntensity, allowedOutdoorIntensities, "outdoor_intensity")
+	companions, _ := normalizeChoice(in.Companions, allowedCompanions, "companions")
 	homeAirport, _ := normalizeAirportCode(in.HomeAirport)
 	var interestsArg interface{}
 	if in.Interests != nil {
@@ -131,11 +149,13 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 		// Like the live tool, distillation can never wipe existing notes.
 		notes = nil
 	}
-	if budget == nil && pace == nil && homeAirport == nil && interestsArg == nil && notes == nil && workStyle == nil {
+	if budget == nil && pace == nil && homeAirport == nil && interestsArg == nil && notes == nil && workStyle == nil &&
+		fitnessRoutine == nil && outdoorIntensity == nil && companions == nil {
 		return
 	}
 	if _, err := queries.UpsertPreferences(ctx, store.UpsertPreferencesParams{
 		UserID: uid, Budget: budget, Pace: pace, Interests: interestsArg, HomeAirport: homeAirport, ProfileNotes: notes, WorkStyle: workStyle,
+		FitnessRoutine: fitnessRoutine, OutdoorIntensity: outdoorIntensity, Companions: companions,
 	}); err != nil {
 		log.Printf("profile distill: save preferences: %v", err)
 	}

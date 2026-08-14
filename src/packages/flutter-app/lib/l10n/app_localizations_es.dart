@@ -147,6 +147,44 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsWorkStyleLeisure => 'no, los viajes son para desconectar';
 
   @override
+  String get prefsCompanions => 'Con quién viajas';
+
+  @override
+  String get prefsFitnessRoutine => 'Ejercicio';
+
+  @override
+  String get prefsFitnessRoutineHelp =>
+      'Sirve para elegir alojamientos cerca de un gimnasio o de un sitio para correr, y para dejarte el tiempo.';
+
+  @override
+  String get prefsFitnessGym => 'acceso a gimnasio';
+
+  @override
+  String get prefsFitnessRunning => 'rutas para correr';
+
+  @override
+  String get prefsFitnessBoth => 'ambos';
+
+  @override
+  String get prefsFitnessNone => 'no es un factor';
+
+  @override
+  String get prefsOutdoorIntensity => 'Días al aire libre';
+
+  @override
+  String get prefsOutdoorIntensityHelp =>
+      'Qué tan exigentes quieres que sean las rutas y otras salidas activas.';
+
+  @override
+  String get prefsOutdoorEasy => 'fácil: paseos y miradores';
+
+  @override
+  String get prefsOutdoorModerate => 'moderado: rutas de medio día';
+
+  @override
+  String get prefsOutdoorChallenging => 'exigente: largo y con desnivel';
+
+  @override
   String get prefsPaceRelaxed => 'relajado';
 
   @override
@@ -226,6 +264,15 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get prefsInterestSkiing => 'esquí';
+
+  @override
+  String get prefsInterestCycling => 'ciclismo';
+
+  @override
+  String get prefsInterestClimbing => 'escalada';
+
+  @override
+  String get prefsInterestNationalParks => 'parques nacionales';
 
   @override
   String get prefsInterestRoadTrips => 'viajes por carretera';
@@ -581,6 +628,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get quizInterestsSubtitle => 'Elige todas las que quieras.';
+
+  @override
+  String get quizActiveTitle => '¿Qué tan activos son tus viajes?';
+
+  @override
+  String get quizActiveSubtitle =>
+      'Ambas son opcionales: definen dónde te alojas y qué tan exigentes son los días al aire libre.';
 
   @override
   String get quizCompanionsTitle => '¿Con quién sueles viajar?';

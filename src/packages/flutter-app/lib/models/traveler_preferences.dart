@@ -14,6 +14,21 @@ class TravelerPreferences {
   @JsonKey(name: 'work_style')
   final String? workStyle;
 
+  /// `gym` | `running` | `both` | `none` — the training kept while away.
+  /// A constraint on where they sleep and how the day opens, not a taste;
+  /// tastes (yoga, climbing) are [interests]. `none` is an answer, not an
+  /// absence: it means stop planning around it.
+  @JsonKey(name: 'fitness_routine')
+  final String? fitnessRoutine;
+
+  /// `easy` | `moderate` | `challenging` — how demanding an active outing
+  /// should be. Orthogonal to [pace], which is how many things happen in a day.
+  @JsonKey(name: 'outdoor_intensity')
+  final String? outdoorIntensity;
+
+  /// `solo` | `partner` | `friends` | `family_with_kids` | `varies`.
+  final String? companions;
+
   const TravelerPreferences({
     this.budget,
     this.pace,
@@ -21,6 +36,9 @@ class TravelerPreferences {
     this.homeAirport,
     this.profileNotes,
     this.workStyle,
+    this.fitnessRoutine,
+    this.outdoorIntensity,
+    this.companions,
   });
 
   factory TravelerPreferences.fromJson(Map<String, dynamic> json) =>

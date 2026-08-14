@@ -22,6 +22,9 @@ class PreferencesApiService {
     String? homeAirport,
     String? profileNotes,
     String? workStyle,
+    String? fitnessRoutine,
+    String? outdoorIntensity,
+    String? companions,
   }) async {
     final res = await apiClient.httpClient.put(
       Uri.parse('${apiClient.baseUrl}/preferences'),
@@ -33,6 +36,9 @@ class PreferencesApiService {
         'home_airport': homeAirport,
         'profile_notes': profileNotes,
         'work_style': workStyle,
+        'fitness_routine': fitnessRoutine,
+        'outdoor_intensity': outdoorIntensity,
+        'companions': companions,
       }),
     );
     if (res.statusCode == 200) {

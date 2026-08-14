@@ -109,6 +109,24 @@
   "prefsWorkStyleNomad": "yes — I work as I travel",
   "prefsWorkStyleWorkation": "sometimes",
   "prefsWorkStyleLeisure": "no — trips are time off",
+  "prefsCompanions": "Who you travel with",
+  "prefsFitnessRoutine": "Working out",
+  "prefsFitnessRoutineHelp": "Used to pick stays near a gym or a place to run, and to leave you the time.",
+  "prefsFitnessGym": "gym access",
+  "@prefsFitnessGym": {
+    "description": "Fitness routine option shown on a chip; the stored API value stays 'gym'."
+  },
+  "prefsFitnessRunning": "running routes",
+  "prefsFitnessBoth": "both",
+  "prefsFitnessNone": "not a factor",
+  "prefsOutdoorIntensity": "Outdoor days",
+  "prefsOutdoorIntensityHelp": "How hard you want hikes and other active outings to be.",
+  "prefsOutdoorEasy": "easy — walks and viewpoints",
+  "@prefsOutdoorEasy": {
+    "description": "Outdoor intensity option shown on a chip; the stored API value stays 'easy'."
+  },
+  "prefsOutdoorModerate": "moderate — half-day hikes",
+  "prefsOutdoorChallenging": "challenging — long and steep",
   "prefsPaceRelaxed": "relaxed",
   "@prefsPaceRelaxed": {
     "description": "Trip pace option shown on a chip; the stored API value stays 'relaxed'."
@@ -142,6 +160,9 @@
   "prefsInterestWildlife": "wildlife",
   "prefsInterestWaterSports": "water sports",
   "prefsInterestSkiing": "skiing",
+  "prefsInterestCycling": "cycling",
+  "prefsInterestClimbing": "climbing",
+  "prefsInterestNationalParks": "national parks",
   "prefsInterestRoadTrips": "road trips",
   "prefsInterestPhotography": "photography",
   "prefsInterestStreetArt": "street art",
@@ -252,6 +273,8 @@
   "quizWorkStyleSubtitle": "So the planner can balance wifi-ready stays and work time with exploring.",
   "quizInterestsTitle": "What do you love doing on a trip?",
   "quizInterestsSubtitle": "Pick as many as you like.",
+  "quizActiveTitle": "How active are your trips?",
+  "quizActiveSubtitle": "Both optional — they shape where you stay and how hard the outdoor days get.",
   "quizCompanionsTitle": "Who do you usually travel with?",
   "quizCompanionSolo": "solo",
   "quizCompanionPartner": "partner",

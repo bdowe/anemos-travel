@@ -787,7 +787,12 @@ func summarizeEvents(city string, events []Event) string {
 
 // profileNotesInstruction is the standing profile-keeping rule appended to every
 // authenticated session's system prompt, whether or not notes exist yet.
-const profileNotesInstruction = "\n\nWhen you learn something durable about this traveler — travel companions, dietary needs, accommodation style, accessibility needs, likes or dislikes — call save_preferences with profile_notes set to the COMPLETE updated profile: your current notes merged with the new fact, de-duplicated, as short bullet lines (max ~15). Never send only the new fact. Don't store one-off trip details or sensitive information (health, religion, politics) unless the traveler explicitly asks you to remember it."
+//
+// This list is for facts with NO column of their own. Travel companions used to
+// be on it and no longer is: migration 00063 gave it one, and naming it here too
+// would tell the agent to write the same fact in two places — the exact
+// duplication that migration cleaned up (docs/zen.md, one obvious way).
+const profileNotesInstruction = "\n\nWhen you learn something durable about this traveler — dietary needs, accommodation style, accessibility needs, likes or dislikes — call save_preferences with profile_notes set to the COMPLETE updated profile: your current notes merged with the new fact, de-duplicated, as short bullet lines (max ~15). Never send only the new fact. Don't store one-off trip details or sensitive information (health, religion, politics) unless the traveler explicitly asks you to remember it."
 
 // responseLanguageInstruction tells the agent which language to write in.
 // Returns "" for English so the English prompt is unchanged; structured tool
@@ -840,10 +845,77 @@ func personalizedSystemPrompt(base string, p *store.TravelerPreference) string {
 			parts = append(parts, "work style: leisure only — trips are time off")
 		}
 	}
+	// Fitness is a constraint on where they sleep and how the day opens, not a
+	// taste (tastes are interests) — so each value names a concrete thing to do
+	// rather than a mood to match. "none" is an answer: parts line, no note,
+	// the same shape leisure_only takes above.
+	var fitnessNote string
+	if p.FitnessRoutine != nil && *p.FitnessRoutine != "" {
+		const freeBlock = " Leave a block free at the start of most days rather than scheduling from wake-up"
+		switch *p.FitnessRoutine {
+		case "gym":
+			parts = append(parts, "fitness: needs gym access")
+			fitnessNote = " This traveler keeps a gym routine on the road: prefer stays with an on-site gym or one a few minutes' walk away and say which it is; when a stay has neither, call search_nearby with the stay's coordinates and name an actual gym, including whether it sells drop-in day passes." +
+				freeBlock + ", and add gym kit with add_packing_item."
+		case "running":
+			parts = append(parts, "fitness: runs while traveling")
+			fitnessNote = " This traveler runs while traveling: for each place they stay, name a specific route nearby — a park loop, waterfront, riverside path or track — with a rough distance, and say when a neighborhood is a poor place to run." +
+				freeBlock + ", and add running shoes and kit with add_packing_item."
+		case "both":
+			parts = append(parts, "fitness: gym and running")
+			fitnessNote = " This traveler trains and runs while traveling: prefer stays with an on-site gym or one a few minutes' walk away and say which (when a stay has neither, call search_nearby with the stay's coordinates and name an actual gym with its drop-in options), and name a specific running route nearby — park loop, waterfront, riverside path or track — with a rough distance." +
+				freeBlock + ", and add running shoes and gym kit with add_packing_item."
+		case "none":
+			parts = append(parts, "fitness: not a factor — don't plan around it")
+		}
+	}
+	// Intensity is a separate axis from pace: pace is how MANY things happen in
+	// a day, this is how hard they are. Every band carries the same
+	// state-the-numbers rule so a mismatched suggestion shows up as a figure the
+	// traveler can reject instead of prose that reads fine either way
+	// (docs/zen.md — contracts the model consumes must fail loudly).
+	var outdoorNote string
+	if p.OutdoorIntensity != nil && *p.OutdoorIntensity != "" {
+		switch *p.OutdoorIntensity {
+		case "easy":
+			parts = append(parts, "outdoor days: easy")
+			outdoorNote = " Keep active outings gentle: flat or paved walks, viewpoints reachable without a climb, trails under about 5 km. Offer the cable car or the drive rather than the ascent."
+		case "moderate":
+			parts = append(parts, "outdoor days: moderate")
+			outdoorNote = " Half-day outings are welcome: hikes up to roughly 10 km with moderate climbing, bike days, paddling."
+		case "challenging":
+			parts = append(parts, "outdoor days: challenging")
+			outdoorNote = " This traveler wants demanding outings: full-day hikes, 15 km or more, 1000 m of ascent, exposed or technical trails where they exist. Don't pad the day with filler around them."
+		}
+		if outdoorNote != "" {
+			outdoorNote += " For every hike, ride, climb or paddle you suggest, state the distance, the elevation gain and roughly how long it takes, so a mismatch is obvious rather than implied."
+		}
+	}
+	// Companions used to live as a "- Travels with: X" bullet inside the profile
+	// notes; migration 00063 gave it a column so the distiller can't reword it
+	// away. profileNotesInstruction no longer names it — one home only.
+	var companionsNote string
+	if p.Companions != nil && *p.Companions != "" {
+		switch *p.Companions {
+		case "solo":
+			parts = append(parts, "traveling: solo")
+			companionsNote = " They travel alone: quote prices and rooms for one person unless told otherwise, and favor places that are comfortable to visit solo — counter seating, walkable evenings, joinable day tours when they want company."
+		case "partner":
+			parts = append(parts, "traveling: as a couple")
+		case "friends":
+			parts = append(parts, "traveling: with friends")
+			companionsNote = " Favor group-friendly tables and shared apartments over single rooms."
+		case "family_with_kids":
+			parts = append(parts, "traveling: with kids")
+			companionsNote = " Favor shorter transfers and places that work with children, and flag age limits, long queues and anything that will eat a nap."
+		case "varies":
+			parts = append(parts, "traveling: varies by trip")
+		}
+	}
 	out := base
 	if len(parts) > 0 {
 		out += "\n\nTraveler preferences — " + strings.Join(parts, "; ") +
-			". Tailor your suggestions accordingly." + homeNote + workNote
+			". Tailor your suggestions accordingly." + homeNote + workNote + fitnessNote + outdoorNote + companionsNote
 	}
 	if p.ProfileNotes != nil && strings.TrimSpace(*p.ProfileNotes) != "" {
 		out += "\n\nTraveler profile notes (maintained by you):\n" + strings.TrimSpace(*p.ProfileNotes)

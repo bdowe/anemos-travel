@@ -15,13 +15,28 @@ var allowedBudgets = map[string]bool{"budget": true, "mid": true, "luxury": true
 var allowedPaces = map[string]bool{"relaxed": true, "balanced": true, "packed": true}
 var allowedWorkStyles = map[string]bool{"digital_nomad": true, "workation": true, "leisure_only": true}
 
+// "none" is a real answer, not an absence: it says the traveler has been asked
+// and keeps no routine, so the agent should stop volunteering gyms and runs.
+// (It also happens to be the one choice field on this profile with a way back
+// to "no" — see specs/active-profile on the shared clear-to-unknown wart.)
+var allowedFitnessRoutines = map[string]bool{"gym": true, "running": true, "both": true, "none": true}
+
+// How demanding an active outing should be. Orthogonal to pace, which is how
+// MANY things happen in a day rather than how hard they are.
+var allowedOutdoorIntensities = map[string]bool{"easy": true, "moderate": true, "challenging": true}
+
+var allowedCompanions = map[string]bool{"solo": true, "partner": true, "friends": true, "family_with_kids": true, "varies": true}
+
 type PreferencesResponse struct {
-	Budget       *string  `json:"budget"`
-	Pace         *string  `json:"pace"`
-	Interests    []string `json:"interests"`
-	HomeAirport  *string  `json:"home_airport"`
-	ProfileNotes *string  `json:"profile_notes"`
-	WorkStyle    *string  `json:"work_style"`
+	Budget           *string  `json:"budget"`
+	Pace             *string  `json:"pace"`
+	Interests        []string `json:"interests"`
+	HomeAirport      *string  `json:"home_airport"`
+	ProfileNotes     *string  `json:"profile_notes"`
+	WorkStyle        *string  `json:"work_style"`
+	FitnessRoutine   *string  `json:"fitness_routine"`
+	OutdoorIntensity *string  `json:"outdoor_intensity"`
+	Companions       *string  `json:"companions"`
 }
 
 type PutPreferencesRequest struct {
@@ -31,8 +46,11 @@ type PutPreferencesRequest struct {
 	Interests   *[]string `json:"interests"`
 	HomeAirport *string   `json:"home_airport"`
 	// Pointer distinguishes omitted (nil -> keep) from cleared ("" -> clear).
-	ProfileNotes *string `json:"profile_notes"`
-	WorkStyle    *string `json:"work_style"`
+	ProfileNotes     *string `json:"profile_notes"`
+	WorkStyle        *string `json:"work_style"`
+	FitnessRoutine   *string `json:"fitness_routine"`
+	OutdoorIntensity *string `json:"outdoor_intensity"`
+	Companions       *string `json:"companions"`
 }
 
 func toPreferencesResponse(p store.TravelerPreference) PreferencesResponse {
@@ -40,7 +58,17 @@ func toPreferencesResponse(p store.TravelerPreference) PreferencesResponse {
 	if interests == nil {
 		interests = []string{}
 	}
-	return PreferencesResponse{Budget: p.Budget, Pace: p.Pace, Interests: interests, HomeAirport: p.HomeAirport, ProfileNotes: p.ProfileNotes, WorkStyle: p.WorkStyle}
+	return PreferencesResponse{
+		Budget:           p.Budget,
+		Pace:             p.Pace,
+		Interests:        interests,
+		HomeAirport:      p.HomeAirport,
+		ProfileNotes:     p.ProfileNotes,
+		WorkStyle:        p.WorkStyle,
+		FitnessRoutine:   p.FitnessRoutine,
+		OutdoorIntensity: p.OutdoorIntensity,
+		Companions:       p.Companions,
+	}
 }
 
 func getPreferencesHandler(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +117,21 @@ func putPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	fitnessRoutine, err := normalizeChoice(req.FitnessRoutine, allowedFitnessRoutines, "fitness_routine")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	outdoorIntensity, err := normalizeChoice(req.OutdoorIntensity, allowedOutdoorIntensities, "outdoor_intensity")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	companions, err := normalizeChoice(req.Companions, allowedCompanions, "companions")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	homeAirport, err := normalizeAirportCode(req.HomeAirport)
 	if err != nil {
@@ -103,13 +146,16 @@ func putPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p, err := store.New(dbPool).UpsertPreferences(r.Context(), store.UpsertPreferencesParams{
-		UserID:       user.ID,
-		Budget:       budget,
-		Pace:         pace,
-		Interests:    interestsArg,
-		HomeAirport:  homeAirport,
-		ProfileNotes: normalizeNotes(req.ProfileNotes),
-		WorkStyle:    workStyle,
+		UserID:           user.ID,
+		Budget:           budget,
+		Pace:             pace,
+		Interests:        interestsArg,
+		HomeAirport:      homeAirport,
+		ProfileNotes:     normalizeNotes(req.ProfileNotes),
+		WorkStyle:        workStyle,
+		FitnessRoutine:   fitnessRoutine,
+		OutdoorIntensity: outdoorIntensity,
+		Companions:       companions,
 	})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not save preferences")

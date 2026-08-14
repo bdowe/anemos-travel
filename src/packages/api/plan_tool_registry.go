@@ -264,7 +264,7 @@ var createItineraryTool = anthropic.ToolParam{
 
 var savePrefsTool = anthropic.ToolParam{
 	Name:        "save_preferences",
-	Description: anthropic.String("Save what you learn about the traveler so future trips are personalized. Call this when the user reveals a budget level, trip pace, interests, which airport they fly from, whether they work while traveling, or any other durable fact about how they travel. Only include fields you actually learned."),
+	Description: anthropic.String("Save what you learn about the traveler so future trips are personalized. Call this when the user reveals a budget level, trip pace, interests, which airport they fly from, whether they work while traveling, whether they keep a fitness routine on the road, how demanding they like their outdoor days, who they travel with, or any other durable fact about how they travel. Only include fields you actually learned."),
 	InputSchema: anthropic.ToolInputSchemaParam{
 		Properties: map[string]any{
 			"budget": map[string]any{
@@ -294,6 +294,21 @@ var savePrefsTool = anthropic.ToolParam{
 				"type":        "string",
 				"enum":        []string{"digital_nomad", "workation", "leisure_only"},
 				"description": "Whether the traveler works remotely while traveling — digital_nomad (works remotely as they travel), workation (sometimes works on trips), leisure_only (trips are strictly time off). Save it when they mention working on the road, needing wifi to work, or that trips are pure vacation.",
+			},
+			"fitness_routine": map[string]any{
+				"type":        "string",
+				"enum":        []string{"gym", "running", "both", "none"},
+				"description": "The training the traveler keeps while away — gym (needs gym access), running (runs while traveling), both, none (explicitly not a factor). Save it when they mention working out, lifting, running, or needing a hotel gym. This is a routine, not a taste: one-off activities like a yoga class or a climbing day belong in interests.",
+			},
+			"outdoor_intensity": map[string]any{
+				"type":        "string",
+				"enum":        []string{"easy", "moderate", "challenging"},
+				"description": "How demanding an active outing should be — easy (flat walks, viewpoints), moderate (half-day hikes), challenging (full-day, long and steep). Separate from pace, which is how many things happen in a day rather than how hard they are. Save it when they say how hard they want their hikes or outdoor days.",
+			},
+			"companions": map[string]any{
+				"type":        "string",
+				"enum":        []string{"solo", "partner", "friends", "family_with_kids", "varies"},
+				"description": "Who the traveler usually travels with. Save it when they say who they travel with in general — not who is on this one trip, which is a trip detail and not a profile fact.",
 			},
 		},
 	},
@@ -739,18 +754,24 @@ func sectionLegsRender(s *planSession) string {
 
 func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool) {
 	var in struct {
-		Budget       *string  `json:"budget"`
-		Pace         *string  `json:"pace"`
-		Interests    []string `json:"interests"`
-		HomeAirport  *string  `json:"home_airport"`
-		ProfileNotes *string  `json:"profile_notes"`
-		WorkStyle    *string  `json:"work_style"`
+		Budget           *string  `json:"budget"`
+		Pace             *string  `json:"pace"`
+		Interests        []string `json:"interests"`
+		HomeAirport      *string  `json:"home_airport"`
+		ProfileNotes     *string  `json:"profile_notes"`
+		WorkStyle        *string  `json:"work_style"`
+		FitnessRoutine   *string  `json:"fitness_routine"`
+		OutdoorIntensity *string  `json:"outdoor_intensity"`
+		Companions       *string  `json:"companions"`
 	}
 	json.Unmarshal(input, &in)
 
 	budget, _ := normalizeChoice(in.Budget, allowedBudgets, "budget")
 	pace, _ := normalizeChoice(in.Pace, allowedPaces, "pace")
 	workStyle, _ := normalizeChoice(in.WorkStyle, allowedWorkStyles, "work_style")
+	fitnessRoutine, _ := normalizeChoice(in.FitnessRoutine, allowedFitnessRoutines, "fitness_routine")
+	outdoorIntensity, _ := normalizeChoice(in.OutdoorIntensity, allowedOutdoorIntensities, "outdoor_intensity")
+	companions, _ := normalizeChoice(in.Companions, allowedCompanions, "companions")
 	homeAirport, _ := normalizeAirportCode(in.HomeAirport)
 	var interestsArg interface{}
 	if in.Interests != nil {
@@ -763,6 +784,7 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 	}
 	_, err := store.New(dbPool).UpsertPreferences(s.ctx, store.UpsertPreferencesParams{
 		UserID: s.uid, Budget: budget, Pace: pace, Interests: interestsArg, HomeAirport: homeAirport, ProfileNotes: notes, WorkStyle: workStyle,
+		FitnessRoutine: fitnessRoutine, OutdoorIntensity: outdoorIntensity, Companions: companions,
 	})
 	if err != nil {
 		return fmt.Sprintf("Could not save preferences: %v", err), true
@@ -785,6 +807,15 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 	}
 	if workStyle != nil {
 		changed = append(changed, "work_style")
+	}
+	if fitnessRoutine != nil {
+		changed = append(changed, "fitness_routine")
+	}
+	if outdoorIntensity != nil {
+		changed = append(changed, "outdoor_intensity")
+	}
+	if companions != nil {
+		changed = append(changed, "companions")
 	}
 	if len(changed) > 0 {
 		sendSSE(s.w, "profile_updated", map[string]any{

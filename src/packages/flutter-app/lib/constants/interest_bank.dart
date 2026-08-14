@@ -4,6 +4,12 @@ import '../l10n/l10n.dart';
 /// agent, so they are NEVER translated — only their display labels are
 /// (specs/i18n-spanish). Order is the curated display order: the original
 /// ten first, then related interests adjacent.
+///
+/// Deliberately absent: `gym` and `running`. Those are the routine a traveler
+/// keeps regardless of city, and they live in `TravelerPreferences
+/// .fitnessRoutine` where they can actually change a stay recommendation —
+/// duplicating them here would give one fact two homes (docs/zen.md).
+/// Tastes that happen to be athletic (cycling, climbing) do belong here.
 const suggestedInterests = [
   'museums',
   'food',
@@ -29,6 +35,9 @@ const suggestedInterests = [
   'wildlife',
   'water sports',
   'skiing',
+  'cycling',
+  'climbing',
+  'national parks',
   'road trips',
   'photography',
   'street art',
@@ -64,6 +73,9 @@ String interestLabel(AppLocalizations l10n, String value) => switch (value) {
       'wildlife' => l10n.prefsInterestWildlife,
       'water sports' => l10n.prefsInterestWaterSports,
       'skiing' => l10n.prefsInterestSkiing,
+      'cycling' => l10n.prefsInterestCycling,
+      'climbing' => l10n.prefsInterestClimbing,
+      'national parks' => l10n.prefsInterestNationalParks,
       'road trips' => l10n.prefsInterestRoadTrips,
       'photography' => l10n.prefsInterestPhotography,
       'street art' => l10n.prefsInterestStreetArt,

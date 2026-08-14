@@ -255,15 +255,18 @@ type Session struct {
 }
 
 type TravelerPreference struct {
-	UserID       uuid.UUID `json:"user_id"`
-	Budget       *string   `json:"budget"`
-	Pace         *string   `json:"pace"`
-	Interests    []string  `json:"interests"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	HomeAirport  *string   `json:"home_airport"`
-	ProfileNotes *string   `json:"profile_notes"`
-	WorkStyle    *string   `json:"work_style"`
+	UserID           uuid.UUID `json:"user_id"`
+	Budget           *string   `json:"budget"`
+	Pace             *string   `json:"pace"`
+	Interests        []string  `json:"interests"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	HomeAirport      *string   `json:"home_airport"`
+	ProfileNotes     *string   `json:"profile_notes"`
+	WorkStyle        *string   `json:"work_style"`
+	FitnessRoutine   *string   `json:"fitness_routine"`
+	OutdoorIntensity *string   `json:"outdoor_intensity"`
+	Companions       *string   `json:"companions"`
 }
 
 type Trip struct {

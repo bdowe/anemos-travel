@@ -146,6 +146,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsWorkStyleLeisure => 'no — trips are time off';
 
   @override
+  String get prefsCompanions => 'Who you travel with';
+
+  @override
+  String get prefsFitnessRoutine => 'Working out';
+
+  @override
+  String get prefsFitnessRoutineHelp =>
+      'Used to pick stays near a gym or a place to run, and to leave you the time.';
+
+  @override
+  String get prefsFitnessGym => 'gym access';
+
+  @override
+  String get prefsFitnessRunning => 'running routes';
+
+  @override
+  String get prefsFitnessBoth => 'both';
+
+  @override
+  String get prefsFitnessNone => 'not a factor';
+
+  @override
+  String get prefsOutdoorIntensity => 'Outdoor days';
+
+  @override
+  String get prefsOutdoorIntensityHelp =>
+      'How hard you want hikes and other active outings to be.';
+
+  @override
+  String get prefsOutdoorEasy => 'easy — walks and viewpoints';
+
+  @override
+  String get prefsOutdoorModerate => 'moderate — half-day hikes';
+
+  @override
+  String get prefsOutdoorChallenging => 'challenging — long and steep';
+
+  @override
   String get prefsPaceRelaxed => 'relaxed';
 
   @override
@@ -225,6 +263,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get prefsInterestSkiing => 'skiing';
+
+  @override
+  String get prefsInterestCycling => 'cycling';
+
+  @override
+  String get prefsInterestClimbing => 'climbing';
+
+  @override
+  String get prefsInterestNationalParks => 'national parks';
 
   @override
   String get prefsInterestRoadTrips => 'road trips';
@@ -573,6 +620,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get quizInterestsSubtitle => 'Pick as many as you like.';
+
+  @override
+  String get quizActiveTitle => 'How active are your trips?';
+
+  @override
+  String get quizActiveSubtitle =>
+      'Both optional — they shape where you stay and how hard the outdoor days get.';
 
   @override
   String get quizCompanionsTitle => 'Who do you usually travel with?';
