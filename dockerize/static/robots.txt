@@ -1,4 +1,4 @@
 User-agent: *
 Disallow: /api/
 
-Sitemap: https://goldentempotravel.com/sitemap.xml
+Sitemap: https://anemos.travel/sitemap.xml

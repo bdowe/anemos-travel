@@ -437,9 +437,9 @@ jobs:
         if: steps.gate.outputs.configured == 'true'
         run: |
           for i in $(seq 1 30); do
-            api=$(curl -sS -m 10 "https://goldentempotravel.com/api/v1/health" \
+            api=$(curl -sS -m 10 "https://anemos.travel/api/v1/health" \
               | jq -r '.release // empty' 2>/dev/null || true)
-            web=$(curl -sS -m 10 "https://goldentempotravel.com/app/version.json?deploy=${IMAGE_TAG}" \
+            web=$(curl -sS -m 10 "https://anemos.travel/app/version.json?deploy=${IMAGE_TAG}" \
               | jq -r '.release // empty' 2>/dev/null || true)
             if [ "$api" = "$IMAGE_TAG" ] && [ "$web" = "$IMAGE_TAG" ]; then
               echo "live: api and web both serving ${IMAGE_TAG}"

@@ -1,7 +1,7 @@
 # Pre-Beta Pitch — Friends & Family Launch
 
-Channel-ready copy for the friends-and-family pre-beta of **Golden Tempo Travel**
-(goldentempotravel.com). Four pieces, one shared spine. The investor-facing pitch
+Channel-ready copy for the friends-and-family pre-beta of **Anemos**
+(anemos.travel). Four pieces, one shared spine. The investor-facing pitch
 lives in [sales-pitch.md](sales-pitch.md); this doc is for the humans we actually know.
 
 > **`[FEEDBACK CHANNEL]`** appears wherever a feedback destination is needed —
@@ -52,7 +52,7 @@ Every piece below is a channel-shaped version of the same three beats:
 > plan a trip (real or imaginary), and tell me everything you don't like.
 > Honest complaints are genuinely the best gift you can give me right now.
 >
-> 👉 goldentempotravel.com
+> 👉 anemos.travel
 >
 > `[FEEDBACK CHANNEL]`
 
@@ -61,7 +61,7 @@ Every piece below is a channel-shaped version of the same three beats:
 > I built a travel app — you describe a trip, it builds the real day-by-day
 > itinerary (flights, places, map, all saved). It's early and rough in spots,
 > and I need honest eyes on it. Try it and tell me what you hate:
-> goldentempotravel.com 🐎 `[FEEDBACK CHANNEL]`
+> anemos.travel 🧭 `[FEEDBACK CHANNEL]`
 
 ---
 
@@ -152,7 +152,7 @@ travelers is what shapes what this becomes.
   This is the longer-odds bet.
 
 **Status / traction framing**
-- Live in production at goldentempotravel.com, on real infrastructure, with
+- Live in production at anemos.travel, on real infrastructure, with
   real flight and places data. LLC formed. Pre-beta = invite-only friends &
   family while the rough edges get sanded.
 

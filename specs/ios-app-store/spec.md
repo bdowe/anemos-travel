@@ -38,7 +38,7 @@ buildable before it completes.
       and land the user signed in on the home screen; cancelling the sheet is
       silent. Web sign-in behavior is byte-identical to today.
 - [ ] Trip share, invite, print, calendar-export, and Privacy/Terms links
-      opened or shared from the iOS app are absolute `https://goldentempotravel.com`
+      opened or shared from the iOS app are absolute `https://anemos.travel`
       URLs (no relative paths, no localhost).
 - [ ] Tapping a share, invite, verify-email, or password-reset link on iPhone
       opens the app (installed) at the right screen — cold start and warm.

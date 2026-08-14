@@ -75,6 +75,6 @@ Browser                       API (Go)                          Google
 https://console.cloud.google.com/apis/credentials and register
 `<PUBLIC_BASE_URL>/api/v1/auth/google/callback` as an authorized redirect URI
 — `http://localhost:3000/api/v1/auth/google/callback` for dev,
-`https://goldentempo.co/api/v1/auth/google/callback` for prod. Unset ⇒
+`https://anemos.travel/api/v1/auth/google/callback` for prod. Unset ⇒
 degraded mode: button hidden, `/auth/google` answers 503, everything else
 unaffected.

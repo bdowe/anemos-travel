@@ -1,4 +1,4 @@
-# Production stack — goldentempotravel.com
+# Production stack — anemos.travel
 
 > **Box died / provider fired us?** [`REHOME.md`](REHOME.md) is the
 > start-to-finish runbook for standing prod up on a fresh VM in ~90 minutes
@@ -50,13 +50,15 @@ Ubuntu LTS image:
 ## Cloudflare Tunnel
 
 One tunnel (Zero Trust → Networks → Tunnels), token in `.env` as
-`TUNNEL_TOKEN`, with three public hostnames:
+`TUNNEL_TOKEN`, with five public hostnames:
 
 | Hostname | Service | Purpose |
 |----------|---------|---------|
-| `goldentempotravel.com` | `http://gateway:80` | the site |
-| `www.goldentempotravel.com` | `http://gateway:80` | nginx 301s it to the apex |
-| `ssh.goldentempotravel.com` | `ssh://172.28.0.1:22` | CI deploys (host sshd via the pinned bridge gateway IP) |
+| `anemos.travel` | `http://gateway:80` | the site |
+| `www.anemos.travel` | `http://gateway:80` | nginx 301s it to the apex |
+| `goldentempotravel.com` | `http://gateway:80` | legacy domain — nginx 308s to anemos.travel (pre-cutover email/share/unsubscribe links never die; unsubscribe is served in place) |
+| `www.goldentempotravel.com` | `http://gateway:80` | legacy www — same 308 |
+| `ssh.goldentempotravel.com` | `ssh://172.28.0.1:22` | CI deploys (host sshd via the pinned bridge gateway IP; deliberately stays on the legacy domain — tunnel-internal, keeps the `DEPLOY_*`/Access secrets stable) |
 
 The SSH hostname sits behind a Cloudflare **Access** application with a
 **service token**; CI authenticates with it (`CF_ACCESS_*` secrets) and
@@ -195,10 +197,11 @@ fresh scratch volume first, then swap it under the live stack and confirm
 ## Sanity checks after a deploy
 
 ```bash
-curl -fsS https://goldentempotravel.com/health              # gateway
-curl -fsS https://goldentempotravel.com/api/v1/health       # API through the proxy
-curl -sI  http://goldentempotravel.com/                     # 301 → https apex
-curl -sI  https://www.goldentempotravel.com/                # 301 → apex
+curl -fsS https://anemos.travel/health              # gateway
+curl -fsS https://anemos.travel/api/v1/health       # API through the proxy
+curl -sI  http://anemos.travel/                     # 301 → https apex
+curl -sI  https://www.anemos.travel/                # 301 → apex
+curl -sI  https://goldentempotravel.com/            # 308 → anemos.travel (legacy)
 ```
 
 For the full end-to-end journey (register → trip → item → share/OG → export →
@@ -213,7 +216,7 @@ against production:
 # SMOKE_MCP_EXPECT=on hard-fails unless the MCP connector is live — use it
 # whenever MCP_ENABLED=true on the host, so a botched flip can't read as green
 # (auto would happily assert the disabled state); off is the post-rollback run.
-make smoke BASE_URL=https://goldentempotravel.com SMOKE_SEED_MODE=plan SMOKE_MCP_EXPECT=on
+make smoke BASE_URL=https://anemos.travel SMOKE_SEED_MODE=plan SMOKE_MCP_EXPECT=on
 ```
 
 Green means the traveler journey works end to end; the run also prints a

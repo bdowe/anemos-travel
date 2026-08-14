@@ -91,7 +91,7 @@ Key decisions:
   does exchange/adopt exactly as web. Cancellation swallowed.
 - **`lib/navigation/incoming_links.dart` (new)** — pure
   `normalizeIncomingLink(Uri)`:
-  `https://goldentempotravel.com/app/<rest>` → `/<rest>`;
+  `https://anemos.travel/app/<rest>` → `/<rest>`;
   `goldentempo://sso/<c>` → `/sso/<c>`; else null. Cold start:
   `AppLinks().getInitialLink()` → `MaterialApp.initialRoute` (null on web).
   Warm: `uriLinkStream` pushes token routes
@@ -117,7 +117,7 @@ Key decisions:
   (pbxproj ~371/550 + RunnerTests); delete legacy
   `CODE_SIGN_IDENTITY "iPhone Developer"` (~335); `TARGETED_DEVICE_FAMILY=1`
   (~353/479/532); `CODE_SIGN_ENTITLEMENTS` → new `Runner/Runner.entitlements`
-  (`applinks:` + `webcredentials:` goldentempotravel.com); `DEVELOPMENT_TEAM`
+  (`applinks:` + `webcredentials:` anemos.travel); `DEVELOPMENT_TEAM`
   left unset with comment (fills post-enrollment). `Info.plist`:
   `NSPhotoLibraryUsageDescription`, `ITSAppUsesNonExemptEncryption=false`,
   `CFBundleLocalizations` [en, es], `CFBundleURLTypes` (`goldentempo`).
@@ -144,8 +144,8 @@ platform value ⇒ 400 at start.
 - **Env vars:** `APPLE_REVOKE_URL` (test seam, default Apple's real endpoint)
   → `.env.sample`. No other new server config.
 - **Dart defines (native builds only):**
-  `API_BASE_URL=https://goldentempotravel.com/api/v1`, `APP_BASE_PATH=/app/`,
-  `PUBLIC_BASE_URL=https://goldentempotravel.com` — carried exclusively by
+  `API_BASE_URL=https://anemos.travel/api/v1`, `APP_BASE_PATH=/app/`,
+  `PUBLIC_BASE_URL=https://anemos.travel` — carried exclusively by
   new Makefile targets `flutter-build-ipa` / `flutter-run-ios` (never
   hand-typed). Web builds unchanged.
 - **Gateway:** AASA file committed under `dockerize/deployment/nginx/` +
