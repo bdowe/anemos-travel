@@ -191,7 +191,7 @@ func (m *healthMonitor) runOnce(ctx context.Context, now time.Time) {
 	dbOK := m.pingDBFn(ctx)
 	backups := readBackupHealth(now)
 	ai := m.aiStateFn()
-	state := computeHealthState(dbOK, backups.Stale, ai)
+	state := computeHealthState(dbOK, backups.Stale, ai, emailHealth.state())
 
 	// Persist the observation BEFORE the transition dedup returns: history
 	// records every tick, alerting only changes (specs/uptime-history). Same
