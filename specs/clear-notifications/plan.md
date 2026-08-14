@@ -103,8 +103,8 @@ route ↔ caller ↔ status handling:
 - **Env vars:** none.
 - **Gateway:** `/api/v1/notifications` already proxies; DELETE needs no extra
   nginx config.
-- **Migrations:** none — deliberately (00058 is double-claimed by in-flight
-  reservations; this feature stays out of that lane entirely).
+- **Migrations:** none — deliberately (00058 was contested at the time and has
+  since been permanently burned; see `docs/parallel-dev.md` §4a).
 
 ## Verification
 

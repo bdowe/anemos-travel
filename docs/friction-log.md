@@ -5,6 +5,48 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-14 — the 00058 migration gap (latent prod outage, defused)
+
+- **[dev] BREAKAGE latent in main → fixed before it fired.** The 00058 gap
+  was not a stale reservation — it was a **loaded gun**. `db.go` calls
+  `goose.Up` with no `WithAllowMissing`, so goose refuses any unapplied
+  version below the DB's max (`found N missing migrations before current
+  version 60`), and `main.go` escalates that to `log.Fatalf`. Reproduced
+  end-to-end against a prod-shaped throwaway Postgres: the API **exits ~25ms
+  into boot, never binds :8080**, and under `restart: unless-stopped` with the
+  old container already replaced it crash-loops — a full API outage that the
+  deploy only reports ~5 minutes later, with no auto-rollback. Merging
+  *anything* numbered 00058 would have done this.
+- **[dev] The scariest part: every existing check passed.** "Migrations apply
+  from zero" runs against an empty database where 58 sorts happily between 57
+  and 59 (verified: `OK 00058_…`, exit 0), and the duplicate guard finds no
+  collision because filling a gap collides with nothing. A doomed PR would
+  have gone green and died on deploy. Fixed by an **out-of-order guard** in the
+  same CI job: every migration a branch adds must sort strictly above main's
+  highest. Rejected the alternative of enabling `WithAllowMissing` — that
+  swaps one loud, zero-damage crash for silent order-dependent schema state
+  repo-wide.
+- **[dev] Root cause — a stacked PR merged into a base that no longer
+  existed.** PR #350 (`budget-v2-autopopulate`) was merged into branch
+  `budget-v2` at 17:14Z on 08-13, **47 minutes after `budget-v2` itself merged
+  to main** at 16:27Z. GitHub shows #350 as MERGED, but its merge commit
+  `c16939c` is not an ancestor of main and the feature is absent from main
+  (`git grep source_kind` → nothing). ~1,357 lines of finished work — the
+  expense↔booking link, its migration, and 509 lines of Flutter tests — have
+  been sitting in `origin/budget-v2` unnoticed for a day. **A MERGED badge is
+  not evidence the code is on main**; when a stacked PR's base merges first,
+  retarget the child before merging and verify with
+  `git merge-base --is-ancestor <merge-commit> origin/main`.
+- **[dev] Writing a guard is not the same as having one.** The first draft of
+  the CI guard read `git ls-tree … -- src/packages/api/migrations/` from a job
+  whose `working-directory` is already `src/packages/api`, so the pathspec
+  matched nothing, `main_max` came back empty, and it **passed every case
+  including the one it existed to catch**. Caught only by testing it against a
+  deliberately-bad tree. A guard now fails closed when it cannot read main,
+  and it is exercised across four cases (no-op / gap-fill / correct next /
+  equal-to-max) under real `bash` — the local shell is zsh, which does not
+  word-split unquoted expansions and quietly hid a loop bug.
+
 ## 2026-08-14 — notification-center dogfooding (no way to clear)
 
 - **[app] Friction → fixed (Clear all + 45-day retention,
@@ -24,8 +66,10 @@ actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
   "anything you've seen sticks around ~6 more weeks" is a guarantee
   expressible to a user — and `read_at IS NOT NULL` makes "unread never
   expires" structural rather than conventional. Hard delete, **no migration**,
-  which also kept the lane clear of the double-claimed 00058 slot (next free
-  is 00060).
+  which also kept the lane clear of the contested 00058 slot (that slot turned
+  out to be un-mergeable, not merely reserved — see the 08-14 migration entry
+  below; always derive the next number from
+  `ls src/packages/api/migrations | tail -1`).
 - **[dev] BREAKAGE (self-inflicted, caught before merge): a proxy check
   can confirm the absence of the very thing it was meant to prove.** I
   verified a revert-restore with `grep -c maybeWhen` — which matched the word

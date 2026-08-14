@@ -12,7 +12,7 @@
 - [ ] `ship pr`
 
 ## PR B — Autopopulate on mark-booked (stacked on A)
-- [ ] Migration 00058 + queries + `make api-sqlc`
+- [ ] Migration (renumber above main's highest — **00058 is burned**) + queries + `make api-sqlc`
 - [ ] `budget_handler.go` upsert-by-source, PATCH auto-flip, `expense_added`
 - [ ] Go tests: link upsert + validation
 - [ ] Flutter: Expense fields, service params/ApiException, categories lift
