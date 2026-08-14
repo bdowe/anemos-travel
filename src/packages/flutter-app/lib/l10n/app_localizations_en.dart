@@ -2334,6 +2334,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatToolSuggestFerries => 'Finding ferries...';
 
   @override
+  String get chatToolLocalRecs => 'Finding local picks...';
+
+  @override
+  String get chatToolReviewTrip => 'Reviewing your trip...';
+
+  @override
+  String get chatToolWeather => 'Checking weather...';
+
+  @override
+  String get chatToolSearchNearby => 'Searching nearby...';
+
+  @override
+  String get chatToolWorking => 'Working...';
+
+  @override
   String get chatSummarizing => 'Summarizing earlier conversation…';
 
   @override

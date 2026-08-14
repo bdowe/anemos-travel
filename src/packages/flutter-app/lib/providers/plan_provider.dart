@@ -109,6 +109,12 @@ class PlanState {
   /// transient "Summarizing earlier conversation…" chip.
   final bool isCompacting;
 
+  /// Whether the server is between steps waiting on the model (between SSE
+  /// `thinking` and the first event that follows it) — lets the typing
+  /// indicator return mid-turn after text has already streamed
+  /// (specs/chat-working-indicator).
+  final bool isThinking;
+
   /// The conversation's stable chat id, mirrored from the notifier's private
   /// one once a conversation exists (first send, or a resume) — the public
   /// read path URL sync needs to emit /plan/<chatId>
@@ -146,6 +152,7 @@ class PlanState {
     this.compactedSummary,
     this.compactedCount = 0,
     this.isCompacting = false,
+    this.isThinking = false,
     this.chatId,
   });
 
@@ -180,6 +187,7 @@ class PlanState {
     Object? compactedSummary = _sentinel,
     int? compactedCount,
     bool? isCompacting,
+    bool? isThinking,
     Object? chatId = _sentinel,
   }) {
     return PlanState(
@@ -217,6 +225,7 @@ class PlanState {
           compactedSummary == _sentinel ? this.compactedSummary : compactedSummary as String?,
       compactedCount: compactedCount ?? this.compactedCount,
       isCompacting: isCompacting ?? this.isCompacting,
+      isThinking: isThinking ?? this.isThinking,
       chatId: chatId == _sentinel ? this.chatId : chatId as String?,
     );
   }
@@ -365,6 +374,7 @@ class PlanNotifier extends StateNotifier<PlanState> {
       streamingText: '',
       chatId: _chatId,
       activeTools: [],
+      isThinking: false,
       flightOffers: null,
       flightRouteLabel: null,
       eventResults: null,
@@ -441,6 +451,12 @@ class PlanNotifier extends StateNotifier<PlanState> {
           state = state.copyWith(isCompacting: false);
         }
 
+        // `thinking` has no terminator of its own either — the model's first
+        // token (or a tool announcement) is what ends the wait.
+        if (state.isThinking && event.type != 'thinking') {
+          state = state.copyWith(isThinking: false);
+        }
+
         switch (event.type) {
           case 'text_delta':
             final delta = event.data['text'] as String? ?? '';
@@ -478,10 +494,15 @@ class PlanNotifier extends StateNotifier<PlanState> {
             final rawLocs = event.data['locations'] as List<dynamic>? ?? [];
             final locations = rawLocs.cast<Map<String, dynamic>>();
             final summary = event.data['summary'] as String?;
+            // `done` IS create_itinerary's result (the tool suppresses
+            // tool_result); without this the "Building itinerary…" chip spins
+            // on while the banner already says finished.
+            final tools = state.activeTools.toList()..remove('create_itinerary');
             state = state.copyWith(
               completedLocations: locations,
               completedSummary: summary,
               savedTripId: event.data['trip_id'] as String?,
+              activeTools: tools,
               suggestedReplies: [],
               // The itinerary banner owns this turn; any places strip would be
               // geocoding leftovers (covers the places-then-done order).
@@ -514,6 +535,9 @@ class PlanNotifier extends StateNotifier<PlanState> {
             // hidden until the stream closes.
             state = state.copyWith(
                 suggestedReplies: raw.whereType<String>().toList());
+
+          case 'thinking':
+            state = state.copyWith(isThinking: true);
 
           case 'compacting':
             state = state.copyWith(isCompacting: true);
@@ -627,6 +651,7 @@ class PlanNotifier extends StateNotifier<PlanState> {
               streamingText: null,
               activeTools: [],
               isCompacting: false,
+              isThinking: false,
               // A turn that ends in an error must not leave reply chips
               // competing with the error banner's Try again.
               suggestedReplies: [],
@@ -663,6 +688,7 @@ class PlanNotifier extends StateNotifier<PlanState> {
         streamingText: null,
         activeTools: [],
         isCompacting: false,
+        isThinking: false,
       );
 
       // Success is the only drain point: after an error the queue stays put
@@ -677,6 +703,7 @@ class PlanNotifier extends StateNotifier<PlanState> {
         streamingText: null,
         activeTools: [],
         isCompacting: false,
+        isThinking: false,
         suggestedReplies: [],
         error: e,
       );
@@ -729,6 +756,7 @@ class PlanNotifier extends StateNotifier<PlanState> {
       streamingText: null,
       activeTools: [],
       isCompacting: false,
+      isThinking: false,
       suggestedReplies: [],
       messages: partial.isEmpty
           ? state.messages

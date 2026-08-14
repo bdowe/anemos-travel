@@ -73,8 +73,11 @@ None.
   paragraph break.
 - A turn that errors mid-stream keeps the paragraph break in the committed
   partial reply.
-- The typing indicator must never appear at the same time as the streaming
-  reply, a tool chip, or the summarizing chip.
+- The typing indicator must never appear at the same time as an
+  actively-streaming reply, a tool chip, or the summarizing chip. (Amended by
+  `specs/chat-working-indicator`: the indicator MAY appear below a *stalled*
+  streamed reply when the server has signaled `thinking` — the model's first
+  token clears that state, so overlap with live streaming remains impossible.)
 
 ## Out of Scope
 

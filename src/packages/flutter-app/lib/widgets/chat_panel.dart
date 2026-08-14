@@ -296,6 +296,16 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
         (_, __) => _scrollToBottom());
     ref.listen(widget.state.select((s) => s.queuedMessages.length),
         (_, __) => _scrollToBottom());
+    // Working indicators (tool chips, typing dots, summarizing chip) grow the
+    // tail below the last text — without a scroll they can appear out of view
+    // and the turn looks stalled. _scrollToBottom itself keeps respecting the
+    // user's upward-scroll disarm.
+    ref.listen(widget.state.select((s) => s.activeTools.length),
+        (_, __) => _scrollToBottom());
+    ref.listen(
+        widget.state.select((s) => s.isThinking), (_, __) => _scrollToBottom());
+    ref.listen(widget.state.select((s) => s.isCompacting),
+        (_, __) => _scrollToBottom());
 
     // LayoutBuilder (house rule: widths computed from the panel's own
     // constraints): the bubble cap must track the surface the panel actually
@@ -606,9 +616,11 @@ class _StreamingBubble extends ConsumerWidget {
 /// Immediate "assistant is working" cue: an animated three-dot bubble shown
 /// from the instant a turn starts (isStreaming flips synchronously on send,
 /// before any SSE event arrives) until streamed text, a tool chip, or the
-/// compacting chip takes over. Also covers the silent gap after a tool_result
-/// while the model composes its next text. Its own leaf watching one derived
-/// bool, so token flushes never rebuild it.
+/// compacting chip takes over — and shown AGAIN below the streamed text
+/// whenever the server signals `thinking` (waiting on the model between
+/// steps, specs/chat-working-indicator). Since the model's first token clears
+/// isThinking, the dots still never overlap an actively-streaming reply. Its
+/// own leaf watching one derived bool, so token flushes never rebuild it.
 class _TypingIndicatorBubble extends ConsumerWidget {
   final ProviderListenable<PlanState> state;
 
@@ -620,7 +632,7 @@ class _TypingIndicatorBubble extends ConsumerWidget {
     // no streaming bubble is visible yet.
     final visible = ref.watch(state.select((s) =>
         s.isStreaming &&
-        (s.streamingText == null || s.streamingText!.isEmpty) &&
+        (s.streamingText == null || s.streamingText!.isEmpty || s.isThinking) &&
         s.activeTools.isEmpty &&
         !s.isCompacting));
     if (!visible) return const SizedBox.shrink();
@@ -770,8 +782,19 @@ class _ActiveToolChips extends ConsumerWidget {
         return l10n.chatToolSuggestFerries;
       case 'find_parking':
         return l10n.chatToolFindParking;
+      case 'search_local_recommendations':
+        return l10n.chatToolLocalRecs;
+      case 'review_trip':
+        return l10n.chatToolReviewTrip;
+      case 'get_weather':
+        return l10n.chatToolWeather;
+      case 'search_nearby':
+        return l10n.chatToolSearchNearby;
       default:
-        return '$tool...';
+        // Every other tool gets a real localized label, never the raw
+        // snake_case name — quick writes flash by; naming them all would be
+        // key sprawl for no clarity.
+        return l10n.chatToolWorking;
     }
   }
 }

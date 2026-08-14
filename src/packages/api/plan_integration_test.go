@@ -140,6 +140,67 @@ func TestPlanToolLoopRoundTripsToolResult(t *testing.T) {
 	}
 }
 
+// (b2) Working-indicator contract (specs/chat-working-indicator): every model
+// call is preceded by a `thinking` frame, and a tool_use turn announces
+// exactly one tool_call per block even though the announcement now happens at
+// content_block_start — the execution loop must dedupe, or the client is left
+// a stuck chip (one tool_result removes one list entry).
+func TestPlanThinkingFramesAndEarlyToolAnnouncement(t *testing.T) {
+	resetDB(t)
+	newFakeAnthropic(t,
+		textThenToolTurn("Let me look that up.", "get_trip", `{}`),
+		textTurn("You have one saved trip."))
+
+	user, token := createTestUser(t, "thinking-frames@example.com")
+	createTestTrip(t, user.ID, 2)
+
+	rec := doJSON(t, "POST", "/api/v1/plan", token, PlanRequest{
+		ChatID:   "chat-thinking",
+		Messages: []PlanChatMessage{{Role: "user", Content: "what trips do I have saved?"}},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/plan = %d, want 200", rec.Code)
+	}
+	events := planEvents(t, rec.Body.String())
+
+	if thinks := eventsOfType(events, "thinking"); len(thinks) != 2 {
+		t.Fatalf("thinking events = %d, want 2 (one per model call)", len(thinks))
+	}
+	calls := eventsOfType(events, "tool_call")
+	if len(calls) != 1 || eventData(calls[0])["name"] != "get_trip" {
+		t.Fatalf("tool_call events = %v, want exactly one get_trip (block-start announce + execution loop must dedupe)", calls)
+	}
+	if errs := eventsOfType(events, "error"); len(errs) != 0 {
+		t.Fatalf("unexpected error events: %v", errs)
+	}
+}
+
+// (b3) An unknown tool name never reaches the wire as a tool_call — neither
+// from the block-start announcement (registry-gated) nor from the execution
+// loop (entry check now precedes the emit). No tool_result would ever clear
+// such a chip, so it must not exist.
+func TestPlanUnknownToolEmitsNoToolCall(t *testing.T) {
+	resetDB(t)
+	newFakeAnthropic(t,
+		toolTurn("imaginary_tool", `{}`),
+		textTurn("Recovered without it."))
+
+	rec := doJSON(t, "POST", "/api/v1/plan", "", PlanRequest{
+		ChatID:   "chat-unknown-tool",
+		Messages: []PlanChatMessage{{Role: "user", Content: "hi"}},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/plan = %d, want 200", rec.Code)
+	}
+	events := planEvents(t, rec.Body.String())
+	if calls := eventsOfType(events, "tool_call"); len(calls) != 0 {
+		t.Fatalf("tool_call events for unknown tool = %v, want none", calls)
+	}
+	if results := eventsOfType(events, "tool_result"); len(results) != 0 {
+		t.Fatalf("tool_result events for unknown tool = %v, want none", results)
+	}
+}
+
 // (c) create_itinerary end-to-end: the streamed `done` event carries a
 // trip_id, and that trip — title, summary and items — is really persisted.
 func TestPlanCreateItineraryPersistsTrip(t *testing.T) {

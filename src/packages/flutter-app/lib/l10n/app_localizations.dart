@@ -4076,6 +4076,36 @@ abstract class AppLocalizations {
   /// **'Finding ferries...'**
   String get chatToolSuggestFerries;
 
+  /// No description provided for @chatToolLocalRecs.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding local picks...'**
+  String get chatToolLocalRecs;
+
+  /// No description provided for @chatToolReviewTrip.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviewing your trip...'**
+  String get chatToolReviewTrip;
+
+  /// No description provided for @chatToolWeather.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking weather...'**
+  String get chatToolWeather;
+
+  /// No description provided for @chatToolSearchNearby.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching nearby...'**
+  String get chatToolSearchNearby;
+
+  /// No description provided for @chatToolWorking.
+  ///
+  /// In en, this message translates to:
+  /// **'Working...'**
+  String get chatToolWorking;
+
   /// No description provided for @chatSummarizing.
   ///
   /// In en, this message translates to:
