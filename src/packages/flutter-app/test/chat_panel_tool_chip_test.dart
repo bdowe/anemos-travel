@@ -128,4 +128,58 @@ void main() {
     afterToolCall.complete();
     await tester.pumpAndSettle();
   });
+
+  testWidgets('parallel same-tool calls collapse to one chip',
+      (WidgetTester tester) async {
+    final afterBothCalls = Completer<void>();
+    final afterFirstResult = Completer<void>();
+    final service = _StagedPlanService([
+      const PlanEvent(type: 'tool_call', data: {'name': 'search_places'}),
+      const PlanEvent(type: 'tool_call', data: {'name': 'search_places'}),
+      afterBothCalls,
+      const PlanEvent(type: 'tool_result', data: {'name': 'search_places'}),
+      afterFirstResult,
+      const PlanEvent(type: 'tool_result', data: {'name': 'search_places'}),
+    ]);
+    await _pumpPanel(tester, service);
+
+    await _send(tester);
+    await tester.pump(const Duration(milliseconds: 20));
+    // Two parallel search_places blocks announced — one chip, not twins.
+    expect(find.text('Searching places...'), findsOneWidget);
+
+    afterBothCalls.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    // First result in: one call still running, so the chip stays.
+    expect(find.text('Searching places...'), findsOneWidget);
+
+    afterFirstResult.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    // Last result clears it.
+    expect(find.text('Searching places...'), findsNothing);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('different unlabeled tools share one working chip',
+      (WidgetTester tester) async {
+    final afterBothCalls = Completer<void>();
+    final service = _StagedPlanService([
+      const PlanEvent(type: 'tool_call', data: {'name': 'save_preferences'}),
+      const PlanEvent(type: 'tool_call', data: {'name': 'set_travel_mode'}),
+      afterBothCalls,
+      const PlanEvent(type: 'tool_result', data: {'name': 'save_preferences'}),
+      const PlanEvent(type: 'tool_result', data: {'name': 'set_travel_mode'}),
+    ]);
+    await _pumpPanel(tester, service);
+
+    await _send(tester);
+    await tester.pump(const Duration(milliseconds: 20));
+    // The dedupe is by rendered label, not tool name: two distinct quick
+    // writes both fall back to the generic label and must share a chip.
+    expect(find.text('Working...'), findsOneWidget);
+    afterBothCalls.complete();
+    await tester.pumpAndSettle();
+  });
 }

@@ -744,18 +744,27 @@ class _ActiveToolChips extends ConsumerWidget {
     final activeTools = ref.watch(state.select((s) => s.activeTools));
     if (activeTools.isEmpty) return const SizedBox.shrink();
     final l10n = context.l10n;
+    // Parallel tool_use blocks announce one activeTools entry each; identical
+    // labels collapse to one chip — the chip says what's happening, not how
+    // many calls are in flight. Deduped on the rendered label (not the tool
+    // name) so unnamed tools sharing the generic "Working..." collapse too;
+    // the set keeps first-occurrence order, and the chip stays up until the
+    // last same-label call finishes.
+    final labels = <String>{
+      for (final tool in activeTools) _toolLabel(l10n, tool),
+    };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Wrap(
         spacing: AppSpacing.sm,
-        children: activeTools.map((tool) {
+        children: labels.map((label) {
           return Chip(
             avatar: const SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            label: Text(_toolLabel(l10n, tool)),
+            label: Text(label),
           );
         }).toList(),
       ),
