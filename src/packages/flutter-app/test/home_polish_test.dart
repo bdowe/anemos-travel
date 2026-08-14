@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:travel_route_planner/constants/app_info.dart';
 import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/models/user.dart';
+import 'package:travel_route_planner/navigation/app_nav.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/live_trip_provider.dart';
 import 'package:travel_route_planner/providers/resumable_chats_provider.dart';
@@ -149,6 +150,77 @@ void main() {
     final tagline = tester.widget<Text>(find.text('Plan less. Travel more.'));
     expect(tagline.maxLines, 2);
     expect(tester.takeException(), isNull);
+  });
+
+  // Logo-links-home for the WORDMARK, not just the plated mark: at rail
+  // widths the wordmark is the only brand in the app bar, and it used to be
+  // inert (no InkWell at all). These two pin the goHome WIRING at the widths
+  // that render each shape — in the real shell Home's app bar only ever shows
+  // at the Home root, so the visible half of the tap is the scroll-to-top
+  // case below.
+  testWidgets('wide app bar: tapping the wordmark goes Home',
+      (WidgetTester tester) async {
+    await _pumpHome(tester, surface: const Size(1200, 800));
+
+    expect(
+      find.ancestor(
+          of: find.text(AppInfo.name), matching: find.byType(InkWell)),
+      findsOneWidget,
+    );
+
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(HomeScreen)));
+    container.read(navIndexProvider.notifier).state = AppTab.plan.index;
+
+    await tester.tap(find.text(AppInfo.name));
+    await tester.pump();
+
+    expect(container.read(navIndexProvider), AppTab.home.index);
+  });
+
+  testWidgets('mid width: the wordmark beside the badge is the same target',
+      (WidgetTester tester) async {
+    await _pumpHome(tester, surface: const Size(700, 800));
+
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(HomeScreen)));
+    container.read(navIndexProvider.notifier).state = AppTab.plan.index;
+
+    // The wordmark text, NOT the badge — the half of the lockup that used to
+    // be dead space.
+    await tester.tap(find.text(AppInfo.name));
+    await tester.pump();
+
+    expect(container.read(navIndexProvider), AppTab.home.index);
+  });
+
+  testWidgets('the lockup is ONE tap target, not a badge nested in a target',
+      (WidgetTester tester) async {
+    await _pumpHome(tester, surface: const Size(700, 800));
+
+    // Mutation pin against re-adding BrandBadge's own onTap: a second,
+    // nested InkWell would hit-test and ripple twice over the same brand.
+    expect(
+      find.ancestor(of: find.byType(BrandLogo), matching: find.byType(InkWell)),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('tapping the brand scrolls Home back to the top',
+      (WidgetTester tester) async {
+    await _pumpHome(tester, surface: const Size(360, 690));
+
+    await tester.drag(
+        find.byType(SingleChildScrollView), const Offset(0, -240));
+    await tester.pumpAndSettle();
+    final position =
+        tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+    expect(position.pixels, greaterThan(0));
+
+    await tester.tap(find.byType(BrandLogo));
+    await tester.pumpAndSettle();
+
+    expect(position.pixels, 0);
   });
 
   testWidgets('overflow floor: home with the plan strip at 360x690 in es',
