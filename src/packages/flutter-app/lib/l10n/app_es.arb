@@ -29,6 +29,7 @@
   "prefsAddInterest": "Añadir un interés",
   "prefsHomeAirport": "Aeropuerto de origen",
   "prefsHomeAirportHelp": "Se usa como origen predeterminado al planificar vuelos.",
+  "prefsHomeAirportPickOne": "Elige un aeropuerto de la lista o vacía el campo.",
   "prefsProfileNotes": "Notas del perfil",
   "prefsProfileNotesHelp": "Tu agente de IA mantiene estas notas a medida que te conoce. Puedes editarlas o borrarlas cuando quieras.",
   "prefsProfileNotesHint": "Todavía no hay notas: el agente las va añadiendo mientras planificas viajes.",

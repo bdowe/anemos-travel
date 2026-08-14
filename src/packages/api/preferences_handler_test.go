@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -87,6 +88,55 @@ func TestNormalizeActiveProfileChoices(t *testing.T) {
 			// other choice field on this profile.
 			if got, err := normalizeChoice(strPtr(""), c.allowed, c.field); got != nil || err != nil {
 				t.Fatalf("normalizeChoice(\"\") = %v, %v; want nil, nil", got, err)
+			}
+		})
+	}
+}
+
+// Home airport is the one field on this profile that CAN be emptied, so its
+// normalizer has to report three request shapes, not two. Before the clear
+// flag existed, "" collapsed into nil and the upsert COALESCEd nil back to the
+// stored value — a traveler could set or replace a home airport but never
+// remove one, and the attempt returned 200 with the old code still in the
+// response. Untested until now.
+func TestNormalizeAirportCode(t *testing.T) {
+	t.Run("nil keeps existing", func(t *testing.T) {
+		got, clear, err := normalizeAirportCode(nil)
+		if got != nil || clear || err != nil {
+			t.Fatalf("got %v, clear=%v, err=%v; want nil, false, nil", got, clear, err)
+		}
+	})
+
+	// The distinction the whole change turns on: empty is a request, not an
+	// omission.
+	for _, empty := range []string{"", "   ", "\t"} {
+		t.Run("empty clears "+strconv.Quote(empty), func(t *testing.T) {
+			got, clear, err := normalizeAirportCode(strPtr(empty))
+			if got != nil || !clear || err != nil {
+				t.Fatalf("got %v, clear=%v, err=%v; want nil, true, nil", got, clear, err)
+			}
+		})
+	}
+
+	for _, in := range []string{"bos", "BOS", "  bos  ", "Bos"} {
+		t.Run("accepts "+strconv.Quote(in), func(t *testing.T) {
+			got, clear, err := normalizeAirportCode(strPtr(in))
+			if err != nil || got == nil || *got != "BOS" || clear {
+				t.Fatalf("got %v, clear=%v, err=%v; want BOS, false, nil", got, clear, err)
+			}
+		})
+	}
+
+	// A rejection must not read as a clear: answering (nil, true) here would
+	// wipe a good home airport because the model spelled the city out.
+	for _, bad := range []string{"Boston", "KBOS", "B", "BO", "B0S", "B S", "BÓS"} {
+		t.Run("rejects "+strconv.Quote(bad), func(t *testing.T) {
+			got, clear, err := normalizeAirportCode(strPtr(bad))
+			if err == nil {
+				t.Fatalf("normalizeAirportCode(%q) = %v; want an error", bad, got)
+			}
+			if clear {
+				t.Fatalf("normalizeAirportCode(%q) set clear; a bad value must never empty the column", bad)
 			}
 		})
 	}

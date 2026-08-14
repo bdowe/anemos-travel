@@ -92,6 +92,10 @@
   "prefsAddInterest": "Add an interest",
   "prefsHomeAirport": "Home airport",
   "prefsHomeAirportHelp": "Used as the default origin when planning flights.",
+  "prefsHomeAirportPickOne": "Pick an airport from the list, or clear the field.",
+  "@prefsHomeAirportPickOne": {
+    "description": "Shown under the home airport field when the traveler typed something but never chose a suggestion, so there is no airport to save."
+  },
   "prefsProfileNotes": "Profile notes",
   "prefsProfileNotesHelp": "Your AI agent keeps these notes as it learns about you. Edit or clear them anytime.",
   "prefsProfileNotesHint": "Nothing noted yet — the agent adds to this as you plan trips.",

@@ -272,6 +272,12 @@ abstract class AppLocalizations {
   /// **'Used as the default origin when planning flights.'**
   String get prefsHomeAirportHelp;
 
+  /// Shown under the home airport field when the traveler typed something but never chose a suggestion, so there is no airport to save.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick an airport from the list, or clear the field.'**
+  String get prefsHomeAirportPickOne;
+
   /// No description provided for @prefsProfileNotes.
   ///
   /// In en, this message translates to:

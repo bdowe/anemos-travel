@@ -133,13 +133,32 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 		return
 	}
 
-	budget, _ := normalizeChoice(in.Budget, allowedBudgets, "budget")
-	pace, _ := normalizeChoice(in.Pace, allowedPaces, "pace")
-	workStyle, _ := normalizeChoice(in.WorkStyle, allowedWorkStyles, "work_style")
-	fitnessRoutine, _ := normalizeChoice(in.FitnessRoutine, allowedFitnessRoutines, "fitness_routine")
-	outdoorIntensity, _ := normalizeChoice(in.OutdoorIntensity, allowedOutdoorIntensities, "outdoor_intensity")
-	companions, _ := normalizeChoice(in.Companions, allowedCompanions, "companions")
-	homeAirport, _ := normalizeAirportCode(in.HomeAirport)
+	// Distillation runs in the background with no caller to answer, so a value
+	// the model got wrong is dropped — but it is logged rather than discarded
+	// silently, because a model that keeps emitting e.g. "Boston" for an IATA
+	// field is a prompt bug and nothing else would ever surface it.
+	keep := func(v *string, err error) *string {
+		if err != nil {
+			log.Printf("profile distill: %v (field left unchanged)", err)
+			return nil
+		}
+		return v
+	}
+
+	budget := keep(normalizeChoice(in.Budget, allowedBudgets, "budget"))
+	pace := keep(normalizeChoice(in.Pace, allowedPaces, "pace"))
+	workStyle := keep(normalizeChoice(in.WorkStyle, allowedWorkStyles, "work_style"))
+	fitnessRoutine := keep(normalizeChoice(in.FitnessRoutine, allowedFitnessRoutines, "fitness_routine"))
+	outdoorIntensity := keep(normalizeChoice(in.OutdoorIntensity, allowedOutdoorIntensities, "outdoor_intensity"))
+	companions := keep(normalizeChoice(in.Companions, allowedCompanions, "companions"))
+
+	// Clear flag dropped on purpose: distillation can no more empty a home
+	// airport than it can wipe notes below.
+	homeAirport, _, airportErr := normalizeAirportCode(in.HomeAirport)
+	if airportErr != nil {
+		log.Printf("profile distill: %v (field left unchanged)", airportErr)
+		homeAirport = nil
+	}
 	var interestsArg interface{}
 	if in.Interests != nil {
 		interestsArg = normalizeInterests(in.Interests)

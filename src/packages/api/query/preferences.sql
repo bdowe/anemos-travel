@@ -19,7 +19,14 @@ ON CONFLICT (user_id) DO UPDATE SET
     budget            = COALESCE(sqlc.narg('budget'), traveler_preferences.budget),
     pace              = COALESCE(sqlc.narg('pace'), traveler_preferences.pace),
     interests         = COALESCE(sqlc.narg('interests'), traveler_preferences.interests),
-    home_airport      = COALESCE(sqlc.narg('home_airport'), traveler_preferences.home_airport),
+    -- Removing a home airport needs a signal COALESCE cannot carry: NULL means
+    -- "omitted, keep what's there", so without this flag the column could only
+    -- ever be set or replaced, never emptied. Writes a real NULL rather than an
+    -- empty-string sentinel, so "no home airport" has exactly one representation.
+    home_airport      = CASE
+        WHEN sqlc.arg('clear_home_airport')::boolean THEN NULL
+        ELSE COALESCE(sqlc.narg('home_airport'), traveler_preferences.home_airport)
+    END,
     profile_notes     = COALESCE(sqlc.narg('profile_notes'), traveler_preferences.profile_notes),
     work_style        = COALESCE(sqlc.narg('work_style'), traveler_preferences.work_style),
     fitness_routine   = COALESCE(sqlc.narg('fitness_routine'), traveler_preferences.fitness_routine),

@@ -53,7 +53,14 @@ ON CONFLICT (user_id) DO UPDATE SET
     budget            = COALESCE($2, traveler_preferences.budget),
     pace              = COALESCE($3, traveler_preferences.pace),
     interests         = COALESCE($4, traveler_preferences.interests),
-    home_airport      = COALESCE($5, traveler_preferences.home_airport),
+    -- Removing a home airport needs a signal COALESCE cannot carry: NULL means
+    -- "omitted, keep what's there", so without this flag the column could only
+    -- ever be set or replaced, never emptied. Writes a real NULL rather than an
+    -- empty-string sentinel, so "no home airport" has exactly one representation.
+    home_airport      = CASE
+        WHEN $11::boolean THEN NULL
+        ELSE COALESCE($5, traveler_preferences.home_airport)
+    END,
     profile_notes     = COALESCE($6, traveler_preferences.profile_notes),
     work_style        = COALESCE($7, traveler_preferences.work_style),
     fitness_routine   = COALESCE($8, traveler_preferences.fitness_routine),
@@ -73,6 +80,7 @@ type UpsertPreferencesParams struct {
 	FitnessRoutine   *string     `json:"fitness_routine"`
 	OutdoorIntensity *string     `json:"outdoor_intensity"`
 	Companions       *string     `json:"companions"`
+	ClearHomeAirport bool        `json:"clear_home_airport"`
 }
 
 func (q *Queries) UpsertPreferences(ctx context.Context, arg UpsertPreferencesParams) (TravelerPreference, error) {
@@ -87,6 +95,7 @@ func (q *Queries) UpsertPreferences(ctx context.Context, arg UpsertPreferencesPa
 		arg.FitnessRoutine,
 		arg.OutdoorIntensity,
 		arg.Companions,
+		arg.ClearHomeAirport,
 	)
 	var i TravelerPreference
 	err := row.Scan(

@@ -102,6 +102,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Used as the default origin when planning flights.';
 
   @override
+  String get prefsHomeAirportPickOne =>
+      'Pick an airport from the list, or clear the field.';
+
+  @override
   String get prefsProfileNotes => 'Profile notes';
 
   @override
