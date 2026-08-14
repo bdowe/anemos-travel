@@ -743,6 +743,11 @@ func buildRouter() *mux.Router {
 	// token IS the capability. GET = human clicks the footer link; POST = RFC
 	// 8058 List-Unsubscribe-Post one-click flow fired by the mail client.
 	api.HandleFunc("/unsubscribe/{token}", unsubscribeHandler).Methods("GET", "POST")
+	// Whether transactional mail can plausibly send, and whether the address it
+	// sends FROM belongs to this site (email_health.go). Public and boolean-only
+	// like its availability siblings; `make smoke` asserts it so a rebuilt .env
+	// can't silently point mail at a dead domain again.
+	api.HandleFunc("/email/availability", emailAvailabilityHandler).Methods("GET")
 	// Sign in with Google (specs/google-sso). Browser redirect flow + one-time
 	// code exchange; unauthenticated, so the credential routes take the strict tier.
 	api.HandleFunc("/auth/google/availability", googleAvailabilityHandler).Methods("GET")

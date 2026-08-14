@@ -172,6 +172,45 @@ req GET /health
 db_status="$(printf '%s' "$RESP_BODY" | jq -r '.database // empty' 2>/dev/null || true)"
 check "API GET /api/v1/health has .database==ok" "ok" "$db_status" "status=$LAST_STATUS"
 
+# ===== 1b. Mail sender sanity =================================================
+# Does the address we send FROM belong to the site we are? Prod once ran for two
+# weeks sending as @goldentempo.co while serving goldentempotravel.com — that
+# domain had been dropped from the mail provider, so every verification and
+# reset send was rejected, and nothing said so: /health stays "healthy", the
+# send errors never reach Sentry, and the inbox round-trip below is a human
+# check that nobody performed. A rebuilt .env reverted the fix.
+#
+# A domain match is not proof of deliverability (the domain could match and
+# still be unverified with the provider) — it is the drift check, and the
+# MANUAL CHECKS block still owns real delivery.
+step "1b. Mail sender"
+req GET /email/availability
+if [ "$LAST_STATUS" = "200" ] && printf '%s' "$RESP_BODY" | jq -e 'has("available") and has("sender_domain_check")' >/dev/null 2>&1; then
+  pass "GET /email/availability -> 200 with available+sender_domain_check"
+else
+  fail "GET /email/availability -> 200 with available+sender_domain_check" "status=$LAST_STATUS"
+fi
+mail_available="$(printf '%s' "$RESP_BODY" | jq -r '.available // false' 2>/dev/null || echo false)"
+sender_check="$(printf '%s' "$RESP_BODY" | jq -r '.sender_domain_check // empty' 2>/dev/null || true)"
+
+case "$sender_check" in
+  ok)
+    pass "sender domain matches this site"
+    ;;
+  mismatch)
+    fail "sender domain matches this site" \
+      "server reports a mismatch — SMTP_FROM's domain is not $( printf '%s' "$BASE_URL" | sed -e 's|^https\?://||' -e 's|/.*$||' ); transactional mail is probably being rejected"
+    ;;
+  skipped)
+    # Expected locally (no SMTP configured, localhost base URL). On prod this
+    # means mail is unconfigured, which is itself worth seeing.
+    skip "sender domain check — server skipped it (mail configured: $mail_available; localhost base URL?)"
+    ;;
+  *)
+    fail "sender domain check returns a known verdict" "got [$sender_check]"
+    ;;
+esac
+
 # ===== 2. Register + auth =====================================================
 step "2. Register + authenticate"
 TS="$(date +%s)"
@@ -573,7 +612,8 @@ ${C_BOLD}MANUAL CHECKS REMAINING (need real DNS/SMTP/crawler)${C_RESET}
       shows the OG title + image (proves the prod bot rewrite + crawler reach).
     - SMTP deliverability + full inbox round-trips: signup verification email,
       password-reset email, and the List-Unsubscribe one-click (RFC 8058) link
-      all arrive and work end to end.
+      all arrive and work end to end. (Step 1b now catches the sender pointing
+      at the WRONG domain; only a real inbox proves the right one can send.)
     - Legal review sign-off: step 9 auto-checks the draft-banner/noindex/TODO
       are gone, but a human still owns the "the copy is correct" sign-off.
     - Prod-only edge checks (skipped against the dev gateway): the security
