@@ -231,7 +231,7 @@ class _LandingHero extends StatelessWidget {
                     // Bare mark + white wordmark floating on the scrimmed
                     // photo, matching the auth screen's plateless mark. The
                     // lockup PNG's baked-in charcoal wordmark needed the
-                    // white badge plate; white Playfair text does not.
+                    // white badge plate; white Cinzel text does not.
                     BrandLogo.mark(size: narrow ? 52 : 96),
                     const SizedBox(height: AppSpacing.sm),
                     ExcludeSemantics(
@@ -240,11 +240,11 @@ class _LandingHero extends StatelessWidget {
                       child: Text(
                         AppInfo.name,
                         style: TextStyle(
-                          fontFamily: 'Playfair Display',
+                          fontFamily: 'Cinzel',
                           fontWeight: FontWeight.w600,
-                          fontSize: narrow ? 26 : 44,
+                          fontSize: narrow ? 24 : 40,
                           height: 1.1,
-                          letterSpacing: 0.5,
+                          letterSpacing: 1.5,
                           color: Colors.white,
                           // Guards the scrim's lighter top-right corner
                           // (alpha 0.35) against bright photo patches.

@@ -59,7 +59,7 @@ class BrandLogo extends StatelessWidget {
       fit: BoxFit.contain,
       semanticLabel: 'Anemos',
       // Degrade gracefully if the image asset fails to load: the mark falls
-      // back to a "GT" monogram, the lockup to the wordmark.
+      // back to an "A" monogram, the lockup to the wordmark.
       errorBuilder: (context, _, __) => _isLockup
           ? _WordmarkFallback(height: _height)
           : _MonogramFallback(size: _height, light: _isLight),
@@ -90,7 +90,7 @@ class _MonogramFallback extends StatelessWidget {
       child: Text(
         'A',
         style: TextStyle(
-          fontFamily: 'Playfair Display',
+          fontFamily: 'Cinzel',
           fontWeight: FontWeight.w600,
           fontSize: size * 0.42,
           height: 1,
@@ -117,7 +117,7 @@ class _WordmarkFallback extends StatelessWidget {
         Text(
           'Anemos',
           style: TextStyle(
-            fontFamily: 'Playfair Display',
+            fontFamily: 'Cinzel',
             fontWeight: FontWeight.w600,
             fontSize: height * 0.32,
             color: Colors.black87,
