@@ -14,16 +14,22 @@ import 'package:travel_route_planner/screens/trips_list_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trip_cache.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
+import 'package:travel_route_planner/widgets/section_header.dart';
 import 'package:travel_route_planner/widgets/stat_tile_row.dart';
 import 'package:travel_route_planner/widgets/travel_footprint_card.dart';
 
 import 'support/l10n_test_app.dart';
 
-/// The "Your travels" band on the trips list (specs/trips-page-insights): the
-/// lifetime stat tiles plus the footprint map, gated at 2+ OWNED trips —
+/// The "Your travels" section on the trips list (specs/trips-page-insights):
+/// the lifetime stat tiles plus the footprint map, gated at 2+ OWNED trips —
 /// shared-with-me is someone else's travel and carries none of the fields.
 /// The map sub-band is gated separately on having pins; with none the card
-/// degrades to header + tiles rather than showing an empty globe.
+/// degrades to a bare stats strip rather than showing an empty globe.
+///
+/// The "Your travels" title is a page-level SectionHeader ABOVE the card, not
+/// inside it — an unlabeled map over a stats panel is the "Up next" hero's
+/// silhouette, so an in-card label let the whole thing read as another
+/// upcoming trip. Header and card share one gate, so neither renders alone.
 ///
 /// Dates are relative to DateTime.now() so the all-time totals stay
 /// deterministic. Tile HTTP in widget tests 400s and is silently tolerated,
@@ -111,6 +117,16 @@ void main() {
     expect(find.text('Your travels'), findsOneWidget);
     expect(_inBand(find.byType(FlutterMap)), findsOneWidget);
     expect(_inBand(find.byType(StatTileRow)), findsOneWidget);
+    // The label sits ABOVE the card as a page-level section header, never
+    // inside it: an in-card label under the map is what let this read as
+    // another upcoming trip card.
+    expect(_inBand(find.text('Your travels')), findsNothing);
+    // ...and it renders as a peer of "Upcoming", not as card chrome.
+    expect(
+      find.ancestor(
+          of: find.text('Your travels'), matching: find.byType(SectionHeader)),
+      findsOneWidget,
+    );
   });
 
   testWidgets('one owned trip gets no band — even beside a shared trip',
@@ -147,10 +163,12 @@ void main() {
     expect(find.text('Your travels'), findsNothing);
   });
 
-  testWidgets('pin-less trips collapse the map but keep header and tiles',
+  testWidgets('pin-less trips collapse the map but keep the header and tiles',
       (WidgetTester tester) async {
     // Old server, or trips whose items are all unlocated: coordinates are
-    // never invented, so the card degrades to a labeled stats strip.
+    // never invented, so the card degrades to a bare stats strip. The section
+    // header is a sibling above it, so the tiles stay labeled either way —
+    // one of the reasons the label moved out of the card.
     await _pumpList(tester, trips: [
       _trip('t1', 'Lisbon Trip',
           start: _rel(10), end: _rel(13), cities: const ['Lisbon']),
