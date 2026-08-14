@@ -13,7 +13,11 @@ import 'support/l10n_test_app.dart';
 const _phases = [
   PlanPhase(id: 'dates', label: 'Set your travel dates'),
   PlanPhase(id: 'itinerary', label: 'Plan your days'),
-  PlanPhase(id: 'bookings', label: 'Book travel & stays'),
+  PlanPhase(
+    id: 'bookings',
+    label: 'Book travel & stays',
+    progress: PhaseProgress(done: 4, total: 11),
+  ),
   PlanPhase(id: 'schedule', label: 'Tidy up your schedule'),
   PlanPhase(id: 'confirm', label: 'Book everything'),
   PlanPhase(id: 'packing', label: 'Start your packing list'),
@@ -73,6 +77,25 @@ void main() {
             of: bookings,
             matching: find.text('EWR → Prague · departs Mon, Aug 24')),
         findsOneWidget);
+  });
+
+  // Sub-progress: eleven booking slots close one at a time under a single
+  // rung, so the rung carries the only number that moves while the ladder
+  // itself sits on "3 of 6". Rungs with no honest denominator show nothing.
+  testWidgets('a rung with a tally shows it, the others show none',
+      (tester) async {
+    await tester.pumpWidget(_app(const PlanProgressSheetBody(
+      progress: PlanProgress(done: 2, total: 6, phases: _phases),
+      currentStep: _step,
+    )));
+
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('plan-phase-bookings')),
+            matching: find.text('4 of 11')),
+        findsOneWidget);
+    // The header pill is the ladder's own counter; no other rung invents one.
+    expect(find.textContaining(' of '), findsNWidgets(2)); // "3 of 6" + "4 of 11"
   });
 
   testWidgets('a complete ladder is all checks and no step block',

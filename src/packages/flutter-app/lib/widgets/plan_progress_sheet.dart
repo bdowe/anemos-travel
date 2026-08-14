@@ -173,8 +173,18 @@ class _PhaseRow extends StatelessWidget {
     final showStep = s != null && s.kind != 'all_set';
     final detail = s?.detail;
 
+    // The rung's own tally ("4 of 11"), for rungs that have one. It is the
+    // only number that moves while a many-city trip sits on "3 of 6" —
+    // eleven booking slots close one at a time under a single rung. The rung
+    // label supplies the noun, so this reuses the bare "{n} of {total}" the
+    // eyebrow counter already speaks.
+    final tally = phase.progress;
+    final tallyLabel =
+        tally == null ? null : l10n.nextStepProgress(tally.done, tally.total);
+
     return Semantics(
-      label: '${phase.label}, $stateLabel',
+      label: [phase.label, stateLabel, if (tallyLabel != null) tallyLabel]
+          .join(', '),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Row(
@@ -215,6 +225,20 @@ class _PhaseRow extends StatelessWidget {
                 ],
               ),
             ),
+            if (tallyLabel != null) ...[
+              const SizedBox(width: AppSpacing.sm),
+              // Trailing and muted: it answers "how much is left here?", it is
+              // not the rung's headline. Excluded from semantics — the row's
+              // own label already reads it out in context.
+              ExcludeSemantics(
+                child: Text(
+                  tallyLabel,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

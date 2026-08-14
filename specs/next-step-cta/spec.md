@@ -65,6 +65,15 @@ straight to the right control.
       since prefix progress cannot speak for phases past the current one. A
       payload with no ladder (older server, cached response) simply renders the
       plain eyebrow.
+- [ ] The **bookings rung carries its own tally** ("4 of 11"): a many-city trip
+      closes eleven booking slots under one rung, so the ladder's "3 of 6"
+      cannot move for weeks and the rung's sub-progress is the only honest
+      signal of movement. Its units are the derived booking slots and a slot
+      counts done whichever way the walk closes it — checked off, or covered by
+      a real accommodation/segment — so the tally and the rung's completion
+      can never disagree. Rungs without an exact denominator (unscheduled
+      places, the book_trip aggregate) show no tally rather than a made-up one,
+      and a trip with no derived slots shows none at all.
 - [ ] The card's secondary entry names its destination — "Trip health", the
       title of the sheet it opens — rather than "View all", which beside a step
       counter promised the steps and delivered the findings list.
@@ -111,10 +120,12 @@ straight to the right control.
   (total is 6) plus `phases[]`, the ladder itself: `{id, label}` per rung, in
   order, ids stable across rewordings and locales (`dates`, `itinerary`,
   `bookings`, `schedule`, `confirm`, `packing`), labels localized. No per-rung
-  state ships: `done` already defines it (index < done complete, == done
-  current, > done later), so the client derives it in one place. Both omitted
-  for past trips. The step is identical whether or not `check_hours` is
-  requested.
+  DONE state ships: `done` already defines it (index < done complete, == done
+  current, > done later), so the client derives it in one place. A rung MAY
+  carry `progress: {done, total}` — its internal tally, present only where the
+  denominator is exact (today: the bookings rung's derived slots, absent when
+  the trip has none). Both omitted for past trips. The step is identical
+  whether or not `check_hours` is requested.
 - **Errors:** unchanged (404 for viewers/missing trips).
 
 ## Data Model

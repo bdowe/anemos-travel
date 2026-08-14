@@ -128,7 +128,28 @@ func mustLadder(t *testing.T, progress *PlanProgress) {
 		if p.Label == "" {
 			t.Fatalf("phase %d (%s) has no label", i, p.ID)
 		}
+		// Only the bookings rung has an exact denominator; every other rung
+		// stays silent rather than inventing one.
+		if p.Progress != nil && p.ID != planPhaseBookings {
+			t.Fatalf("phase %s must not carry a tally: %+v", p.ID, p.Progress)
+		}
+		if p.Progress != nil && (p.Progress.Total <= 0 || p.Progress.Done > p.Progress.Total) {
+			t.Fatalf("phase %s tally = %d/%d, want 0 <= done <= total, total > 0",
+				p.ID, p.Progress.Done, p.Progress.Total)
+		}
 	}
+}
+
+// bookingsTally returns the bookings rung's tally (nil when it has none).
+func bookingsTally(t *testing.T, progress *PlanProgress) *PhaseProgress {
+	t.Helper()
+	for _, p := range progress.Phases {
+		if p.ID == planPhaseBookings {
+			return p.Progress
+		}
+	}
+	t.Fatalf("no %q rung in %+v", planPhaseBookings, progress.Phases)
+	return nil
 }
 
 func TestNextStep_Undated(t *testing.T) {
@@ -848,4 +869,78 @@ func TestNextStep_LadderPhases(t *testing.T) {
 			t.Fatalf("phase %d (%s) is not translated: %q", i, wantIDs[i], es.Phases[i].Label)
 		}
 	}
+}
+
+// The bookings rung reports how much of ITSELF is done — the sub-progress a
+// 10-city trip needs, because "3 of 6" cannot move while eleven slots close
+// one by one (Brian, 2026-08-14). The tally comes from the same walk that
+// picks the step, so it counts a slot closed either way the walk closes it:
+// checked off, or claimed by a real accommodation/segment.
+func TestNextStep_BookingsTally(t *testing.T) {
+	base := nextStepFixture(t)
+
+	t.Run("counts closed slots anywhere in the list", func(t *testing.T) {
+		d := base
+		d.Accommodations, d.Segments = nil, nil // nothing claimed; boxes only
+		// Close the FIRST and LAST of the five slots: the walk must keep
+		// counting past the open one in between.
+		d.BookingTodos = bookSlots(walkTodos(t), "transport:ewr>>paris", "transport:lyon>>ewr")
+		step, progress := derive("en", nextStepNow, d)
+		mustStep(t, step, progress, "add_lodging", 2) // first open slot: stay in Paris
+		if tally := bookingsTally(t, progress); tally == nil || tally.Done != 2 || tally.Total != 5 {
+			t.Fatalf("tally = %+v, want 2/5", tally)
+		}
+	})
+
+	t.Run("a claimed slot counts as done", func(t *testing.T) {
+		d := base
+		// Not one box is checked, yet the fixture's two booked stays cover
+		// every Paris and Lyon night and its booked segment connects them —
+		// three slots CLAIMED. The tally must agree with the walk's own
+		// definition of closed, not with the checkboxes.
+		d.BookingTodos = walkTodos(t)
+		step, progress := derive("en", nextStepNow, d)
+		mustStep(t, step, progress, "add_transport", 2) // the unclaimed outbound leg
+		if tally := bookingsTally(t, progress); tally == nil || tally.Done != 3 || tally.Total != 5 {
+			t.Fatalf("tally = %+v, want 3/5 (2 stays + 1 leg claimed)", tally)
+		}
+	})
+
+	t.Run("a satisfied rung reads full", func(t *testing.T) {
+		d := base
+		d.BookingTodos = bookSlots(walkTodos(t),
+			"transport:ewr>>paris", "stay:paris", "transport:paris>>lyon",
+			"stay:lyon", "transport:lyon>>ewr")
+		step, progress := derive("en", nextStepNow, d)
+		// Phase 3 is satisfied, so the ladder has moved on — and the rung
+		// behind it reads 5/5 rather than going silent.
+		if step == nil || step.Kind == "add_lodging" || step.Kind == "add_transport" {
+			t.Fatalf("step = %+v, want the ladder past phase 3", step)
+		}
+		if tally := bookingsTally(t, progress); tally == nil || tally.Done != 5 || tally.Total != 5 {
+			t.Fatalf("tally = %+v, want 5/5", tally)
+		}
+	})
+
+	t.Run("no derived slots, no tally", func(t *testing.T) {
+		d := base
+		d.Accommodations[0].Booked = false // findings-fallback trip, phase 3 via findings
+		_, progress := derive("en", nextStepNow, d)
+		if tally := bookingsTally(t, progress); tally != nil {
+			t.Fatalf("tally = %+v, want none (no derived slots to count)", tally)
+		}
+	})
+
+	t.Run("rides along on an earlier phase", func(t *testing.T) {
+		d := base
+		d.Accommodations, d.Segments = nil, nil
+		d.Trip.StartDate = pgtype.Date{}
+		d.Trip.EndDate = pgtype.Date{}
+		d.BookingTodos = bookSlots(walkTodos(t), "transport:ewr>>paris")
+		step, progress := derive("en", nextStepNow, d)
+		mustStep(t, step, progress, "set_dates", 0)
+		if tally := bookingsTally(t, progress); tally == nil || tally.Done != 1 || tally.Total != 5 {
+			t.Fatalf("tally = %+v, want 1/5 even at phase 1", tally)
+		}
+	})
 }

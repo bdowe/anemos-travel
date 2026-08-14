@@ -206,9 +206,29 @@ class PlanPhase {
   final String id;
   final String label;
 
-  const PlanPhase({required this.id, required this.label});
+  /// The rung's own tally, when it has an exact denominator — today only the
+  /// bookings rung, whose units are the trip's derived booking slots. Null
+  /// means the rung has nothing honest to count, NOT zero.
+  final PhaseProgress? progress;
+
+  const PlanPhase({required this.id, required this.label, this.progress});
 
   factory PlanPhase.fromJson(Map<String, dynamic> json) =>
       _$PlanPhaseFromJson(json);
   Map<String, dynamic> toJson() => _$PlanPhaseToJson(this);
+}
+
+/// Progress INSIDE one ladder rung — e.g. 4 of 11 booking slots closed. This
+/// is what moves while the ladder's own "3 of 6" stands still on a many-city
+/// trip, so the sheet renders it on the rung it belongs to.
+@JsonSerializable()
+class PhaseProgress {
+  final int done;
+  final int total;
+
+  const PhaseProgress({required this.done, required this.total});
+
+  factory PhaseProgress.fromJson(Map<String, dynamic> json) =>
+      _$PhaseProgressFromJson(json);
+  Map<String, dynamic> toJson() => _$PhaseProgressToJson(this);
 }
