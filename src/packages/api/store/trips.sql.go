@@ -352,12 +352,20 @@ const listLatestTripsByOwner = `-- name: ListLatestTripsByOwner :many
 SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
        latest.title, latest.start_date, latest.end_date,
        latest.chat_id, latest.version_count,
-       COALESCE(c.cities, ARRAY[]::text[])::text[] AS cities
+       COALESCE(c.cities, ARRAY[]::text[])::text[] AS cities,
+       COALESCE(ic.item_count, 0)::int AS item_count,
+       COALESCE(bt.total, 0)::int AS booking_total,
+       COALESCE(bt.booked, 0)::int AS booking_booked,
+       EXISTS (
+         SELECT 1 FROM trip_collaborators tc
+         WHERE tc.owner_id = latest.user_id AND tc.chat_id = latest.chat_id
+           AND tc.revoked_at IS NULL
+       )::bool AS shared
 FROM (
   SELECT DISTINCT ON (COALESCE(chat_id, id::text))
          id, user_id, created_at, updated_at, title, start_date, end_date, chat_id,
          count(*) OVER (PARTITION BY COALESCE(chat_id, id::text)) AS version_count
-  FROM trips WHERE user_id = $1
+  FROM trips WHERE trips.user_id = $1
   ORDER BY COALESCE(chat_id, id::text), created_at DESC
 ) latest
 LEFT JOIN LATERAL (
@@ -371,25 +379,43 @@ LEFT JOIN LATERAL (
     GROUP BY COALESCE(NULLIF(ii.day_trip_from, ''), NULLIF(ii.city, ''))
   ) hub
 ) c ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS item_count
+  FROM itinerary_items ii2 WHERE ii2.trip_id = latest.id
+) ic ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS total, count(*) FILTER (WHERE b.booked) AS booked
+  FROM booking_todos b WHERE b.trip_id = latest.id
+) bt ON true
 ORDER BY latest.created_at DESC
 `
 
 type ListLatestTripsByOwnerRow struct {
-	ID           uuid.UUID   `json:"id"`
-	UserID       uuid.UUID   `json:"user_id"`
-	CreatedAt    time.Time   `json:"created_at"`
-	UpdatedAt    time.Time   `json:"updated_at"`
-	Title        string      `json:"title"`
-	StartDate    pgtype.Date `json:"start_date"`
-	EndDate      pgtype.Date `json:"end_date"`
-	ChatID       *string     `json:"chat_id"`
-	VersionCount int64       `json:"version_count"`
-	Cities       []string    `json:"cities"`
+	ID            uuid.UUID   `json:"id"`
+	UserID        uuid.UUID   `json:"user_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	Title         string      `json:"title"`
+	StartDate     pgtype.Date `json:"start_date"`
+	EndDate       pgtype.Date `json:"end_date"`
+	ChatID        *string     `json:"chat_id"`
+	VersionCount  int64       `json:"version_count"`
+	Cities        []string    `json:"cities"`
+	ItemCount     int32       `json:"item_count"`
+	BookingTotal  int32       `json:"booking_total"`
+	BookingBooked int32       `json:"booking_booked"`
+	Shared        bool        `json:"shared"`
 }
 
 // One row per chat group (latest version), with how many versions exist and the
 // trip's distinct hub cities (day_trip_from ?? city) in first-appearance order
 // for a location summary. Legacy trips with NULL chat_id stand alone.
+//
+// List-row enrichment invariant: the list payload stays ONE query — anything
+// added here must be a lateral / correlated subquery over indexed FKs (no
+// N+1, no per-trip HTTP fanout). Facts that can't be expressed that way
+// (trip health, budget totals) stay off the list. The shared EXISTS is the
+// HasActiveCollaborators predicate — keep the two in sync.
 func (q *Queries) ListLatestTripsByOwner(ctx context.Context, userID uuid.UUID) ([]ListLatestTripsByOwnerRow, error) {
 	rows, err := q.db.Query(ctx, listLatestTripsByOwner, userID)
 	if err != nil {
@@ -410,6 +436,10 @@ func (q *Queries) ListLatestTripsByOwner(ctx context.Context, userID uuid.UUID) 
 			&i.ChatID,
 			&i.VersionCount,
 			&i.Cities,
+			&i.ItemCount,
+			&i.BookingTotal,
+			&i.BookingBooked,
+			&i.Shared,
 		); err != nil {
 			return nil, err
 		}

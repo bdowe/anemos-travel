@@ -95,39 +95,51 @@ class UpNextTripCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: AppSpacing.xs),
-                          Row(
+                          // A Wrap, not a Row: three variable-length labels
+                          // (countdown, range, booking progress — es strings
+                          // run long) as loose-flex Row children would each
+                          // be capped at a third of the free width and ALL
+                          // ellipsize on phones. Wrapping to a second run
+                          // keeps every label whole; a single over-wide
+                          // label still ellipsizes via StatusPill's internal
+                          // Flexible (the flight_offer_card pattern).
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.xs,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              // White-tinted pill on the gradient, the
-                              // LiveTripCard treatment — not the trips list's
-                              // light-surface StatusPill. Flexible because
-                              // the label is variable-length ("Empieza en
-                              // 365 días"): a Row hands non-flex children
-                              // unbounded width, so the pill's internal
-                              // ellipsis only engages inside a flex slot —
-                              // without it, large a11y text scales overflow
-                              // the hero on narrow phones.
+                              // White-tinted pills on the gradient, the
+                              // LiveTripCard treatment — not the trips
+                              // list's light-surface StatusPill.
                               if (days != null)
-                                Flexible(
-                                  child: StatusPill.custom(
-                                    label: l10n.upNextStartsIn(days),
-                                    background:
-                                        Colors.white.withValues(alpha: 0.22),
-                                    foreground: Colors.white,
+                                StatusPill.custom(
+                                  label: l10n.upNextStartsIn(days),
+                                  background:
+                                      Colors.white.withValues(alpha: 0.22),
+                                  foreground: Colors.white,
+                                ),
+                              if (range != null)
+                                Text(
+                                  range,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color:
+                                        Colors.white.withValues(alpha: 0.85),
                                   ),
                                 ),
-                              if (days != null && range != null)
-                                const SizedBox(width: AppSpacing.sm),
-                              if (range != null)
-                                Flexible(
-                                  child: Text(
-                                    range,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: Colors.white
-                                          .withValues(alpha: 0.85),
-                                    ),
-                                  ),
+                              // Booking progress rides the hero too — it
+                              // replaced the plain card, so the promoted trip
+                              // must not lose its progress pill. Null/zero
+                              // hides it.
+                              if ((trip.bookingTotal ?? 0) > 0)
+                                StatusPill.custom(
+                                  label: l10n.tripsListBookedCount(
+                                      trip.bookingBooked ?? 0,
+                                      trip.bookingTotal!),
+                                  background:
+                                      Colors.white.withValues(alpha: 0.22),
+                                  foreground: Colors.white,
                                 ),
                             ],
                           ),

@@ -3062,6 +3062,24 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{1 city} other{{count} cities}}'**
   String tripCitiesCount(int count);
 
+  /// No description provided for @tripsListPlaces.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 place} other{{count} places}}'**
+  String tripsListPlaces(int count);
+
+  /// No description provided for @tripsListBookedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{booked}/{total} booked'**
+  String tripsListBookedCount(int booked, int total);
+
+  /// No description provided for @tripsListShared.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared'**
+  String get tripsListShared;
+
   /// No description provided for @upNextEyebrow.
   ///
   /// In en, this message translates to:

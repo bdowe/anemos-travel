@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
@@ -171,7 +173,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                       child: LiveTripCard(
                         trip: liveTrip,
-                        onTap: () => _openTrip(context, liveTrip.id),
+                        onTap: () => _openTrip(context, ref, liveTrip.id),
                       ),
                     ),
                   // In-progress AI conversations that haven't produced a
@@ -228,7 +230,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                       child: UpNextTripCard(
                         trip: hero,
-                        onTap: () => _openTrip(context, hero.id),
+                        onTap: () => _openTrip(context, ref, hero.id),
                       ),
                     ),
                   for (final t in upcomingCards)
@@ -311,10 +313,19 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
   }
 }
 
-void _openTrip(BuildContext context, String tripId) {
-  Navigator.of(context).push(
+Future<void> _openTrip(
+    BuildContext context, WidgetRef ref, String tripId) async {
+  await Navigator.of(context).push(
     locatedRoute(TripDetailScreen(tripId: tripId), tripDetailLocation(tripId)),
   );
+  // Re-sync on the way back: the detail screen mutates list-visible facts
+  // (booked flips, item/todo add/delete feed the booked-progress pill and
+  // item count) and this screen never remounts (IndexedStack keeps tabs
+  // alive), so the pop is the list's one refresh point — the counterpart of
+  // _patch's "keep list in sync" on the detail side. Fire-and-forget, same
+  // as pull-to-refresh.
+  ref.invalidate(sharedWithMeProvider);
+  unawaited(ref.read(tripsProvider.notifier).loadTrips());
 }
 
 void _openImport(BuildContext context) {
@@ -385,6 +396,40 @@ class _TripCard extends ConsumerWidget {
                 MetaChip(
                     icon: Icons.location_city_outlined,
                     label: l10n.tripCitiesCount(cityCount)),
+              // Booking progress: a STATE pill (StatusPill, label-carrying
+              // per its colorblind doctrine), tonal-green once everything is
+              // booked. Null fields (full views, old servers, stale offline
+              // snapshots) hide it — no local derivation.
+              if ((trip.bookingTotal ?? 0) > 0)
+                StatusPill.custom(
+                  label: l10n.tripsListBookedCount(
+                      trip.bookingBooked ?? 0, trip.bookingTotal!),
+                  background: trip.bookingBooked == trip.bookingTotal
+                      ? Theme.of(context).colorScheme.secondaryContainer
+                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foreground: trip.bookingBooked == trip.bookingTotal
+                      ? Theme.of(context).colorScheme.onSecondaryContainer
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              // Shared OUT (owner has co-planners) — a labeled pill, not a
+              // bare icon: the group leading icon already means "shared
+              // WITH me" on received trips.
+              if (trip.isOwner && trip.shared == true)
+                StatusPill.custom(
+                  label: l10n.tripsListShared,
+                  background:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foreground: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              // Item count is context, not state: plain text like the
+              // planned-with/shared-by attributions, so the row isn't pill
+              // soup.
+              if ((trip.itemCount ?? 0) > 0)
+                Text(
+                  l10n.tripsListPlaces(trip.itemCount!),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
               if (!trip.isOwner && (trip.ownerName ?? '').isNotEmpty)
                 Text(
                   trip.canEdit
@@ -421,7 +466,7 @@ class _TripCard extends ConsumerWidget {
           title: title,
           subtitle: subtitle,
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => _openTrip(context, trip.id),
+          onTap: () => _openTrip(context, ref, trip.id),
         ),
       );
     }
@@ -514,7 +559,7 @@ class _VersionList extends ConsumerWidget {
                           shortDate(versions[i].createdAt)),
                 ),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => _openTrip(context, versions[i].id),
+                onTap: () => _openTrip(context, ref, versions[i].id),
               ),
           ],
         );

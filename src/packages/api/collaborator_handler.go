@@ -232,6 +232,16 @@ func listSharedWithMeHandler(w http.ResponseWriter, r *http.Request) {
 			name := t.OwnerName
 			resp.OwnerName = &name
 		}
+		itemCount := int(t.ItemCount)
+		resp.ItemCount = &itemCount
+		// Booking state is editor-visible only — the same boundary
+		// getTripHandler enforces on the full view's booking todos.
+		if t.Role != "viewer" {
+			bookingTotal, bookingBooked :=
+				int(t.BookingTotal), int(t.BookingBooked)
+			resp.BookingTotal = &bookingTotal
+			resp.BookingBooked = &bookingBooked
+		}
 		out = append(out, resp)
 	}
 	writeJSON(w, http.StatusOK, out)

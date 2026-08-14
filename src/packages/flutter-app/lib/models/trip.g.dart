@@ -35,6 +35,9 @@ Trip _$TripFromJson(Map<String, dynamic> json) => Trip(
       ownerName: json['owner_name'] as String?,
       updatedByName: json['updated_by_name'] as String?,
       shared: json['shared'] as bool?,
+      itemCount: (json['item_count'] as num?)?.toInt(),
+      bookingTotal: (json['booking_total'] as num?)?.toInt(),
+      bookingBooked: (json['booking_booked'] as num?)?.toInt(),
       legs: (json['legs'] as List<dynamic>?)
           ?.map((e) => TripLegDto.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -61,5 +64,8 @@ Map<String, dynamic> _$TripToJson(Trip instance) => <String, dynamic>{
       'owner_name': instance.ownerName,
       'updated_by_name': instance.updatedByName,
       'shared': instance.shared,
+      'item_count': instance.itemCount,
+      'booking_total': instance.bookingTotal,
+      'booking_booked': instance.bookingBooked,
       'legs': instance.legs?.map((e) => e.toJson()).toList(),
     };

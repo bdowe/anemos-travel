@@ -1094,6 +1094,26 @@
       }
     }
   },
+  "tripsListPlaces": "{count, plural, one{1 place} other{{count} places}}",
+  "@tripsListPlaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripsListBookedCount": "{booked}/{total} booked",
+  "@tripsListBookedCount": {
+    "placeholders": {
+      "booked": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "tripsListShared": "Shared",
   "upNextEyebrow": "UP NEXT",
   "upNextStartsIn": "{days, plural, =0{Starts today} =1{Starts tomorrow} other{Starts in {days} days}}",
   "@upNextStartsIn": {

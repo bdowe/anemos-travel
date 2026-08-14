@@ -1728,6 +1728,25 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String tripsListPlaces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lugares',
+      one: '1 lugar',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String tripsListBookedCount(int booked, int total) {
+    return '$booked/$total reservados';
+  }
+
+  @override
+  String get tripsListShared => 'Compartido';
+
+  @override
   String get upNextEyebrow => 'PRÓXIMO VIAJE';
 
   @override
