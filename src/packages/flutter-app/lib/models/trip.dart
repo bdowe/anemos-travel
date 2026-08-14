@@ -50,8 +50,21 @@ class Trip {
   final String? updatedByName;
 
   /// True on an owner's trip that has active co-planners: the detail screen
-  /// polls for freshness. Editors poll based on [access] alone.
+  /// polls for freshness. Editors poll based on [access] alone. Also set on
+  /// list rows (the shared-out pill on trip cards).
   final bool? shared;
+
+  /// List-row enrichment (GET /trips laterals): total itinerary items and
+  /// booking-todo progress. Null on full views, old servers, and stale
+  /// offline snapshots — cards hide the chips rather than derive locally
+  /// (the server row is the one derivation for list display, like [cities]).
+  /// Booking fields are absent for viewer-role shared trips.
+  @JsonKey(name: 'item_count')
+  final int? itemCount;
+  @JsonKey(name: 'booking_total')
+  final int? bookingTotal;
+  @JsonKey(name: 'booking_booked')
+  final int? bookingBooked;
 
   /// Server-computed city legs (specs/server-leg-dates) — present on full
   /// trip views; absent on list responses, offline caches, and old
@@ -78,6 +91,9 @@ class Trip {
     this.ownerName,
     this.updatedByName,
     this.shared,
+    this.itemCount,
+    this.bookingTotal,
+    this.bookingBooked,
     this.legs,
   });
 

@@ -47,12 +47,18 @@ WHERE t.id = $1 AND (t.user_id = $2 OR c.id IS NOT NULL);
 
 -- name: ListLatestCollaboratedTripsForUser :many
 -- "Shared with you": one row per collaborated lineage (latest version), same
--- shape as ListLatestTripsByOwner plus the owner's display name.
+-- shape as ListLatestTripsByOwner plus the owner's display name. Carries the
+-- same item/booking count laterals (no shared EXISTS — a shared-with-me row
+-- is by definition shared); the HANDLER nils booking fields for viewers
+-- (the getTripHandler boundary), keeping this query role-agnostic.
 SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
        latest.title, latest.start_date, latest.end_date,
        latest.chat_id, latest.role, latest.version_count,
        COALESCE(c2.cities, ARRAY[]::text[])::text[] AS cities,
-       COALESCE(u.display_name, '')::text AS owner_name
+       COALESCE(u.display_name, '')::text AS owner_name,
+       COALESCE(ic.item_count, 0)::int AS item_count,
+       COALESCE(bt.total, 0)::int AS booking_total,
+       COALESCE(bt.booked, 0)::int AS booking_booked
 FROM (
   SELECT DISTINCT ON (t.chat_id)
          t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date,
@@ -75,4 +81,12 @@ LEFT JOIN LATERAL (
     GROUP BY COALESCE(NULLIF(ii.day_trip_from, ''), NULLIF(ii.city, ''))
   ) hub
 ) c2 ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS item_count
+  FROM itinerary_items ii2 WHERE ii2.trip_id = latest.id
+) ic ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS total, count(*) FILTER (WHERE b.booked) AS booked
+  FROM booking_todos b WHERE b.trip_id = latest.id
+) bt ON true
 ORDER BY latest.created_at DESC;

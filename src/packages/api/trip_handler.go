@@ -72,6 +72,16 @@ type TripResponse struct {
 	// the owner's client polls /status only when set (editors always poll).
 	UpdatedByName *string `json:"updated_by_name,omitempty"`
 	Shared        bool    `json:"shared,omitempty"`
+	// List-row enrichment (the laterals in ListLatestTripsByOwner /
+	// ListLatestCollaboratedTripsForUser): total itinerary items and
+	// booking-todo progress. Pointers so absence (full views, old servers)
+	// is distinct from a real zero — "0/9 booked" must serialize. List
+	// responses only; full views carry the real arrays and clients derive
+	// from those. Booking fields are nil'd for viewers on shared-with-me
+	// (the getTripHandler visibility boundary).
+	ItemCount     *int `json:"item_count,omitempty"`
+	BookingTotal  *int `json:"booking_total,omitempty"`
+	BookingBooked *int `json:"booking_booked,omitempty"`
 	// Legs is the server-computed city-leg view (specs/server-leg-dates):
 	// the rendered date span per contiguous city run, from computeTripLegs —
 	// the one derivation. Attached only on the full trip views (GET
@@ -395,6 +405,12 @@ func listTripsHandler(w http.ResponseWriter, r *http.Request) {
 		}, nil, nil, nil, nil)
 		resp.VersionCount = int(t.VersionCount)
 		resp.Cities = t.Cities
+		itemCount, bookingTotal, bookingBooked :=
+			int(t.ItemCount), int(t.BookingTotal), int(t.BookingBooked)
+		resp.ItemCount = &itemCount
+		resp.BookingTotal = &bookingTotal
+		resp.BookingBooked = &bookingBooked
+		resp.Shared = t.Shared
 		out = append(out, resp)
 	}
 	writeJSON(w, http.StatusOK, out)

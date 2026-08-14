@@ -192,7 +192,10 @@ SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
        latest.title, latest.start_date, latest.end_date,
        latest.chat_id, latest.role, latest.version_count,
        COALESCE(c2.cities, ARRAY[]::text[])::text[] AS cities,
-       COALESCE(u.display_name, '')::text AS owner_name
+       COALESCE(u.display_name, '')::text AS owner_name,
+       COALESCE(ic.item_count, 0)::int AS item_count,
+       COALESCE(bt.total, 0)::int AS booking_total,
+       COALESCE(bt.booked, 0)::int AS booking_booked
 FROM (
   SELECT DISTINCT ON (t.chat_id)
          t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date,
@@ -215,26 +218,40 @@ LEFT JOIN LATERAL (
     GROUP BY COALESCE(NULLIF(ii.day_trip_from, ''), NULLIF(ii.city, ''))
   ) hub
 ) c2 ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS item_count
+  FROM itinerary_items ii2 WHERE ii2.trip_id = latest.id
+) ic ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS total, count(*) FILTER (WHERE b.booked) AS booked
+  FROM booking_todos b WHERE b.trip_id = latest.id
+) bt ON true
 ORDER BY latest.created_at DESC
 `
 
 type ListLatestCollaboratedTripsForUserRow struct {
-	ID           uuid.UUID   `json:"id"`
-	UserID       uuid.UUID   `json:"user_id"`
-	CreatedAt    time.Time   `json:"created_at"`
-	UpdatedAt    time.Time   `json:"updated_at"`
-	Title        string      `json:"title"`
-	StartDate    pgtype.Date `json:"start_date"`
-	EndDate      pgtype.Date `json:"end_date"`
-	ChatID       *string     `json:"chat_id"`
-	Role         string      `json:"role"`
-	VersionCount int64       `json:"version_count"`
-	Cities       []string    `json:"cities"`
-	OwnerName    string      `json:"owner_name"`
+	ID            uuid.UUID   `json:"id"`
+	UserID        uuid.UUID   `json:"user_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	Title         string      `json:"title"`
+	StartDate     pgtype.Date `json:"start_date"`
+	EndDate       pgtype.Date `json:"end_date"`
+	ChatID        *string     `json:"chat_id"`
+	Role          string      `json:"role"`
+	VersionCount  int64       `json:"version_count"`
+	Cities        []string    `json:"cities"`
+	OwnerName     string      `json:"owner_name"`
+	ItemCount     int32       `json:"item_count"`
+	BookingTotal  int32       `json:"booking_total"`
+	BookingBooked int32       `json:"booking_booked"`
 }
 
 // "Shared with you": one row per collaborated lineage (latest version), same
-// shape as ListLatestTripsByOwner plus the owner's display name.
+// shape as ListLatestTripsByOwner plus the owner's display name. Carries the
+// same item/booking count laterals (no shared EXISTS — a shared-with-me row
+// is by definition shared); the HANDLER nils booking fields for viewers
+// (the getTripHandler boundary), keeping this query role-agnostic.
 func (q *Queries) ListLatestCollaboratedTripsForUser(ctx context.Context, userID uuid.UUID) ([]ListLatestCollaboratedTripsForUserRow, error) {
 	rows, err := q.db.Query(ctx, listLatestCollaboratedTripsForUser, userID)
 	if err != nil {
@@ -257,6 +274,9 @@ func (q *Queries) ListLatestCollaboratedTripsForUser(ctx context.Context, userID
 			&i.VersionCount,
 			&i.Cities,
 			&i.OwnerName,
+			&i.ItemCount,
+			&i.BookingTotal,
+			&i.BookingBooked,
 		); err != nil {
 			return nil, err
 		}
