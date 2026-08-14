@@ -65,6 +65,39 @@ actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
   deliberately-unlocalized `writeJSONError` doctrine (`i18n.go`). The real fix
   is an app-wide move to `ApiException` with machine-readable codes.
 
+## 2026-08-13 — plan-chat dogfooding (working-indicator arc leftovers, #370)
+
+Open gaps found while fixing "chat doesn't clearly indicate it's loading"
+(specs/chat-working-indicator, PR #370) and deliberately left out of that lane:
+
+- **[app] OPEN — composer loses its only in-flight cue while typing:** the
+  stop button shows only while the composer is empty
+  (`showStop = isStreaming && composerEmpty && !draftAttachments`), so typing
+  a queue-ahead follow-up flips it back to Send; if the tail is also scrolled
+  away there is then zero on-screen evidence a turn is running. Candidate: a
+  small spinner beside the composer (or in the input border) tied to
+  isStreaming alone.
+- **[app] OPEN — no app-level busy cue when the refine panel is closed
+  mid-stream:** closing the trip-detail refine dock (or collapsing the narrow
+  sheet to its 0.15 min extent) hides the chat while the turn keeps running —
+  the FAB is a static chat icon with no busy state, and nothing else in the
+  app watches isStreaming.
+- **[app] OPEN — a silently dropped stream is indistinguishable from
+  success:** /plan has no end-of-turn event. The `done` event is not one
+  despite the name — `create_itinerary` alone emits it
+  (`plan_tool_registry.go`, handled as "itinerary ready" in
+  `plan_provider.dart`), so a plain conversational turn ends by the socket
+  simply closing. A socket that dies without an `error` frame therefore exits
+  the client loop normally and commits the partial reply as if finished
+  (relevant for 15–45s flight searches behind proxy idle timeouts). Wants a
+  `turn_done`-style terminator — a NEW event, since `done` is spoken for —
+  plus client stall detection, and pairs with the SDK's silent MaxRetries=2
+  re-issues, which can stretch the quiet window further.
+- **[app] OPEN — `stays`/`transport` SSE events are dropped by the client:**
+  `suggest_stays` / `suggest_transport` emit side events with no case in the
+  provider switch, so those tools produce a chip that vanishes with no result
+  artifact at all.
+
 ## 2026-08-13 — trip-detail dogfooding (Bookings tab counter → pill)
 
 - **[app] Friction → fixed (counter styling unified):** with the wear/pack
