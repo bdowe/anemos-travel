@@ -15,7 +15,9 @@ import 'package:travel_route_planner/widgets/trip_refine_panel.dart';
 import 'support/l10n_test_app.dart';
 
 /// Mobile declutter, header half: on narrow the meta row drops the Refine
-/// button (it becomes an app-bar sparkle) and the dates chip humanizes.
+/// button (it becomes an app-bar sparkle). The dates chip humanizes at BOTH
+/// widths — it read raw ISO on wide until 2026-08-14, so the two assertions
+/// below are deliberately the same string.
 class _FakeTripsApiService extends TripsApiService {
   final Trip trip;
   _FakeTripsApiService(this.trip) : super(ApiClient(baseUrl: 'http://test'));
@@ -100,11 +102,15 @@ void main() {
     expect(find.byIcon(Icons.auto_awesome), findsNothing);
   });
 
-  testWidgets('wide keeps the header button and raw ISO dates; no sparkle',
+  testWidgets('wide keeps the header button; dates humanize there too',
       (tester) async {
     await _pump(tester, _trip(), surface: const Size(1200, 900));
     expect(find.text('Refine with AI'), findsOneWidget);
-    expect(find.text('2026-09-01 → 2026-09-03'), findsOneWidget);
+    // Same string as narrow: the chip's format is a property of the trip, not
+    // of the viewport. Wide showed the raw ISO pair until 2026-08-14 purely
+    // because only narrow was ever fixed.
+    expect(find.text('Sep 1 – Sep 3'), findsOneWidget);
+    expect(find.text('2026-09-01 → 2026-09-03'), findsNothing);
     expect(find.byTooltip('Refine with AI'), findsNothing);
   });
 

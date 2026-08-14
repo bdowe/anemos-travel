@@ -4762,13 +4762,23 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           children: [
             ActionChip(
               avatar: const Icon(Icons.event, size: 16),
-              // Narrow: humanized short range ("Jul 20 – Jul 27") — the raw
-              // ISO pair is ~200px and forces the meta row to wrap.
+              // Humanized short range ("Jul 20 – Jul 27") at every width, and
+              // localized with it (tripDateRange goes through the app locale,
+              // so Spanish reads "20 jul – 27 jul"). Narrow got this first,
+              // because the raw ISO pair is ~200px and forced the meta row to
+              // wrap; wide simply kept the machine form it started with, which
+              // left the SAME trip reading "2026-07-21 → 2026-07-22" on desktop
+              // and "Jul 21 – Jul 22" on a phone. Width is not a reason to
+              // show a different date format — and the layout that has more
+              // room was the one showing the denser string.
+              //
+              // The ISO pair survives only as the unparseable-date fallback:
+              // tripDateRange returns null there, and echoing back whatever is
+              // stored beats an empty chip on a trip whose dates are the thing
+              // you came to fix.
               label: Text(hasDates
-                  ? (_narrow
-                      ? (tripDateRange(trip.startDate, trip.endDate) ??
-                          '${trip.startDate} → ${trip.endDate}')
-                      : '${trip.startDate} → ${trip.endDate}')
+                  ? (tripDateRange(trip.startDate, trip.endDate) ??
+                      '${trip.startDate} → ${trip.endDate}')
                   : l10n.tripAddDates),
               onPressed: (_isOffline || !trip.canEdit) ? null : _editDates,
             ),
