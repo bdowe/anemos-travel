@@ -167,3 +167,32 @@ precisely the "five ways to group a leg" failure the doc was written after.
   row — in-app flight search / Ferryhopper / ground link — because the row
   already knows how; stay steps keep the seeded chat, where suggesting places
   to sleep is genuinely better than a raw search page.
+
+### Review corrections (2026-08-14, adversarial pass)
+
+Four defects the first cut of the walk shipped with, all now fixed and pinned:
+
+- **The walk can only speak for nights a slot spans.** A leg range ends at its
+  last scheduled item, so a trip's trailing nights can belong to NO slot —
+  nobody ever asked about them, which is the opposite of "booked elsewhere".
+  A satisfied walk now surfaces the lodging finding for *unslotted* nights
+  only (`firstUnslottedLodging` / `slotSpansNight`), so "You're all set" can
+  never contradict the health sheet. The never-mix rule still holds exactly
+  where it was designed to: a night a slot does span is the walk's to answer.
+- **Grouping placeholders are not places.** `kOtherPlacesLabel` ("Other
+  places", never translated by contract) and the server's own "Itinerary" hub
+  reached the card as a city — and, worse, the canonical-English seed, sending
+  the agent to find hotels in a city that does not exist. `namesAPlace` now
+  rejects both, matching the silence `checkLodging` / `checkTransit` already
+  keep for a hubless group.
+- **The booked flip is the card's advance signal** — phase 3 walks the booked
+  flags — but `_setRowBooked` never re-read the review, so the card kept
+  recommending the slot just checked off. It now invalidates after the server
+  accepts (never on a rolled-back optimistic flip). Pinned by a mutation-
+  verified widget test.
+- **The button must name what the tap does.** The label was derived from
+  `fix.mode` alone, but `checkTransit` always sets a mode, so a *fallback*
+  step promised "Find flights" and opened a chat. The screen now injects
+  `transportHandsOff` from the same lookup the tap performs, and `_setRowMode`
+  invalidates the review (the sync's `_sameTodoState` gate compares only
+  key+booked, so a mode-only edit never re-read it).

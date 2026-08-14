@@ -10,18 +10,21 @@ import 'package:travel_route_planner/models/flight_search_response.dart';
 import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/models/itinerary_item.dart';
 import 'package:travel_route_planner/models/trip_finding.dart';
+import 'package:travel_route_planner/providers/booking_todos_provider.dart';
 import 'package:travel_route_planner/providers/ferries_provider.dart';
 import 'package:travel_route_planner/providers/flights_provider.dart';
 import 'package:travel_route_planner/providers/plan_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/providers/trip_review_provider.dart';
 import 'package:travel_route_planner/services/api_client.dart';
+import 'package:travel_route_planner/services/booking_todos_api_service.dart';
 import 'package:travel_route_planner/services/ferry_api_service.dart';
 import 'package:travel_route_planner/services/flights_api_service.dart';
 import 'package:travel_route_planner/services/plan_service.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/services/trip_review_api_service.dart';
 import 'package:travel_route_planner/screens/flight_search_screen.dart';
+import 'package:travel_route_planner/widgets/booking_todo_card.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
 import 'support/l10n_test_app.dart';
@@ -72,6 +75,31 @@ class _FakeFlightsApiService extends FlightsApiService {
 
   @override
   Future<List<Airport>> nearestAirports(double lat, double lng) async => [];
+}
+
+/// Accepts the booked flip so the card's advance signal can be observed; the
+/// derived sync fails (offline test env) exactly as it does in the other
+/// trip-detail suites, leaving the fixture's own todos in place.
+class _FakeBookingTodosApiService extends BookingTodosApiService {
+  final List<(String, bool)> bookedCalls = [];
+  _FakeBookingTodosApiService() : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<List<BookingTodo>> syncTodos(
+          String tripId, List<Map<String, dynamic>> derived) async =>
+      throw Exception('offline test env');
+
+  @override
+  Future<BookingTodo> setBooked(
+      String tripId, String todoId, bool booked) async {
+    bookedCalls.add((todoId, booked));
+    return BookingTodo(
+        id: todoId,
+        kind: 'transport',
+        todoKey: 'transport:paris>>lyon',
+        title: 'Paris → Lyon',
+        booked: booked);
+  }
 }
 
 /// Empty ferry results: the ferry handoff degrades to the search-failed
@@ -245,6 +273,8 @@ Future<void> _pump(
         // airports on mount, the ferry path fetches the booking link on tap.
         flightsApiServiceProvider.overrideWithValue(_FakeFlightsApiService()),
         ferryApiServiceProvider.overrideWithValue(_FakeFerryApiService()),
+        bookingTodosApiServiceProvider
+            .overrideWithValue(_FakeBookingTodosApiService()),
         tripRefineProvider.overrideWith((ref, tripId) => PlanNotifier(
             _ScriptedPlanService(planEvents), ApiClient(),
             tripId: tripId)),
@@ -509,5 +539,29 @@ void main() {
     // Verbatim server seed (canonical English), shown as the localized title.
     expect(messages.single.content, _transportSeed);
     expect(messages.single.displayLabel, 'Book your flight to Lyon');
+  });
+
+  // Ticking a slot's checkbox IS the card's advance signal: phase 3 walks the
+  // booked flags, so the flip must re-read the review. Without the
+  // invalidation the card keeps recommending the leg the traveler just booked.
+  testWidgets('checking off a booking row advances the card', (tester) async {
+    _useViewport(tester);
+    final review = _FakeReviewApiService(
+      _transportReview(mode: 'flight'),
+      resolved: _lodgingReview(),
+    );
+    await _pump(tester,
+        trip: _trip(items: _twoCityItems(), bookingTodos: [_parisLyonLeg()]),
+        review: review);
+
+    expect(find.text('Book your flight to Lyon'), findsOneWidget);
+    final callsBefore = review.calls;
+
+    final row = find.widgetWithText(BookingTodoRow, 'Paris → Lyon');
+    await tester.tap(find.descendant(of: row, matching: find.byType(Checkbox)));
+    await tester.pumpAndSettle();
+
+    expect(review.calls, greaterThan(callsBefore));
+    expect(find.text('Book a place to stay'), findsOneWidget);
   });
 }

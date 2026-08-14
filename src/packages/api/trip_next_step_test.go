@@ -378,6 +378,83 @@ func TestNextStep_WalkNeverFallsThroughToFindings(t *testing.T) {
 	}
 }
 
+// The walk only speaks for nights a slot actually spans. A trip whose leg
+// ranges stop short (the client ends a range at its last scheduled item)
+// leaves trailing nights in NO slot — nobody asked about them, so the card
+// must not claim the trip is all set while Trip Health says three nights have
+// no lodging.
+func TestNextStep_WalkUnslottedNightsStillSurface(t *testing.T) {
+	d := nextStepFixture(t)
+	// Stretch the trip two nights past the last slot's checkout.
+	d.Trip.EndDate = dateVal(t, "2026-09-06")
+	d.BookingTodos = bookSlots(walkTodos(t),
+		"transport:ewr>>paris", "stay:paris", "transport:paris>>lyon",
+		"stay:lyon", "transport:lyon>>ewr")
+
+	findings := reviewTrip(context.Background(), "en", d, reviewOptions{}, reviewDeps{})
+	if firstFindingIn(findings, "lodging") == nil {
+		t.Fatal("fixture precondition: the trailing nights should be flagged")
+	}
+	step, progress := deriveNextStep("en", nextStepNow, d, findings)
+	mustStep(t, step, progress, "add_lodging", 2)
+	if step.Fix == nil || step.Fix.CheckIn == nil || *step.Fix.CheckIn != "2026-09-04" {
+		t.Fatalf("fix should prefill the UNSLOTTED nights, got %+v", step.Fix)
+	}
+
+	// Cover them for real and the walk is genuinely satisfied.
+	d.Accommodations = append(d.Accommodations, store.Accommodation{
+		ID: uuid.New(), Name: "Lyon Riverside Hotel", Booked: true,
+		CheckIn: dateVal(t, "2026-09-04"), CheckOut: dateVal(t, "2026-09-06")})
+	step, progress = derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "all_set", planLadderTotal)
+}
+
+// The grouping placeholders are not places: a slot named for one keeps the
+// generic copy and an endpoint-less fix, so neither the card nor the
+// canonical-English seed ever tells anyone to book a hotel in "Other places".
+func TestNextStep_WalkPlaceholderLabelsAreNotCities(t *testing.T) {
+	t.Run("stay", func(t *testing.T) {
+		d := nextStepFixture(t)
+		d.Accommodations = nil
+		d.BookingTodos = []store.BookingTodo{
+			{ID: uuid.New(), Kind: "stay", TodoKey: "stay:other places",
+				Title: "Stay in Other places", Auto: true,
+				DepartDate: dateVal(t, "2026-09-01"), ReturnDate: dateVal(t, "2026-09-03")},
+		}
+		step, progress := derive("en", nextStepNow, d)
+		mustStep(t, step, progress, "add_lodging", 2)
+		if step.Title != "Book a place to stay" {
+			t.Fatalf("title = %q, want the city-less fallback", step.Title)
+		}
+		if step.Fix.City != nil {
+			t.Fatalf("fix city = %q, want none", *step.Fix.City)
+		}
+		if strings.Contains(step.SeedPrompt, "Other places") {
+			t.Fatalf("seed must not name the placeholder:\n%s", step.SeedPrompt)
+		}
+	})
+
+	t.Run("transport", func(t *testing.T) {
+		d := nextStepFixture(t)
+		d.BookingTodos = []store.BookingTodo{
+			{ID: uuid.New(), Kind: "transport", TodoKey: "transport:paris>>other places",
+				Title: "Paris → Other places", Provider: strp("google_flights"), Auto: true,
+				DepartDate: dateVal(t, "2026-09-03")},
+		}
+		step, progress := derive("en", nextStepNow, d)
+		mustStep(t, step, progress, "add_transport", 2)
+		if step.Title != "Add transport between cities" {
+			t.Fatalf("title = %q, want the generic fallback", step.Title)
+		}
+		if step.Fix.Origin != nil || step.Fix.Destination != nil {
+			t.Fatalf("fix should carry no endpoints, got %+v", step.Fix)
+		}
+		if strings.Contains(step.SeedPrompt, "Other places") {
+			t.Fatalf("seed must not name the placeholder:\n%s", step.SeedPrompt)
+		}
+	})
+}
+
 // Copy and fix follow the slot's mode: the per-leg override wins, else the
 // provider the sync stored implies it.
 func TestNextStep_WalkModeVariants(t *testing.T) {
@@ -525,11 +602,13 @@ func TestNextStep_WalkSlotFallbacks(t *testing.T) {
 		}
 		step, progress := derive("en", nextStepNow, d)
 		// A zero-night stop needs no lodging, so the slot is vacuously claimed
-		// and the walk never asks the traveler to book it. The row itself is
-		// still an open checkbox, so the phase-5 aggregate keeps listing it —
-		// that count is motivational by design (specs/next-step-cta) and its
-		// claim rules are deliberately untouched by the walk.
-		mustStep(t, step, progress, "book_trip", 4)
+		// and the walk never asks the traveler to book it — but it also spans
+		// no night, so the trip's real nights stay unslotted and surface
+		// through the lodging finding rather than being masked.
+		mustStep(t, step, progress, "add_lodging", 2)
+		if step.Fix == nil || step.Fix.CheckIn == nil || *step.Fix.CheckIn != "2026-09-01" {
+			t.Fatalf("fix should cover the unslotted nights, got %+v", step.Fix)
+		}
 	})
 
 	t.Run("single-night stay uses the singular copy", func(t *testing.T) {

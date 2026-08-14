@@ -1193,6 +1193,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
       return;
     }
+    // The booked flip IS the Next Step card's advance signal: phase 3 walks
+    // the booking slots and phase 5 aggregates them, so both read the flag
+    // this call just wrote (specs/next-step-cta). Only after the server
+    // accepted it — a rolled-back optimistic flip must not move the card.
+    if (mounted) _invalidateReview();
+
     // Budget autopopulate rides the flip only AFTER the server accepted it
     // (a rolled-back optimistic flip must never create or delete money).
     if (!mounted) return;
@@ -1476,6 +1482,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       setState(() => _bookingTodos = [
             for (final t in _bookingTodos) t.id == updated.id ? updated : t
           ]);
+      // A walk-derived Next Step reads this row's mode for its copy and its
+      // action label (specs/next-step-cta), and the sync below only
+      // invalidates when the DERIVED set changed — which a mode-only edit
+      // does not. Re-read the review explicitly so card and row agree.
+      _invalidateReview();
       final trip = _trip;
       if (trip != null) await _syncBookingTodos(trip);
     } catch (e) {
@@ -4305,6 +4316,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           progress: review?.planProgress,
           compact: _narrow,
           enabled: !_isOffline,
+          // Same lookup the tap performs, so the label can never promise a
+          // handoff the action won't make (specs/next-step-cta).
+          transportHandsOff: _transportHandsOff(step),
           onPrimary: allSet ? null : () => _onNextStepAction(trip, step),
           onViewAll: () => _openHealthSheet(trip),
           onDismiss:
@@ -5817,6 +5831,17 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// lowercasing both sides absorbs the round trip. Null when the fix isn't a
   /// transport one, an endpoint is missing (an older server's fix-less step),
   /// or no synced todo matches; the caller falls back to the seeded chat.
+  /// Whether a transport step's tap will hand off to a provider rather than
+  /// open the seeded chat — the SAME resolution [_onNextStepAction] performs,
+  /// so the card's label can never promise a handoff the action won't make.
+  /// Building the callback is side-effect free (the tracking rides inside the
+  /// returned closure), so it is safe to ask during build.
+  bool _transportHandsOff(NextStep step) {
+    if (step.kind != 'add_transport') return false;
+    final todo = _transportTodoForFix(step.fix);
+    return todo != null && _openCallbackFor(todo) != null;
+  }
+
   BookingTodo? _transportTodoForFix(FindingFix? fix) {
     if (fix == null || fix.action != 'add_transport') return null;
     final origin = fix.origin;

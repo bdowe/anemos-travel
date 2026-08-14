@@ -120,14 +120,32 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 	// before stays, per destination. Open = unbooked and not claimed by a
 	// matching server row (bookingSlotClaimed). Trips with no derived slots
 	// (import/MCP/agent-created, never opened in the app) fall back to the
-	// old findings behavior in this same progress slot. Never mixed: a
-	// satisfied walk does NOT fall through to the findings — a checked
-	// checkbox with no accommodation/segment row is complete by design (the
-	// checkbox is the traveler's booked-elsewhere assertion; Trip Health
-	// keeps full fidelity on the same gap).
+	// old findings behavior in this same progress slot. What a slot DOES
+	// cover, the walk answers alone: a checked checkbox with no
+	// accommodation/segment row is complete by design — the traveler's
+	// booked-elsewhere assertion — and never re-raised from the findings
+	// (Trip Health keeps full fidelity on the same gap). The one thing a
+	// satisfied walk still defers to the findings is a night no slot spans
+	// at all; see below.
 	if slot, walked := nextOpenBookingSlot(data); walked {
 		if slot != nil {
 			return bookingSlotStep(locale, data, *slot), progress(2)
+		}
+		// The walk is satisfied — but it can only speak for nights some slot
+		// actually spans. A leg range ends at its last scheduled item, so
+		// trailing nights of a trip can belong to NO slot: nobody ever asked
+		// about them, which is the opposite of "booked elsewhere". Surface
+		// those (and only those) from the lodging findings, so "You're all
+		// set" can never contradict the health sheet.
+		if f := firstUnslottedLodging(data, findings); f != nil {
+			return &NextStep{
+				Kind:       "add_lodging",
+				Title:      tr(locale, "review.next.addLodging.title"),
+				Detail:     f.Message,
+				Day:        f.Day,
+				Fix:        f.Fix,
+				SeedPrompt: seedAddLodging(data, f.Fix),
+			}, progress(2)
 		}
 	} else {
 		// Findings fallback (first = earliest day thanks to reviewTrip's
@@ -380,6 +398,50 @@ func stayNightsCovered(accs []store.Accommodation, from, to time.Time) bool {
 	return true
 }
 
+// slotSpansNight reports whether some derived stay slot spans this night —
+// i.e. whether the walk has an opinion about it at all. Checkout-exclusive,
+// the same convention as stayCoversNight.
+func slotSpansNight(todos []store.BookingTodo, night time.Time) bool {
+	for _, t := range todos {
+		if !strings.HasPrefix(t.TodoKey, "stay:") || !t.DepartDate.Valid || !t.ReturnDate.Valid {
+			continue
+		}
+		if !night.Before(t.DepartDate.Time) && night.Before(t.ReturnDate.Time) {
+			return true
+		}
+	}
+	return false
+}
+
+// firstUnslottedLodging returns the first lodging finding covering at least
+// one night NO stay slot spans. Nights a slot does span belong to the walk —
+// a checked slot there is the traveler's booked-elsewhere assertion and must
+// not be re-raised — so only the unrepresented ones fall through. The finding
+// carries its own night range on the fix (checkLodging fills check_in /
+// check_out), which is what makes this a range test and not a day guess.
+func firstUnslottedLodging(d exportData, findings []Finding) *Finding {
+	for i := range findings {
+		f := &findings[i]
+		if f.Category != "lodging" || f.Fix == nil || f.Fix.CheckIn == nil || f.Fix.CheckOut == nil {
+			continue
+		}
+		from, err := time.Parse(dateLayout, *f.Fix.CheckIn)
+		if err != nil {
+			continue
+		}
+		to, err := time.Parse(dateLayout, *f.Fix.CheckOut)
+		if err != nil {
+			continue
+		}
+		for night := from; night.Before(to); night = night.AddDate(0, 0, 1) {
+			if !slotSpansNight(d.BookingTodos, night) {
+				return f
+			}
+		}
+	}
+	return nil
+}
+
 // bookingSlotStep renders the walk's winning slot as a NextStep, dispatching
 // on the todo_key PREFIX — the same field nextOpenBookingSlot filtered on, so
 // the filter and this branch structurally cannot disagree (Kind is a separate
@@ -399,18 +461,31 @@ func bookingSlotStep(locale string, d exportData, t store.BookingTodo) *NextStep
 // the generic endpoint-less copy.
 func legEndpoints(t store.BookingTodo) (origin, dest string, ok bool) {
 	if o, d, found := strings.Cut(t.Title, " → "); found {
-		if o, d = strings.TrimSpace(o), strings.TrimSpace(d); o != "" && d != "" {
+		if o, d = strings.TrimSpace(o), strings.TrimSpace(d); namesAPlace(o) && namesAPlace(d) {
 			return o, d, true
 		}
 	}
 	if key := strings.TrimPrefix(t.TodoKey, "transport:"); key != t.TodoKey {
 		if o, d, found := strings.Cut(key, ">>"); found {
-			if o, d = strings.TrimSpace(o), strings.TrimSpace(d); o != "" && d != "" {
+			if o, d = strings.TrimSpace(o), strings.TrimSpace(d); namesAPlace(o) && namesAPlace(d) {
 				return o, d, true
 			}
 		}
 	}
 	return "", "", false
+}
+
+// namesAPlace rejects the empty string and the two grouping placeholders that
+// stand in for "we could not resolve a city": the server's own "Itinerary"
+// hub and the client's kOtherPlacesLabel (trip_legs.dart — documented as
+// never translated, because screens localize it at render time). Neither is
+// somewhere a traveler can sleep or fly to, so a slot naming one keeps the
+// generic copy and an endpoint-less fix — the same silence checkLodging and
+// checkTransit keep for a hubless group, and it also keeps the placeholder
+// out of the canonical-English seed, where it would send the agent hunting
+// for hotels in a city called "Other places".
+func namesAPlace(s string) bool {
+	return s != "" && !strings.EqualFold(s, "Itinerary") && !strings.EqualFold(s, "Other places")
 }
 
 // staySlotCity extracts a stay slot's city: the "Stay in <Label>" title keeps
@@ -419,12 +494,14 @@ func legEndpoints(t store.BookingTodo) (origin, dest string, ok bool) {
 // keeps the generic addLodging title).
 func staySlotCity(t store.BookingTodo) string {
 	if c := strings.TrimPrefix(t.Title, "Stay in "); c != t.Title {
-		if c = strings.TrimSpace(c); c != "" {
+		if c = strings.TrimSpace(c); namesAPlace(c) {
 			return c
 		}
 	}
 	if c := strings.TrimPrefix(t.TodoKey, "stay:"); c != t.TodoKey {
-		return strings.TrimSpace(c)
+		if c = strings.TrimSpace(c); namesAPlace(c) {
+			return c
+		}
 	}
 	return ""
 }

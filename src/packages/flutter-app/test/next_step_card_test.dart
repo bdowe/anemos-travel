@@ -140,6 +140,7 @@ void main() {
   testWidgets('add_transport with a flight fix labels Find flights',
       (tester) async {
     await tester.pumpWidget(_app(NextStepCard(
+      transportHandsOff: true,
       step: const NextStep(
         kind: 'add_transport',
         title: 'Book your flight to Lyon',
@@ -161,6 +162,7 @@ void main() {
   testWidgets('add_transport with a ferry fix labels Find ferries',
       (tester) async {
     await tester.pumpWidget(_app(NextStepCard(
+      transportHandsOff: true,
       step: const NextStep(
         kind: 'add_transport',
         title: 'Book your ferry to Naxos',
@@ -182,6 +184,7 @@ void main() {
   testWidgets('add_transport with no mode keeps the generic label',
       (tester) async {
     await tester.pumpWidget(_app(NextStepCard(
+      transportHandsOff: true,
       step: const NextStep(
         kind: 'add_transport',
         title: 'Book your travel to Lyon',
@@ -211,5 +214,29 @@ void main() {
 
     expect(find.text('Find options'), findsOneWidget);
     expect(find.byIcon(Icons.directions_transit_outlined), findsOneWidget);
+  });
+
+  // The findings fallback (no synced row behind the step) still carries a
+  // mode on its fix — checkTransit always sets one — but its tap opens the
+  // seeded chat, so the button must not promise "Find flights".
+  testWidgets('add_transport that cannot hand off keeps the generic label',
+      (tester) async {
+    await tester.pumpWidget(_app(NextStepCard(
+      step: const NextStep(
+        kind: 'add_transport',
+        title: 'Add transport between cities',
+        fix: FindingFix(
+          action: 'add_transport',
+          label: 'Add transport',
+          origin: 'Paris',
+          destination: 'Lyon',
+          mode: 'flight',
+        ),
+      ),
+      onPrimary: () {},
+    )));
+
+    expect(find.text('Find options'), findsOneWidget);
+    expect(find.text('Find flights'), findsNothing);
   });
 }
