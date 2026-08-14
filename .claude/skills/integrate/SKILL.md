@@ -1,6 +1,6 @@
 ---
 name: integrate
-description: Serially merge a wave of open lane PRs — rebase, resolve hub files, regenerate generated code, wait for green CI, merge, watch the deploy, repeat. Use after a parallel wave's lane agents have stopped at PR-open.
+description: Serially merge a wave of open lane PRs — rebase, resolve hub files, regenerate generated code, wait for green CI, merge, repeat. Deploys run in the background and never block the next merge. Use after a parallel wave's lane agents have stopped at PR-open.
 ---
 
 # Integrate a wave of lane PRs
@@ -57,17 +57,27 @@ here: `docs/parallel-dev.md` §3–6.
 
 8. **Merge**: `gh pr merge <number> --merge --delete-branch`.
 
-9. **Watch the deploy**: every main merge triggers build-push → a
-   self-verifying prod deploy. `gh run watch` the run for the merge commit
-   until "Verify deployed release" succeeds. **Do not start the next merge
-   before this** — a broken deploy under a stacked queue is un-bisectable.
-   If it fails: stop the queue, fix forward on main (or revert), resume only
-   when prod is green.
+9. **Start the deploy, but do NOT block the queue on it**: every main merge
+   triggers build-push → a self-verifying prod deploy. Go straight to
+   rebasing the next PR — **do not wait for "Verify deployed release"**.
+   Brian's standing instruction: a multi-PR wave otherwise spends most of its
+   wall-clock idling on `gh run watch`, and the deploy is self-verifying with
+   its result still visible afterward.
+
+   **The safety valve stays — it is just moved, not removed.** Check the
+   deploys you already started between merges (a non-blocking
+   `gh run list --branch main --limit 3` is enough), and the moment one goes
+   red: **stop the queue**, fix forward on main (or revert), resume only when
+   prod is green. A broken deploy under a stacked queue is un-bisectable, so
+   not-blocking is a bet that deploys usually pass — never a licence to leave
+   a failure unnoticed. Every deploy must be accounted for by step 10.
 
 10. **Next PR.** When the queue is empty: return to the main checkout,
     `git checkout main && git pull`, then `make wt-rm NAME=<lane>` for each
     merged lane (from the main checkout — it deletes the lane's worktree and
-    branch), and report the wave summary — PRs merged, deploys verified,
+    branch), and report the wave summary — PRs merged, **the outcome of every
+    deploy the wave started** (confirm each one actually landed before
+    declaring the wave done; this is where the step-9 watch was traded for),
     final prod SHA.
 
 ## Notes

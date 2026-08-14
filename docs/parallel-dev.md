@@ -9,8 +9,10 @@ the process half.
 One feature wave = N **lanes**. One lane = one branch = one git worktree = one
 coding agent = one PR (or a short PR chain). Lane agents **stop at PR-open** —
 they never merge. One **integrator** session merges serially: rebase → resolve
-hub files → regenerate generated code → green CI → merge → watch the deploy →
-next. Brian approves the lane plan and steers; agents code.
+hub files → regenerate generated code → green CI → merge → next. The prod
+deploy each merge triggers runs in the background and **never blocks the next
+merge** (§6); it is checked as it lands, and a red one stops the queue. Brian
+approves the lane plan and steers; agents code.
 
 Roles:
 
@@ -20,7 +22,8 @@ Roles:
   rebases, never touches files outside its conflict manifest.
 - **Integrator** — owns `main`. Runs the `/integrate` loop
   (`.claude/skills/integrate`). Only the integrator rebases, force-pushes
-  (`--force-with-lease`), merges, and watches deploys.
+  (`--force-with-lease`), and merges. It tracks deploys without serializing
+  the queue behind them, and accounts for every one in the wave summary.
 - **Brian** — wave-planning approval, lane steering, anything requiring
   product judgment.
 
@@ -145,10 +148,11 @@ rebase that conflicts in generated files you **never hand-merge them**:
 - `trip_detail_screen.dart` is in ~1 of 3 PRs: in a wave of k typical lanes,
   expected god-screen touchers ≈ 0.31k. Past 3–4 lanes you can't fill a wave
   that avoids it. (Splitting that screen is the single biggest future unlock.)
-- Integration is serial: rebase + regen + CI wait + merge + deploy watch is
-  ~15–25 min per PR, and every merge to main is a queued, self-verifying prod
-  deploy. Four lanes ≈ a 1.5 h integrator tail; beyond that the parallel
-  coding gain is eaten by the tail.
+- Integration is serial: rebase + regen + CI wait + merge is ~10–20 min per
+  PR. The prod deploy each merge triggers is queued and self-verifying, but
+  sits **off** the critical path (§6), so it no longer adds to the per-PR
+  cost — it only stops the queue if it goes red. Four lanes ≈ a 1 h
+  integrator tail; beyond that the parallel coding gain is eaten by the tail.
 - The ≤1-migration-per-lane and single-registry-lane rules cap schema- or
   agent-tool-heavy waves regardless.
 - Each Mode-B lane also runs a full 4-container stack (~1–2 GB peak during the
@@ -160,9 +164,16 @@ Summary (the operational skill is `.claude/skills/integrate` — run
 `/integrate`): merge in dependency order; one PR at a time; rebase (inside the
 lane's worktree — the branch is checked out there) → resolve per §3–4 →
 local checks → `--force-with-lease` → wait green (the rebase rerun
-is also what makes the duplicate-migration CI guard bite) → merge → **watch
-the deploy until prod serves the new SHA before starting the next merge** — a
-broken deploy under a stacked queue is un-bisectable.
+is also what makes the duplicate-migration CI guard bite) → merge → **start
+the next PR immediately; do NOT wait for the deploy**.
+
+The prod deploy each merge triggers is self-verifying and runs off the
+critical path. Check the ones already in flight between merges, and **the
+moment one goes red, stop the queue** — fix forward on main (or revert) and
+resume only when prod is green, because a broken deploy under a stacked queue
+is un-bisectable. Every deploy the wave started must be accounted for in the
+final summary; not blocking is a bet that deploys usually pass, never a reason
+to leave one unchecked.
 
 Who fixes a red check: **the integrator fixes anything integration created**
 (hub resolution, cross-lane contract parity, codegen drift, fmt);
