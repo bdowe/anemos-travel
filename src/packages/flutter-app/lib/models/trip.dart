@@ -25,6 +25,13 @@ class Trip {
   /// flight-default behavior in drafts, todos, and Trip Health.
   @JsonKey(name: 'travel_mode')
   final String? travelMode;
+
+  /// Where the traveler sets out from, in their own words ("Lake George, NY").
+  /// Set once when the trip is created and never edited — the derived
+  /// transport legs take their identity from it, so a later change would
+  /// orphan them (see migration 00062). Null means it was never stated, and
+  /// the legs fall back to the saved home airport.
+  final String? origin;
   @JsonKey(name: 'version_count')
   final int? versionCount;
   final List<String>? cities;
@@ -115,6 +122,7 @@ class Trip {
     this.endDate,
     this.chatId,
     this.travelMode,
+    this.origin,
     this.versionCount,
     this.cities,
     required this.createdAt,

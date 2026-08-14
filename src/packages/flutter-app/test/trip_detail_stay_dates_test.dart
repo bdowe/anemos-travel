@@ -241,4 +241,56 @@ void main() {
     expect(chipTextIn('Madrid', '· 2 nights'), findsOneWidget);
     expect(find.text('Aug 28'), findsNothing);
   });
+
+  testWidgets('a stated origin titles the home legs instead of the airport',
+      (WidgetTester tester) async {
+    // The saved home airport is a standing guess about how this traveler
+    // usually leaves; the origin is what they said about THIS trip. Before
+    // this, a stated drive from Lake George still produced "EWR → Montreal"
+    // (2026-08-14).
+    final trip = Trip(
+      id: 't1',
+      title: 'Montreal Weekend',
+      startDate: '2026-08-15',
+      endDate: '2026-08-17',
+      createdAt: '2026-08-01',
+      updatedAt: '2026-08-01',
+      travelMode: 'car',
+      origin: 'Lake George, NY',
+      items: [
+        _item(0, "Schwartz's Deli", 'Montreal', day: 1),
+        _item(1, 'Jean-Talon Market', 'Montreal', day: 2),
+      ],
+    );
+
+    final fake = _CapturingBookingTodosApiService();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          tripsApiServiceProvider.overrideWithValue(_FakeTripsApiService(trip)),
+          bookingTodosApiServiceProvider.overrideWithValue(fake),
+          preferencesApiServiceProvider.overrideWithValue(_FakePrefsApi()),
+        ],
+        child: MaterialApp(
+            localizationsDelegates: testLocalizationsDelegates,
+            home: TripDetailScreen(tripId: 't1')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final derived = fake.syncedPayloads.last;
+    final out = derived.singleWhere(
+        (t) => t['todo_key'] == 'transport:lake george, ny>>montreal');
+    expect(out['title'], 'Lake George, NY → Montreal');
+    // A car trip routes through Rome2Rio, not a flight search.
+    expect(out['provider'], 'rome2rio');
+
+    // And home again, with the origin as the destination.
+    final back = derived.singleWhere(
+        (t) => t['todo_key'] == 'transport:montreal>>lake george, ny');
+    expect(back['title'], 'Montreal → Lake George, NY');
+
+    // The airport it would otherwise have assumed appears nowhere.
+    expect(derived.any((t) => (t['todo_key'] as String).contains('ewr')), isFalse);
+  });
 }

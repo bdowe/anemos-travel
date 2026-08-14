@@ -260,6 +260,7 @@ func duplicateSharedTripHandler(w http.ResponseWriter, r *http.Request) {
 		ChatID:     &newChatID,
 		Summary:    src.Summary,
 		TravelMode: src.TravelMode,
+		Origin:     src.Origin,
 	})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not copy trip")

@@ -111,7 +111,7 @@ void main() {
   const homePoint = (lat: 40.6895, lng: -74.1745);
 
   // Three legs so the gate has a first, a middle, and a last.
-  Trip makeTrip({String? travelMode}) => Trip(
+  Trip makeTrip({String? travelMode, String? origin}) => Trip(
     id: 't1',
     title: 'Grand tour',
     createdAt: '2026-06-01',
@@ -119,6 +119,7 @@ void main() {
     startDate: '2026-09-01',
     endDate: '2026-09-03',
     travelMode: travelMode,
+    origin: origin,
     items: [
       _item(0, 'Louvre', 'Paris', 48.8606, 2.3376, 1),
       _item(1, 'Colosseum', 'Rome', 41.8902, 12.4922, 2),
@@ -220,6 +221,19 @@ void main() {
     // journey the trip never described (a Claude-authored road trip to
     // Montreal rendered as a flight from Newark, 2026-08-14).
     await pumpScreen(tester, tripOverride: makeTrip(travelMode: 'car'));
+
+    expect(map(tester).home, isNull);
+    expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a stated origin draws no home-airport leg',
+      (WidgetTester tester) async {
+    // The trip named where it starts, so the saved airport is known to be the
+    // wrong origin — and the stated one is free text we hold no coordinates
+    // for. The booking legs still carry it by name.
+    await pumpScreen(tester,
+        tripOverride: makeTrip(origin: 'Lake George, NY'));
 
     expect(map(tester).home, isNull);
     expect(find.byIcon(Icons.flight_takeoff), findsNothing);

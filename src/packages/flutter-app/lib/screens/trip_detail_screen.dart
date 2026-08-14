@@ -966,7 +966,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final ferryLegs =
         <String, ({String origin, String destination, String? date})>{};
     var pos = 0;
-    final home = _homeAirport;
+    // Where the journey starts and ends. A stated origin beats the saved home
+    // airport: the airport is a standing guess about how this traveler
+    // usually leaves, while the origin is what they said about THIS trip
+    // ("driving up from Lake George"). Neither one means no home legs at all.
+    final stated = trip.origin?.trim();
+    final home = (stated != null && stated.isNotEmpty) ? stated : _homeAirport;
     final hasHome = home != null && home.isNotEmpty && ranges.isNotEmpty;
     final ground = _groundModeOf(trip);
 
@@ -4896,6 +4901,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               ref,
               homeAirport: _homeAirport,
               travelMode: trip.travelMode,
+              tripOrigin: trip.origin,
               focusedLegIndex:
                   focusKey == null ? null : derivation.legIndexOf(focusKey),
               legCount: derivation.legs.length,
@@ -5068,6 +5074,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           destinations: derivation.mapDestinations,
           homeAirport: _homeAirport,
           travelMode: trip.travelMode,
+          tripOrigin: trip.origin,
           firstCityPoint: endpoints.first,
           lastCityPoint: endpoints.last,
           itemsForLeg: (k) {
