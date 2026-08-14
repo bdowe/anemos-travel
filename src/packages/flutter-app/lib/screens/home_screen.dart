@@ -98,13 +98,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // hero/greeting/guides subtree.
     final displayName =
         ref.watch(authProvider.select((s) => s.user?.displayName));
-    final recentTrip = ref.watch(recentTripProvider.select((r) => r == null
-        ? null
-        : (
-            tripId: r.tripId,
-            title: r.title,
-            dateRange: r.dateRange,
-          )));
+    // Derived, never read straight off device storage: continueTripProvider
+    // prefers the trip this device last viewed and falls back to the trips
+    // list when this origin has no record of one (new device, cleared
+    // storage, domain move) — precedence in continueTripOf. It already
+    // excludes the live trip, so nothing here has to.
+    final continueTrip = ref.watch(continueTripProvider);
     // Populated app-wide: AppShell's IndexedStack keeps TripsListScreen
     // mounted, and its loadTrips() feeds tripsProvider — no fetch from here.
     //
@@ -121,7 +120,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // While providers are still loading this reads false and the full hero
     // shows briefly — same async-appearance behavior as LiveTripCard.
     final returning = liveTrip != null ||
-        recentTrip != null ||
+        continueTrip != null ||
         ref.watch(tripsProvider.select((s) => s.trips.isNotEmpty)) ||
         ref.watch(resumableChatsProvider
             .select((a) => a.valueOrNull?.isNotEmpty ?? false));
@@ -192,21 +191,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                 ],
-                // One "Continue where you left off" section: the most
-                // recently viewed trip (hidden when it *is* the live trip,
-                // so the same trip never stacks twice), then in-progress AI
+                // One "Continue where you left off" section: the trip to pick
+                // back up (see continueTripProvider), then in-progress AI
                 // conversations that haven't produced a trip yet
                 // (specs/continue-where-you-left-off). Collapses to nothing
-                // when there is nothing to resume.
+                // only when the account genuinely has nothing to resume.
                 ContinueChatsSection(
-                  leading: recentTrip != null &&
-                          recentTrip.tripId != liveTrip?.id
+                  leading: continueTrip != null
                       ? _RecentTripCard(
-                          tripId: recentTrip.tripId,
-                          title: recentTrip.title,
-                          dateRange: recentTrip.dateRange,
+                          tripId: continueTrip.tripId,
+                          title: continueTrip.title,
+                          dateRange: continueTrip.dateRange,
                           onTap: () =>
-                              openTripOnTripsTab(ref, recentTrip.tripId),
+                              openTripOnTripsTab(ref, continueTrip.tripId),
                         )
                       : null,
                 ),
@@ -560,8 +557,10 @@ class _AgentHeroCard extends StatelessWidget {
   }
 }
 
-/// One-tap way back into the most recently viewed trip, styled as a lighter
-/// sibling of the hero card (same teal family as the app bar gradient).
+/// One-tap way back into the trip [continueTripProvider] picked — the one this
+/// device last viewed, or the most recently updated one when this origin has
+/// no such memory — styled as a lighter sibling of the hero card (same teal
+/// family as the app bar gradient).
 /// Rendered inside the "Continue where you left off" section, which supplies
 /// the header — the card itself carries no eyebrow.
 class _RecentTripCard extends StatelessWidget {
