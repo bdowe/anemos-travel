@@ -52,6 +52,7 @@ class _AgentScreenState extends ConsumerState<AgentScreen> {
   /// transcript survives sign-in because the plan notifier keeps its
   /// singleton ApiClient (the token mutates in place).
   void _openSignIn() {
+    warmSsoAvailability(context);
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const AuthScreen()),
     );

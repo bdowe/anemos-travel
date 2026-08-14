@@ -57,9 +57,10 @@ List<InlineSpan> _legalLinkSpans(
 }
 
 /// "By signing up you agree to the Terms of Service and Privacy Policy" —
-/// informational small print with tappable links. Used under the SSO buttons,
-/// where the provider's own click is the agreement (email sign-up uses the
-/// blocking [LegalConsentCheckbox] instead).
+/// informational small print with tappable links. Rendered as the auth
+/// screen's footer by `SsoLegalAgreement`, where the provider's own click is
+/// the agreement (email sign-up uses the blocking [LegalConsentCheckbox]
+/// instead).
 class LegalAgreementText extends StatefulWidget {
   const LegalAgreementText({super.key});
 

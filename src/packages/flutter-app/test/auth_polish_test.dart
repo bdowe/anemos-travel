@@ -81,11 +81,19 @@ Finder _dialogField(int index) => find
     .descendant(of: find.byType(AlertDialog), matching: find.byType(TextField))
     .at(index);
 
-Future<void> _signInAttempt(WidgetTester tester) async {
+/// The email submit button, by its label. Deliberately NOT
+/// `find.byType(FilledButton).first`: the SSO block now precedes the form and
+/// Apple's button is a FilledButton too, so `.first` would silently become
+/// "Continue with Apple" the moment a fake here reports Apple available.
+Finder _submitButton(String label) =>
+    find.ancestor(of: find.text(label), matching: find.byType(FilledButton));
+
+Future<void> _signInAttempt(WidgetTester tester,
+    {String label = 'Sign in'}) async {
   await tester.enterText(
       find.byType(TextFormField).at(0), 'traveler@example.com');
   await tester.enterText(find.byType(TextFormField).at(1), 'wrong-password');
-  await tester.tap(find.byType(FilledButton).first);
+  await tester.tap(_submitButton(label));
   await tester.pumpAndSettle();
 }
 
@@ -98,7 +106,7 @@ void main() {
     await tester.pumpWidget(_wrap(service, locale: const Locale('es')));
     await tester.pump();
 
-    await _signInAttempt(tester);
+    await _signInAttempt(tester, label: 'Iniciar sesión');
 
     expect(find.text('Correo o contraseña incorrectos.'), findsOneWidget);
     expect(find.textContaining('invalid email'), findsNothing);
@@ -148,7 +156,8 @@ void main() {
     expect(box().value, isTrue);
 
     // Create-account button arms only once consent is given.
-    final button = tester.widget<FilledButton>(find.byType(FilledButton).first);
+    final button =
+        tester.widget<FilledButton>(_submitButton('Create account'));
     expect(button.onPressed, isNotNull);
   });
 

@@ -225,6 +225,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppSpacing.xl),
+                    // One-tap sign-in first: position alone marks it the
+                    // default path. The block owns the "or" divider that
+                    // separates it from the email form below.
+                    const SsoButtons(),
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
@@ -339,7 +343,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         onPressed: auth.loading ? null : _forgotPassword,
                         child: Text(l10n.authForgotPassword),
                       ),
-                    const SsoButtons(),
+                    const SsoLegalAgreement(),
                   ],
                 ),
               ),
