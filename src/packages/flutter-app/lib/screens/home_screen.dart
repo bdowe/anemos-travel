@@ -26,6 +26,7 @@ import '../widgets/language_menu_button.dart';
 import '../widgets/live_trip_card.dart';
 import '../widgets/near_me_chip.dart';
 import '../widgets/page_container.dart';
+import '../widgets/random_suggestions.dart';
 import '../widgets/section_header.dart';
 import '../widgets/trip_map.dart';
 import '../widgets/trip_map_destinations.dart';
@@ -354,14 +355,6 @@ class _AgentHeroCard extends StatelessWidget {
 
   const _AgentHeroCard({required this.onStart});
 
-  /// Seed prompts for the chat. Free text (not API values), so they are
-  /// localized — the agent answers in whatever language it is asked.
-  static List<String> _suggestions(AppLocalizations l10n) => [
-        l10n.homeSuggestionParis,
-        l10n.homeSuggestionRome,
-        l10n.homeSuggestionTokyo,
-      ];
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -452,28 +445,30 @@ class _AgentHeroCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              NearMeChip(
-                onSend: (text, {displayLabel}) => onStart(
-                    initialMessage: text, displayLabel: displayLabel),
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.brandDark,
-                labelStyle: theme.textTheme.labelMedium?.copyWith(
-                    color: AppColors.brandDark, fontWeight: FontWeight.w500),
-              ),
-              ..._suggestions(l10n).map((s) => ActionChip(
-                    label: Text(s,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                            color: AppColors.brandDark,
-                            fontWeight: FontWeight.w500)),
-                    backgroundColor: Colors.white,
-                    side: BorderSide.none,
-                    onPressed: () => onStart(initialMessage: s),
-                  )),
-            ],
+          RandomSuggestions(
+            builder: (context, prompts) => Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                NearMeChip(
+                  onSend: (text, {displayLabel}) => onStart(
+                      initialMessage: text, displayLabel: displayLabel),
+                  backgroundColor: Colors.white,
+                  foregroundColor: AppColors.brandDark,
+                  labelStyle: theme.textTheme.labelMedium?.copyWith(
+                      color: AppColors.brandDark, fontWeight: FontWeight.w500),
+                ),
+                ...prompts.map((s) => ActionChip(
+                      label: Text(s,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                              color: AppColors.brandDark,
+                              fontWeight: FontWeight.w500)),
+                      backgroundColor: Colors.white,
+                      side: BorderSide.none,
+                      onPressed: () => onStart(initialMessage: s),
+                    )),
+              ],
+            ),
           ),
         ],
       ),

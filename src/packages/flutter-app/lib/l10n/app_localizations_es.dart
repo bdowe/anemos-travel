@@ -1847,13 +1847,40 @@ class AppLocalizationsEs extends AppLocalizations {
   String get homeHeroCta => 'Vamos';
 
   @override
-  String get homeSuggestionParis => '2 días en París';
+  String get suggestionParis => '2 días en París';
 
   @override
-  String get homeSuggestionRome => 'Museos en Roma';
+  String get suggestionRome => 'Museos en Roma';
 
   @override
-  String get homeSuggestionTokyo => 'Fin de semana en Tokio';
+  String get suggestionTokyo => 'Fin de semana en Tokio';
+
+  @override
+  String get suggestionGreece => 'De isla en isla por Grecia';
+
+  @override
+  String get suggestionLisbon => '3 días en Lisboa';
+
+  @override
+  String get suggestionBarcelona => 'De tapas por Barcelona';
+
+  @override
+  String get suggestionBangkok => 'Comida callejera en Bangkok';
+
+  @override
+  String get suggestionAmalfi => 'Ruta por la Costa Amalfitana';
+
+  @override
+  String get suggestionNewYork => 'Una semana en Nueva York';
+
+  @override
+  String get suggestionBali => 'Playas de Bali';
+
+  @override
+  String get suggestionPatagonia => 'Senderismo en la Patagonia';
+
+  @override
+  String get suggestionKenya => 'Safari en Kenia';
 
   @override
   String get homeLocalGuidesTitle => 'Guías locales';
@@ -2614,15 +2641,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get agentScreenEmptyMessage =>
       'Soy Ferdinand: buscaré lugares y crearé un itinerario día a día para ti.';
-
-  @override
-  String get agentScreenSuggestionParis => '2 días en París';
-
-  @override
-  String get agentScreenSuggestionRome => 'Museos en Roma';
-
-  @override
-  String get agentScreenSuggestionTokyo => 'Un fin de semana en Tokio';
 
   @override
   String agentScreenItineraryReady(int count) {
