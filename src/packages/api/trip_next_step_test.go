@@ -109,6 +109,47 @@ func mustStep(t *testing.T, step *NextStep, progress *PlanProgress, kind string,
 	if progress.Done != done || progress.Total != planLadderTotal {
 		t.Fatalf("progress = %d/%d, want %d/%d", progress.Done, progress.Total, done, planLadderTotal)
 	}
+	// The ladder rides on EVERY step: the card's "N of 6" is unreadable
+	// without it, and the client renders whatever order arrives here.
+	mustLadder(t, progress)
+}
+
+// mustLadder asserts the wire ladder matches planLadder — same length as
+// Total, ids in order, every label filled.
+func mustLadder(t *testing.T, progress *PlanProgress) {
+	t.Helper()
+	if len(progress.Phases) != progress.Total {
+		t.Fatalf("phases = %d, want %d (Total)", len(progress.Phases), progress.Total)
+	}
+	for i, p := range progress.Phases {
+		if p.ID != planLadder[i].ID {
+			t.Fatalf("phase %d id = %q, want %q", i, p.ID, planLadder[i].ID)
+		}
+		if p.Label == "" {
+			t.Fatalf("phase %d (%s) has no label", i, p.ID)
+		}
+		// Only the bookings rung has an exact denominator; every other rung
+		// stays silent rather than inventing one.
+		if p.Progress != nil && p.ID != planPhaseBookings {
+			t.Fatalf("phase %s must not carry a tally: %+v", p.ID, p.Progress)
+		}
+		if p.Progress != nil && (p.Progress.Total <= 0 || p.Progress.Done > p.Progress.Total) {
+			t.Fatalf("phase %s tally = %d/%d, want 0 <= done <= total, total > 0",
+				p.ID, p.Progress.Done, p.Progress.Total)
+		}
+	}
+}
+
+// bookingsTally returns the bookings rung's tally (nil when it has none).
+func bookingsTally(t *testing.T, progress *PlanProgress) *PhaseProgress {
+	t.Helper()
+	for _, p := range progress.Phases {
+		if p.ID == planPhaseBookings {
+			return p.Progress
+		}
+	}
+	t.Fatalf("no %q rung in %+v", planPhaseBookings, progress.Phases)
+	return nil
 }
 
 func TestNextStep_Undated(t *testing.T) {
@@ -789,4 +830,117 @@ func TestNextStep_IgnoresWeatherAndHoursFindings(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The ladder on the wire (specs/next-step-cta): ids are the stable identity
+// clients and tests key on — they do NOT move with the copy or the locale —
+// while labels are localized display text. Pinned end to end because the
+// progress sheet renders these labels in this order and nothing else.
+func TestNextStep_LadderPhases(t *testing.T) {
+	d := nextStepFixture(t)
+	d.Accommodations[0].Booked = false // any mid-ladder step will do
+
+	_, en := derive("en", nextStepNow, d)
+	_, es := derive("es", nextStepNow, d)
+	if en == nil || es == nil {
+		t.Fatalf("progress = %v / %v, want both", en, es)
+	}
+	mustLadder(t, en)
+	mustLadder(t, es)
+
+	wantIDs := []string{"dates", "itinerary", "bookings", "schedule", "confirm", "packing"}
+	wantEN := []string{
+		"Set your travel dates",
+		"Plan your days",
+		"Book travel & stays",
+		"Tidy up your schedule",
+		"Book everything",
+		"Start your packing list",
+	}
+	for i := range wantIDs {
+		if en.Phases[i].ID != wantIDs[i] || es.Phases[i].ID != wantIDs[i] {
+			t.Fatalf("phase %d ids = %q/%q, want %q",
+				i, en.Phases[i].ID, es.Phases[i].ID, wantIDs[i])
+		}
+		if en.Phases[i].Label != wantEN[i] {
+			t.Fatalf("phase %d en label = %q, want %q", i, en.Phases[i].Label, wantEN[i])
+		}
+		if es.Phases[i].Label == en.Phases[i].Label {
+			t.Fatalf("phase %d (%s) is not translated: %q", i, wantIDs[i], es.Phases[i].Label)
+		}
+	}
+}
+
+// The bookings rung reports how much of ITSELF is done — the sub-progress a
+// 10-city trip needs, because "3 of 6" cannot move while eleven slots close
+// one by one (Brian, 2026-08-14). The tally comes from the same walk that
+// picks the step, so it counts a slot closed either way the walk closes it:
+// checked off, or claimed by a real accommodation/segment.
+func TestNextStep_BookingsTally(t *testing.T) {
+	base := nextStepFixture(t)
+
+	t.Run("counts closed slots anywhere in the list", func(t *testing.T) {
+		d := base
+		d.Accommodations, d.Segments = nil, nil // nothing claimed; boxes only
+		// Close the FIRST and LAST of the five slots: the walk must keep
+		// counting past the open one in between.
+		d.BookingTodos = bookSlots(walkTodos(t), "transport:ewr>>paris", "transport:lyon>>ewr")
+		step, progress := derive("en", nextStepNow, d)
+		mustStep(t, step, progress, "add_lodging", 2) // first open slot: stay in Paris
+		if tally := bookingsTally(t, progress); tally == nil || tally.Done != 2 || tally.Total != 5 {
+			t.Fatalf("tally = %+v, want 2/5", tally)
+		}
+	})
+
+	t.Run("a claimed slot counts as done", func(t *testing.T) {
+		d := base
+		// Not one box is checked, yet the fixture's two booked stays cover
+		// every Paris and Lyon night and its booked segment connects them —
+		// three slots CLAIMED. The tally must agree with the walk's own
+		// definition of closed, not with the checkboxes.
+		d.BookingTodos = walkTodos(t)
+		step, progress := derive("en", nextStepNow, d)
+		mustStep(t, step, progress, "add_transport", 2) // the unclaimed outbound leg
+		if tally := bookingsTally(t, progress); tally == nil || tally.Done != 3 || tally.Total != 5 {
+			t.Fatalf("tally = %+v, want 3/5 (2 stays + 1 leg claimed)", tally)
+		}
+	})
+
+	t.Run("a satisfied rung reads full", func(t *testing.T) {
+		d := base
+		d.BookingTodos = bookSlots(walkTodos(t),
+			"transport:ewr>>paris", "stay:paris", "transport:paris>>lyon",
+			"stay:lyon", "transport:lyon>>ewr")
+		step, progress := derive("en", nextStepNow, d)
+		// Phase 3 is satisfied, so the ladder has moved on — and the rung
+		// behind it reads 5/5 rather than going silent.
+		if step == nil || step.Kind == "add_lodging" || step.Kind == "add_transport" {
+			t.Fatalf("step = %+v, want the ladder past phase 3", step)
+		}
+		if tally := bookingsTally(t, progress); tally == nil || tally.Done != 5 || tally.Total != 5 {
+			t.Fatalf("tally = %+v, want 5/5", tally)
+		}
+	})
+
+	t.Run("no derived slots, no tally", func(t *testing.T) {
+		d := base
+		d.Accommodations[0].Booked = false // findings-fallback trip, phase 3 via findings
+		_, progress := derive("en", nextStepNow, d)
+		if tally := bookingsTally(t, progress); tally != nil {
+			t.Fatalf("tally = %+v, want none (no derived slots to count)", tally)
+		}
+	})
+
+	t.Run("rides along on an earlier phase", func(t *testing.T) {
+		d := base
+		d.Accommodations, d.Segments = nil, nil
+		d.Trip.StartDate = pgtype.Date{}
+		d.Trip.EndDate = pgtype.Date{}
+		d.BookingTodos = bookSlots(walkTodos(t), "transport:ewr>>paris")
+		step, progress := derive("en", nextStepNow, d)
+		mustStep(t, step, progress, "set_dates", 0)
+		if tally := bookingsTally(t, progress); tally == nil || tally.Done != 1 || tally.Total != 5 {
+			t.Fatalf("tally = %+v, want 1/5 even at phase 1", tally)
+		}
+	})
 }

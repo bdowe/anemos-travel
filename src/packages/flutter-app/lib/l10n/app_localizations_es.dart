@@ -2471,6 +2471,25 @@ class AppLocalizationsEs extends AppLocalizations {
   String get nextStepAllSetDismiss => 'Descartar';
 
   @override
+  String get nextStepViewProgress => 'Ver todos los pasos';
+
+  @override
+  String get planProgressTitle => 'Progreso del plan';
+
+  @override
+  String get planProgressHint =>
+      'Los pasos se desbloquean en orden: termina este y se abrirá el siguiente.';
+
+  @override
+  String get planProgressStateDone => 'Hecho';
+
+  @override
+  String get planProgressStateCurrent => 'Paso actual';
+
+  @override
+  String get planProgressStateLater => 'Más adelante';
+
+  @override
   String get notifTitle => 'Notificaciones';
 
   @override

@@ -33,6 +33,50 @@ func reviewCategories(t *testing.T, id, token string) map[string]bool {
 	return found
 }
 
+// assertLadderJSON pins the wire shape of plan_progress.phases: the whole
+// ladder, in order, with ids that survive rewording and a label for each. The
+// client's progress sheet renders exactly this, so an empty or reordered array
+// is a silent UI regression, not a cosmetic one.
+func assertLadderJSON(t *testing.T, progress map[string]any) {
+	t.Helper()
+	phases, ok := progress["phases"].([]any)
+	if !ok || len(phases) != planLadderTotal {
+		t.Fatalf("plan_progress.phases = %v, want %d entries", progress["phases"], planLadderTotal)
+	}
+	for i, raw := range phases {
+		p, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("phase %d = %v, want an object", i, raw)
+		}
+		if p["id"] != planLadder[i].ID {
+			t.Fatalf("phase %d id = %v, want %q", i, p["id"], planLadder[i].ID)
+		}
+		if label, _ := p["label"].(string); label == "" {
+			t.Fatalf("phase %d (%v) has no label", i, p["id"])
+		}
+		// Only the bookings rung has an exact denominator to report.
+		if _, has := p["progress"]; has && p["id"] != planPhaseBookings {
+			t.Fatalf("phase %v must not carry a tally: %v", p["id"], p["progress"])
+		}
+	}
+}
+
+// bookingsTallyJSON returns the bookings rung's {done,total} tally, or nil
+// when the rung reports none (a trip with no derived slots).
+func bookingsTallyJSON(t *testing.T, progress map[string]any) map[string]any {
+	t.Helper()
+	phases, _ := progress["phases"].([]any)
+	for _, raw := range phases {
+		p, _ := raw.(map[string]any)
+		if p != nil && p["id"] == planPhaseBookings {
+			tally, _ := p["progress"].(map[string]any)
+			return tally
+		}
+	}
+	t.Fatalf("no %q rung in %v", planPhaseBookings, progress["phases"])
+	return nil
+}
+
 func TestTripReview_BrokenTrip(t *testing.T) {
 	resetDB(t)
 	owner, ownerToken := createTestUser(t, "owner@example.com")
@@ -176,6 +220,7 @@ func TestTripReview_NextStepPayload(t *testing.T) {
 	if !ok || progress["done"] != float64(1) || progress["total"] != float64(6) {
 		t.Fatalf("plan_progress = %v, want 1/6", body["plan_progress"])
 	}
+	assertLadderJSON(t, progress)
 
 	// check_hours must not change the step (deterministic across variants).
 	hoursKind, _ := stepKind("?check_hours=true")
@@ -243,7 +288,10 @@ func TestTripReview_NextStepWalkIntegration(t *testing.T) {
 		t.Fatalf("synced %d todos, want 2: %s", len(todos), sync.Body.String())
 	}
 
-	step := func(t *testing.T) map[string]any {
+	// closedSlots is what the bookings rung must report at this point: the
+	// sub-progress the sheet shows ("1 of 2"), which is the only thing that
+	// moves while the ladder itself sits on 3 of 6.
+	step := func(t *testing.T, closedSlots int) map[string]any {
 		t.Helper()
 		rec := doJSON(t, "GET", "/api/v1/trips/"+id+"/review", ownerToken, nil)
 		if rec.Code != http.StatusOK {
@@ -258,11 +306,16 @@ func TestTripReview_NextStepWalkIntegration(t *testing.T) {
 		if !ok || progress["done"] != float64(2) || progress["total"] != float64(6) {
 			t.Fatalf("plan_progress = %v, want 2/6", body["plan_progress"])
 		}
+		assertLadderJSON(t, progress)
+		tally := bookingsTallyJSON(t, progress)
+		if tally == nil || tally["done"] != float64(closedSlots) || tally["total"] != float64(2) {
+			t.Fatalf("bookings tally = %v, want %d/2", tally, closedSlots)
+		}
 		return s
 	}
 
 	// The flight comes first, even though every night is also unbooked.
-	first := step(t)
+	first := step(t, 0)
 	if kind, _ := first["kind"].(string); kind != "add_transport" {
 		t.Fatalf("kind = %q, want add_transport (the outbound flight): %v", kind, first)
 	}
@@ -277,7 +330,7 @@ func TestTripReview_NextStepWalkIntegration(t *testing.T) {
 		map[string]any{"booked": true}); rec.Code != http.StatusOK {
 		t.Fatalf("patch todo booked = %d: %s", rec.Code, rec.Body.String())
 	}
-	second := step(t)
+	second := step(t, 1)
 	if kind, _ := second["kind"].(string); kind != "add_lodging" {
 		t.Fatalf("kind = %q, want add_lodging after the leg is booked: %v", kind, second)
 	}

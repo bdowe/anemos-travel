@@ -76,6 +76,7 @@ import '../widgets/map_leg_chips.dart';
 import '../widgets/next_step_card.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/place_photo_card.dart';
+import '../widgets/plan_progress_sheet.dart';
 import '../widgets/source_links_card.dart';
 import '../widgets/status_pill.dart';
 import '../widgets/trip_map.dart';
@@ -4276,7 +4277,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   }
 
   /// Opens the Trip Health sheet with the screen's standard wiring — shared by
-  /// the Next Step card's "View all" and its unknown-kind fallback (the
+  /// the Next Step card's Trip-health entry and its unknown-kind fallback (the
   /// app-bar badge keeps its own inline call).
   void _openHealthSheet(Trip trip) {
     showTripHealthSheet(
@@ -4314,9 +4315,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         if (allSet && (!_hadNextStep || _allSetDismissed)) {
           return const SizedBox.shrink();
         }
+        final progress = review?.planProgress;
         return NextStepCard(
           step: step,
-          progress: review?.planProgress,
+          progress: progress,
           compact: _narrow,
           enabled: !_isOffline,
           // Same lookup the tap performs, so the label can never promise a
@@ -4324,6 +4326,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           transportHandsOff: _transportHandsOff(step),
           onPrimary: allSet ? null : () => _onNextStepAction(trip, step),
           onViewAll: () => _openHealthSheet(trip),
+          // No ladder on the wire (older server, cached response) => no
+          // affordance, rather than an entry point onto an empty sheet.
+          onViewProgress: progress != null && progress.phases.isNotEmpty
+              ? () => showPlanProgressSheet(context,
+                  progress: progress, currentStep: step)
+              : null,
           onDismiss:
               allSet ? () => setState(() => _allSetDismissed = true) : null,
         );

@@ -19,8 +19,11 @@ class NextStepCard extends StatelessWidget {
   final NextStep? step;
   final PlanProgress? progress;
 
-  /// Narrow layouts: drop the detail line and the "View all" entry (the
+  /// Narrow layouts: drop the detail line and the Trip-health entry (the
   /// app-bar health badge stays the always-present overview on every width).
+  /// The eyebrow's progress entry survives compaction on purpose — it is the
+  /// only thing that explains the counter, and the counter renders at every
+  /// width.
   final bool compact;
 
   /// Offline: the card stays visible but its actions are disabled — same
@@ -29,6 +32,16 @@ class NextStepCard extends StatelessWidget {
 
   final VoidCallback? onPrimary;
   final VoidCallback? onViewAll;
+
+  /// Opens the plan-progress sheet from the eyebrow's "N of 6" counter
+  /// (specs/next-step-cta). Null hides the affordance and leaves the plain
+  /// eyebrow — which is what a payload with no ladder (older server, cached
+  /// response) gets, since there would be nothing to show.
+  ///
+  /// Deliberately NOT gated on [enabled]: the sheet is a pure render of the
+  /// payload already on screen, so explaining the counter keeps working
+  /// offline even though every action on the card is disabled there.
+  final VoidCallback? onViewProgress;
 
   /// Dismisses the all_set celebration (session-scoped; the screen owns the
   /// bool). Only rendered on the all_set variant.
@@ -50,6 +63,7 @@ class NextStepCard extends StatelessWidget {
     this.enabled = true,
     this.onPrimary,
     this.onViewAll,
+    this.onViewProgress,
     this.onDismiss,
     this.transportHandsOff = false,
   });
@@ -119,9 +133,39 @@ class NextStepCard extends StatelessWidget {
     );
     var eyebrow = l10n.nextStepEyebrow.toUpperCase();
     final p = progress;
-    if (p != null && p.total > 0) {
+    final counted = p != null && p.total > 0;
+    if (counted) {
       final current = (p.done + 1).clamp(1, p.total);
       eyebrow = '$eyebrow · ${l10n.nextStepProgress(current, p.total)}';
+    }
+    // A counter nobody can expand is a dead end ("3 of 6" — of WHAT?), so the
+    // eyebrow itself opens the ladder. It lives inside the card-wide InkWell:
+    // the inner recognizer wins the tap, so opening the sheet never also fires
+    // the primary action (pinned by next_step_card_test).
+    final eyebrowText = Text(eyebrow, style: eyebrowStyle);
+    Widget eyebrowLine = eyebrowText;
+    if (counted && onViewProgress != null) {
+      eyebrowLine = Tooltip(
+        message: l10n.nextStepViewProgress,
+        child: InkWell(
+          key: const ValueKey('next-step-progress'),
+          onTap: onViewProgress,
+          borderRadius: AppRadius.smAll,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Flexible, not bare: on a phone the eyebrow already wraps to
+                // two lines beside the action button, and the counter is the
+                // one thing here that must never be clipped away.
+                Flexible(child: eyebrowText),
+                Icon(Icons.expand_more, size: 14, color: AppColors.brandDark),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     final detail = s.detail;
@@ -148,7 +192,7 @@ class NextStepCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(eyebrow, style: eyebrowStyle),
+                    eyebrowLine,
                     const SizedBox(height: 2),
                     Text(
                       s.title,
@@ -178,7 +222,10 @@ class NextStepCard extends StatelessWidget {
                 TextButton(
                   key: const ValueKey('next-step-view-all'),
                   onPressed: enabled ? onViewAll : null,
-                  child: Text(l10n.nextStepViewAll),
+                  // Named for where it goes. Beside a step counter, "View all"
+                  // promised the steps and delivered the findings list; the
+                  // sheet's own title says what this really opens.
+                  child: Text(l10n.reviewSectionTitle),
                 ),
                 const SizedBox(width: AppSpacing.sm),
               ],

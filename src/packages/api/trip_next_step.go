@@ -22,7 +22,7 @@ import (
 // deriveNextStep is composed AFTER reviewTrip at both call sites (the review
 // handler and the review_trip agent tool); phase 3 walks the client-synced
 // booking todos in position order (flights before stays, per destination —
-// see nextOpenBookingSlot), falling back to the lodging/transit findings only
+// see walkBookingSlots), falling back to the lodging/transit findings only
 // for trips with no derived slots, and reads the extra signals (zero items,
 // unbooked booking todos, empty packing checklist) straight off exportData.
 // Budget, weather and opening hours are deliberately NOT phases: a budget
@@ -52,13 +52,86 @@ type NextStep struct {
 // from the top, so the current step is phase Done+1 and all_set reports 6/6.
 // Total is a field (not a client-side constant) so the ladder can grow or
 // shrink (it did: 7 → 6 when lodging+transport merged into the booking-slot
-// walk) without a lockstep client release.
+// walk) without a lockstep client release — and Phases now ships the rungs
+// themselves for the same reason: "3 of 6" is unreadable when only the server
+// knows what the six are (specs/next-step-cta, Brian 2026-08-14).
+//
+// Phases carries NO per-rung DONE state. Prefix progress already states it —
+// index < Done is complete, == Done is current, > Done is later — so the
+// client derives it at render and there is exactly one definition of "done" on
+// the wire (docs/zen.md). Total is likewise computed from the same array as
+// Phases, so the count and the list structurally cannot disagree.
 type PlanProgress struct {
+	Done   int         `json:"done"`
+	Total  int         `json:"total"`
+	Phases []PlanPhase `json:"phases,omitempty"`
+}
+
+// PlanPhase is one rung: a stable id, its localized short label, and — where
+// the rung has an exact denominator — its own internal tally. The id is the
+// identity clients and tests key on (locale-independent, unchanged when the
+// copy is reworded); the label is display copy and nothing else.
+type PlanPhase struct {
+	ID       string         `json:"id"`
+	Label    string         `json:"label"`
+	Progress *PhaseProgress `json:"progress,omitempty"`
+}
+
+// PhaseProgress is a rung's INTERNAL progress — the units of work inside one
+// ladder phase, not the ladder itself. Only the bookings rung reports one
+// today: its units are the derived booking slots, so the denominator is exact
+// and Done counts a slot closed EITHER WAY the walk closes it (checked off, or
+// claimed by a real accommodation/segment) — the same test that decides the
+// phase is satisfied, so the tally and the rung's completion cannot disagree.
+// The other rungs deliberately stay nil: "3 unscheduled places" and the
+// book_trip aggregate have no honest total (specs/next-step-cta puts the
+// aggregate's parity out of scope), and a made-up denominator is worse than
+// none. Absent whenever the trip has no derived slots at all.
+type PhaseProgress struct {
 	Done  int `json:"done"`
 	Total int `json:"total"`
 }
 
-const planLadderTotal = 6
+// planPhaseBookings is the rung the booking-slot walk tallies — named so the
+// ladder table above and the tally below refer to the same rung explicitly,
+// rather than agreeing on a bare string in two places.
+const planPhaseBookings = "bookings"
+
+// planLadder IS the ladder, in order — the phase ids paired with the catalog
+// key for each rung's short label. Five of the six reuse the step titles the
+// card already shows, so the progress sheet and the card speak in one voice
+// (the same reuse staySlotStep makes of review.noLodging); only phase 3 needs
+// its own copy, because it covers lodging AND transport and neither step title
+// names the pair. Adding or reordering a rung here changes the wire, the
+// count, and the sheet together.
+var planLadder = [...]struct{ ID, Key string }{
+	{"dates", "review.next.setDates.title"},
+	{"itinerary", "review.next.planItinerary.title"},
+	{planPhaseBookings, "review.ladder.bookings"},
+	{"schedule", "review.next.scheduleItems.title"},
+	{"confirm", "review.next.book.title"},
+	{"packing", "review.next.packing.title"},
+}
+
+// len of an array (not a slice) is a constant expression, so the ladder stays
+// the single source of the total the phases below already imply.
+const planLadderTotal = len(planLadder)
+
+// planLadderPhases renders the ladder for one locale, hanging the booking
+// walk's tally on the rung that owns it. The walk is passed in rather than
+// re-run here: it is the same single pass phase 3 decides on, so the sheet's
+// "4 of 11" and the card's step can never come from different counts.
+func planLadderPhases(locale string, slots bookingWalk) []PlanPhase {
+	phases := make([]PlanPhase, 0, len(planLadder))
+	for _, p := range planLadder {
+		phase := PlanPhase{ID: p.ID, Label: tr(locale, p.Key)}
+		if p.ID == planPhaseBookings && slots.Total > 0 {
+			phase.Progress = &PhaseProgress{Done: slots.Closed, Total: slots.Total}
+		}
+		phases = append(phases, phase)
+	}
+	return phases
+}
 
 // deriveNextStep walks the ladder and returns the first unmet phase, or the
 // all_set terminal step when every phase is complete. Both results are nil for
@@ -71,8 +144,18 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 		return nil, nil
 	}
 
+	// One pass over the booking checklist, up front: phase 3 picks its step
+	// from it below, and EVERY phase's payload carries its tally — a trip
+	// stopped at "set your dates" still gets to see how much of the booking
+	// rung is already done.
+	slots := walkBookingSlots(data)
+
 	progress := func(done int) *PlanProgress {
-		return &PlanProgress{Done: done, Total: planLadderTotal}
+		return &PlanProgress{
+			Done:   done,
+			Total:  planLadderTotal,
+			Phases: planLadderPhases(locale, slots),
+		}
 	}
 
 	// Phase 1 — dates. The repo's first "unfinished work" arm (migration
@@ -127,9 +210,9 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 	// (Trip Health keeps full fidelity on the same gap). The one thing a
 	// satisfied walk still defers to the findings is a night no slot spans
 	// at all; see below.
-	if slot, walked := nextOpenBookingSlot(data); walked {
-		if slot != nil {
-			return bookingSlotStep(locale, data, *slot), progress(2)
+	if slots.Total > 0 {
+		if slots.Open != nil {
+			return bookingSlotStep(locale, data, *slots.Open), progress(2)
 		}
 		// The walk is satisfied — but it can only speak for nights some slot
 		// actually spans. A leg range ends at its last scheduled item, so
@@ -343,30 +426,47 @@ func todoClaimed(d exportData, t store.BookingTodo) bool {
 // reader of that convention (pinned by TestNextStep_WalkFlightBeforeStay's
 // cased-endpoint assertions).
 
-// nextOpenBookingSlot walks d.BookingTodos in slice order — position ASC from
+// bookingWalk is everything phase 3 learns from one pass over the checklist:
+// which slot to name next, and how much of the rung is already behind the
+// traveler. One struct rather than two functions because the tally and the
+// step MUST come from the same pass — a second walk is a second definition of
+// "closed" waiting to drift.
+type bookingWalk struct {
+	Open   *store.BookingTodo // first OPEN slot; nil ⇔ every slot is closed
+	Closed int                // slots already booked or claimed, anywhere in the list
+	Total  int                // derived slots seen; 0 ⇒ nothing to walk
+}
+
+// walkBookingSlots walks d.BookingTodos in slice order — position ASC from
 // ListBookingTodosByTrip, i.e. the client's itinerary order (outbound leg,
-// stay 1, leg 1→2, stay 2, …, return leg) — and returns the first OPEN
-// derived slot. Only derived slots participate, recognized by the todo_key
-// prefix ("stay:"/"transport:"); custom:* rows and any other keys are not
-// slots — they surface in the book_trip aggregate instead. Open means
-// !Booked && !bookingSlotClaimed. walked=false ⇔ the trip has zero derived
-// slots (import/MCP/agent-created trips never opened in the app), which sends
-// deriveNextStep to the findings fallback; (nil, true) means every slot is
-// closed and phase 3 is satisfied.
-func nextOpenBookingSlot(d exportData) (*store.BookingTodo, bool) {
-	walked := false
+// stay 1, leg 1→2, stay 2, …, return leg). Only derived slots participate,
+// recognized by the todo_key prefix ("stay:"/"transport:"); custom:* rows and
+// any other keys are not slots — they surface in the book_trip aggregate
+// instead. Open means !Booked && !bookingSlotClaimed. Total=0 ⇔ the trip has
+// zero derived slots (import/MCP/agent-created trips never opened in the app),
+// which sends deriveNextStep to the findings fallback; Total>0 with a nil Open
+// means every slot is closed and phase 3 is satisfied.
+//
+// The walk does NOT stop at the first open slot: Closed counts every closed
+// slot in the list, because "4 of 11 booked" is a fact about the whole rung,
+// not about its prefix.
+func walkBookingSlots(d exportData) bookingWalk {
+	var w bookingWalk
 	for i := range d.BookingTodos {
 		t := &d.BookingTodos[i]
 		if !strings.HasPrefix(t.TodoKey, "stay:") && !strings.HasPrefix(t.TodoKey, "transport:") {
 			continue
 		}
-		walked = true
+		w.Total++
 		if t.Booked || bookingSlotClaimed(d, *t) {
+			w.Closed++
 			continue
 		}
-		return t, true
+		if w.Open == nil {
+			w.Open = t
+		}
 	}
-	return nil, walked
+	return w
 }
 
 // bookingSlotClaimed is the walk's claim test — a date-aware upgrade of
@@ -443,7 +543,7 @@ func firstUnslottedLodging(d exportData, findings []Finding) *Finding {
 }
 
 // bookingSlotStep renders the walk's winning slot as a NextStep, dispatching
-// on the todo_key PREFIX — the same field nextOpenBookingSlot filtered on, so
+// on the todo_key PREFIX — the same field walkBookingSlots filtered on, so
 // the filter and this branch structurally cannot disagree (Kind is a separate
 // client-supplied column that could in principle drift from the key).
 func bookingSlotStep(locale string, d exportData, t store.BookingTodo) *NextStep {

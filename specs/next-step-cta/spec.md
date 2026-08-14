@@ -28,6 +28,9 @@ straight to the right control.
   jobs stay two taps.
 - As a **trip owner**, I want to see how far along the planning journey I am
   ("Step 3 of 6") so that finishing feels within reach.
+- As a **trip owner**, I want to open that counter and see what the six steps
+  actually are so that "3 of 6" tells me something instead of raising a
+  question I can't answer (Brian, 2026-08-14).
 - As a **trip owner**, I want a clear "you're all set" moment when nothing is
   left so that I know the trip is genuinely ready.
 
@@ -54,6 +57,26 @@ straight to the right control.
       5. **Book everything** — any unbooked stay/segment/booking to-do remains.
       6. **Start packing** — packing checklist is empty (only before the trip
          starts).
+- [ ] The eyebrow's "N of 6" counter is a tap target at EVERY width (the
+      trailing entries are dropped when the card compacts; the counter is not)
+      and opens a **Plan progress** sheet: all six rungs in server order, the
+      completed ones checked, the current one marked and carrying the card's
+      own step title/detail, the rest shown as *later* — never as failures,
+      since prefix progress cannot speak for phases past the current one. A
+      payload with no ladder (older server, cached response) simply renders the
+      plain eyebrow.
+- [ ] The **bookings rung carries its own tally** ("4 of 11"): a many-city trip
+      closes eleven booking slots under one rung, so the ladder's "3 of 6"
+      cannot move for weeks and the rung's sub-progress is the only honest
+      signal of movement. Its units are the derived booking slots and a slot
+      counts done whichever way the walk closes it — checked off, or covered by
+      a real accommodation/segment — so the tally and the rung's completion
+      can never disagree. Rungs without an exact denominator (unscheduled
+      places, the book_trip aggregate) show no tally rather than a made-up one,
+      and a trip with no derived slots shows none at all.
+- [ ] The card's secondary entry names its destination — "Trip health", the
+      title of the sheet it opens — rather than "View all", which beside a step
+      counter promised the steps and delivered the findings list.
 - [ ] Booking guidance follows the trip, not the category: the outbound flight
       surfaces before the first stay, and ticking a slot's checkbox advances
       the card even when no accommodation or segment row exists.
@@ -75,11 +98,13 @@ straight to the right control.
       all.
 - [ ] Past trips (end date before today) never show the card.
 - [ ] Viewers (read-only access) never see the card; offline, the card is
-      visible but its actions are disabled.
+      visible but its actions are disabled — except the progress sheet, which
+      is a pure render of the payload already on screen and keeps working.
 - [ ] The `review_trip` chat tool mentions the suggested next step, so the
       agent gives the same guidance the card does.
 - [ ] Trip Health (badge, sheet, findings, fixes) is unchanged apart from the
-      payload growing; the health count never includes "steps".
+      payload growing and the card's entry to it being renamed; the health
+      count never includes "steps".
 - [ ] Card copy is localized (en + es); chat seed prompts remain canonical
       English.
 
@@ -92,8 +117,15 @@ straight to the right control.
   title/detail, optional day anchor, optional count (e.g. unbooked items),
   optional structured fix (same shape findings use), and a canonical-English
   `seed_prompt` for chat-driven steps. `plan_progress` — `done`/`total` phases
-  (total is 6). Both omitted for past trips. The step is identical whether or
-  not `check_hours` is requested.
+  (total is 6) plus `phases[]`, the ladder itself: `{id, label}` per rung, in
+  order, ids stable across rewordings and locales (`dates`, `itinerary`,
+  `bookings`, `schedule`, `confirm`, `packing`), labels localized. No per-rung
+  DONE state ships: `done` already defines it (index < done complete, == done
+  current, > done later), so the client derives it in one place. A rung MAY
+  carry `progress: {done, total}` — its internal tally, present only where the
+  denominator is exact (today: the bookings rung's derived slots, absent when
+  the trip has none). Both omitted for past trips. The step is identical
+  whether or not `check_hours` is requested.
 - **Errors:** unchanged (404 for viewers/missing trips).
 
 ## Data Model
