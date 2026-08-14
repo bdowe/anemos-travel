@@ -1917,6 +1917,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get healthDegradedTitle => 'Sistema degradado';
 
   @override
+  String get healthRecoveredTitle => 'Sistema recuperado';
+
+  @override
+  String get notifOpsOpenHealth => 'Ver el estado del sistema';
+
+  @override
   String get reviewSectionTitle => 'Estado del viaje';
 
   @override

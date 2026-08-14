@@ -19,7 +19,16 @@ import '../widgets/status_pill.dart';
 ///   Activity — the latest analytics events, newest first, load-more.
 ///   Users    — per-user activity aggregates, most recently active first.
 class AdminMetricsScreen extends ConsumerStatefulWidget {
-  const AdminMetricsScreen({super.key});
+  /// Index of the Health tab in the tab list below. Named so callers in other
+  /// files (the ops rows in the notification center) never carry a bare
+  /// literal — the tab order stays defined in exactly one place.
+  static const int healthTabIndex = 4;
+
+  /// Which tab to open on. Transient view state, deliberately NOT part of the
+  /// URL: `/admin/metrics` stays one location, so a refresh lands on Overview.
+  final int initialTabIndex;
+
+  const AdminMetricsScreen({super.key, this.initialTabIndex = 0});
 
   @override
   ConsumerState<AdminMetricsScreen> createState() => _AdminMetricsScreenState();
@@ -33,6 +42,7 @@ class _AdminMetricsScreenState extends ConsumerState<AdminMetricsScreen> {
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 5,
+      initialIndex: widget.initialTabIndex,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Metrics'),

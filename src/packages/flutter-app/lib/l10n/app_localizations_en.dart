@@ -1903,6 +1903,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get healthDegradedTitle => 'System degraded';
 
   @override
+  String get healthRecoveredTitle => 'System recovered';
+
+  @override
+  String get notifOpsOpenHealth => 'View system health';
+
+  @override
   String get reviewSectionTitle => 'Trip health';
 
   @override

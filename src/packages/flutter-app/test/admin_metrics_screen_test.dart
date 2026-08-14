@@ -4,8 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:travel_route_planner/models/admin_insights.dart';
 import 'package:travel_route_planner/models/admin_metrics.dart';
+import 'package:travel_route_planner/models/ops_health.dart';
+import 'package:travel_route_planner/models/ops_metrics.dart';
 import 'package:travel_route_planner/providers/admin_metrics_provider.dart';
+import 'package:travel_route_planner/providers/ops_admin_provider.dart';
 import 'package:travel_route_planner/screens/admin_metrics_screen.dart';
+
+import 'support/l10n_test_app.dart';
 
 // The Overview tab (default) watches totals alongside the windowed metrics;
 // tests that only exercise Overview still need this override so the totals
@@ -28,8 +33,7 @@ const _totals = AdminTotals(
 );
 
 void main() {
-  testWidgets('renders funnel and AI tiles from metrics',
-      (tester) async {
+  testWidgets('renders funnel and AI tiles from metrics', (tester) async {
     tester.view.physicalSize = const Size(800, 3600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -408,5 +412,41 @@ void main() {
     expect(find.text('1.5M / 250.0k'), findsOneWidget);
     expect(find.text('\$8.25'), findsOneWidget);
     expect(find.text('2026-06-01'), findsOneWidget);
+  });
+
+  // The destination half of the ops-notification tap: an ops_alert row pushes
+  // AdminMetricsScreen(initialTabIndex: healthTabIndex), so the Health pane
+  // must be on screen at the first frame without anyone tapping a tab.
+  testWidgets('initialTabIndex opens straight onto the Health tab',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          adminMetricsProvider(30)
+              .overrideWith((ref) async => const AdminMetrics(days: 30)),
+          adminTotalsProvider.overrideWith((ref) async => _totals),
+          opsHealthProvider.overrideWith((ref) async => const OpsHealth(
+                db: HealthDb(status: 'ok', pingMs: 3),
+                degraded: true,
+                reasons: ['backups stale'],
+                backups: BackupInfo(stale: true),
+              )),
+          opsMetricsProvider.overrideWith((ref) async => const OpsMetrics()),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: testLocalizationsDelegates,
+          home: const AdminMetricsScreen(
+              initialTabIndex: AdminMetricsScreen.healthTabIndex),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('System degraded'), findsOneWidget);
+    expect(find.text('• backups stale'), findsOneWidget);
   });
 }

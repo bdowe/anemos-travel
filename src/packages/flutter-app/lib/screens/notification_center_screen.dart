@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../models/notification.dart';
+import '../navigation/app_nav.dart';
+import '../navigation/app_routes.dart';
 import '../providers/notifications_provider.dart';
 import '../theme/spacing.dart';
 import '../utils/errors.dart';
@@ -10,6 +12,7 @@ import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/offline_banner.dart' show relativeTime;
 import '../widgets/page_container.dart';
+import 'admin_metrics_screen.dart';
 
 /// The notification center (Wave 16): every notification as a durable,
 /// read/unread feed row. Type-agnostic — each row renders from its `type` +
@@ -102,12 +105,32 @@ class _NotificationCenterScreenState
 /// is chosen by `type`: `price_drop` renders the flight-specific layout from its
 /// payload, and any unrecognized type falls back to a generic title/subtitle so
 /// a new backend type is never a blank row.
-class _NotificationTile extends StatelessWidget {
+class _NotificationTile extends ConsumerWidget {
   final AppNotification notification;
   const _NotificationTile({required this.notification});
 
+  /// Where this row leads, or null when it leads nowhere. Nullable by design:
+  /// `InkWell(onTap: null)` renders no ripple, no hover cursor and no button
+  /// semantics, so every type without a destination behaves exactly as it did
+  /// before there was a tap target at all. This is the one place to add the
+  /// next destination (`collab_edit` -> the trip, via `notification.tripId`).
+  ///
+  /// No admin gate on the ops arm: only admins are ever written `ops_alert`
+  /// rows (the monitor fans out over `ListAdminUsers`), and the screen it
+  /// opens is enforced by `adminMiddleware` server-side regardless. A second,
+  /// client-side notion of who is an admin would be a duplicated derivation.
+  VoidCallback? _tapAction(WidgetRef ref) => switch (notification.type) {
+        'ops_alert' || 'ops_recovered' => () => pushOnActiveTab(
+              ref,
+              const AdminMetricsScreen(
+                  initialTabIndex: AdminMetricsScreen.healthTabIndex),
+              location: utilityLocation(BootUtility.adminMetrics),
+            ),
+        _ => null,
+      };
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final unread = notification.isUnread;
     // tryParse: one malformed timestamp must degrade to a row without a
@@ -125,6 +148,11 @@ class _NotificationTile extends StatelessWidget {
           payload: notification.payload,
           unread: unread,
         ),
+      'ops_alert' || 'ops_recovered' => _OpsBody(
+          type: notification.type,
+          payload: notification.payload,
+          unread: unread,
+        ),
       _ => _GenericBody(
           type: notification.type,
           payload: notification.payload,
@@ -133,47 +161,54 @@ class _NotificationTile extends StatelessWidget {
     };
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Unread accent dot; a spacer keeps read rows aligned. The
-            // Semantics label announces unread state to screen readers —
-            // color/weight alone don't.
-            Padding(
-              padding: const EdgeInsets.only(top: 6, right: AppSpacing.md),
-              child: Semantics(
-                label: unread ? context.l10n.notifUnreadSemantic : null,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color:
-                        unread ? theme.colorScheme.primary : Colors.transparent,
+      // The ripple must be clipped to the card's rounded shape, or tapping
+      // squares off the corners.
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _tapAction(ref),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Unread accent dot; a spacer keeps read rows aligned. The
+              // Semantics label announces unread state to screen readers —
+              // color/weight alone don't.
+              Padding(
+                padding: const EdgeInsets.only(top: 6, right: AppSpacing.md),
+                child: Semantics(
+                  label: unread ? context.l10n.notifUnreadSemantic : null,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: unread
+                          ? theme.colorScheme.primary
+                          : Colors.transparent,
+                    ),
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  content,
-                  if (when != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      when,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    content,
+                    if (when != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        when,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -261,10 +296,108 @@ class _PriceDropBody extends StatelessWidget {
   }
 }
 
+/// Ops health signals for admins (`ops_alert` / `ops_recovered`, written by
+/// the API's health self-check). The payload carries `{degraded, reasons[]}`,
+/// so the row names WHAT is wrong — "backups stale", "AI provider failing:
+/// credit balance" — instead of falling through to [_GenericBody], which could
+/// only title-case the type into a contentless "Ops Alert".
+///
+/// The variant comes from `type`, not `payload['degraded']`: the type is
+/// already the discriminator, and deriving the same fact twice is how the two
+/// drift apart.
+///
+/// Layout deliberately mirrors `_DegradedBanner` in `widgets/health_pane.dart`
+/// (icon + title + reason bullets) WITHOUT its full-bleed errorContainer box —
+/// the feed row already supplies card chrome, the unread dot and the
+/// timestamp, so reusing the banner would nest a card inside a card. If a
+/// third context ever needs this, extract the shared shape then.
+class _OpsBody extends StatelessWidget {
+  final String type;
+  final Map<String, dynamic> payload;
+  final bool unread;
+  const _OpsBody({
+    required this.type,
+    required this.payload,
+    required this.unread,
+  });
+
+  /// The reasons the server recorded, defensively parsed: a malformed or
+  /// absent list must degrade to "no bullets", never throw in a feed row.
+  List<String> get _reasons {
+    final raw = payload['reasons'];
+    return raw is List ? raw.whereType<String>().toList() : const [];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final degraded = type == 'ops_alert';
+    final reasons = _reasons;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2, right: AppSpacing.sm),
+          child: Icon(
+            degraded ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+            size: 18,
+            color: degraded
+                ? theme.colorScheme.error
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                degraded ? l10n.healthDegradedTitle : l10n.healthRecoveredTitle,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: unread ? FontWeight.w700 : FontWeight.w500,
+                  color: unread
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              // Reason strings are canonical server values (computeHealthState
+              // in ops_health.go) and operator-facing, exactly like the ops
+              // alert email — rendered verbatim, only the headline is
+              // localized.
+              for (final r in reasons) ...[
+                const SizedBox(height: 2),
+                Text(
+                  '• $r',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 2),
+              // Without a hint the row is silently tappable — the exact
+              // discoverability gap this screen already had.
+              Text(
+                l10n.notifOpsOpenHealth,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.primary),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Fallback layout for any type the client doesn't specialize yet. Reads a
 /// `title` (or `message`/`body`) from the payload, else humanizes the type
 /// name, so a newly-added backend notification always renders something
 /// sensible instead of a blank row.
+///
+/// A row showing a title-cased type name (e.g. "Ops Alert") is the signal that
+/// the type has outgrown this fallback and wants its own arm in the switch
+/// above.
 class _GenericBody extends StatelessWidget {
   final String type;
   final Map<String, dynamic> payload;
