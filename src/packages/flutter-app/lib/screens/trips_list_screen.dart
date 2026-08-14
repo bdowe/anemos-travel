@@ -4,6 +4,7 @@ import '../l10n/l10n.dart';
 import '../navigation/app_nav.dart';
 import '../navigation/app_routes.dart';
 import '../theme/spacing.dart';
+import '../utils/trip_days.dart';
 import '../utils/trip_format.dart';
 import '../utils/trip_list_order.dart';
 import '../widgets/account_menu.dart';
@@ -12,10 +13,12 @@ import '../widgets/continue_chats_section.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/live_trip_card.dart';
+import '../widgets/meta_chip.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
 import '../widgets/status_pill.dart';
+import '../widgets/up_next_trip_card.dart';
 import '../models/chat_session.dart';
 import '../models/trip.dart';
 import '../providers/auth_provider.dart';
@@ -129,6 +132,16 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       // shared trips simply sort last.
       final sharedGroups = partitionTripsForList(shared, now);
       final sharedOrdered = [...sharedGroups.upcoming, ...sharedGroups.past];
+      // The soonest dated upcoming trip, promoted to an "Up next" hero. A
+      // live trip already owns the promoted slot, so the hero yields to it —
+      // one promoted object at a time. Unlike the live spotlight, the hero
+      // REPLACES its plain card (it shows strictly more), hence the dedupe.
+      final hero = liveTrip == null ? upNextTrip(groups.upcoming, now) : null;
+      final upcomingCards = [
+        for (final t in groups.upcoming)
+          if (t.id != hero?.id) t
+      ];
+      final stats = upcomingStats(groups.upcoming, now);
       body = RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(sharedWithMeProvider);
@@ -168,13 +181,57 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                   // empty and already ends in an AppSpacing.lg gap, so the
                   // My Trips header below needs no top padding of its own.
                   const ContinueChatsSection(),
-                  if (resumable.isNotEmpty && state.trips.isNotEmpty)
+                  // Always-on section header — before it existed only next to
+                  // a resumable-chats section, leaving the common case with
+                  // bare cards under the app bar. "Upcoming" (not the app
+                  // bar's "My Trips" again) mirrors "Past trips" below, and
+                  // its action is the populated list's one create affordance
+                  // (the empty state keeps its own Plan-a-trip button).
+                  if (state.trips.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(
                           AppSpacing.xs, 0, 0, AppSpacing.sm),
-                      child: SectionHeader(title: l10n.tripsListTitle),
+                      child: SectionHeader(
+                        title: l10n.tripsListUpcoming,
+                        action: TextButton.icon(
+                          onPressed: () => ref
+                              .read(navIndexProvider.notifier)
+                              .state = AppTab.plan.index,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: Text(l10n.tripsListNewTrip),
+                        ),
+                      ),
                     ),
-                  for (final t in groups.upcoming)
+                  // Aggregate line, only when there are enough NOT-started
+                  // trips for an aggregate to say anything a single card
+                  // doesn't (the stats exclude in-progress trips, so the
+                  // gate must read the same filtered count); zero segments
+                  // (undated trips, city-less legacy rows) drop out.
+                  if (stats.trips >= 2)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.xs, 0, 0, AppSpacing.sm),
+                      child: Text(
+                        [
+                          l10n.tripsListStatsUpcoming(stats.trips),
+                          if (stats.travelDays > 0)
+                            l10n.tripDurationDays(stats.travelDays),
+                          if (stats.cities > 0)
+                            l10n.tripCitiesCount(stats.cities),
+                        ].join(' · '),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                  if (hero != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: UpNextTripCard(
+                        trip: hero,
+                        onTap: () => _openTrip(context, hero.id),
+                      ),
+                    ),
+                  for (final t in upcomingCards)
                     _TripCard(trip: t, isAdmin: isAdmin),
                   if (groups.past.isNotEmpty)
                     Padding(
@@ -287,12 +344,16 @@ class _TripCard extends ConsumerWidget {
       two: (a, b) => l10n.citiesTwo(a, b),
       more: (a, b, n) => l10n.citiesMore(a, b, n),
     );
-    // Same rule as the trip-detail header (_displayTitle): the trip's own
-    // title unless it's really the AI summary, then the cities label. The
-    // cities line below is only shown when it isn't already the headline.
-    final usableTitle = trip.title.isNotEmpty && !tripTitleIsLong(trip.title);
-    final headline = usableTitle ? trip.title : (cities ?? trip.title);
+    // Same rule as the trip-detail header (_displayTitle) and the promoted
+    // cards, via the one shared helper. The cities line below is only shown
+    // when it isn't already the headline.
+    final headline = tripHeadline(trip.title, cities);
     final showCitiesLine = cities != null && headline != cities;
+    // Payload-only facts: duration from the date span (0 without both dates,
+    // so undated trips naturally skip the chip) and hub-city count (a
+    // "1 city" chip is noise when the cities line/headline already names it).
+    final days = dayCount(trip.startDate, trip.endDate, const <int?>[]);
+    final cityCount = trip.cities?.length ?? 0;
 
     final title = Text(
       headline,
@@ -315,9 +376,15 @@ class _TripCard extends ConsumerWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               if (range != null)
-                _DateChip(label: range)
+                MetaChip(label: range)
               else
                 Text(l10n.tripsListCreated(shortDate(trip.createdAt))),
+              if (days > 0)
+                MetaChip(icon: Icons.schedule, label: l10n.tripDurationDays(days)),
+              if (cityCount >= 2)
+                MetaChip(
+                    icon: Icons.location_city_outlined,
+                    label: l10n.tripCitiesCount(cityCount)),
               if (!trip.isOwner && (trip.ownerName ?? '').isNotEmpty)
                 Text(
                   trip.canEdit
@@ -373,43 +440,6 @@ class _TripCard extends ConsumerWidget {
         childrenPadding: const EdgeInsets.only(bottom: 8),
         children: [
           _VersionList(chatId: trip.chatId!, latestId: trip.id),
-        ],
-      ),
-    );
-  }
-}
-
-/// Display-only date range, styled as a tonal pill so it pairs with the
-/// [StatusPill] beside it and matches the trip-detail header's date chip.
-class _DateChip extends StatelessWidget {
-  final String label;
-  const _DateChip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 3,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.event,
-              size: 13, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: AppSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
         ],
       ),
     );

@@ -1677,6 +1677,60 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get tripsListUpcoming => 'Upcoming';
+
+  @override
+  String get tripsListNewTrip => 'New trip';
+
+  @override
+  String tripsListStatsUpcoming(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count upcoming trips',
+      one: '1 upcoming trip',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String tripDurationDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String tripCitiesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cities',
+      one: '1 city',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get upNextEyebrow => 'UP NEXT';
+
+  @override
+  String upNextStartsIn(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Starts in $days days',
+      one: 'Starts tomorrow',
+      zero: 'Starts today',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String tripsListCreated(String date) {
     return 'Created $date';
   }

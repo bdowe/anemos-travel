@@ -32,6 +32,15 @@ String? shortDateLabel(String? iso) {
 /// same trip never flips names between screens.
 bool tripTitleIsLong(String title) => title.contains('\n') || title.length > 60;
 
+/// The one display-title rule for trip cards ([tripTitleIsLong] applied): the
+/// trip's own title unless it's really the AI summary, then the [cities]
+/// label, then the raw title as a last resort. Shared by the trips list card,
+/// the live-trip tile, and the "Up next" hero so the same trip never flips
+/// names between cards. A card showing a separate cities line should suppress
+/// it when this returns the cities label itself.
+String tripHeadline(String title, String? cities) =>
+    title.isNotEmpty && !tripTitleIsLong(title) ? title : (cities ?? title);
+
 /// A short destination summary from a trip's hub cities: "Paris",
 /// "Mexico City & Puerto Vallarta", or "Tokyo & Kyoto +2 more". Null when
 /// there is no city data (legacy trips), so callers fall back to the title.

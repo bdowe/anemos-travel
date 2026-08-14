@@ -97,22 +97,23 @@ final recentTripProvider =
   return RecentTripNotifier(userId)..load();
 });
 
-/// Full cached detail of the recently viewed trip, feeding the home tile's
-/// map band. Cache-first and cache-ONLY: a miss (MRU eviction, fresh device)
-/// yields null and the tile renders its plain row — home never fetches, it
-/// only decorates what other screens load. The band therefore shows the trip
-/// *as of the last time this device viewed its detail* (accepted staleness:
-/// a collaborator's edit elsewhere appears on the next detail open).
+/// Full cached detail of a trip, feeding a card's map band (TripMapBand).
+/// Cache-first and cache-ONLY: a miss (MRU eviction, fresh device) yields
+/// null and the host card renders its plain row — list surfaces never fetch,
+/// they only decorate what other screens load. The band therefore shows the
+/// trip *as of the last time this device viewed its detail* (accepted
+/// staleness: a collaborator's edit elsewhere appears on the next detail
+/// open).
 ///
 /// Watches the WHOLE [recentTripProvider] state on purpose: [record] mints a
 /// fresh [RecentTrip] instance on every successful detail load, so this
-/// re-reads the just-rewritten cache after each detail view (edit → back home
+/// re-reads the just-rewritten cache after each detail view (edit → back
 /// shows the new route). [TripCache.readTrip] drains queued writes first, so
 /// that read-after-write is safe. Watching [tripCacheProvider] (auth-keyed)
 /// re-resolves to null on sign-out.
-final recentTripDetailProvider = FutureProvider<Trip?>((ref) async {
-  final recent = ref.watch(recentTripProvider);
-  if (recent == null) return null;
-  final cached = await ref.watch(tripCacheProvider).readTrip(recent.tripId);
+final cachedTripDetailProvider =
+    FutureProvider.family<Trip?, String>((ref, tripId) async {
+  ref.watch(recentTripProvider);
+  final cached = await ref.watch(tripCacheProvider).readTrip(tripId);
   return cached?.trip;
 });

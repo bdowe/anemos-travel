@@ -46,6 +46,28 @@ void main() {
     });
   });
 
+  group('daysUntilTrip', () {
+    final today = DateTime(2026, 8, 13, 22, 30); // time of day is ignored
+
+    test('counts whole local days to the start date', () {
+      expect(daysUntilTrip('2026-08-24', today), 11);
+      expect(daysUntilTrip('2026-08-14', today), 1);
+    });
+
+    test('a trip starting today is 0, not null', () {
+      expect(daysUntilTrip('2026-08-13', today), 0);
+    });
+
+    test('a started trip has no countdown', () {
+      expect(daysUntilTrip('2026-08-12', today), isNull);
+    });
+
+    test('missing or garbage start dates yield null', () {
+      expect(daysUntilTrip(null, today), isNull);
+      expect(daysUntilTrip('not-a-date', today), isNull);
+    });
+  });
+
   group('dayCount', () {
     test('date span wins when items are untagged', () {
       expect(dayCount('2026-06-10', '2026-06-14', [null, null]), 5);
