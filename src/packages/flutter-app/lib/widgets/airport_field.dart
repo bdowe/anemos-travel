@@ -8,10 +8,26 @@ import '../providers/flights_provider.dart';
 import '../theme/spacing.dart';
 import '../utils/errors.dart';
 
-/// An airport/city autocomplete field backed by [airportSearchProvider]. When a
-/// place is selected it shows the chosen label with a clear button; otherwise it
-/// shows a search box with a live suggestion dropdown. Shared by the Find
-/// Flights screen and the Travel profile (home airport).
+/// An airport/city autocomplete field backed by [airportSearchProvider]. Shared
+/// by the Find Flights screen, the onboarding quiz and the Travel profile
+/// (home airport).
+///
+/// **One mode, always editable.** The field is a real [TextField] holding the
+/// selected airport's label, so a value that is already set can be typed over
+/// in place. It used to render a chosen airport as static text with only a
+/// clear button, which made an existing value impossible to edit — the Travel
+/// profile seeds [selected] from the server, so that page always opened in the
+/// non-editable state.
+///
+/// [selected] remains the authoritative value: typing voids a stale pick
+/// (`onSelected(null)`) so the visible text can never disagree with what the
+/// parent will save. A parent therefore has to treat "text present, selection
+/// null" as an unresolved edit rather than as "no airport".
+///
+/// [selected] must be a stable field on the parent's `State`. The re-seed guard
+/// compares [Airport.label] rather than instances (Airport has no `==`), so a
+/// value rebuilt each frame is harmless, but a parent that derives [selected]
+/// instead of honoring `onSelected(null)` would fight the user's typing.
 class AirportField extends ConsumerStatefulWidget {
   final String label;
   final IconData icon;
@@ -32,20 +48,99 @@ class AirportField extends ConsumerStatefulWidget {
 
 class _AirportFieldState extends ConsumerState<AirportField> {
   final _controller = TextEditingController();
+  final _focus = FocusNode();
   Timer? _debounce;
   String _query = ''; // debounced search text driving airportSearchProvider
+
+  /// True once the user has edited the text and before that edit is committed
+  /// (a pick, a clear, or an accepted seed). While dirty the field belongs to
+  /// the user: a parent selection that lands late must not overwrite what they
+  /// are in the middle of typing.
+  bool _dirty = false;
+
+  /// At most one pending post-frame `onSelected(null)` (see [_voidSelectionSoon]).
+  bool _pendingVoid = false;
+
+  /// One-shot: the next tap after focusing an untouched value selects the whole
+  /// label so typing replaces the airport, instead of editing "Paris (CDG)"
+  /// character by character. Later taps position the caret normally.
+  bool _selectAllOnTap = false;
 
   /// Hides the suggestion list after an outside tap without discarding the
   /// typed text; typing or tapping back into the field re-opens it.
   bool _dismissed = false;
 
+  /// Deliberately does NOT test [_focus] — a suggestion row is an [InkWell],
+  /// which takes focus on click on desktop/web, so a focus term here would
+  /// tear the list down under the pointer and make picking impossible. The
+  /// orphaned-list case it would have guarded (a seed landing under an open
+  /// dropdown) is already closed by [_acceptSeed].
   bool get _listOpen => !_dismissed && _query.trim().length >= 2;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load-bearing on Find Flights: that form is built only while expanded, so
+    // this State is recreated on every collapse/expand and a value already held
+    // by the parent would otherwise come back as an empty box.
+    final label = widget.selected?.label;
+    if (label != null) _setText(label);
+    _focus.addListener(_onFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(AirportField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final selected = widget.selected;
+    // Never re-seed from a null selection: onChanged voids the pick on every
+    // keystroke, so doing so would wipe the character just typed.
+    if (selected == null || selected.label == _controller.text) return;
+    if (_dirty) {
+      // A parent selection landed while the user was typing — Find Flights
+      // resolves its origin asynchronously and can answer minutes after the
+      // field was first shown. The user wins; the parent is told its selection
+      // is void, but not from here (see [_voidSelectionSoon]).
+      _voidSelectionSoon();
+      return;
+    }
+    _acceptSeed(selected.label);
+  }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _focus.removeListener(_onFocusChanged);
+    _focus.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Writes [text] with the caret at the end. Never assign `_controller.text`
+  /// directly: that setter parks the selection at offset -1, which the engine
+  /// normalizes to 0, so the next keystroke lands in *front* of the value.
+  void _setText(String text) {
+    if (text == _controller.text) return; // don't disturb the user's caret
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  void _selectAll() {
+    if (_controller.text.isEmpty) return;
+    _controller.selection =
+        TextSelection(baseOffset: 0, extentOffset: _controller.text.length);
+  }
+
+  void _onFocusChanged() {
+    if (!_focus.hasFocus) {
+      _selectAllOnTap = false;
+      return;
+    }
+    _selectAllOnTap = !_dirty && widget.selected != null;
+    // Covers focus arriving without a tap (keyboard traversal); a tap re-runs
+    // it from onTap, after the gesture has positioned the caret.
+    if (_selectAllOnTap) _selectAll();
   }
 
   /// Debounces the [_query] update that drives [airportSearchProvider] so one
@@ -59,12 +154,58 @@ class _AirportFieldState extends ConsumerState<AirportField> {
     });
   }
 
-  /// Clears the field immediately (selection / clear button), cancelling any
-  /// pending debounce so stale text can't resurrect the dropdown afterwards.
-  void _resetQuery() {
+  /// Accepts a selection handed down by the parent (first seed, or an async
+  /// resolve). A full reset, not just a text write: leaving [_query] and the
+  /// armed debounce in place would keep the dropdown showing results for the
+  /// text this just replaced, or reopen it 350 ms later.
+  void _acceptSeed(String label) {
     _debounce?.cancel();
-    _controller.clear();
-    setState(() => _query = '');
+    _setText(label);
+    _query = '';
+    _dismissed = true;
+    _dirty = false;
+  }
+
+  /// Reports a voided selection to the parent after the current frame.
+  /// [didUpdateWidget] runs during build and every call site sits below the
+  /// element owning the build scope, so calling [AirportField.onSelected]
+  /// synchronously from there throws "setState() called during build".
+  void _voidSelectionSoon() {
+    if (_pendingVoid) return;
+    _pendingVoid = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pendingVoid = false;
+      if (mounted && _dirty && widget.selected != null) {
+        widget.onSelected(null);
+      }
+    });
+  }
+
+  /// Commits a pick: the field shows the chosen label and the list closes.
+  void _commit(Airport airport) {
+    _debounce?.cancel();
+    widget.onSelected(airport);
+    setState(() {
+      _setText(airport.label);
+      // Clearing _query is what closes the list. airportSearchProvider is not
+      // autoDispose, so leaving a stale query would let the next onTap reopen
+      // the dropdown instantly with the pre-pick rows.
+      _query = '';
+      _dismissed = true;
+      _dirty = false;
+    });
+  }
+
+  /// Clears both the text and the selection (the trailing X).
+  void _clear() {
+    _debounce?.cancel();
+    widget.onSelected(null);
+    setState(() {
+      _controller.clear();
+      _query = '';
+      _dismissed = false;
+      _dirty = false;
+    });
   }
 
   /// Shared bordered shell for the suggestion list and its empty/error rows,
@@ -85,33 +226,7 @@ class _AirportFieldState extends ConsumerState<AirportField> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    final selected = widget.selected;
     final muted = theme.colorScheme.onSurfaceVariant;
-
-    if (selected != null) {
-      return InputDecorator(
-        decoration: InputDecoration(
-          labelText: widget.label,
-          prefixIcon: Icon(widget.icon),
-          border: const OutlineInputBorder(),
-          suffixIcon: IconButton(
-            tooltip: l10n.airportFieldClearTooltip,
-            icon: const Icon(Icons.close),
-            onPressed: () {
-              widget.onSelected(null);
-              _resetQuery();
-            },
-          ),
-        ),
-        child: Text(
-          selected.label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style:
-              theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
-        ),
-      );
-    }
 
     // TapRegion: a tap anywhere outside the field + list dismisses the list
     // (the inline dropdown otherwise only closes on selection).
@@ -123,17 +238,37 @@ class _AirportFieldState extends ConsumerState<AirportField> {
         children: [
           TextField(
             controller: _controller,
+            focusNode: _focus,
             decoration: InputDecoration(
               labelText: widget.label,
               hintText: l10n.airportFieldHint,
               prefixIcon: Icon(widget.icon),
               border: const OutlineInputBorder(),
+              suffixIcon: _controller.text.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: l10n.airportFieldClearTooltip,
+                      icon: const Icon(Icons.close),
+                      onPressed: _clear,
+                    ),
             ),
-            onTap: () => setState(() => _dismissed = false),
-            onChanged: (v) {
-              // Reopen the list immediately; only the provider-feeding
-              // _query update is debounced.
+            onTap: () {
+              if (_selectAllOnTap) {
+                _selectAllOnTap = false;
+                _selectAll();
+              }
               setState(() => _dismissed = false);
+            },
+            onChanged: (v) {
+              // Typing voids a stale pick so the text on screen can never
+              // disagree with the value the parent holds. Programmatic writes
+              // never reach onChanged, so this cannot loop with the
+              // didUpdateWidget re-seed.
+              if (widget.selected != null) widget.onSelected(null);
+              setState(() {
+                _dirty = true;
+                _dismissed = false;
+              });
               _onSearchChanged(v);
             },
           ),
@@ -172,10 +307,7 @@ class _AirportFieldState extends ConsumerState<AirportField> {
                                       subtitle: a.country.isEmpty
                                           ? null
                                           : Text(a.country),
-                                      onTap: () {
-                                        widget.onSelected(a);
-                                        _resetQuery();
-                                      },
+                                      onTap: () => _commit(a),
                                     ))
                                 .toList(),
                           ),
