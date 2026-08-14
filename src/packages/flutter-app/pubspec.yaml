@@ -123,16 +123,18 @@ dev_dependencies:
 
 # Native launch screens (iOS/Android) shown while the engine boots, before the
 # in-app SplashScreen takes over. Solid #00695C (the brand teal mid-tone; the
-# gradient isn't expressible natively) + the same white badge as the web splash
-# (assets/splash/badge_4x.png, 480px = 4x the 120dp badge, rendered from the
-# index.html CSS). web: false — index.html has its own hand-crafted splash.
+# gradient isn't expressible natively) + the same bare light mark as the web
+# splash (assets/splash/mark_light_4x.png, 384px = 4x the 96dp mark — no white
+# plate). Android 12+ masks its icon to a circle, so it gets its own safe-zone
+# seed (mark_light_android12.png, 768px mark centered on a 1152px canvas).
+# web: false — index.html has its own hand-crafted splash.
 flutter_native_splash:
   color: "#00695C"
-  image: assets/splash/badge_4x.png
+  image: assets/splash/mark_light_4x.png
   web: false
   android_12:
     color: "#00695C"
-    image: assets/splash/badge_4x.png
+    image: assets/splash/mark_light_android12.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

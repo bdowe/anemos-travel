@@ -14,6 +14,15 @@ from `src/packages/flutter-app/assets/fonts/`). Because of that external
 reference + live text, always render via the pipeline below, never by loading
 lockup.svg as a plain `<img>`.
 
+`mark-light.svg` is the **reversed variant for teal fields** (the boot
+splash): cardinal points recolored white/`#B2DFDB` (teal-100), gold
+intercardinals and the hub unchanged. It duplicates mark.svg's point geometry
+— a geometry change in one must be mirrored in the other (both headers say
+so). Plate policy after the splash redesign: the **splash floats the bare
+light mark** on the teal gradient — no white plate; **gradient app bars still
+plate the dark mark** on a light `BrandBadge` (see
+`lib/widgets/brand_logo.dart`).
+
 ## Rendering pipeline (committed — do not run rasterizers ad hoc)
 
 ```
@@ -30,14 +39,16 @@ below is generated — edit the SVGs or harnesses, never the PNGs.**
 | Rendered via | File | Size |
 |---|---|---|
 | render/mark.html | `flutter-app/assets/images/anemos_mark.png` | 540 |
-| render/mark.html | `flutter-app/web/splash/anemos_mark.png` (copy) | 540 |
 | render/mark.html | `flutter-app/web/favicon.png` | 64 |
+| render/mark-light.html | `flutter-app/assets/images/anemos_mark_light.png` | 540 |
+| render/mark-light.html | `flutter-app/web/splash/anemos_mark_light.png` (copy) | 540 |
+| render/mark-light.html (shrunk) | `flutter-app/assets/splash/mark_light_4x.png` | 384 |
+| render/splash-android12.html (768 mark in 1152 safe zone) | `flutter-app/assets/splash/mark_light_android12.png` | 1152 |
 | render/icon84.html (84%, transparent) | `flutter-app/web/icons/Icon-192/512.png` | 384 / 1024 |
 | render/maskable.html (64%, white) | `flutter-app/web/icons/Icon-maskable-192/512.png` | 384 / 1024 |
-| render/badge.html (white rounded square) | `flutter-app/assets/splash/badge_4x.png` | 480 |
 | render/lockup.html | `flutter-app/assets/images/anemos_logo.png` | 1024 |
 | render/ogcard.html (teal gradient + tagline) | `flutter-app/web/og-card.png` | 1200×630 |
-| ↳ flutter_native_splash (from badge_4x) | iOS LaunchImage*, Android `splash.png`/`android12splash.png` (+night) | ladders |
+| ↳ flutter_native_splash (from the mark_light seeds) | iOS LaunchImage*, Android `splash.png`/`android12splash.png` (+night) | ladders |
 | ↳ flutter_launcher_icons (from Icon-maskable-512) | iOS/Android/macOS/Windows app icons | ladders |
 
 Historical gotcha this table exists to prevent: og-card and badge_4x were
