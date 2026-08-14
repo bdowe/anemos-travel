@@ -174,6 +174,66 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsInterestArchitecture => 'arquitectura';
 
   @override
+  String get prefsInterestLiveMusic => 'música en vivo';
+
+  @override
+  String get prefsInterestBars => 'bares';
+
+  @override
+  String get prefsInterestTheater => 'teatro';
+
+  @override
+  String get prefsInterestFestivals => 'festivales';
+
+  @override
+  String get prefsInterestLocalMarkets => 'mercados locales';
+
+  @override
+  String get prefsInterestStreetFood => 'comida callejera';
+
+  @override
+  String get prefsInterestCoffee => 'café';
+
+  @override
+  String get prefsInterestWine => 'vino';
+
+  @override
+  String get prefsInterestCraftBeer => 'cerveza artesanal';
+
+  @override
+  String get prefsInterestFineDining => 'alta cocina';
+
+  @override
+  String get prefsInterestHiking => 'senderismo';
+
+  @override
+  String get prefsInterestWildlife => 'vida silvestre';
+
+  @override
+  String get prefsInterestWaterSports => 'deportes acuáticos';
+
+  @override
+  String get prefsInterestSkiing => 'esquí';
+
+  @override
+  String get prefsInterestRoadTrips => 'viajes por carretera';
+
+  @override
+  String get prefsInterestPhotography => 'fotografía';
+
+  @override
+  String get prefsInterestStreetArt => 'arte urbano';
+
+  @override
+  String get prefsInterestWellness => 'bienestar';
+
+  @override
+  String get prefsInterestSpas => 'spas';
+
+  @override
+  String get prefsInterestSportsEvents => 'eventos deportivos';
+
+  @override
   String get ssoContinueWithGoogle => 'Continuar con Google';
 
   @override

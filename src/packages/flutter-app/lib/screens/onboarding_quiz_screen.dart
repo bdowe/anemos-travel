@@ -10,6 +10,7 @@ import '../widgets/airport_field.dart';
 import '../widgets/choice_chip_row.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
+import '../widgets/interest_picker.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
 import '../utils/snack.dart';
@@ -19,18 +20,6 @@ import '../utils/snack.dart';
 // translated — only their display labels are (specs/i18n-spanish).
 const _budgets = ['budget', 'mid', 'luxury'];
 const _paces = ['relaxed', 'balanced', 'packed'];
-const _suggestedInterests = [
-  'museums',
-  'food',
-  'nightlife',
-  'nature',
-  'history',
-  'art',
-  'shopping',
-  'outdoors',
-  'beaches',
-  'architecture',
-];
 const _companionOptions = [
   'solo',
   'partner',
@@ -51,22 +40,6 @@ String _paceLabel(AppLocalizations l10n, String value) => switch (value) {
       'relaxed' => l10n.prefsPaceRelaxed,
       'balanced' => l10n.prefsPaceBalanced,
       'packed' => l10n.prefsPacePacked,
-      _ => value,
-    };
-
-/// Suggested interests get translated labels; anything the traveler typed
-/// themselves is shown exactly as they wrote it.
-String _interestLabel(AppLocalizations l10n, String value) => switch (value) {
-      'museums' => l10n.prefsInterestMuseums,
-      'food' => l10n.prefsInterestFood,
-      'nightlife' => l10n.prefsInterestNightlife,
-      'nature' => l10n.prefsInterestNature,
-      'history' => l10n.prefsInterestHistory,
-      'art' => l10n.prefsInterestArt,
-      'shopping' => l10n.prefsInterestShopping,
-      'outdoors' => l10n.prefsInterestOutdoors,
-      'beaches' => l10n.prefsInterestBeaches,
-      'architecture' => l10n.prefsInterestArchitecture,
       _ => value,
     };
 
@@ -159,13 +132,11 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
   }
 
   Airport? _homeAirport;
-  final _interestController = TextEditingController();
   final _tripsController = TextEditingController();
 
   @override
   void dispose() {
     _pageController.dispose();
-    _interestController.dispose();
     _tripsController.dispose();
     super.dispose();
   }
@@ -177,14 +148,6 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
     );
-  }
-
-  void _addInterest() {
-    final t = _interestController.text.trim();
-    if (t.isNotEmpty) {
-      setState(() => _interests.add(t));
-      _interestController.clear();
-    }
   }
 
   Future<void> _skip() async {
@@ -340,42 +303,13 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                 title: l10n.quizInterestsTitle,
                 subtitle: l10n.quizInterestsSubtitle,
                 children: [
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.xs,
-                    children:
-                        {..._suggestedInterests, ..._interests}.map((label) {
-                      final selected = _interests.contains(label);
-                      return FilterChip(
-                        label: Text(_interestLabel(l10n, label)),
-                        selected: selected,
-                        onSelected: (sel) => setState(() {
-                          if (sel) {
-                            _interests.add(label);
-                          } else {
-                            _interests.remove(label);
-                          }
-                        }),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _interestController,
-                          decoration:
-                              InputDecoration(hintText: l10n.prefsAddInterest),
-                          onSubmitted: (_) => _addInterest(),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        tooltip: l10n.prefsAddInterest,
-                        onPressed: _addInterest,
-                      ),
-                    ],
+                  InterestPicker(
+                    selected: _interests,
+                    onChanged: (next) => setState(
+                      () => _interests
+                        ..clear()
+                        ..addAll(next),
+                    ),
                   ),
                 ],
               ),
