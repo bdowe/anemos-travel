@@ -299,7 +299,7 @@ var printViewTmpl = template.Must(template.New("print-view").Parse(`<!DOCTYPE ht
 <body>
   <header>
     <div class="wrap">
-      <p class="brand"><img src="/app/icons/Icon-512.png" alt="">Anemos</p>
+      <p class="brand"><img src="/app/icons/Icon-512.png?v=2" alt="">Anemos</p>
       <h1>{{.Title}}</h1>
       {{if .Dates}}<p class="meta">{{.Dates}}</p>{{end}}
     </div>

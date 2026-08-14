@@ -48,7 +48,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Anemos">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <!-- ?v=2 busts nginx's year-long immutable cache on /app/icons/* (Anemos art) -->
+  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=2">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
@@ -133,7 +134,7 @@
 <body>
   <div id="splash">
     <div class="splash-badge">
-      <img src="splash/golden_tempo_mark.png" alt="Anemos">
+      <img src="splash/anemos_mark.png" alt="Anemos">
     </div>
     <div class="splash-spinner"></div>
   </div>

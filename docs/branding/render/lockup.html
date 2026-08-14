@@ -1,0 +1,16 @@
+<!-- Render harness: full lockup (rose + "Anemos" wordmark) at 1024.
+     Uses <object> so lockup.svg may resolve its external mark.svg reference,
+     and loads Playfair Display from the app's bundled font so the live
+     <text> renders identically to the app. Requires Chrome flag
+     --allow-file-access-from-files (brand-render.sh passes it). -->
+<!doctype html>
+<html><head><style>
+  @font-face{
+    font-family:'Playfair Display';
+    font-weight:600;
+    src:url('../../../src/packages/flutter-app/assets/fonts/PlayfairDisplay-SemiBold.ttf') format('truetype');
+  }
+  html,body{margin:0;padding:0;background:transparent}
+  object{display:block;width:1024px;height:1024px}
+</style></head>
+<body><object type="image/svg+xml" data="../lockup.svg"></object></body></html>
