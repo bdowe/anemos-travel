@@ -266,7 +266,12 @@ var messages = map[string]map[string]string{
 	"review.fix.reschedule":       {"en": "Reschedule", "es": "Reprogramar"},
 	"review.fix.setDates":         {"en": "Set dates", "es": "Añadir fechas"},
 	"review.itemBeyondSpan":       {"en": "%q is on day %d, past the trip's %d-day span.", "es": "%q está en el día %d, más allá de la duración de %d días del viaje."},
-	"review.mayBeClosed":          {"en": "%s may be closed on %s (Day %d).", "es": "%s puede estar cerrado el %s (día %d)."},
+	// review.ladder.* — rung labels for the plan-progress sheet, needed only by
+	// the rungs with no step title of their own. Phase 3 covers lodging AND
+	// transport, so neither review.next.addLodging/addTransport title names it;
+	// every other rung reuses its step title (see planLadder).
+	"review.ladder.bookings": {"en": "Book travel & stays", "es": "Reserva transporte y alojamiento"},
+	"review.mayBeClosed":     {"en": "%s may be closed on %s (Day %d).", "es": "%s puede estar cerrado el %s (día %d)."},
 	// review.next.* — the Next Step CTA ladder (trip_next_step.go). Titles are
 	// short imperatives; details are one supporting line. The booking-slot walk
 	// (phase 3) builds its own bookStay/bookTransport copy from the slot; the

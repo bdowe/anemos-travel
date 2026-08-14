@@ -4208,6 +4208,42 @@ abstract class AppLocalizations {
   /// **'Dismiss'**
   String get nextStepAllSetDismiss;
 
+  /// No description provided for @nextStepViewProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'View all steps'**
+  String get nextStepViewProgress;
+
+  /// No description provided for @planProgressTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan progress'**
+  String get planProgressTitle;
+
+  /// No description provided for @planProgressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Steps unlock in order — finish this one and the next opens.'**
+  String get planProgressHint;
+
+  /// No description provided for @planProgressStateDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get planProgressStateDone;
+
+  /// No description provided for @planProgressStateCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current step'**
+  String get planProgressStateCurrent;
+
+  /// No description provided for @planProgressStateLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get planProgressStateLater;
+
   /// No description provided for @notifTitle.
   ///
   /// In en, this message translates to:

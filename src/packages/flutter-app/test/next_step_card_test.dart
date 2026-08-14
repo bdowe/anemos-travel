@@ -15,6 +15,15 @@ const _lodgingStep = NextStep(
   detail: 'No lodging booked for the nights of Sep 1 – Sep 2 (2 nights).',
 );
 
+const _progress = PlanProgress(done: 2, total: 6, phases: [
+  PlanPhase(id: 'dates', label: 'Set your travel dates'),
+  PlanPhase(id: 'itinerary', label: 'Plan your days'),
+  PlanPhase(id: 'bookings', label: 'Book travel & stays'),
+  PlanPhase(id: 'schedule', label: 'Tidy up your schedule'),
+  PlanPhase(id: 'confirm', label: 'Book everything'),
+  PlanPhase(id: 'packing', label: 'Start your packing list'),
+]);
+
 const _allSetStep = NextStep(
   kind: 'all_set',
   title: "You're all set",
@@ -29,7 +38,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_app(NextStepCard(
       step: _lodgingStep,
-      progress: const PlanProgress(done: 2, total: 6),
+      progress: _progress,
       onPrimary: () {},
       onViewAll: () {},
     )));
@@ -38,8 +47,58 @@ void main() {
     expect(find.text('Book a place to stay'), findsOneWidget);
     expect(find.textContaining('No lodging booked'), findsOneWidget);
     expect(find.text('Find lodging'), findsOneWidget); // add_lodging action
-    expect(find.text('View all'), findsOneWidget);
+    // The secondary entry names its destination — the health sheet's own
+    // title — instead of the old ambiguous "View all" beside a step counter.
+    expect(find.text('Trip health'), findsOneWidget);
     expect(find.byIcon(Icons.hotel_outlined), findsOneWidget);
+  });
+
+  // The eyebrow counter is the ladder's entry point (specs/next-step-cta): it
+  // must open the progress sheet and, sitting inside the card-wide InkWell,
+  // must NOT also fire the primary action.
+  testWidgets('the progress counter opens the ladder, not the primary action',
+      (tester) async {
+    var progressTaps = 0, primaryTaps = 0;
+    await tester.pumpWidget(_app(NextStepCard(
+      step: _lodgingStep,
+      progress: _progress,
+      onPrimary: () => primaryTaps++,
+      onViewProgress: () => progressTaps++,
+    )));
+
+    expect(find.byIcon(Icons.expand_more), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('next-step-progress')));
+    expect(progressTaps, 1);
+    expect(primaryTaps, 0);
+  });
+
+  testWidgets('no progress callback leaves a plain, untappable eyebrow',
+      (tester) async {
+    await tester.pumpWidget(_app(NextStepCard(
+      step: _lodgingStep,
+      progress: _progress,
+      onPrimary: () {},
+    )));
+
+    expect(find.text('NEXT STEP · 3 of 6'), findsOneWidget);
+    expect(find.byKey(const ValueKey('next-step-progress')), findsNothing);
+    expect(find.byIcon(Icons.expand_more), findsNothing);
+  });
+
+  // Explaining the counter is a pure read of the payload already on screen, so
+  // it survives the offline disable that kills every acting affordance.
+  testWidgets('the progress entry still opens while offline', (tester) async {
+    var opened = false;
+    await tester.pumpWidget(_app(NextStepCard(
+      step: _lodgingStep,
+      progress: _progress,
+      enabled: false,
+      onPrimary: () {},
+      onViewProgress: () => opened = true,
+    )));
+
+    await tester.tap(find.byKey(const ValueKey('next-step-progress')));
+    expect(opened, isTrue);
   });
 
   testWidgets('primary fires from the button and the whole card',
@@ -73,18 +132,23 @@ void main() {
     expect(fired, isFalse);
   });
 
-  testWidgets('compact drops detail and View all but keeps the action',
+  // Compact sheds the detail line and the health entry, but NOT the progress
+  // entry: the counter renders at every width, so its explanation must too.
+  testWidgets('compact drops detail and Trip health, keeps action + counter',
       (tester) async {
     await tester.pumpWidget(_app(NextStepCard(
       step: _lodgingStep,
+      progress: _progress,
       compact: true,
       onPrimary: () {},
       onViewAll: () {},
+      onViewProgress: () {},
     )));
 
     expect(find.textContaining('No lodging booked'), findsNothing);
     expect(find.byKey(const ValueKey('next-step-view-all')), findsNothing);
     expect(find.byKey(const ValueKey('next-step-primary')), findsOneWidget);
+    expect(find.byKey(const ValueKey('next-step-progress')), findsOneWidget);
   });
 
   testWidgets('unknown kind falls back to the fix label', (tester) async {

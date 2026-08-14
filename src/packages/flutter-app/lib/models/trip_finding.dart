@@ -168,15 +168,47 @@ class NextStep {
 
 /// Prefix progress through the planning ladder: [done] phases are complete
 /// from the top, so the current step is phase done+1 of [total]. The total is
-/// server-owned so the ladder can grow without a client release.
+/// server-owned so the ladder can grow without a client release — and so are
+/// [phases], the rungs themselves, which is what lets the progress sheet name
+/// the six steps the "N of 6" counter counts.
+///
+/// [phases] carries no per-rung state: prefix progress already says it —
+/// index < [done] is complete, == [done] is the current step, > [done] is
+/// later — so that derivation lives in exactly one place (the sheet).
+/// Empty when the payload predates the ladder (older server, cached
+/// response); callers gate their entry point on it rather than opening an
+/// empty sheet.
 @JsonSerializable()
 class PlanProgress {
   final int done;
   final int total;
 
-  const PlanProgress({required this.done, required this.total});
+  @JsonKey(defaultValue: <PlanPhase>[])
+  final List<PlanPhase> phases;
+
+  const PlanProgress({
+    required this.done,
+    required this.total,
+    this.phases = const [],
+  });
 
   factory PlanProgress.fromJson(Map<String, dynamic> json) =>
       _$PlanProgressFromJson(json);
   Map<String, dynamic> toJson() => _$PlanProgressToJson(this);
+}
+
+/// One rung of the planning ladder. [id] is the stable, locale-independent
+/// identity (dates | itinerary | bookings | schedule | confirm | packing —
+/// treat unknown ids as future rungs and render them by [label] alone);
+/// [label] is localized display copy and nothing else.
+@JsonSerializable()
+class PlanPhase {
+  final String id;
+  final String label;
+
+  const PlanPhase({required this.id, required this.label});
+
+  factory PlanPhase.fromJson(Map<String, dynamic> json) =>
+      _$PlanPhaseFromJson(json);
+  Map<String, dynamic> toJson() => _$PlanPhaseToJson(this);
 }

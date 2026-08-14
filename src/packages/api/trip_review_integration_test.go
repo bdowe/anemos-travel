@@ -33,6 +33,30 @@ func reviewCategories(t *testing.T, id, token string) map[string]bool {
 	return found
 }
 
+// assertLadderJSON pins the wire shape of plan_progress.phases: the whole
+// ladder, in order, with ids that survive rewording and a label for each. The
+// client's progress sheet renders exactly this, so an empty or reordered array
+// is a silent UI regression, not a cosmetic one.
+func assertLadderJSON(t *testing.T, progress map[string]any) {
+	t.Helper()
+	phases, ok := progress["phases"].([]any)
+	if !ok || len(phases) != planLadderTotal {
+		t.Fatalf("plan_progress.phases = %v, want %d entries", progress["phases"], planLadderTotal)
+	}
+	for i, raw := range phases {
+		p, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("phase %d = %v, want an object", i, raw)
+		}
+		if p["id"] != planLadder[i].ID {
+			t.Fatalf("phase %d id = %v, want %q", i, p["id"], planLadder[i].ID)
+		}
+		if label, _ := p["label"].(string); label == "" {
+			t.Fatalf("phase %d (%v) has no label", i, p["id"])
+		}
+	}
+}
+
 func TestTripReview_BrokenTrip(t *testing.T) {
 	resetDB(t)
 	owner, ownerToken := createTestUser(t, "owner@example.com")
@@ -176,6 +200,7 @@ func TestTripReview_NextStepPayload(t *testing.T) {
 	if !ok || progress["done"] != float64(1) || progress["total"] != float64(6) {
 		t.Fatalf("plan_progress = %v, want 1/6", body["plan_progress"])
 	}
+	assertLadderJSON(t, progress)
 
 	// check_hours must not change the step (deterministic across variants).
 	hoursKind, _ := stepKind("?check_hours=true")
@@ -258,6 +283,7 @@ func TestTripReview_NextStepWalkIntegration(t *testing.T) {
 		if !ok || progress["done"] != float64(2) || progress["total"] != float64(6) {
 			t.Fatalf("plan_progress = %v, want 2/6", body["plan_progress"])
 		}
+		assertLadderJSON(t, progress)
 		return s
 	}
 

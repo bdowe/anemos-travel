@@ -109,6 +109,26 @@ func mustStep(t *testing.T, step *NextStep, progress *PlanProgress, kind string,
 	if progress.Done != done || progress.Total != planLadderTotal {
 		t.Fatalf("progress = %d/%d, want %d/%d", progress.Done, progress.Total, done, planLadderTotal)
 	}
+	// The ladder rides on EVERY step: the card's "N of 6" is unreadable
+	// without it, and the client renders whatever order arrives here.
+	mustLadder(t, progress)
+}
+
+// mustLadder asserts the wire ladder matches planLadder — same length as
+// Total, ids in order, every label filled.
+func mustLadder(t *testing.T, progress *PlanProgress) {
+	t.Helper()
+	if len(progress.Phases) != progress.Total {
+		t.Fatalf("phases = %d, want %d (Total)", len(progress.Phases), progress.Total)
+	}
+	for i, p := range progress.Phases {
+		if p.ID != planLadder[i].ID {
+			t.Fatalf("phase %d id = %q, want %q", i, p.ID, planLadder[i].ID)
+		}
+		if p.Label == "" {
+			t.Fatalf("phase %d (%s) has no label", i, p.ID)
+		}
+	}
 }
 
 func TestNextStep_Undated(t *testing.T) {
@@ -788,5 +808,44 @@ func TestNextStep_IgnoresWeatherAndHoursFindings(t *testing.T) {
 				t.Fatalf("progress diverges: %d vs %d", baseProg.Done, noiseProg.Done)
 			}
 		})
+	}
+}
+
+// The ladder on the wire (specs/next-step-cta): ids are the stable identity
+// clients and tests key on — they do NOT move with the copy or the locale —
+// while labels are localized display text. Pinned end to end because the
+// progress sheet renders these labels in this order and nothing else.
+func TestNextStep_LadderPhases(t *testing.T) {
+	d := nextStepFixture(t)
+	d.Accommodations[0].Booked = false // any mid-ladder step will do
+
+	_, en := derive("en", nextStepNow, d)
+	_, es := derive("es", nextStepNow, d)
+	if en == nil || es == nil {
+		t.Fatalf("progress = %v / %v, want both", en, es)
+	}
+	mustLadder(t, en)
+	mustLadder(t, es)
+
+	wantIDs := []string{"dates", "itinerary", "bookings", "schedule", "confirm", "packing"}
+	wantEN := []string{
+		"Set your travel dates",
+		"Plan your days",
+		"Book travel & stays",
+		"Tidy up your schedule",
+		"Book everything",
+		"Start your packing list",
+	}
+	for i := range wantIDs {
+		if en.Phases[i].ID != wantIDs[i] || es.Phases[i].ID != wantIDs[i] {
+			t.Fatalf("phase %d ids = %q/%q, want %q",
+				i, en.Phases[i].ID, es.Phases[i].ID, wantIDs[i])
+		}
+		if en.Phases[i].Label != wantEN[i] {
+			t.Fatalf("phase %d en label = %q, want %q", i, en.Phases[i].Label, wantEN[i])
+		}
+		if es.Phases[i].Label == en.Phases[i].Label {
+			t.Fatalf("phase %d (%s) is not translated: %q", i, wantIDs[i], es.Phases[i].Label)
+		}
 	}
 }

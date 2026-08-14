@@ -109,10 +109,25 @@ Map<String, dynamic> _$NextStepToJson(NextStep instance) => <String, dynamic>{
 PlanProgress _$PlanProgressFromJson(Map<String, dynamic> json) => PlanProgress(
       done: (json['done'] as num).toInt(),
       total: (json['total'] as num).toInt(),
+      phases: (json['phases'] as List<dynamic>?)
+              ?.map((e) => PlanPhase.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
 
 Map<String, dynamic> _$PlanProgressToJson(PlanProgress instance) =>
     <String, dynamic>{
       'done': instance.done,
       'total': instance.total,
+      'phases': instance.phases,
+    };
+
+PlanPhase _$PlanPhaseFromJson(Map<String, dynamic> json) => PlanPhase(
+      id: json['id'] as String,
+      label: json['label'] as String,
+    );
+
+Map<String, dynamic> _$PlanPhaseToJson(PlanPhase instance) => <String, dynamic>{
+      'id': instance.id,
+      'label': instance.label,
     };

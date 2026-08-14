@@ -2455,6 +2455,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nextStepAllSetDismiss => 'Dismiss';
 
   @override
+  String get nextStepViewProgress => 'View all steps';
+
+  @override
+  String get planProgressTitle => 'Plan progress';
+
+  @override
+  String get planProgressHint =>
+      'Steps unlock in order — finish this one and the next opens.';
+
+  @override
+  String get planProgressStateDone => 'Done';
+
+  @override
+  String get planProgressStateCurrent => 'Current step';
+
+  @override
+  String get planProgressStateLater => 'Later';
+
+  @override
   String get notifTitle => 'Notifications';
 
   @override

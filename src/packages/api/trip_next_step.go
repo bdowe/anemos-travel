@@ -52,13 +52,57 @@ type NextStep struct {
 // from the top, so the current step is phase Done+1 and all_set reports 6/6.
 // Total is a field (not a client-side constant) so the ladder can grow or
 // shrink (it did: 7 → 6 when lodging+transport merged into the booking-slot
-// walk) without a lockstep client release.
+// walk) without a lockstep client release — and Phases now ships the rungs
+// themselves for the same reason: "3 of 6" is unreadable when only the server
+// knows what the six are (specs/next-step-cta, Brian 2026-08-14).
+//
+// Phases carries NO per-rung state. Prefix progress already states it — index
+// < Done is complete, == Done is current, > Done is later — so the client
+// derives it at render and there is exactly one definition of "done" on the
+// wire (docs/zen.md). Total is likewise computed from the same array as
+// Phases, so the count and the list structurally cannot disagree.
 type PlanProgress struct {
-	Done  int `json:"done"`
-	Total int `json:"total"`
+	Done   int         `json:"done"`
+	Total  int         `json:"total"`
+	Phases []PlanPhase `json:"phases,omitempty"`
 }
 
-const planLadderTotal = 6
+// PlanPhase is one rung: a stable id plus its localized short label. The id is
+// the identity clients and tests key on (locale-independent, unchanged when
+// the copy is reworded); the label is display copy and nothing else.
+type PlanPhase struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// planLadder IS the ladder, in order — the phase ids paired with the catalog
+// key for each rung's short label. Five of the six reuse the step titles the
+// card already shows, so the progress sheet and the card speak in one voice
+// (the same reuse staySlotStep makes of review.noLodging); only phase 3 needs
+// its own copy, because it covers lodging AND transport and neither step title
+// names the pair. Adding or reordering a rung here changes the wire, the
+// count, and the sheet together.
+var planLadder = [...]struct{ ID, Key string }{
+	{"dates", "review.next.setDates.title"},
+	{"itinerary", "review.next.planItinerary.title"},
+	{"bookings", "review.ladder.bookings"},
+	{"schedule", "review.next.scheduleItems.title"},
+	{"confirm", "review.next.book.title"},
+	{"packing", "review.next.packing.title"},
+}
+
+// len of an array (not a slice) is a constant expression, so the ladder stays
+// the single source of the total the phases below already imply.
+const planLadderTotal = len(planLadder)
+
+// planLadderPhases renders the ladder for one locale.
+func planLadderPhases(locale string) []PlanPhase {
+	phases := make([]PlanPhase, 0, len(planLadder))
+	for _, p := range planLadder {
+		phases = append(phases, PlanPhase{ID: p.ID, Label: tr(locale, p.Key)})
+	}
+	return phases
+}
 
 // deriveNextStep walks the ladder and returns the first unmet phase, or the
 // all_set terminal step when every phase is complete. Both results are nil for
@@ -72,7 +116,11 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 	}
 
 	progress := func(done int) *PlanProgress {
-		return &PlanProgress{Done: done, Total: planLadderTotal}
+		return &PlanProgress{
+			Done:   done,
+			Total:  planLadderTotal,
+			Phases: planLadderPhases(locale),
+		}
 	}
 
 	// Phase 1 — dates. The repo's first "unfinished work" arm (migration

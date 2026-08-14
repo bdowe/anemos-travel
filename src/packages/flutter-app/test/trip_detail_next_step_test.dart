@@ -183,6 +183,17 @@ const _lodgingSeed =
     'I still need a place to stay in Athens for 2026-09-01 to 2026-09-03. '
     'Suggest a few good lodging options (call suggest_stays)…';
 
+/// The ladder the server ships alongside every step — what the eyebrow's
+/// "3 of 6" counter expands into (specs/next-step-cta).
+const _ladder = [
+  PlanPhase(id: 'dates', label: 'Set your travel dates'),
+  PlanPhase(id: 'itinerary', label: 'Plan your days'),
+  PlanPhase(id: 'bookings', label: 'Book travel & stays'),
+  PlanPhase(id: 'schedule', label: 'Tidy up your schedule'),
+  PlanPhase(id: 'confirm', label: 'Book everything'),
+  PlanPhase(id: 'packing', label: 'Start your packing list'),
+];
+
 TripReview _lodgingReview() => const TripReview(
       findings: [
         TripFinding(
@@ -200,7 +211,7 @@ TripReview _lodgingReview() => const TripReview(
         day: 1,
         seedPrompt: _lodgingSeed,
       ),
-      planProgress: PlanProgress(done: 2, total: 6),
+      planProgress: PlanProgress(done: 2, total: 6, phases: _ladder),
     );
 
 const _allSetReview = TripReview(
@@ -451,9 +462,12 @@ void main() {
     expect(find.byKey(const ValueKey('next-step-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('next-step-view-all')), findsNothing);
     expect(find.textContaining('No lodging booked'), findsNothing);
+    // The health entry goes, the counter's explanation stays — the counter
+    // itself renders at every width.
+    expect(find.byKey(const ValueKey('next-step-progress')), findsOneWidget);
   });
 
-  testWidgets('"View all" opens the health sheet', (tester) async {
+  testWidgets('the health entry opens the health sheet', (tester) async {
     _useViewport(tester);
     await _pump(tester, trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
 
@@ -461,6 +475,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Trip health'), findsWidgets);
+  });
+
+  // The counter is no longer a dead end: it opens the ladder it counts
+  // (specs/next-step-cta), with the card's own step on the current rung.
+  testWidgets('the progress counter opens the plan-progress sheet',
+      (tester) async {
+    _useViewport(tester);
+    await _pump(tester, trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
+
+    expect(find.text('NEXT STEP · 3 of 6'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('next-step-progress')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Plan progress'), findsOneWidget);
+    for (final p in _ladder) {
+      expect(find.byKey(ValueKey('plan-phase-${p.id}')), findsOneWidget);
+    }
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('plan-phase-bookings')),
+            matching: find.text('Book a place to stay')),
+        findsOneWidget);
   });
 
   // Walk-derived transport steps (itinerary-order walk, specs/next-step-cta):
