@@ -18,9 +18,11 @@ import 'support/l10n_test_app.dart';
 
 /// The agent screen's empty state draws its suggestion chips from the shared
 /// randomized pool: the near-me chip always leads, exactly
-/// [kSuggestionCount] pool picks follow, a pick is drawn once per mount
-/// (a locale switch relabels WITHOUT reshuffling; a chat reset re-rolls),
-/// and tapping a chip sends exactly the visible label.
+/// [kSuggestionCount] pool picks follow (the import-from-AI-chat button
+/// closes the row — a button, not a chip, because it navigates instead of
+/// sending), a pick is drawn once per mount (a locale switch relabels
+/// WITHOUT reshuffling; a chat reset re-rolls), and tapping a chip sends
+/// exactly the visible label.
 
 class _RecordingPlanNotifier extends PlanNotifier {
   final List<(String, String?)> sent = [];
@@ -110,7 +112,9 @@ void main() {
 
     final emptyState = tester.widget<EmptyState>(find.byType(EmptyState));
     expect(emptyState.actions.first, isA<NearMeChip>());
-    expect(emptyState.actions, hasLength(1 + kSuggestionCount));
+    // near-me + pool picks + the trailing import entry point.
+    expect(emptyState.actions, hasLength(1 + kSuggestionCount + 1));
+    expect(emptyState.actions.last, isA<OutlinedButton>());
 
     expect(find.text('Island hopping in Greece'), findsOneWidget);
     expect(find.text('3 days in Lisbon'), findsOneWidget);

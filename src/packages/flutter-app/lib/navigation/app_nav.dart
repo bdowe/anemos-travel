@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../screens/import_trip_screen.dart';
 import '../screens/trip_detail_screen.dart';
 import 'app_routes.dart';
 
@@ -105,6 +106,22 @@ void openTripOnTripsTab(WidgetRef ref, String tripId) {
     navKeys[AppTab.trips.index].currentState?.popUntil((r) => r.isFirst);
     return locatedRoute(
         TripDetailScreen(tripId: tripId), tripDetailLocation(tripId));
+  });
+}
+
+/// Open the import-from-AI-chat screen on the Trips tab — every entry point
+/// funnels here so the Trips nav item highlights, back lands on the trips
+/// list, and the URL reports /import (whose refresh restores onto Trips).
+/// The import screen's success replace-navigates to the new trip's detail,
+/// which must land on the stack-keeping Trips tab, not whichever tab hosted
+/// the entry point.
+void openImportOnTripsTab(WidgetRef ref) {
+  ref.read(navIndexProvider.notifier).state = AppTab.trips.index;
+  final navKeys = ref.read(tabNavKeysProvider);
+  pushOnTabWhenReady(navKeys, AppTab.trips, () {
+    navKeys[AppTab.trips.index].currentState?.popUntil((r) => r.isFirst);
+    return locatedRoute(
+        const ImportTripScreen(), utilityLocation(BootUtility.importTrip));
   });
 }
 
