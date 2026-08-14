@@ -93,6 +93,120 @@ func TestPersonalizedSystemPromptWorkStyleLeisure(t *testing.T) {
 	}
 }
 
+// --- specs/active-profile -------------------------------------------------
+// Each field's value must produce a concrete instruction, not just a tag: the
+// whole point is that the profile changes what the agent DOES.
+
+func TestPersonalizedSystemPromptFitnessGym(t *testing.T) {
+	p := &store.TravelerPreference{FitnessRoutine: strPtr("gym")}
+	got := personalizedSystemPrompt("base", p)
+	if !strings.Contains(got, "fitness: needs gym access") {
+		t.Fatalf("prompt missing gym parts line: %q", got)
+	}
+	for _, want := range []string{"on-site gym", "search_nearby", "day passes", "add_packing_item"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("gym note missing %q: %q", want, got)
+		}
+	}
+	if strings.Contains(got, "poor place to run") {
+		t.Fatalf("gym must not get the running note: %q", got)
+	}
+}
+
+func TestPersonalizedSystemPromptFitnessRunning(t *testing.T) {
+	p := &store.TravelerPreference{FitnessRoutine: strPtr("running")}
+	got := personalizedSystemPrompt("base", p)
+	if !strings.Contains(got, "fitness: runs while traveling") {
+		t.Fatalf("prompt missing running parts line: %q", got)
+	}
+	for _, want := range []string{"rough distance", "poor place to run", "add_packing_item"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("running note missing %q: %q", want, got)
+		}
+	}
+	if strings.Contains(got, "day passes") {
+		t.Fatalf("running must not get the gym note: %q", got)
+	}
+}
+
+func TestPersonalizedSystemPromptFitnessBoth(t *testing.T) {
+	p := &store.TravelerPreference{FitnessRoutine: strPtr("both")}
+	got := personalizedSystemPrompt("base", p)
+	if !strings.Contains(got, "fitness: gym and running") {
+		t.Fatalf("prompt missing both parts line: %q", got)
+	}
+	for _, want := range []string{"on-site gym", "running route", "add_packing_item"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("both note missing %q: %q", want, got)
+		}
+	}
+}
+
+// "none" is an answer, not an absence: it says so on the parts line and then
+// stays silent, the same shape leisure_only takes.
+func TestPersonalizedSystemPromptFitnessNone(t *testing.T) {
+	p := &store.TravelerPreference{FitnessRoutine: strPtr("none")}
+	got := personalizedSystemPrompt("base", p)
+	if !strings.Contains(got, "fitness: not a factor") {
+		t.Fatalf("prompt missing none parts line: %q", got)
+	}
+	if strings.Contains(got, "add_packing_item") || strings.Contains(got, "on-site gym") {
+		t.Fatalf("none must not get a fitness note: %q", got)
+	}
+}
+
+// The state-the-numbers rule is what makes a mismatched suggestion falsifiable
+// (docs/zen.md), so it must ride EVERY band, not just the hard one.
+func TestPersonalizedSystemPromptOutdoorIntensityBands(t *testing.T) {
+	cases := map[string]string{
+		"easy":        "outdoor days: easy",
+		"moderate":    "outdoor days: moderate",
+		"challenging": "outdoor days: challenging",
+	}
+	for value, partsLine := range cases {
+		t.Run(value, func(t *testing.T) {
+			p := &store.TravelerPreference{OutdoorIntensity: strPtr(value)}
+			got := personalizedSystemPrompt("base", p)
+			if !strings.Contains(got, partsLine) {
+				t.Fatalf("prompt missing parts line %q: %q", partsLine, got)
+			}
+			if !strings.Contains(got, "state the distance, the elevation gain and roughly how long it takes") {
+				t.Fatalf("%s band missing the state-the-numbers rule: %q", value, got)
+			}
+		})
+	}
+}
+
+func TestPersonalizedSystemPromptCompanions(t *testing.T) {
+	solo := personalizedSystemPrompt("base", &store.TravelerPreference{Companions: strPtr("solo")})
+	if !strings.Contains(solo, "traveling: solo") || !strings.Contains(solo, "for one person") {
+		t.Fatalf("solo prompt missing line or note: %q", solo)
+	}
+	kids := personalizedSystemPrompt("base", &store.TravelerPreference{Companions: strPtr("family_with_kids")})
+	if !strings.Contains(kids, "traveling: with kids") || !strings.Contains(kids, "shorter transfers") {
+		t.Fatalf("family prompt missing line or note: %q", kids)
+	}
+	// partner/varies are facts worth stating with nothing extra to instruct.
+	partner := personalizedSystemPrompt("base", &store.TravelerPreference{Companions: strPtr("partner")})
+	if !strings.Contains(partner, "traveling: as a couple") {
+		t.Fatalf("partner prompt missing parts line: %q", partner)
+	}
+	if strings.Contains(partner, "shorter transfers") || strings.Contains(partner, "for one person") {
+		t.Fatalf("partner must not borrow another value's note: %q", partner)
+	}
+}
+
+// Companions has a column now, so the standing notes rule must stop naming it —
+// otherwise the agent writes the same fact into profile_notes as well.
+func TestProfileNotesInstructionOmitsCompanions(t *testing.T) {
+	if strings.Contains(profileNotesInstruction, "companions") {
+		t.Fatalf("profileNotesInstruction still names companions: %q", profileNotesInstruction)
+	}
+	if !strings.Contains(profileNotesInstruction, "dietary needs") {
+		t.Fatalf("profileNotesInstruction lost its remaining free-text fields: %q", profileNotesInstruction)
+	}
+}
+
 // runPlanHandler posts a PlanRequest to planHandler directly (the recorder
 // implements http.Flusher, which the SSE handler requires) and returns the
 // raw event-stream body.

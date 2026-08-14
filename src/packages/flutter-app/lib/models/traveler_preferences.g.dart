@@ -17,6 +17,9 @@ TravelerPreferences _$TravelerPreferencesFromJson(Map<String, dynamic> json) =>
       homeAirport: json['home_airport'] as String?,
       profileNotes: json['profile_notes'] as String?,
       workStyle: json['work_style'] as String?,
+      fitnessRoutine: json['fitness_routine'] as String?,
+      outdoorIntensity: json['outdoor_intensity'] as String?,
+      companions: json['companions'] as String?,
     );
 
 Map<String, dynamic> _$TravelerPreferencesToJson(
@@ -28,4 +31,7 @@ Map<String, dynamic> _$TravelerPreferencesToJson(
       'home_airport': instance.homeAirport,
       'profile_notes': instance.profileNotes,
       'work_style': instance.workStyle,
+      'fitness_routine': instance.fitnessRoutine,
+      'outdoor_intensity': instance.outdoorIntensity,
+      'companions': instance.companions,
     };

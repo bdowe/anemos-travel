@@ -14,20 +14,16 @@ import '../widgets/interest_picker.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
 import '../utils/snack.dart';
+import '../constants/travel_profile_options.dart';
 
-// Canonical API values. These are sent to the server (and, for companions,
-// folded into the profile notes the AI agent reads), so they are NEVER
+// Canonical API values. These are sent to the server, so they are NEVER
 // translated — only their display labels are (specs/i18n-spanish).
+// Companions, fitness and outdoor intensity live in
+// `constants/travel_profile_options.dart` because the Travel profile screen
+// renders the same three rows.
 const _budgets = ['budget', 'mid', 'luxury'];
 const _paces = ['relaxed', 'balanced', 'packed'];
 const _workStyleOptions = ['digital_nomad', 'workation', 'leisure_only'];
-const _companionOptions = [
-  'solo',
-  'partner',
-  'friends',
-  'family with kids',
-  'it varies'
-];
 const _tripsMaxLength = 500;
 
 String _budgetLabel(AppLocalizations l10n, String value) => switch (value) {
@@ -52,24 +48,15 @@ String _workStyleLabel(AppLocalizations l10n, String value) => switch (value) {
     };
 
 
-String _companionLabel(AppLocalizations l10n, String value) => switch (value) {
-      'solo' => l10n.quizCompanionSolo,
-      'partner' => l10n.quizCompanionPartner,
-      'friends' => l10n.quizCompanionFriends,
-      'family with kids' => l10n.quizCompanionFamily,
-      'it varies' => l10n.quizCompanionVaries,
-      _ => value,
-    };
-
 /// Formats the quiz's free-form answers as profile-notes bullet lines, using
 /// the same short-bullet convention the AI profile distiller maintains so the
 /// two sources merge cleanly. Returns '' when there is nothing to note.
-String buildOnboardingProfileNotes(
-    {String? companions, required String tripsInMind}) {
+///
+/// Companions used to be written here as a `- Travels with: X` bullet because
+/// it had nowhere else to go; migration 00062 gave it a column, and the fact
+/// now lives there only (docs/zen.md — one home per fact).
+String buildOnboardingProfileNotes({required String tripsInMind}) {
   final lines = <String>[];
-  if (companions != null && companions.isNotEmpty) {
-    lines.add('- Travels with: $companions');
-  }
   final trips = tripsInMind.trim();
   if (trips.isNotEmpty) {
     lines.add(
@@ -97,7 +84,7 @@ class OnboardingQuizScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
-  static const _stepCount = 6;
+  static const _stepCount = 7;
 
   final _pageController = PageController();
   int _step = 0;
@@ -109,6 +96,8 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
   String? _workStyle;
   final Set<String> _interests = {};
   String? _companions;
+  String? _fitnessRoutine;
+  String? _outdoorIntensity;
 
   @override
   void initState() {
@@ -135,6 +124,13 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
     _budget = prefs.budget;
     _pace = prefs.pace;
     _workStyle = prefs.workStyle;
+    // Companions is seeded from here for the first time: before migration
+    // 00062 it had no field to come back from, so a retake always showed it
+    // blank. Every new preference field MUST be added here or an untouched
+    // retake shows an empty chip row over a stored value.
+    _companions = prefs.companions;
+    _fitnessRoutine = prefs.fitnessRoutine;
+    _outdoorIntensity = prefs.outdoorIntensity;
     _interests.addAll(prefs.interests);
     final home = prefs.homeAirport;
     if (home != null && home.isNotEmpty) {
@@ -178,13 +174,15 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
     final l10n = context.l10n;
     setState(() => _submitting = true);
     final notes = buildOnboardingProfileNotes(
-      companions: _companions,
       tripsInMind: _tripsController.text,
     );
     final ok = await ref.read(preferencesProvider.notifier).save(
           budget: _budget,
           pace: _pace,
           workStyle: _workStyle,
+          companions: _companions,
+          fitnessRoutine: _fitnessRoutine,
+          outdoorIntensity: _outdoorIntensity,
           interests: _interests.toList(),
           homeAirport: _homeAirport?.iataCode,
           // null keeps notes untouched (they're empty for a brand-new user).
@@ -338,13 +336,36 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                 ],
               ),
               _buildStep(
+                title: l10n.quizActiveTitle,
+                subtitle: l10n.quizActiveSubtitle,
+                children: [
+                  SectionHeader(title: l10n.prefsFitnessRoutine),
+                  const SizedBox(height: AppSpacing.sm),
+                  ChoiceChipRow(
+                    options: fitnessRoutineOptions,
+                    selected: _fitnessRoutine,
+                    onSelected: (v) => setState(() => _fitnessRoutine = v),
+                    labelBuilder: (v) => fitnessRoutineLabel(l10n, v),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  SectionHeader(title: l10n.prefsOutdoorIntensity),
+                  const SizedBox(height: AppSpacing.sm),
+                  ChoiceChipRow(
+                    options: outdoorIntensityOptions,
+                    selected: _outdoorIntensity,
+                    onSelected: (v) => setState(() => _outdoorIntensity = v),
+                    labelBuilder: (v) => outdoorIntensityLabel(l10n, v),
+                  ),
+                ],
+              ),
+              _buildStep(
                 title: l10n.quizCompanionsTitle,
                 children: [
                   ChoiceChipRow(
-                    options: _companionOptions,
+                    options: companionOptions,
                     selected: _companions,
                     onSelected: (v) => setState(() => _companions = v),
-                    labelBuilder: (v) => _companionLabel(l10n, v),
+                    labelBuilder: (v) => companionLabel(l10n, v),
                   ),
                 ],
               ),

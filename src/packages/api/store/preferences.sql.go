@@ -12,7 +12,7 @@ import (
 )
 
 const getPreferences = `-- name: GetPreferences :one
-SELECT user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes, work_style FROM traveler_preferences WHERE user_id = $1
+SELECT user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions FROM traveler_preferences WHERE user_id = $1
 `
 
 func (q *Queries) GetPreferences(ctx context.Context, userID uuid.UUID) (TravelerPreference, error) {
@@ -28,12 +28,15 @@ func (q *Queries) GetPreferences(ctx context.Context, userID uuid.UUID) (Travele
 		&i.HomeAirport,
 		&i.ProfileNotes,
 		&i.WorkStyle,
+		&i.FitnessRoutine,
+		&i.OutdoorIntensity,
+		&i.Companions,
 	)
 	return i, err
 }
 
 const upsertPreferences = `-- name: UpsertPreferences :one
-INSERT INTO traveler_preferences (user_id, budget, pace, interests, home_airport, profile_notes, work_style)
+INSERT INTO traveler_preferences (user_id, budget, pace, interests, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions)
 VALUES (
     $1,
     $2,
@@ -41,26 +44,35 @@ VALUES (
     COALESCE($4, '{}'::text[]),
     $5,
     $6,
-    $7
+    $7,
+    $8,
+    $9,
+    $10
 )
 ON CONFLICT (user_id) DO UPDATE SET
-    budget        = COALESCE($2, traveler_preferences.budget),
-    pace          = COALESCE($3, traveler_preferences.pace),
-    interests     = COALESCE($4, traveler_preferences.interests),
-    home_airport  = COALESCE($5, traveler_preferences.home_airport),
-    profile_notes = COALESCE($6, traveler_preferences.profile_notes),
-    work_style    = COALESCE($7, traveler_preferences.work_style)
-RETURNING user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes, work_style
+    budget            = COALESCE($2, traveler_preferences.budget),
+    pace              = COALESCE($3, traveler_preferences.pace),
+    interests         = COALESCE($4, traveler_preferences.interests),
+    home_airport      = COALESCE($5, traveler_preferences.home_airport),
+    profile_notes     = COALESCE($6, traveler_preferences.profile_notes),
+    work_style        = COALESCE($7, traveler_preferences.work_style),
+    fitness_routine   = COALESCE($8, traveler_preferences.fitness_routine),
+    outdoor_intensity = COALESCE($9, traveler_preferences.outdoor_intensity),
+    companions        = COALESCE($10, traveler_preferences.companions)
+RETURNING user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions
 `
 
 type UpsertPreferencesParams struct {
-	UserID       uuid.UUID   `json:"user_id"`
-	Budget       *string     `json:"budget"`
-	Pace         *string     `json:"pace"`
-	Interests    interface{} `json:"interests"`
-	HomeAirport  *string     `json:"home_airport"`
-	ProfileNotes *string     `json:"profile_notes"`
-	WorkStyle    *string     `json:"work_style"`
+	UserID           uuid.UUID   `json:"user_id"`
+	Budget           *string     `json:"budget"`
+	Pace             *string     `json:"pace"`
+	Interests        interface{} `json:"interests"`
+	HomeAirport      *string     `json:"home_airport"`
+	ProfileNotes     *string     `json:"profile_notes"`
+	WorkStyle        *string     `json:"work_style"`
+	FitnessRoutine   *string     `json:"fitness_routine"`
+	OutdoorIntensity *string     `json:"outdoor_intensity"`
+	Companions       *string     `json:"companions"`
 }
 
 func (q *Queries) UpsertPreferences(ctx context.Context, arg UpsertPreferencesParams) (TravelerPreference, error) {
@@ -72,6 +84,9 @@ func (q *Queries) UpsertPreferences(ctx context.Context, arg UpsertPreferencesPa
 		arg.HomeAirport,
 		arg.ProfileNotes,
 		arg.WorkStyle,
+		arg.FitnessRoutine,
+		arg.OutdoorIntensity,
+		arg.Companions,
 	)
 	var i TravelerPreference
 	err := row.Scan(
@@ -84,6 +99,9 @@ func (q *Queries) UpsertPreferences(ctx context.Context, arg UpsertPreferencesPa
 		&i.HomeAirport,
 		&i.ProfileNotes,
 		&i.WorkStyle,
+		&i.FitnessRoutine,
+		&i.OutdoorIntensity,
+		&i.Companions,
 	)
 	return i, err
 }

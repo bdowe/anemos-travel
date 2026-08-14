@@ -8,6 +8,7 @@ import '../widgets/section_header.dart';
 import '../widgets/choice_chip_row.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/interest_picker.dart';
+import '../constants/travel_profile_options.dart';
 import '../l10n/l10n.dart';
 import '../providers/preferences_provider.dart';
 import '../theme/spacing.dart';
@@ -53,6 +54,9 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   String? _budget;
   String? _pace;
   String? _workStyle;
+  String? _companions;
+  String? _fitnessRoutine;
+  String? _outdoorIntensity;
   final Set<String> _interests = {};
   Airport? _homeAirport;
   final _notesController = TextEditingController();
@@ -80,6 +84,9 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
         _budget = prefs.budget;
         _pace = prefs.pace;
         _workStyle = prefs.workStyle;
+        _companions = prefs.companions;
+        _fitnessRoutine = prefs.fitnessRoutine;
+        _outdoorIntensity = prefs.outdoorIntensity;
         _interests.addAll(prefs.interests);
         final home = prefs.homeAirport;
         if (home != null && home.isNotEmpty) {
@@ -102,6 +109,9 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
           budget: _budget,
           pace: _pace,
           workStyle: _workStyle,
+          companions: _companions,
+          fitnessRoutine: _fitnessRoutine,
+          outdoorIntensity: _outdoorIntensity,
           interests: _interests.toList(),
           homeAirport: _homeAirport?.iataCode,
           // Always send the field's text: an emptied field clears the notes.
@@ -174,6 +184,15 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
                   labelBuilder: (v) => _workStyleLabel(l10n, v),
                 ),
                 const SizedBox(height: AppSpacing.xl),
+                SectionHeader(title: l10n.prefsCompanions),
+                const SizedBox(height: AppSpacing.sm),
+                ChoiceChipRow(
+                  options: companionOptions,
+                  selected: _companions,
+                  onSelected: (v) => setState(() => _companions = v),
+                  labelBuilder: (v) => companionLabel(l10n, v),
+                ),
+                const SizedBox(height: AppSpacing.xl),
                 SectionHeader(title: l10n.prefsInterests),
                 const SizedBox(height: AppSpacing.sm),
                 InterestPicker(
@@ -183,6 +202,38 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
                       ..clear()
                       ..addAll(next),
                   ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                SectionHeader(title: l10n.prefsFitnessRoutine),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  l10n.prefsFitnessRoutineHelp,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ChoiceChipRow(
+                  options: fitnessRoutineOptions,
+                  selected: _fitnessRoutine,
+                  onSelected: (v) => setState(() => _fitnessRoutine = v),
+                  labelBuilder: (v) => fitnessRoutineLabel(l10n, v),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                SectionHeader(title: l10n.prefsOutdoorIntensity),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  l10n.prefsOutdoorIntensityHelp,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ChoiceChipRow(
+                  options: outdoorIntensityOptions,
+                  selected: _outdoorIntensity,
+                  onSelected: (v) => setState(() => _outdoorIntensity = v),
+                  labelBuilder: (v) => outdoorIntensityLabel(l10n, v),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 SectionHeader(title: l10n.prefsHomeAirport),

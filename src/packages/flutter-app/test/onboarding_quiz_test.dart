@@ -59,6 +59,9 @@ class _FakePrefsService implements PreferencesApiService {
   TravelerPreferences result = const TravelerPreferences();
   int getCalls = 0;
   String? savedWorkStyle;
+  String? savedCompanions;
+  String? savedFitnessRoutine;
+  String? savedOutdoorIntensity;
 
   @override
   ApiClient get apiClient => throw UnimplementedError();
@@ -80,8 +83,14 @@ class _FakePrefsService implements PreferencesApiService {
     String? homeAirport,
     String? profileNotes,
     String? workStyle,
+    String? fitnessRoutine,
+    String? outdoorIntensity,
+    String? companions,
   }) async {
     savedWorkStyle = workStyle;
+    savedCompanions = companions;
+    savedFitnessRoutine = fitnessRoutine;
+    savedOutdoorIntensity = outdoorIntensity;
     return result;
   }
 }
@@ -119,41 +128,31 @@ Future<void> _pumpGate(WidgetTester tester, UserModel? user) async {
 void main() {
   group('buildOnboardingProfileNotes', () {
     test('empty answers produce no notes', () {
-      expect(
-          buildOnboardingProfileNotes(companions: null, tripsInMind: ''), '');
-      expect(
-          buildOnboardingProfileNotes(companions: null, tripsInMind: '  \n '),
-          '');
-    });
-
-    test('companions only', () {
-      expect(
-        buildOnboardingProfileNotes(companions: 'partner', tripsInMind: ''),
-        '- Travels with: partner',
-      );
+      expect(buildOnboardingProfileNotes(tripsInMind: ''), '');
+      expect(buildOnboardingProfileNotes(tripsInMind: '  \n '), '');
     });
 
     test('trips only, trimmed', () {
       expect(
-        buildOnboardingProfileNotes(
-            companions: null, tripsInMind: ' Japan in spring '),
+        buildOnboardingProfileNotes(tripsInMind: ' Japan in spring '),
         '- Trips in mind: Japan in spring',
-      );
-    });
-
-    test('both answers become separate bullet lines', () {
-      expect(
-        buildOnboardingProfileNotes(
-            companions: 'family with kids', tripsInMind: 'Greek islands'),
-        '- Travels with: family with kids\n- Trips in mind: Greek islands',
       );
     });
 
     test('newlines in the trips text collapse to semicolons', () {
       expect(
-        buildOnboardingProfileNotes(
-            companions: null, tripsInMind: 'Japan in spring\nPatagonia trek'),
+        buildOnboardingProfileNotes(tripsInMind: 'Japan in spring\nPatagonia trek'),
         '- Trips in mind: Japan in spring; Patagonia trek',
+      );
+    });
+
+    // Companions used to be written here as "- Travels with: X". Migration
+    // 00062 gave it a column, so notes must no longer carry it — otherwise the
+    // same fact has two homes and the two can disagree (specs/active-profile).
+    test('companions never appears in the notes', () {
+      expect(
+        buildOnboardingProfileNotes(tripsInMind: 'Greek islands'),
+        isNot(contains('Travels with')),
       );
     });
   });
@@ -243,17 +242,17 @@ void main() {
       ));
       await tester.pump();
 
-      // The work question is step 2 of 6.
+      // The work question is step 2 of 7.
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
       expect(find.text('Do you work while you travel?'), findsOneWidget);
-      expect(find.text('Step 2 of 6'), findsOneWidget);
+      expect(find.text('Step 2 of 7'), findsOneWidget);
 
       await tester.tap(find.text('yes — I work as I travel'));
       await tester.pump();
 
       // Walk to the last step and finish.
-      for (var i = 0; i < 4; i++) {
+      for (var i = 0; i < 5; i++) {
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
       }
@@ -278,6 +277,85 @@ void main() {
     });
   });
 
+  // specs/active-profile: fitness routine, outdoor intensity and companions.
+  group('active profile', () {
+    testWidgets('the activity step saves both answers', (tester) async {
+      final service = _FakePrefsService();
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          preferencesApiServiceProvider.overrideWithValue(service),
+          authProvider.overrideWith(
+              (ref) => _FakeAuthNotifier(_user(needsOnboarding: true))),
+        ],
+        child: localizedTestApp(home: const OnboardingQuizScreen()),
+      ));
+      await tester.pump();
+
+      // Style -> work -> interests -> active (step 4 of 7).
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('How active are your trips?'), findsOneWidget);
+      expect(find.text('Step 4 of 7'), findsOneWidget);
+
+      await tester.tap(find.text('gym access'));
+      await tester.pump();
+      await tester.tap(find.text('challenging — long and steep'));
+      await tester.pump();
+
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text('Finish'));
+      await tester.pump();
+
+      expect(service.savedFitnessRoutine, 'gym');
+      expect(service.savedOutdoorIntensity, 'challenging');
+    });
+
+    testWidgets('a retake seeds all three new answers', (tester) async {
+      // Companions is the notable one: before it had a column, a retake always
+      // came back blank because _seedFrom had nothing to read.
+      final service = _FakePrefsService()
+        ..result = const TravelerPreferences(
+          fitnessRoutine: 'running',
+          outdoorIntensity: 'moderate',
+          companions: 'family_with_kids',
+        );
+      await _pumpRetake(tester, service);
+      await tester.pump();
+      await tester.pump();
+
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+      }
+      expect(
+          tester
+              .widget<ChoiceChip>(
+                  find.widgetWithText(ChoiceChip, 'running routes'))
+              .selected,
+          isTrue);
+      expect(
+          tester
+              .widget<ChoiceChip>(find.widgetWithText(
+                  ChoiceChip, 'moderate — half-day hikes'))
+              .selected,
+          isTrue);
+
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(
+          tester
+              .widget<ChoiceChip>(
+                  find.widgetWithText(ChoiceChip, 'family with kids'))
+              .selected,
+          isTrue);
+    });
+  });
+
   group('system back gesture', () {
     testWidgets('steps back to the previous question instead of leaving',
         (tester) async {
@@ -290,7 +368,7 @@ void main() {
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
       expect(find.text('Do you work while you travel?'), findsOneWidget);
-      expect(find.text('Step 2 of 6'), findsOneWidget);
+      expect(find.text('Step 2 of 7'), findsOneWidget);
 
       // System back: intercepted by PopScope -> back to step 1, quiz intact.
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
@@ -300,7 +378,7 @@ void main() {
 
       expect(find.byType(OnboardingQuizScreen), findsOneWidget);
       expect(find.text("What's your travel style?"), findsOneWidget);
-      expect(find.text('Step 1 of 6'), findsOneWidget);
+      expect(find.text('Step 1 of 7'), findsOneWidget);
     });
   });
 

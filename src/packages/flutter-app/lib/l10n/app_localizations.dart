@@ -356,6 +356,78 @@ abstract class AppLocalizations {
   /// **'no — trips are time off'**
   String get prefsWorkStyleLeisure;
 
+  /// No description provided for @prefsCompanions.
+  ///
+  /// In en, this message translates to:
+  /// **'Who you travel with'**
+  String get prefsCompanions;
+
+  /// No description provided for @prefsFitnessRoutine.
+  ///
+  /// In en, this message translates to:
+  /// **'Working out'**
+  String get prefsFitnessRoutine;
+
+  /// No description provided for @prefsFitnessRoutineHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Used to pick stays near a gym or a place to run, and to leave you the time.'**
+  String get prefsFitnessRoutineHelp;
+
+  /// Fitness routine option shown on a chip; the stored API value stays 'gym'.
+  ///
+  /// In en, this message translates to:
+  /// **'gym access'**
+  String get prefsFitnessGym;
+
+  /// No description provided for @prefsFitnessRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'running routes'**
+  String get prefsFitnessRunning;
+
+  /// No description provided for @prefsFitnessBoth.
+  ///
+  /// In en, this message translates to:
+  /// **'both'**
+  String get prefsFitnessBoth;
+
+  /// No description provided for @prefsFitnessNone.
+  ///
+  /// In en, this message translates to:
+  /// **'not a factor'**
+  String get prefsFitnessNone;
+
+  /// No description provided for @prefsOutdoorIntensity.
+  ///
+  /// In en, this message translates to:
+  /// **'Outdoor days'**
+  String get prefsOutdoorIntensity;
+
+  /// No description provided for @prefsOutdoorIntensityHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'How hard you want hikes and other active outings to be.'**
+  String get prefsOutdoorIntensityHelp;
+
+  /// Outdoor intensity option shown on a chip; the stored API value stays 'easy'.
+  ///
+  /// In en, this message translates to:
+  /// **'easy — walks and viewpoints'**
+  String get prefsOutdoorEasy;
+
+  /// No description provided for @prefsOutdoorModerate.
+  ///
+  /// In en, this message translates to:
+  /// **'moderate — half-day hikes'**
+  String get prefsOutdoorModerate;
+
+  /// No description provided for @prefsOutdoorChallenging.
+  ///
+  /// In en, this message translates to:
+  /// **'challenging — long and steep'**
+  String get prefsOutdoorChallenging;
+
   /// Trip pace option shown on a chip; the stored API value stays 'relaxed'.
   ///
   /// In en, this message translates to:
@@ -517,6 +589,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'skiing'**
   String get prefsInterestSkiing;
+
+  /// No description provided for @prefsInterestCycling.
+  ///
+  /// In en, this message translates to:
+  /// **'cycling'**
+  String get prefsInterestCycling;
+
+  /// No description provided for @prefsInterestClimbing.
+  ///
+  /// In en, this message translates to:
+  /// **'climbing'**
+  String get prefsInterestClimbing;
+
+  /// No description provided for @prefsInterestNationalParks.
+  ///
+  /// In en, this message translates to:
+  /// **'national parks'**
+  String get prefsInterestNationalParks;
 
   /// No description provided for @prefsInterestRoadTrips.
   ///
@@ -1177,6 +1267,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pick as many as you like.'**
   String get quizInterestsSubtitle;
+
+  /// No description provided for @quizActiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How active are your trips?'**
+  String get quizActiveTitle;
+
+  /// No description provided for @quizActiveSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Both optional — they shape where you stay and how hard the outdoor days get.'**
+  String get quizActiveSubtitle;
 
   /// No description provided for @quizCompanionsTitle.
   ///

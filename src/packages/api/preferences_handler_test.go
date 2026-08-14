@@ -52,3 +52,42 @@ func TestNormalizeWorkStyle(t *testing.T) {
 		t.Fatalf("normalizeChoice(nil) = %v, %v; want nil, nil (keep existing)", got, err)
 	}
 }
+
+// specs/active-profile. Each field goes through the same normalizeChoice
+// boundary as budget/pace/work_style, so these pin the value sets rather than
+// the mechanism.
+func TestNormalizeActiveProfileChoices(t *testing.T) {
+	cases := []struct {
+		field   string
+		allowed map[string]bool
+		valid   []string
+		invalid string
+	}{
+		{"fitness_routine", allowedFitnessRoutines, []string{"gym", "running", "both", "none"}, "lifting"},
+		{"outdoor_intensity", allowedOutdoorIntensities, []string{"easy", "moderate", "challenging"}, "extreme"},
+		{"companions", allowedCompanions, []string{"solo", "partner", "friends", "family_with_kids", "varies"}, "family with kids"},
+	}
+	for _, c := range cases {
+		t.Run(c.field, func(t *testing.T) {
+			for _, v := range c.valid {
+				got, err := normalizeChoice(strPtr(v), c.allowed, c.field)
+				if err != nil || got == nil || *got != v {
+					t.Fatalf("normalizeChoice(%q) = %v, %v; want accepted", v, got, err)
+				}
+			}
+			// The pre-00062 quiz sent companions as "family with kids"; the
+			// column is snake_case, so the old spelling must NOT sneak through.
+			if _, err := normalizeChoice(strPtr(c.invalid), c.allowed, c.field); err == nil {
+				t.Fatalf("normalizeChoice(%q) should be rejected", c.invalid)
+			}
+			if got, err := normalizeChoice(nil, c.allowed, c.field); got != nil || err != nil {
+				t.Fatalf("normalizeChoice(nil) = %v, %v; want nil, nil (keep existing)", got, err)
+			}
+			// Empty string means "omit", never "clear" — shared with every
+			// other choice field on this profile.
+			if got, err := normalizeChoice(strPtr(""), c.allowed, c.field); got != nil || err != nil {
+				t.Fatalf("normalizeChoice(\"\") = %v, %v; want nil, nil", got, err)
+			}
+		})
+	}
+}
