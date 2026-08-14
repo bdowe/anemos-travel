@@ -46,6 +46,7 @@ import '../theme/spacing.dart';
 import '../utils/calendar_links.dart';
 import '../utils/clothing_recs.dart';
 import '../utils/date_formats.dart';
+import '../utils/event_picks.dart';
 import '../utils/leg_parity.dart';
 import '../utils/money_format.dart';
 import '../utils/share_link.dart';
@@ -67,12 +68,13 @@ import '../widgets/trip_health_sheet.dart';
 import '../widgets/trip_review_section.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/choice_chip_row.dart';
-import '../widgets/event_card.dart';
+import '../widgets/city_events_sheet.dart';
 import '../widgets/hover_reveal.dart';
 import '../widgets/local_rec_card.dart';
 import '../widgets/map_leg_chips.dart';
 import '../widgets/next_step_card.dart';
 import '../widgets/offline_banner.dart';
+import '../widgets/place_photo_card.dart';
 import '../widgets/source_links_card.dart';
 import '../widgets/status_pill.dart';
 import '../widgets/trip_map.dart';
@@ -2628,11 +2630,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  /// Live local-events section for a city group, looked up for the group's date
-  /// window. Returns an empty box (no sliver content) when the group has no
-  /// real city/dates to query. Wrapped in a [Consumer] so only this section
-  /// rebuilds as the async lookup resolves.
+  /// Live local-events section for a city group, looked up for the group's
+  /// date window and rendered as the same horizontal poster rail the plan chat
+  /// uses for these events ([PlacePhotoStrip] + [PlaceCardData.event]) — one
+  /// card system, two surfaces. Returns an empty box (no sliver content) when
+  /// the group has no real city/dates to query. Wrapped in a [Consumer] so
+  /// only this section rebuilds as the async lookup resolves.
+  ///
+  /// [range] is the group's VISIBLE range — the window the city header chip
+  /// shows the traveler. It has to be: a section headed "Events while you're
+  /// here" that queried a different window than the one on screen is what made
+  /// a Sep 1–4 Berlin leg show five events, all on Sep 4.
   Widget _eventsSliver(
+    Trip trip,
     String label,
     ({DateTime? start, DateTime? end})? range,
     ThemeData theme,
@@ -2650,25 +2660,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return SliverToBoxAdapter(
       child: Consumer(builder: (context, ref, _) {
         final async = ref.watch(eventsByCityProvider(query));
-        final header = Padding(
-          // left: lines the icon up with the booking rows' kind icons, which
-          // sit at 12px (BookingTodoRow's own left padding).
-          padding: const EdgeInsets.only(
-              left: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.xs),
-          child: Row(
-            children: [
-              Icon(Icons.local_activity, size: 16, color: AppColors.toolEvents),
-              const SizedBox(width: 6),
-              Text(
-                context.l10n.tripEventsWhileHere,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.toolEvents,
-                ),
-              ),
-            ],
-          ),
-        );
         return async.when(
           loading: () => Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -2697,17 +2688,51 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           error: (_, __) => _greekEventsFallback(query, theme),
           data: (events) {
             if (events.isEmpty) return _greekEventsFallback(query, theme);
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                header,
-                for (final e in events.take(5))
-                  EventCard(
-                    event: e,
-                    onAddToTrip: () =>
-                        _addToTrip(AddToTripPayload.fromEvent(e)),
-                  ),
-              ],
+            // Day-spread, not the chronological head: on a busy first night a
+            // plain take(N) fills every slot from day one and the rest of the
+            // stay never appears (utils/event_picks.dart).
+            final picks = spreadEventsByDay(events, limit: kEventRailCards);
+            return Padding(
+              // left: lines the strip's header icon up with the booking rows'
+              // kind icons, which sit at 12px (BookingTodoRow's own left
+              // padding) — the leading grid asserted by
+              // trip_detail_booking_alignment_test.
+              padding: const EdgeInsets.only(left: AppSpacing.md),
+              child: PlacePhotoStrip(
+                icon: Icons.local_activity,
+                accent: AppColors.toolEvents,
+                // Counts everything found, not the cards shown — otherwise 8
+                // reads as "that's all there is". At the server's per-city cap
+                // the true total is unknown, so the count says "30+".
+                label: events.length >= kEventsServerCap
+                    ? context.l10n
+                        .tripEventsWhileHereCountCapped(events.length)
+                    : context.l10n.tripEventsWhileHereCount(events.length),
+                actionLabel: context.l10n.commonSeeAll,
+                onViewTrip: events.length > picks.length
+                    ? () => showCityEventsSheet(
+                          context,
+                          city: label,
+                          events: events,
+                          onAddToTrip: (e) =>
+                              _addToTrip(AddToTripPayload.fromEvent(e)),
+                        )
+                    : null,
+                cards: [
+                  for (final e in picks)
+                    PlacePhotoCard(
+                      data: PlaceCardData.event(e),
+                      onTap: e.url.isEmpty
+                          ? null
+                          : () => trackedLaunchUrl(context, e.url,
+                              provider: 'ticketmaster',
+                              surface: 'trip_event_card',
+                              tripId: trip.id),
+                      onAddToTrip: () =>
+                          _addToTrip(AddToTripPayload.fromEvent(e)),
+                    ),
+                ],
+              ),
             );
           },
         );
@@ -4475,32 +4500,26 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   }
 
   /// Per-leg what-to-wear derivations for the wear/pack sheet
-  /// (specs/what-to-wear). Weather queries stay on rawLegRanges — the
-  /// doc-pinned range source shared with the day chips (leg_ranges.dart) —
-  /// while the DISPLAYED dates come from the index-aligned visibleLegRanges
-  /// pair, so a row's dates can never disagree with the city-header chips
-  /// above it (the same raw-vs-visible twin the nights counter rides).
-  /// Iterates the leg LIST — not groupRanges, whose label keying is
-  /// last-wins for revisited cities — so a revisited city gets one row per
-  /// visit. Fetch sharing: a single-visit city's WeatherQuery is
-  /// byte-identical to its city-group watch, so the provider family dedups;
-  /// a revisited city's earlier visits query per-visit windows the chips
-  /// never build — one extra cached /weather call each, the accepted cost of
-  /// per-visit rows. Loading or failed reports derive null and drop out;
-  /// offline this is simply empty. Consecutive same-guidance recs fold into
-  /// one displayed row inside [WearRecsList] ([groupWearRegions]) — a
-  /// display-layer concern only, so the watches and the sheet header's
-  /// summary stay per-leg here.
+  /// (specs/what-to-wear). Queried AND displayed on visibleLegRanges — the
+  /// dates the city-header chips render — so the guidance can never describe
+  /// a window the traveler was never shown. (It used to query the raw ranges
+  /// and display the visible ones, the same raw-vs-visible split that made a
+  /// Sep 1–4 Berlin leg look up events for Sep 4 alone; friction-log
+  /// 2026-08-14.) Iterates the leg LIST by index, so a revisited city gets one
+  /// row per visit on that visit's own window. Fetch sharing: the city-group
+  /// weather watch now builds a byte-identical WeatherQuery, so the provider
+  /// family dedups every leg, revisits included. Loading or failed reports
+  /// derive null and drop out; offline this is simply empty. Consecutive
+  /// same-guidance recs fold into one displayed row inside [WearRecsList]
+  /// ([groupWearRegions]) — a display-layer concern only, so the watches and
+  /// the sheet header's summary stay per-leg here.
   List<WearRegionRec> _legClothingRecs(Trip trip, WidgetRef ref) {
     // NOTE: [ref] is the app-bar wear action's Consumer ref, NOT the
     // State's — the weather watches here must subscribe that icon, never
     // the whole screen (see _wearAppBarAction).
     final derivation = _derive(trip);
-    final raw = derivation.rawRanges;
-    final visible = derivation.visibleRanges; // 1:1 by index with raw
     final recs = <WearRegionRec>[];
-    for (var i = 0; i < raw.length; i++) {
-      final r = raw[i];
+    for (final r in derivation.visibleRanges) {
       final start = r.start, end = r.end;
       if (r.label == _kOtherPlaces || start == null || end == null) continue;
       final report = ref
@@ -4513,13 +4532,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       if (report == null) continue;
       final rec = clothingRec(report);
       if (rec == null) continue;
-      final v = visible[i];
-      recs.add((
-        label: r.label,
-        start: v.start ?? start,
-        end: v.end ?? end,
-        rec: rec,
-      ));
+      recs.add((label: r.label, start: start, end: end, rec: rec));
     }
     return recs;
   }
@@ -5263,9 +5276,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       for (final key in derivation.liveDayKeys) {
                         _dayHeaderKeys.putIfAbsent(key, GlobalKey.new);
                       }
-                      // Date window per city group, for the embedded events
-                      // lookup (keyed by the same label the groups use).
-                      final groupRanges = derivation.groupRanges;
+                      // Date window per city group for the embedded weather and
+                      // events lookups: the VISIBLE ranges, index-aligned with
+                      // [groups] — the same window the group's header chip
+                      // renders. Anything else means a section can promise
+                      // "while you're here" over dates the traveler was never
+                      // shown; the raw ranges did exactly that (friction-log
+                      // 2026-08-14). Per-index, so a revisited city gets its
+                      // own visit's window instead of a label collision.
+                      final groupRanges = derivation.visibleRanges;
+                      ({DateTime? start, DateTime? end})? rangeFor(int gi) =>
+                          gi < groupRanges.length
+                              ? (
+                                  start: groupRanges[gi].start,
+                                  end: groupRanges[gi].end
+                                )
+                              : null;
                       final tripStart = DateTime.tryParse(trip.startDate ?? '');
                       // Map leg chips (specs/map-city-focus) read straight
                       // off the derivation inside _mapCard: legChips and
@@ -5620,17 +5646,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                             tripStart,
                                             showTonight: group.key ==
                                                 firstTodayGroupKey,
-                                            range: groupRanges[group.label]),
+                                            range: rangeFor(gi)),
                                         // Curated local recommendations for this
                                         // city — the "legit info you can't
                                         // google" surface. Leads the events
                                         // section.
                                         _localIntelSliver(group.label, theme),
                                         // Local events for this city's dates.
-                                        _eventsSliver(
-                                            group.label,
-                                            groupRanges[group.label],
-                                            theme),
+                                        _eventsSliver(trip, group.label,
+                                            rangeFor(gi), theme),
                                         if (gi == groups.length - 1 &&
                                             gi < grouped.slots.length)
                                           _boxSliver(_bookingRowWidgets(

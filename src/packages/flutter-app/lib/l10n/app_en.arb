@@ -774,7 +774,37 @@
       }
     }
   },
-  "tripEventsWhileHere": "Events while you're here",
+  "tripEventsWhileHereCount": "{count, plural, =1{1 event while you're here} other{{count} events while you're here}}",
+  "@tripEventsWhileHereCount": {
+    "description": "Header of the per-city events rail on the trip detail page. Counts every event the lookup returned, not the number of cards shown.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripEventsWhileHereCountCapped": "{count}+ events while you're here",
+  "@tripEventsWhileHereCountCapped": {
+    "description": "Same header when the lookup came back at the server's per-city cap, where the true total is unknown and could be higher.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripEventsInCity": "Events in {city}",
+  "@tripEventsInCity": {
+    "description": "Title of the bottom sheet listing every event found for one city.",
+    "placeholders": {
+      "city": {
+        "type": "String"
+      }
+    }
+  },
+  "tripEventsSource": "Listings from Ticketmaster",
+  "@tripEventsSource": {
+    "description": "Footnote on the events sheet naming the listings provider, so the list doesn't read as everything happening in the city."
+  },
   "tripFindingEvents": "Finding events in {city}…",
   "@tripFindingEvents": {
     "placeholders": {

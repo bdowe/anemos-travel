@@ -115,9 +115,14 @@ List<LegRange> rawLegRanges(Trip trip) {
 /// dates (previous end) follow automatically. A confirmed stay's explicit
 /// dates are never collapsed (same carve-out as the first-leg anchor); an
 /// arrival strictly inside a leg's own span keeps the leg's start (partial
-/// overlap — unchanged). Stay todos, inter-city leg dates, and header chips
-/// consume THIS; map pins and weather/events stay on the raw ranges. The
-/// server mirrors this in visibleLegDisplayRange (plan_leg_dates.go).
+/// overlap — unchanged). Stay todos, inter-city leg dates, header chips, and
+/// the per-city weather and events lookups consume THIS — anything that makes
+/// a promise about the dates ON SCREEN has to be derived from the dates on
+/// screen (a "while you're here" events section on the raw ranges queried one
+/// day of a four-day Berlin stay; friction-log 2026-08-14). Map pins and
+/// leg-nights stay on the raw ranges: a pin is a point, and nights must not
+/// double-count the arrival day. The server mirrors this in
+/// visibleLegDisplayRange (plan_leg_dates.go).
 List<LegRange> visibleLegRanges(Trip trip) {
   final raw = rawLegRanges(trip);
   final result = <LegRange>[];

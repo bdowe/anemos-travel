@@ -1287,7 +1287,28 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get tripEventsWhileHere => 'Events while you\'re here';
+  String tripEventsWhileHereCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count events while you\'re here',
+      one: '1 event while you\'re here',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String tripEventsWhileHereCountCapped(int count) {
+    return '$count+ events while you\'re here';
+  }
+
+  @override
+  String tripEventsInCity(String city) {
+    return 'Events in $city';
+  }
+
+  @override
+  String get tripEventsSource => 'Listings from Ticketmaster';
 
   @override
   String tripFindingEvents(String city) {

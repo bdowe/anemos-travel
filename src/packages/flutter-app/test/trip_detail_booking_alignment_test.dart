@@ -167,8 +167,8 @@ void main() {
             matching: find.byIcon(Icons.hotel_outlined))),
         moreOrLessEquals(stayTitleDx, epsilon: 0.1));
 
-    // The events header icon (16px — the EventCard below carries its own
-    // 20px copy) lines up with the rows' kind icons.
+    // The events rail's header icon (16px — the rail card below carries its
+    // own 32px fallback copy) lines up with the rows' kind icons.
     final headerIcon = find.byWidgetPredicate(
         (w) => w is Icon && w.icon == Icons.local_activity && w.size == 16);
     expect(headerIcon, findsOneWidget);
@@ -192,8 +192,8 @@ void main() {
     double dx(Finder f) => tester.getTopLeft(f).dx;
 
     // The _inRow scoping is load-bearing: the Paris group also renders an
-    // EventCard with its own bare open_in_new, and the matched stay's
-    // BookingDetailRow carries trailing IconButtons.
+    // events rail whose cards carry their own bare open_in_new, and the
+    // matched stay's BookingDetailRow carries trailing IconButtons.
     // Differing label widths are what make the dx equality meaningful.
     expect(_inRow('Stay in Paris', find.text('Open in Airbnb')),
         findsOneWidget);

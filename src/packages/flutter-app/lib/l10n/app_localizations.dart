@@ -2390,11 +2390,29 @@ abstract class AppLocalizations {
   /// **'By {name}'**
   String tripGuideBy(String name);
 
-  /// No description provided for @tripEventsWhileHere.
+  /// Header of the per-city events rail on the trip detail page. Counts every event the lookup returned, not the number of cards shown.
   ///
   /// In en, this message translates to:
-  /// **'Events while you\'re here'**
-  String get tripEventsWhileHere;
+  /// **'{count, plural, =1{1 event while you\'re here} other{{count} events while you\'re here}}'**
+  String tripEventsWhileHereCount(int count);
+
+  /// Same header when the lookup came back at the server's per-city cap, where the true total is unknown and could be higher.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}+ events while you\'re here'**
+  String tripEventsWhileHereCountCapped(int count);
+
+  /// Title of the bottom sheet listing every event found for one city.
+  ///
+  /// In en, this message translates to:
+  /// **'Events in {city}'**
+  String tripEventsInCity(String city);
+
+  /// Footnote on the events sheet naming the listings provider, so the list doesn't read as everything happening in the city.
+  ///
+  /// In en, this message translates to:
+  /// **'Listings from Ticketmaster'**
+  String get tripEventsSource;
 
   /// No description provided for @tripFindingEvents.
   ///

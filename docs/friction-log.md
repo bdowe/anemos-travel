@@ -5,6 +5,63 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-14 — events on the trip page (overwhelming, and asking the wrong dates)
+
+- **[app] Friction → fixed (specs/events-rail):** a 3-night Berlin leg whose
+  whole plan was two rows carried **five full-width event cards** under them —
+  ~470px of listings under ~120px of plan, repeated for every city on an
+  8-stop trip. Suggestions were rendered with the exact weight of committed
+  plan rows, and the header never said how many existed, so five read as "all
+  of them" when the client already held up to 30. Now one fixed-height poster
+  rail (~196px) reusing the widget the plan chat already uses for these same
+  events — `PlacePhotoStrip` + `PlaceCardData.event` — with a counted header
+  and a "See all" sheet. Trip detail had been the second, poorer
+  implementation of the same card system: it threw away the Ticketmaster
+  poster and re-drew the data as text.
+- **[app] BREAKAGE underneath it — the section was asking about the wrong
+  dates, and the screenshot was the proof.** All five events fell on Fri Sep 4,
+  the day he *leaves* Berlin, while the leg header above them read
+  "Sep 1 – Sep 4 · 3 nights". Not clustering — the lookup had only asked about
+  Sep 4. Reproduced exactly against the live API: the five cards, in order,
+  with the same times and venues, come back from
+  `start_date=end_date=2026-09-04`; the header's own window returns **14
+  events spread 2/3/2/7 across all four days**. (Tell: the same Cirque du
+  Soleil run is Sep 3 18:30 in the wide query and Sep 4 16:00 in the narrow
+  one — dedupe-by-name keeps the earliest in window.) Cause: the header
+  renders `visibleLegRanges` while the events and weather lookups read
+  `rawLegRanges` via a label-keyed `groupRanges` map. Berlin's one day-tagged
+  item collapsed its RAW range to a single day. **A section that promises
+  "while you're here" has to derive from the dates on screen** — anything else
+  is two derivations of "when am I in this city" with the user-facing one
+  reading the wrong copy, the leg-dates lesson again (docs/zen.md).
+- **[app] The same map was silently double-keyed.** `groupRanges` was keyed by
+  city LABEL, last-wins, so a revisited city (Fira → Naxos → Fira) rendered two
+  identical sections, both on the second visit's window. Everything else on the
+  screen keys on the run key. Fixed by **deleting** `groupRanges` rather than
+  re-keying it: it was a third parallel window shape with two consumers and
+  zero test references, and `visibleRanges` is already index-aligned with the
+  groups. Deleting a derivation beats fixing one.
+- **[app] A fix that pays twice.** `_legClothingRecs` had the identical
+  raw-query/visible-display split — the wear sheet showed dates it had not
+  asked about. Moving it too restores query sharing: the sheet and the city
+  group now build byte-identical `WeatherQuery`s and the provider family
+  dedups, instead of issuing two windows per city.
+- **[dev] A day-spread shortlist is not a substitute for the right window.**
+  The first diagnosis was "the picks cluster, spread them across the stay", and
+  it was wrong about the cause — with a one-day window there is nothing to
+  spread. Both shipped (the round-robin matters the moment a real four-day
+  window is busy on day one; a plain `take(5)` over the real Berlin data shows
+  Sep 1–2 and nothing else), but **the premise got checked with one curl before
+  the copy was written**, and that curl is what found the real bug. When a
+  symptom implies something implausible about upstream data — "zero events in
+  Berlin on three consecutive days" — go look before designing around it.
+- **[app] The planner was telling people their events were saved.**
+  `summarizeEvents` closed with "the full list is saved with their trip".
+  Nothing persists events; no itinerary item can even hold one
+  (`allowedItemCategories` is `{attraction, restaurant}`). `summarizeOffers`
+  had this exact false claim killed and pinned; `summarizeEvents` was missed.
+  Now pinned too.
+
 ## 2026-08-14 — the 00058 migration gap (latent prod outage, defused)
 
 - **[dev] BREAKAGE latent in main → fixed before it fired.** The 00058 gap

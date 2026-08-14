@@ -6,14 +6,21 @@ import '../theme/spacing.dart';
 import '../utils/tracked_launch.dart';
 import 'add_to_trip_sheet.dart';
 
-/// "Wed, Jul 1 · 20:00" — date via intl's locale-aware [DateFormat.MMMEd]
-/// (which reads Intl.defaultLocale, set by the locale provider — same pattern
-/// as lib/utils/trip_format.dart), with the raw HH:mm appended. Kept here as a
-/// presentation helper so the [Event] model stays a pure JSON mirror.
-/// Unparseable dates fall back to the raw string.
-String eventWhenLabel(Event event) {
+/// "Wed, Jul 1" — date via intl's locale-aware [DateFormat.MMMEd] (which reads
+/// Intl.defaultLocale, set by the locale provider — same pattern as
+/// lib/utils/trip_format.dart). Kept here as a presentation helper so the
+/// [Event] model stays a pure JSON mirror. Unparseable dates fall back to the
+/// raw string.
+String eventDayLabel(Event event) {
   final d = DateTime.tryParse(event.startDate);
-  final date = d == null ? event.startDate : DateFormat.MMMEd().format(d);
+  return d == null ? event.startDate : DateFormat.MMMEd().format(d);
+}
+
+/// "Wed, Jul 1 · 20:00" — [eventDayLabel] with the raw HH:mm appended. One
+/// definition of the date half, so a day header and a card underneath it can
+/// never format the same date two ways.
+String eventWhenLabel(Event event) {
+  final date = eventDayLabel(event);
   return event.startTime.isEmpty ? date : '$date · ${event.startTime}';
 }
 
@@ -27,7 +34,17 @@ class EventCard extends StatelessWidget {
   /// which opens the ticket page.
   final VoidCallback? onAddToTrip;
 
-  const EventCard({super.key, required this.event, this.onAddToTrip});
+  /// False when a day header directly above already states the date, so the
+  /// accent line shows only the clock time (the events sheet groups by day).
+  /// An event with no start time keeps the full label rather than going blank.
+  final bool showDate;
+
+  const EventCard({
+    super.key,
+    required this.event,
+    this.onAddToTrip,
+    this.showDate = true,
+  });
 
   Future<void> _open(BuildContext context) async {
     if (event.url.isEmpty) return;
@@ -76,7 +93,9 @@ class EventCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      eventWhenLabel(event),
+                      showDate || event.startTime.isEmpty
+                          ? eventWhenLabel(event)
+                          : event.startTime,
                       style: theme.textTheme.labelMedium?.copyWith(
                           color: accent, fontWeight: FontWeight.w600),
                     ),

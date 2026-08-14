@@ -344,6 +344,11 @@ class PlacePhotoStrip extends StatelessWidget {
   final VoidCallback? onViewTrip;
   final List<PlacePhotoCard> cards;
 
+  /// Label for the trailing header action. Defaults to the chat's
+  /// "View in trip"; the trip-detail events rail passes "See all", where the
+  /// action opens the full list rather than navigating to a trip.
+  final String? actionLabel;
+
   const PlacePhotoStrip({
     super.key,
     required this.icon,
@@ -351,6 +356,7 @@ class PlacePhotoStrip extends StatelessWidget {
     required this.label,
     this.onViewTrip,
     required this.cards,
+    this.actionLabel,
   });
 
   @override
@@ -386,7 +392,7 @@ class PlacePhotoStrip extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          context.l10n.resultChipViewInTrip,
+                          actionLabel ?? context.l10n.resultChipViewInTrip,
                           style: theme.textTheme.bodySmall?.copyWith(
                               color: accent, fontWeight: FontWeight.w600),
                         ),
