@@ -151,8 +151,8 @@ wt-new: ## Create a parallel worktree + port slot (NAME=<branch> [SLOT=n])
 wt-init: ## Provision the CURRENT worktree with a port slot ([SLOT=n])
 	./scripts/worktree.sh init $(if $(SLOT),--slot $(SLOT))
 
-wt-rm: ## Tear down a worktree: stack down -v, worktree + branch removed (NAME=... [FORCE=1])
-	./scripts/worktree.sh rm "$(NAME)" $(if $(FORCE),--force)
+wt-rm: ## Tear down a worktree: stack down -v, worktree + local/remote branch removed (NAME=... [FORCE=1] [KEEP_REMOTE=1])
+	./scripts/worktree.sh rm "$(NAME)" $(if $(FORCE),--force) $(if $(KEEP_REMOTE),--keep-remote)
 
 wt-list: ## List worktrees, slots, ports, and running stacks
 	./scripts/worktree.sh list
