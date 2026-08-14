@@ -314,6 +314,13 @@ func upstreamCountsSnapshot() map[string]int64 {
 	m["ai_transient_total"] = ai.TransientTotal
 	m["ai_fatal_total"] = ai.FatalTotal
 	m["ai_consecutive_fatal"] = ai.ConsecutiveFatal
+	// Transactional mail, tracked the same passive way (email_health.go).
+	// email_fatal_total rising is the signal that a sender the static domain
+	// check calls fine is being rejected in practice.
+	mail := emailHealth.state()
+	m["email_success_total"] = mail.SuccessTotal
+	m["email_transient_total"] = mail.TransientTotal
+	m["email_fatal_total"] = mail.FatalTotal
 	return m
 }
 

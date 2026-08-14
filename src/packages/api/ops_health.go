@@ -83,7 +83,7 @@ func opsHealthHandler(w http.ResponseWriter, r *http.Request) {
 func buildDependencyHealth(ctx context.Context, now time.Time) DependencyHealth {
 	db := probeDB(ctx)
 	backups := readBackupHealth(now)
-	state := computeHealthState(db.Status == "ok", backups.Stale, aiHealth.state())
+	state := computeHealthState(db.Status == "ok", backups.Stale, aiHealth.state(), emailHealth.state())
 	return DependencyHealth{
 		DB:        db,
 		Providers: providerStatuses(),
@@ -198,16 +198,17 @@ type healthState struct {
 	reasons  []string
 }
 
-// computeHealthState derives the top-level degraded verdict from three
-// deterministic, unpriced signals: DB reachability, backup freshness, and the
+// computeHealthState derives the top-level degraded verdict from four
+// deterministic, unpriced signals: DB reachability, backup freshness, the
 // AI provider's passively-tracked health (ai_health.go — fatal billing/auth
-// failures recorded by the real AI call sites; no probe is ever sent). It
+// failures recorded by the real AI call sites; no probe is ever sent), and
+// transactional mail's, tracked the same passive way (email_health.go). It
 // deliberately does NOT consider provider configuration (a missing optional
 // provider key is not "the service is unhealthy") and never pings paid
 // providers. Once fatal, the AI signal clears only on the next successful AI
 // call — with zero AI traffic the state stays degraded, which is correct for
 // billing/auth outages (they don't fix themselves). reasons is always non-nil.
-func computeHealthState(dbOK, backupsStale bool, ai aiHealthState) healthState {
+func computeHealthState(dbOK, backupsStale bool, ai aiHealthState, mail emailHealthState) healthState {
 	reasons := []string{}
 	if !dbOK {
 		reasons = append(reasons, "database unreachable")
@@ -221,6 +222,15 @@ func computeHealthState(dbOK, backupsStale bool, ai aiHealthState) healthState {
 			reason = "unknown"
 		}
 		reasons = append(reasons, "AI provider failing: "+reason)
+	}
+	if mail.Failing {
+		reason := mail.Reason
+		if reason == "" {
+			reason = "unknown"
+		}
+		// Deliberately reported even though the alert email itself cannot get
+		// out — the Sentry log and the in-app admin notification carry it.
+		reasons = append(reasons, "email failing: "+reason)
 	}
 	return healthState{degraded: len(reasons) > 0, reasons: reasons}
 }

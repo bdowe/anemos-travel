@@ -114,25 +114,33 @@ func TestEvalBackupHealth(t *testing.T) {
 
 func TestComputeHealthState(t *testing.T) {
 	failing := aiHealthState{Failing: true, Reason: "credit balance"}
+	mailFailing := emailHealthState{Failing: true, Reason: "sender rejected"}
 	cases := []struct {
 		dbOK, backupsStale bool
 		ai                 aiHealthState
+		mail               emailHealthState
 		wantDegraded       bool
 		wantReasons        []string
 	}{
-		{true, false, aiHealthState{}, false, []string{}},
-		{false, false, aiHealthState{}, true, []string{"database unreachable"}},
-		{true, true, aiHealthState{}, true, []string{"backups stale"}},
-		{false, true, aiHealthState{}, true, []string{"database unreachable", "backups stale"}},
-		{true, false, failing, true, []string{"AI provider failing: credit balance"}},
-		{false, true, failing, true, []string{"database unreachable", "backups stale", "AI provider failing: credit balance"}},
+		{true, false, aiHealthState{}, emailHealthState{}, false, []string{}},
+		{false, false, aiHealthState{}, emailHealthState{}, true, []string{"database unreachable"}},
+		{true, true, aiHealthState{}, emailHealthState{}, true, []string{"backups stale"}},
+		{false, true, aiHealthState{}, emailHealthState{}, true, []string{"database unreachable", "backups stale"}},
+		{true, false, failing, emailHealthState{}, true, []string{"AI provider failing: credit balance"}},
+		{false, true, failing, emailHealthState{}, true, []string{"database unreachable", "backups stale", "AI provider failing: credit balance"}},
 		// Defensive: Failing with no reason still yields a readable line.
-		{true, false, aiHealthState{Failing: true}, true, []string{"AI provider failing: unknown"}},
+		{true, false, aiHealthState{Failing: true}, emailHealthState{}, true, []string{"AI provider failing: unknown"}},
 		// A non-failing tracker with history is not degraded.
-		{true, false, aiHealthState{Reason: "credit balance", FatalTotal: 3}, false, []string{}},
+		{true, false, aiHealthState{Reason: "credit balance", FatalTotal: 3}, emailHealthState{}, false, []string{}},
+		// Mail is the fourth signal, and stacks with the others.
+		{true, false, aiHealthState{}, mailFailing, true, []string{"email failing: sender rejected"}},
+		{true, false, aiHealthState{Failing: true}, mailFailing, true, []string{"AI provider failing: unknown", "email failing: sender rejected"}},
+		{true, false, aiHealthState{}, emailHealthState{Failing: true}, true, []string{"email failing: unknown"}},
+		// History without a current failure is not degraded.
+		{true, false, aiHealthState{}, emailHealthState{Reason: "sender rejected", FatalTotal: 2}, false, []string{}},
 	}
 	for _, c := range cases {
-		got := computeHealthState(c.dbOK, c.backupsStale, c.ai)
+		got := computeHealthState(c.dbOK, c.backupsStale, c.ai, c.mail)
 		if got.degraded != c.wantDegraded {
 			t.Errorf("dbOK=%v stale=%v ai=%+v: degraded=%v want %v", c.dbOK, c.backupsStale, c.ai, got.degraded, c.wantDegraded)
 		}

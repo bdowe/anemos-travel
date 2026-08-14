@@ -97,7 +97,13 @@ func (s *EmailService) SendWithHeaders(to, subject, body string, extraHeaders []
 	if s.Username != "" {
 		auth = smtp.PlainAuth("", s.Username, s.Password, s.Host)
 	}
-	return smtp.SendMail(s.Host+":"+s.Port, auth, s.From, []string{to}, []byte(msg))
+	// The ONE send site, so the ONE place a delivery failure can be observed.
+	// Callers only log the error (and log.Printf never reaches Sentry), which
+	// is how a rejected sender stayed invisible for two weeks — see
+	// email_health.go. Record exactly once per attempt.
+	err := smtp.SendMail(s.Host+":"+s.Port, auth, s.From, []string{to}, []byte(msg))
+	recordEmailResult(err)
+	return err
 }
 
 // buildEmailMessage frames the RFC 5322 message (CRLF-delimited). Pure so the
