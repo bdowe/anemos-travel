@@ -24,7 +24,7 @@ const (
 	distillSystemPrompt = "You distill what was learned about a traveler from a trip-planning conversation, so future trips are personalized. " +
 		"Call update_traveler_profile once. Set profile_notes to the COMPLETE traveler profile: the current notes merged with anything new from the conversation, de-duplicated, as short bullet lines (max ~15, under 1800 characters). " +
 		"Keep only durable facts about how this person travels (companions, dietary needs, accommodation style, likes/dislikes, accessibility) — no one-off trip details, no sensitive information (health, religion, politics). " +
-		"Only set budget, pace, interests, or home_airport if the conversation clearly establishes them; omit any field you are unsure about. If nothing durable was learned, omit profile_notes too."
+		"Only set budget, pace, interests, home_airport, or work_style if the conversation clearly establishes them; omit any field you are unsure about. If nothing durable was learned, omit profile_notes too."
 )
 
 // distillTravelerProfile runs one non-streamed Claude call over the chat
@@ -71,6 +71,7 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 				"interests":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 				"home_airport":  map[string]any{"type": "string", "description": "IATA code, e.g. BOS"},
 				"profile_notes": map[string]any{"type": "string", "description": "The complete merged profile as short bullet lines"},
+				"work_style":    map[string]any{"type": "string", "enum": []string{"digital_nomad", "workation", "leisure_only"}},
 			},
 		},
 	}
@@ -100,6 +101,7 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 		Interests    []string `json:"interests"`
 		HomeAirport  *string  `json:"home_airport"`
 		ProfileNotes *string  `json:"profile_notes"`
+		WorkStyle    *string  `json:"work_style"`
 	}
 	found := false
 	for _, block := range resp.Content {
@@ -118,6 +120,7 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 
 	budget, _ := normalizeChoice(in.Budget, allowedBudgets, "budget")
 	pace, _ := normalizeChoice(in.Pace, allowedPaces, "pace")
+	workStyle, _ := normalizeChoice(in.WorkStyle, allowedWorkStyles, "work_style")
 	homeAirport, _ := normalizeAirportCode(in.HomeAirport)
 	var interestsArg interface{}
 	if in.Interests != nil {
@@ -128,11 +131,11 @@ func distillTravelerProfile(ctx context.Context, client anthropic.Client, uid uu
 		// Like the live tool, distillation can never wipe existing notes.
 		notes = nil
 	}
-	if budget == nil && pace == nil && homeAirport == nil && interestsArg == nil && notes == nil {
+	if budget == nil && pace == nil && homeAirport == nil && interestsArg == nil && notes == nil && workStyle == nil {
 		return
 	}
 	if _, err := queries.UpsertPreferences(ctx, store.UpsertPreferencesParams{
-		UserID: uid, Budget: budget, Pace: pace, Interests: interestsArg, HomeAirport: homeAirport, ProfileNotes: notes,
+		UserID: uid, Budget: budget, Pace: pace, Interests: interestsArg, HomeAirport: homeAirport, ProfileNotes: notes, WorkStyle: workStyle,
 	}); err != nil {
 		log.Printf("profile distill: save preferences: %v", err)
 	}

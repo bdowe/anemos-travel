@@ -18,6 +18,7 @@ import '../utils/snack.dart';
 // (specs/i18n-spanish).
 const _budgets = ['budget', 'mid', 'luxury'];
 const _paces = ['relaxed', 'balanced', 'packed'];
+const _workStyles = ['digital_nomad', 'workation', 'leisure_only'];
 
 String _budgetLabel(AppLocalizations l10n, String value) => switch (value) {
       'budget' => l10n.prefsBudgetLow,
@@ -33,6 +34,14 @@ String _paceLabel(AppLocalizations l10n, String value) => switch (value) {
       _ => value,
     };
 
+String _workStyleLabel(AppLocalizations l10n, String value) => switch (value) {
+      'digital_nomad' => l10n.prefsWorkStyleNomad,
+      'workation' => l10n.prefsWorkStyleWorkation,
+      'leisure_only' => l10n.prefsWorkStyleLeisure,
+      _ => value,
+    };
+
+
 class PreferencesScreen extends ConsumerStatefulWidget {
   const PreferencesScreen({super.key});
 
@@ -43,6 +52,7 @@ class PreferencesScreen extends ConsumerStatefulWidget {
 class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   String? _budget;
   String? _pace;
+  String? _workStyle;
   final Set<String> _interests = {};
   Airport? _homeAirport;
   final _notesController = TextEditingController();
@@ -69,6 +79,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
       if (prefs != null) {
         _budget = prefs.budget;
         _pace = prefs.pace;
+        _workStyle = prefs.workStyle;
         _interests.addAll(prefs.interests);
         final home = prefs.homeAirport;
         if (home != null && home.isNotEmpty) {
@@ -90,6 +101,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
     final ok = await ref.read(preferencesProvider.notifier).save(
           budget: _budget,
           pace: _pace,
+          workStyle: _workStyle,
           interests: _interests.toList(),
           homeAirport: _homeAirport?.iataCode,
           // Always send the field's text: an emptied field clears the notes.
@@ -151,6 +163,15 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
                   selected: _pace,
                   onSelected: (v) => setState(() => _pace = v),
                   labelBuilder: (v) => _paceLabel(l10n, v),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                SectionHeader(title: l10n.prefsWorkStyle),
+                const SizedBox(height: AppSpacing.sm),
+                ChoiceChipRow(
+                  options: _workStyles,
+                  selected: _workStyle,
+                  onSelected: (v) => setState(() => _workStyle = v),
+                  labelBuilder: (v) => _workStyleLabel(l10n, v),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 SectionHeader(title: l10n.prefsInterests),

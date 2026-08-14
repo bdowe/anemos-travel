@@ -105,6 +105,10 @@
   },
   "prefsBudgetMid": "mid",
   "prefsBudgetLuxury": "luxury",
+  "prefsWorkStyle": "Work & travel",
+  "prefsWorkStyleNomad": "yes — I work as I travel",
+  "prefsWorkStyleWorkation": "sometimes",
+  "prefsWorkStyleLeisure": "no — trips are time off",
   "prefsPaceRelaxed": "relaxed",
   "@prefsPaceRelaxed": {
     "description": "Trip pace option shown on a chip; the stored API value stays 'relaxed'."
@@ -244,6 +248,8 @@
   "quizFinish": "Finish",
   "quizStyleTitle": "What's your travel style?",
   "quizStyleSubtitle": "Helps the planner match stays and activities to you.",
+  "quizWorkStyleTitle": "Do you work while you travel?",
+  "quizWorkStyleSubtitle": "So the planner can balance wifi-ready stays and work time with exploring.",
   "quizInterestsTitle": "What do you love doing on a trip?",
   "quizInterestsSubtitle": "Pick as many as you like.",
   "quizCompanionsTitle": "Who do you usually travel with?",

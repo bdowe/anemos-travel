@@ -135,6 +135,18 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsBudgetLuxury => 'lujo';
 
   @override
+  String get prefsWorkStyle => 'Trabajo y viajes';
+
+  @override
+  String get prefsWorkStyleNomad => 'sí, trabajo mientras viajo';
+
+  @override
+  String get prefsWorkStyleWorkation => 'a veces';
+
+  @override
+  String get prefsWorkStyleLeisure => 'no, los viajes son para desconectar';
+
+  @override
   String get prefsPaceRelaxed => 'relajado';
 
   @override
@@ -556,6 +568,13 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get quizStyleSubtitle =>
       'Ayuda al planificador a ajustar los alojamientos y las actividades a ti.';
+
+  @override
+  String get quizWorkStyleTitle => '¿Trabajas mientras viajas?';
+
+  @override
+  String get quizWorkStyleSubtitle =>
+      'Así el planificador equilibra alojamientos con buen wifi y tiempo de trabajo con la exploración.';
 
   @override
   String get quizInterestsTitle => '¿Qué te encanta hacer en un viaje?';

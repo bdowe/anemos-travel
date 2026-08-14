@@ -13,6 +13,7 @@ import (
 
 var allowedBudgets = map[string]bool{"budget": true, "mid": true, "luxury": true}
 var allowedPaces = map[string]bool{"relaxed": true, "balanced": true, "packed": true}
+var allowedWorkStyles = map[string]bool{"digital_nomad": true, "workation": true, "leisure_only": true}
 
 type PreferencesResponse struct {
 	Budget       *string  `json:"budget"`
@@ -20,6 +21,7 @@ type PreferencesResponse struct {
 	Interests    []string `json:"interests"`
 	HomeAirport  *string  `json:"home_airport"`
 	ProfileNotes *string  `json:"profile_notes"`
+	WorkStyle    *string  `json:"work_style"`
 }
 
 type PutPreferencesRequest struct {
@@ -30,6 +32,7 @@ type PutPreferencesRequest struct {
 	HomeAirport *string   `json:"home_airport"`
 	// Pointer distinguishes omitted (nil -> keep) from cleared ("" -> clear).
 	ProfileNotes *string `json:"profile_notes"`
+	WorkStyle    *string `json:"work_style"`
 }
 
 func toPreferencesResponse(p store.TravelerPreference) PreferencesResponse {
@@ -37,7 +40,7 @@ func toPreferencesResponse(p store.TravelerPreference) PreferencesResponse {
 	if interests == nil {
 		interests = []string{}
 	}
-	return PreferencesResponse{Budget: p.Budget, Pace: p.Pace, Interests: interests, HomeAirport: p.HomeAirport, ProfileNotes: p.ProfileNotes}
+	return PreferencesResponse{Budget: p.Budget, Pace: p.Pace, Interests: interests, HomeAirport: p.HomeAirport, ProfileNotes: p.ProfileNotes, WorkStyle: p.WorkStyle}
 }
 
 func getPreferencesHandler(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +84,11 @@ func putPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	workStyle, err := normalizeChoice(req.WorkStyle, allowedWorkStyles, "work_style")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	homeAirport, err := normalizeAirportCode(req.HomeAirport)
 	if err != nil {
@@ -101,6 +109,7 @@ func putPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 		Interests:    interestsArg,
 		HomeAirport:  homeAirport,
 		ProfileNotes: normalizeNotes(req.ProfileNotes),
+		WorkStyle:    workStyle,
 	})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not save preferences")

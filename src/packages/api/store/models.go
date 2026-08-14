@@ -263,6 +263,7 @@ type TravelerPreference struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	HomeAirport  *string   `json:"home_airport"`
 	ProfileNotes *string   `json:"profile_notes"`
+	WorkStyle    *string   `json:"work_style"`
 }
 
 type Trip struct {

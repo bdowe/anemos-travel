@@ -12,7 +12,7 @@ import (
 )
 
 const getPreferences = `-- name: GetPreferences :one
-SELECT user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes FROM traveler_preferences WHERE user_id = $1
+SELECT user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes, work_style FROM traveler_preferences WHERE user_id = $1
 `
 
 func (q *Queries) GetPreferences(ctx context.Context, userID uuid.UUID) (TravelerPreference, error) {
@@ -27,27 +27,30 @@ func (q *Queries) GetPreferences(ctx context.Context, userID uuid.UUID) (Travele
 		&i.UpdatedAt,
 		&i.HomeAirport,
 		&i.ProfileNotes,
+		&i.WorkStyle,
 	)
 	return i, err
 }
 
 const upsertPreferences = `-- name: UpsertPreferences :one
-INSERT INTO traveler_preferences (user_id, budget, pace, interests, home_airport, profile_notes)
+INSERT INTO traveler_preferences (user_id, budget, pace, interests, home_airport, profile_notes, work_style)
 VALUES (
     $1,
     $2,
     $3,
     COALESCE($4, '{}'::text[]),
     $5,
-    $6
+    $6,
+    $7
 )
 ON CONFLICT (user_id) DO UPDATE SET
     budget        = COALESCE($2, traveler_preferences.budget),
     pace          = COALESCE($3, traveler_preferences.pace),
     interests     = COALESCE($4, traveler_preferences.interests),
     home_airport  = COALESCE($5, traveler_preferences.home_airport),
-    profile_notes = COALESCE($6, traveler_preferences.profile_notes)
-RETURNING user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes
+    profile_notes = COALESCE($6, traveler_preferences.profile_notes),
+    work_style    = COALESCE($7, traveler_preferences.work_style)
+RETURNING user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes, work_style
 `
 
 type UpsertPreferencesParams struct {
@@ -57,6 +60,7 @@ type UpsertPreferencesParams struct {
 	Interests    interface{} `json:"interests"`
 	HomeAirport  *string     `json:"home_airport"`
 	ProfileNotes *string     `json:"profile_notes"`
+	WorkStyle    *string     `json:"work_style"`
 }
 
 func (q *Queries) UpsertPreferences(ctx context.Context, arg UpsertPreferencesParams) (TravelerPreference, error) {
@@ -67,6 +71,7 @@ func (q *Queries) UpsertPreferences(ctx context.Context, arg UpsertPreferencesPa
 		arg.Interests,
 		arg.HomeAirport,
 		arg.ProfileNotes,
+		arg.WorkStyle,
 	)
 	var i TravelerPreference
 	err := row.Scan(
@@ -78,6 +83,7 @@ func (q *Queries) UpsertPreferences(ctx context.Context, arg UpsertPreferencesPa
 		&i.UpdatedAt,
 		&i.HomeAirport,
 		&i.ProfileNotes,
+		&i.WorkStyle,
 	)
 	return i, err
 }
