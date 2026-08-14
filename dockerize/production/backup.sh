@@ -49,7 +49,13 @@ compose() {
     fi
 }
 
-mkdir -p "$BACKUP_DIR"
+# install -d, not mkdir -p: the mode must be explicit AND applied even when
+# the directory already exists. This job runs as root, and root's umask once
+# created the directory 0700 — the api container (uid 1001, read-only mount)
+# couldn't traverse it, so /admin/ops/health reported "backups stale" forever
+# despite fresh nightly dumps. 0755 is required for the heartbeat to be
+# readable through the compose bind mount; self-heals on every run.
+install -d -m 755 "$BACKUP_DIR"
 
 out="$BACKUP_DIR/${PG_DB}-$(date +%F).dump.gz"
 tmp="$out.tmp"
