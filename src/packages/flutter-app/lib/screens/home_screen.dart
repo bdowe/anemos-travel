@@ -190,7 +190,10 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                 ] else
-                  _AgentHeroCard(onStart: startPlanning),
+                  _AgentHeroCard(
+                    onStart: startPlanning,
+                    onImport: () => openImportOnTripsTab(ref),
+                  ),
 
                 const SizedBox(height: AppSpacing.xl),
 
@@ -349,8 +352,9 @@ class _GreetingHeader extends StatelessWidget {
 
 class _AgentHeroCard extends StatelessWidget {
   final void Function({String? initialMessage, String? displayLabel}) onStart;
+  final VoidCallback onImport;
 
-  const _AgentHeroCard({required this.onStart});
+  const _AgentHeroCard({required this.onStart, required this.onImport});
 
   @override
   Widget build(BuildContext context) {
@@ -466,6 +470,16 @@ class _AgentHeroCard extends StatelessWidget {
                     )),
               ],
             ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // Already planned in ChatGPT/Claude? Its own line, not another
+          // chip: the chips above put words into the chat, this navigates
+          // (specs/import-trip-from-ai-chat).
+          TextButton.icon(
+            onPressed: onImport,
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            icon: const Icon(Icons.content_paste_go, size: 18),
+            label: Text(l10n.importFromAi),
           ),
         ],
       ),

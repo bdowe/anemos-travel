@@ -78,7 +78,12 @@ No schema changes. Writes `trips` + `itinerary_items` through the existing
 ## UI Behavior
 
 - Surface: "Import from AI chat" icon action on the Trips list app bar, plus a
-  button on the trips-list empty state.
+  button on the trips-list empty state; also a labeled button on the Agent
+  chat's empty state and a white text-button line under the Home new-user
+  hero's suggestion chips (buttons, not chips — neighboring chips put words
+  into the chat, import navigates). Every entry funnels through
+  `openImportOnTripsTab`: it switches to the Trips tab and pushes `/import`,
+  so the post-import trip detail lands on the stack-keeping Trips tab.
 - Screen: explainer, "Copy planning prompt" button, large paste field, Import
   button. During import: indeterminate progress with staged copy (extraction
   takes 5–20 s). Success: navigate (replace) to the new trip's detail screen;

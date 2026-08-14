@@ -135,6 +135,15 @@ class _EmptyState extends ConsumerWidget {
                 .sendMessage(text, displayLabel: displayLabel),
           ),
           for (final prompt in prompts) _SuggestionChip(prompt),
+          // Planned elsewhere (ChatGPT/Claude)? Paste it in instead
+          // (specs/import-trip-from-ai-chat). A button, not a chip: the
+          // chips above put words into the chat, this navigates — to the
+          // Trips tab, same as /import's refresh-restore.
+          OutlinedButton.icon(
+            onPressed: () => openImportOnTripsTab(ref),
+            icon: const Icon(Icons.content_paste_go, size: 18),
+            label: Text(l10n.importFromAi),
+          ),
         ],
       ),
     );

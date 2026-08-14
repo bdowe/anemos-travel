@@ -28,7 +28,6 @@ import '../providers/live_trip_provider.dart';
 import '../providers/resumable_chats_provider.dart';
 import '../providers/shared_with_me_provider.dart';
 import '../providers/trips_provider.dart';
-import 'import_trip_screen.dart';
 import 'trip_detail_screen.dart';
 
 class TripsListScreen extends ConsumerStatefulWidget {
@@ -113,7 +112,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           // Planned elsewhere (ChatGPT/Claude)? Paste it in instead
           // (specs/import-trip-from-ai-chat).
           OutlinedButton.icon(
-            onPressed: () => _openImport(context),
+            onPressed: () => openImportOnTripsTab(ref),
             icon: const Icon(Icons.content_paste_go, size: 18),
             label: Text(l10n.importFromAi),
           ),
@@ -303,7 +302,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           IconButton(
             tooltip: l10n.importFromAi,
             icon: const Icon(Icons.content_paste_go),
-            onPressed: () => _openImport(context),
+            onPressed: () => openImportOnTripsTab(ref),
           ),
           const AccountMenu(),
         ],
@@ -326,13 +325,6 @@ Future<void> _openTrip(
   // as pull-to-refresh.
   ref.invalidate(sharedWithMeProvider);
   unawaited(ref.read(tripsProvider.notifier).loadTrips());
-}
-
-void _openImport(BuildContext context) {
-  Navigator.of(context).push(
-    locatedRoute(
-        const ImportTripScreen(), utilityLocation(BootUtility.importTrip)),
-  );
 }
 
 /// A single trip in the list. Shows the latest version of its chat; for admins,

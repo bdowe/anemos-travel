@@ -24,6 +24,8 @@
 - [x] `lib/screens/import_trip_screen.dart` (copy-prompt, paste, progress,
       warnings, error/retry)
 - [x] Entry points: trips-list app bar action + empty-state action
+- [x] Entry points v2: Agent empty-state button + Home new-user hero line,
+      all via the shared `openImportOnTripsTab` helper (app_nav.dart)
 - [x] ARB strings en+es (incl. planning prompt) + regenerate l10n
 - [x] `flutter analyze` green
 
