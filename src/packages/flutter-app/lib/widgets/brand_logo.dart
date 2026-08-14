@@ -9,11 +9,12 @@ import '../theme/spacing.dart';
 /// - [BrandLogo.lockup] — the full rose + "Anemos" wordmark image, for spots
 ///   with horizontal room (app-bar titles).
 /// - [BrandLogo.mark] — the rose icon only, for tight spots (nav rail,
-///   hero badge).
+///   landing hero).
 ///
-/// The artwork is teal + gold on a transparent background, so it needs a light
-/// surface behind it on teal app bars / dark photos. Wrap either form in
-/// [BrandBadge] for that.
+/// The artwork is teal + gold on a transparent background. It floats bare on
+/// page surfaces and scrimmed imagery (auth screen, nav rail, landing hero);
+/// only on flat teal chrome — gradient app bars, the splash field — does the
+/// teal rose need a light plate behind it. Wrap in [BrandBadge] there.
 class BrandLogo extends StatelessWidget {
   static const String _lockupAsset = 'assets/images/anemos_logo.png';
   static const String _markAsset = 'assets/images/anemos_mark.png';
@@ -22,13 +23,13 @@ class BrandLogo extends StatelessWidget {
   final double _height;
   final bool _isLockup;
 
-  /// Full lockup (horseshoe mark + wordmark), sized by [height].
+  /// Full lockup (wind-rose mark + wordmark), sized by [height].
   const BrandLogo.lockup({super.key, double height = 36})
       : _asset = _lockupAsset,
         _height = height,
         _isLockup = true;
 
-  /// Horseshoe mark only, rendered as a [size]×[size] square.
+  /// Wind-rose mark only, rendered as a [size]×[size] square.
   const BrandLogo.mark({super.key, double size = 28})
       : _asset = _markAsset,
         _height = size,
@@ -50,10 +51,10 @@ class BrandLogo extends StatelessWidget {
   }
 }
 
-/// "A" monogram stand-in for the horseshoe mark when the image asset is
+/// "A" monogram stand-in for the wind-rose mark when the image asset is
 /// unavailable. Fills the same [size]×[size] square the icon glyph did, so
-/// layout is identical either way, and uses the same black-on-light palette
-/// as the artwork (it sits on a light [BrandBadge] surface).
+/// layout is identical either way. Its own black87 tile keeps it readable on
+/// any surface — badge plate or bare page background alike.
 class _MonogramFallback extends StatelessWidget {
   final double size;
   const _MonogramFallback({required this.size});
@@ -110,8 +111,8 @@ class _WordmarkFallback extends StatelessWidget {
   }
 }
 
-/// A light rounded surface that lets the black/gold [BrandLogo] read on teal
-/// app bars and dark hero imagery.
+/// A light rounded surface that lets the teal/gold [BrandLogo] read on flat
+/// teal chrome (gradient app bars, the splash field).
 class BrandBadge extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;

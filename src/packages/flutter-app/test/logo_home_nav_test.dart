@@ -5,10 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:travel_route_planner/navigation/app_nav.dart';
 import 'package:travel_route_planner/widgets/brand_logo.dart';
 
-/// Logo-links-home: the brand badge is tappable when given onTap (rail brand
-/// and Home app bar), and goHome mirrors the shell's tab-select behavior
-/// (selectTab): land on the Home ROOT — the Home stack is popped to its root
-/// whether the tap switches tabs or Home is already active.
+/// Logo-links-home: the brand badge is tappable when given onTap (Home app
+/// bar; the rail brand is a bare mark with its own InkWell, pinned in
+/// nav_tab_reset_test.dart), and goHome mirrors the shell's tab-select
+/// behavior (selectTab): land on the Home ROOT — the Home stack is popped to
+/// its root whether the tap switches tabs or Home is already active.
 void main() {
   testWidgets('BrandBadge with onTap fires the callback',
       (WidgetTester tester) async {

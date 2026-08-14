@@ -248,7 +248,16 @@ var printViewTmpl = template.Must(template.New("print-view").Parse(`<!DOCTYPE ht
       font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase;
       opacity: 0.85; margin: 0 0 6px; display: flex; align-items: center; gap: 10px;
     }
-    header .brand img { height: 22px; width: 22px; border-radius: 5px; }
+    header .brand img {
+      /* White plate behind the teal rose (the icon PNG is transparent), same
+         treatment as the in-app BrandBadge; box-sizing is border-box, so grow
+         the box to keep an 18px glyph. print-color-adjust keeps the plate in
+         print output, where backgrounds are stripped by default. */
+      height: 26px; width: 26px; padding: 4px;
+      background: rgba(255, 255, 255, 0.92);
+      border-radius: 5px;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
     header h1 { margin: 0; font-size: 1.7rem; }
     header .meta { margin: 8px 0 0; opacity: 0.9; font-size: 0.95rem; }
     main { max-width: 820px; margin: 0 auto; padding: 28px 24px 56px; }
