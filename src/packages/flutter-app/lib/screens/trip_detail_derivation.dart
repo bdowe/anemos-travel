@@ -133,17 +133,15 @@ class TripDerivation {
 
   /// The leg date ranges, raw and as rendered. Both live HERE so every
   /// consumer — header chips, nights suffixes, stay/leg booking todos,
-  /// what-to-wear rows — structurally reads the same pair (docs/zen.md: one
-  /// derivation, N call sites).
+  /// what-to-wear rows, the per-city weather and events lookups — structurally
+  /// reads the same pair (docs/zen.md: one derivation, N call sites). Both are
+  /// index-aligned with [legs] and [groups]; the label-keyed copy that used to
+  /// live here collapsed revisited cities onto one window and is gone.
   final List<LegRange> rawRanges;
   final List<LegRange> visibleRanges;
 
   /// Leg labels in trip order ([rawRanges] order) — the booking-slot keys.
   final List<String> legLabels;
-
-  /// Date window per city-group label (label-keyed, last-wins for revisited
-  /// cities), for the embedded weather/events lookups.
-  final Map<String, ({DateTime? start, DateTime? end})> groupRanges;
 
   /// Each itinerary item's position mapped to its location's date-chip parts
   /// (arrival-adjusted [visibleRanges] + localized nights suffix).
@@ -215,7 +213,6 @@ class TripDerivation {
     required this.rawRanges,
     required this.visibleRanges,
     required this.legLabels,
-    required this.groupRanges,
     required this.locationDates,
     required this.groups,
     required this.groupedBookings,
@@ -397,9 +394,6 @@ class TripDerivation {
     final rawRanges = rawLegRanges(trip);
     final visibleRanges = visibleLegRanges(trip);
     final legLabels = [for (final r in rawRanges) r.label];
-    final groupRanges = {
-      for (final r in rawRanges) r.label: (start: r.start, end: r.end)
-    };
 
     // Per-position date chips from the arrival-adjusted visible ranges —
     // index-aligned with [legs] by construction (both run the same tripLegs
@@ -511,7 +505,6 @@ class TripDerivation {
       rawRanges: rawRanges,
       visibleRanges: visibleRanges,
       legLabels: legLabels,
-      groupRanges: groupRanges,
       locationDates: locationDates,
       groups: groups,
       groupedBookings: groupedBookings,

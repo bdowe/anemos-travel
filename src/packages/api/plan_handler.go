@@ -774,7 +774,14 @@ func summarizeEvents(city string, events []Event) string {
 		}
 		b.WriteString(line + "\n")
 	}
-	b.WriteString("In your reply, highlight the events that fit the traveler's interests and dates; the full list is saved with their trip.")
+	// Nothing here is persisted — events are a live lookup, and no itinerary
+	// item can even hold one (allowedItemCategories is {attraction,
+	// restaurant}). The old closing line claimed "the full list is saved with
+	// their trip", so the model could truthfully-soundingly tell a traveler
+	// their events were saved. Same false-persistence claim summarizeOffers
+	// already dropped. Naming the date and venue is what actually survives the
+	// turn, so the reply has to carry them.
+	b.WriteString("In your reply, highlight the events that fit the traveler's interests and dates. Nothing here is saved — these are live listings — so name the date and venue of any event you recommend.")
 	return b.String()
 }
 
