@@ -96,7 +96,14 @@ class _NotificationCenterScreenState
     // there is nothing to clear during loading/error/empty, and a destructive
     // affordance over an unknown feed is noise. Watching the provider means it
     // disappears by itself right after a successful clear.
-    final hasRows = notifs.valueOrNull?.isNotEmpty ?? false;
+    //
+    // Asked through maybeWhen, NOT valueOrNull: a refetch that fails (the
+    // on-open mark-read invalidate, pull-to-refresh) yields an AsyncError that
+    // still carries the previous rows, so valueOrNull would keep the menu alive
+    // over the error panel below. Sharing `when`'s combinator is what keeps the
+    // two in lockstep — the menu shows exactly when the body shows a list.
+    final hasRows =
+        notifs.maybeWhen(data: (list) => list.isNotEmpty, orElse: () => false);
     return Scaffold(
       appBar: GradientAppBar(
         title: Text(l10n.notifTitle),

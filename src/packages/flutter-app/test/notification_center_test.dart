@@ -41,17 +41,31 @@ class _FakeAuthNotifier extends StateNotifier<AuthState>
 
 class _FakeNotificationsApiService extends NotificationsApiService {
   final List<AppNotification> notifications;
+
+  /// Flip to make the NEXT list() throw — the shape of a feed that loaded
+  /// once and then failed to refresh (pull-to-refresh, retry, the on-open
+  /// mark-read invalidate). Set it after the first load has settled so the
+  /// failure lands on top of real data.
+  Exception? failNextList;
+
   bool markReadCalled = false;
   bool clearAllCalled = false;
   Exception? clearAllError; // set to make clearAll throw
+
   _FakeNotificationsApiService(this.notifications)
       : super(ApiClient(baseUrl: 'http://test'));
 
   // Post-clear refetches observe the cleared feed, matching the real
   // contract (the client re-lists to see post-state).
   @override
-  Future<List<AppNotification>> list({int limit = 50}) async =>
-      clearAllCalled ? const [] : notifications;
+  Future<List<AppNotification>> list({int limit = 50}) async {
+    final err = failNextList;
+    if (err != null) {
+      failNextList = null;
+      throw err;
+    }
+    return clearAllCalled ? const [] : notifications;
+  }
 
   @override
   Future<void> clearAll() async {
@@ -65,9 +79,11 @@ class _FakeNotificationsApiService extends NotificationsApiService {
     markReadCalled = true;
   }
 
+  // Mirrors list(): a cleared feed has nothing unread, so the badge a
+  // post-clear refetch observes is 0.
   @override
   Future<int> unreadCount() async =>
-      notifications.where((n) => n.isUnread).length;
+      clearAllCalled ? 0 : notifications.where((n) => n.isUnread).length;
 }
 
 UserModel _user() => UserModel(
@@ -402,6 +418,67 @@ void main() {
       expect(find.text('No notifications yet'), findsOneWidget);
       // The visibility rule holds post-clear: nothing left to clear, no menu.
       expect(find.byIcon(Icons.more_vert), findsNothing);
+    });
+
+    testWidgets('a failed refresh hides the menu along with the feed',
+        (tester) async {
+      // An error that FOLLOWS a successful load still carries the previous
+      // rows (AsyncError.copyWithPrevious), so a valueOrNull-based gate would
+      // leave the destructive menu sitting over the error panel. The menu must
+      // track the rendered body.
+      final service = await _pump(tester, [_ops()]);
+      // Assert the precondition rather than assume it: the feed really is
+      // AsyncData-with-rows before the refresh fails, so this can never pass
+      // vacuously through an error that carried no previous value.
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+
+      service.failNextList = Exception('refresh failed');
+      ProviderScope.containerOf(
+              tester.element(find.byType(NotificationCenterScreen)))
+          .invalidate(notificationsProvider);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Could not load notifications'), findsOneWidget);
+      expect(find.byIcon(Icons.more_vert), findsNothing);
+    });
+
+    testWidgets('clearing refreshes the unread badge', (tester) async {
+      // The screen only invalidates the badge provider; nothing else watches
+      // it, so this harness watches it explicitly — otherwise dropping that
+      // invalidate would leave a count standing over an empty feed.
+      final service = _FakeNotificationsApiService([_priceDrop()]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
+            notificationsApiServiceProvider.overrideWithValue(service),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: testLocalizationsDelegates,
+            home: Column(children: [
+              Consumer(
+                builder: (context, ref, _) => Text(
+                  'badge:${ref.watch(notificationsUnreadCountProvider).valueOrNull ?? -1}',
+                  textDirection: TextDirection.ltr,
+                ),
+              ),
+              const Expanded(child: NotificationCenterScreen()),
+            ]),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('badge:1'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('More options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Clear all'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(service.clearAllCalled, isTrue);
+      expect(find.text('badge:0'), findsOneWidget);
     });
 
     testWidgets('a failed clear shows a snackbar and keeps the rows',
