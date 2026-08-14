@@ -13,8 +13,11 @@
 #   worktree.sh new NAME [--slot N]    create worktree + branch NAME off origin/main
 #   worktree.sh init [--slot N]        provision the CURRENT worktree in place
 #                                      (for harness-created agent worktrees)
-#   worktree.sh rm NAME [--force]      worktree + branch removed, stack down -v
-#                                      (--force also unlocks harness worktrees)
+#   worktree.sh rm NAME [--force]      worktree + local AND remote branch
+#                                      removed, stack down -v. The remote
+#                                      delete only runs when the branch was
+#                                      merged (--keep-remote opts out;
+#                                      --force also unlocks harness worktrees)
 #   worktree.sh list                   worktrees, slots, ports, running stacks
 #   worktree.sh prune [--yes]          list (and with --yes delete) orphaned
 #                                      dirs under .claude/worktrees
@@ -175,12 +178,13 @@ cmd_init() {
 }
 
 cmd_rm() {
-  local name=${1:-} force=""
-  [ -n "$name" ] || die "usage: worktree.sh rm NAME [--force]"
+  local name=${1:-} force="" keep_remote=""
+  [ -n "$name" ] || die "usage: worktree.sh rm NAME [--force] [--keep-remote]"
   shift
   while [ $# -gt 0 ]; do
     case "$1" in
       (--force) force=1; shift ;;
+      (--keep-remote) keep_remote=1; shift ;;
       (*) die "unknown option '$1'" ;;
     esac
   done
@@ -223,9 +227,41 @@ cmd_rm() {
     (*) echo "warn: project '$proj' is not a lane (gtt-*) — skipping stack teardown" >&2 ;;
   esac
 
-  if [ -n "${branch:-$name}" ]; then
-    git -C "$MAIN" branch -d "${branch:-$name}" 2>/dev/null \
-      || echo "branch '${branch:-$name}' not deleted (unmerged or missing) — git branch -D if you're sure" >&2
+  local b="${branch:-$name}"
+  if [ -n "$b" ]; then
+    case "$b" in
+      (main|master) die "refusing to delete branch '$b'" ;;
+    esac
+    # Decide the REMOTE's fate before touching anything, and decide it against
+    # origin/main specifically.
+    #
+    # Do NOT use `git branch -d` as the safety gate: it also succeeds when the
+    # branch is merely merged into its own UPSTREAM, which every pushed branch
+    # trivially is. A lane stopped at PR-open would sail through it and lose
+    # the branch its open PR points at. Ancestry against origin/main is the
+    # only question worth asking.
+    local merged_into_main=""
+    git -C "$MAIN" fetch origin main --quiet 2>/dev/null || true
+    if git -C "$MAIN" merge-base --is-ancestor "refs/heads/$b" origin/main 2>/dev/null; then
+      merged_into_main=1
+    fi
+
+    git -C "$MAIN" branch -d "$b" 2>/dev/null \
+      || echo "branch '$b' not deleted locally (unmerged or missing) — git branch -D if you're sure" >&2
+
+    if [ -z "$merged_into_main" ]; then
+      echo "kept remote branch 'origin/$b' — not merged into origin/main (an open PR still needs it)" >&2
+    elif [ -n "$keep_remote" ]; then
+      echo "kept remote branch 'origin/$b' (--keep-remote)"
+    elif ! git -C "$MAIN" ls-remote --exit-code --heads origin "$b" >/dev/null 2>&1; then
+      : # never pushed, or already gone — nothing to do
+    elif git -C "$MAIN" push origin --delete "$b" >/dev/null 2>&1; then
+      echo "deleted remote branch 'origin/$b'"
+    else
+      # Non-fatal: the worktree and local branch are already gone, and a
+      # leftover remote branch is untidy rather than harmful.
+      echo "warn: could not delete 'origin/$b' — remove it with: git push origin --delete $b" >&2
+    fi
   fi
   echo "removed: $dir (project $proj)"
 }
