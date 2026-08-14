@@ -89,9 +89,18 @@ straight to the right control.
       rung is still ahead. Each tally's Done is counted by the very test that
       decides its rung is satisfied — a booking slot closed either way the walk
       closes it, a day planned either way the day walk fills it — so a tally
-      and its rung can never disagree. Rungs without an exact denominator
-      (destinations, the book_trip aggregate) show no tally rather than a
-      made-up one; a trip with no derived slots and an undated trip show none.
+      and its rung can never disagree. Rungs without an exact denominator (the
+      book_trip aggregate) show no tally rather than a made-up one; a trip with
+      no derived slots and an undated trip show none.
+- [ ] **The destinations rung carries a bare count** ("10") rather than a
+      tally, because adding stops has no target to progress toward and "10 of
+      10" would claim the rung is finished instead of saying how big the trip
+      is. It is a separate wire field from the tally, so the two can never be
+      rendered as each other, and a rung carries at most one. The number is the
+      trip's rendered legs — the stops the map chips and itinerary headers
+      already show, hubless "Other places" runs excluded and a revisited city
+      counted once per visit — so the sheet and the screen agree. Absent, not
+      zero, on a trip with no places.
 - [ ] The card's secondary entry names its destination — "Trip health", the
       title of the sheet it opens — rather than "View all", which beside a step
       counter promised the steps and delivered the findings list.
@@ -141,10 +150,12 @@ straight to the right control.
   rungs 2 and 4 were renamed; ids are identity, labels are copy), labels
   localized. No per-rung DONE state ships: `done` already defines it (index <
   done complete, == done current, > done later), so the client derives it in one
-  place. A rung MAY carry `progress: {done, total}` — its internal tally,
-  present only where the denominator is exact: the bookings rung's derived slots
-  (absent when the trip has none) and the schedule rung's plannable days (absent
-  when the trip is undated). Both omitted for past trips. The step is identical
+  place. A rung MAY carry ONE trailing number, and the two kinds are separate
+  fields: `progress: {done, total}` where the denominator is exact (the bookings
+  rung's derived slots, absent when the trip has none; the schedule rung's
+  plannable days, absent when the trip is undated), or `count: N` where the work
+  has no target at all (the destinations rung's rendered legs, absent when the
+  trip has no places). Both omitted for past trips. The step is identical
   whether or not `check_hours` is requested.
 - **Errors:** unchanged (404 for viewers/missing trips).
 

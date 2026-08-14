@@ -259,6 +259,19 @@ nothing about how much of it is undone.
 packing list" and the all-set celebration are harder to reach. That is the
 honest ladder; the tally is what keeps it from feeling stuck.
 
+**Count vs tally (Brian, same day, after first review).** The destinations rung
+was going to ship with no number — the tally rule says "exact denominator or
+nothing", and destinations have none. Brian asked for the badge back, which is
+the right call for a different reason: the number he wants is not progress, it
+is *how big is this trip*. So `PlanPhase` grows a second, separate field,
+`count`, and a rung carries at most one of the two. Keeping them apart is the
+whole point — a count squeezed into `progress` renders "10 of 10", which claims
+the rung is finished. The number is `countDestinations`: the trip's rendered
+legs with a hub, so it equals the map chips and the itinerary headers rather
+than being a third opinion about what a destination is (hubless "Other places"
+runs excluded, a revisited city counted once per visit, absent — not zero — on
+a trip with no places).
+
 **Sheet placement (same PR).** The sheet sized to its content, so six short
 rows anchored to the bottom ~46% of a tall window and read as a footer. It now
 carries a `minHeight` floor of 62% of the window under the existing 80% cap —

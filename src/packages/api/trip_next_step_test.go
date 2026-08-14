@@ -138,6 +138,14 @@ func mustLadder(t *testing.T, progress *PlanProgress) {
 			t.Fatalf("phase %s tally = %d/%d, want 0 <= done <= total, total > 0",
 				p.ID, p.Progress.Done, p.Progress.Total)
 		}
+		// A bare count belongs only to the rung with no denominator at all,
+		// and never alongside a tally — the sheet renders one trailing number.
+		if p.Count != nil && p.ID != planPhaseItinerary {
+			t.Fatalf("phase %s must not carry a count: %d", p.ID, *p.Count)
+		}
+		if p.Count != nil && p.Progress != nil {
+			t.Fatalf("phase %s carries both a count and a tally", p.ID)
+		}
 	}
 }
 
@@ -150,13 +158,19 @@ func bookingsTally(t *testing.T, progress *PlanProgress) *PhaseProgress {
 // rungTally returns one rung's tally (nil when it has none).
 func rungTally(t *testing.T, progress *PlanProgress, id string) *PhaseProgress {
 	t.Helper()
+	return phaseByID(t, progress, id).Progress
+}
+
+// phaseByID returns one rung of the wire ladder.
+func phaseByID(t *testing.T, progress *PlanProgress, id string) PlanPhase {
+	t.Helper()
 	for _, p := range progress.Phases {
 		if p.ID == id {
-			return p.Progress
+			return p
 		}
 	}
 	t.Fatalf("no %q rung in %+v", id, progress.Phases)
-	return nil
+	return PlanPhase{}
 }
 
 func TestNextStep_Undated(t *testing.T) {
@@ -969,6 +983,50 @@ func TestNextStep_LadderPhases(t *testing.T) {
 		if es.Phases[i].Label == en.Phases[i].Label {
 			t.Fatalf("phase %d (%s) is not translated: %q", i, wantIDs[i], es.Phases[i].Label)
 		}
+	}
+}
+
+// The destinations rung carries a bare COUNT, not a tally: adding stops has no
+// target to progress toward, and "10 of 10" would claim the rung is finished
+// rather than saying how many stops the trip has. The number is the trip's
+// rendered legs, so it matches the map chips and the itinerary headers.
+func TestNextStep_DestinationsCount(t *testing.T) {
+	d := nextStepFixture(t) // Paris → Lyon
+
+	_, progress := derive("en", nextStepNow, d)
+	phase := phaseByID(t, progress, planPhaseItinerary)
+	if phase.Count == nil || *phase.Count != 2 {
+		t.Fatalf("destinations count = %v, want 2", phase.Count)
+	}
+	if phase.Progress != nil {
+		t.Fatalf("the destinations rung has no denominator: %+v", phase.Progress)
+	}
+
+	// A revisited city counts once per VISIT — that is how the trip renders it,
+	// and the rung's number must match what is on screen.
+	d.Items = append(d.Items, store.ItineraryItem{
+		ID: uuid.New(), Name: "Musée Rodin", City: strp("Paris"), Day: i32p(4), Position: 5})
+	_, progress = derive("en", nextStepNow, d)
+	if c := phaseByID(t, progress, planPhaseItinerary).Count; c == nil || *c != 3 {
+		t.Fatalf("count after a revisit = %v, want 3 (Paris, Lyon, Paris)", c)
+	}
+
+	// "Other places" is a grouping placeholder, not somewhere anyone goes —
+	// the same reason namesAPlace rejects it.
+	d = nextStepFixture(t)
+	d.Items = append(d.Items, store.ItineraryItem{
+		ID: uuid.New(), Name: "Some idea", Day: i32p(4), Position: 5}) // no city
+	_, progress = derive("en", nextStepNow, d)
+	if c := phaseByID(t, progress, planPhaseItinerary).Count; c == nil || *c != 2 {
+		t.Fatalf("count with a hubless item = %v, want 2", c)
+	}
+
+	// No places at all: no count rather than a zero.
+	d = nextStepFixture(t)
+	d.Items = nil
+	_, progress = derive("en", nextStepNow, d)
+	if c := phaseByID(t, progress, planPhaseItinerary).Count; c != nil {
+		t.Fatalf("count on an empty trip = %d, want none", *c)
 	}
 }
 

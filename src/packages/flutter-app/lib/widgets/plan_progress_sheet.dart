@@ -184,14 +184,21 @@ class _PhaseRow extends StatelessWidget {
     // two colors. The label already said it; only the detail adds anything.
     final showTitle = showStep && s.title != phase.label;
 
-    // The rung's own tally ("4 of 11"), for rungs that have one. It is the
-    // only number that moves while a many-city trip sits on "3 of 6" —
-    // eleven booking slots close one at a time under a single rung. The rung
-    // label supplies the noun, so this reuses the bare "{n} of {total}" the
-    // eyebrow counter already speaks.
+    // The rung's own number. A tally ("4 of 11") for rungs measured against an
+    // exact denominator — the only number that moves while a many-city trip
+    // sits on "3 of 6", since eleven booking slots close one at a time under a
+    // single rung. Otherwise a bare count ("10") for a rung with no target to
+    // progress toward; rendering that as a tally would say "10 of 10", which
+    // claims the rung is finished. The server never sets both. Either way the
+    // rung label supplies the noun, so this reuses the bare "{n} of {total}"
+    // the eyebrow counter already speaks and adds no copy of its own.
     final tally = phase.progress;
-    final tallyLabel =
-        tally == null ? null : l10n.nextStepProgress(tally.done, tally.total);
+    final count = phase.count;
+    final String? tallyLabel = tally != null
+        ? l10n.nextStepProgress(tally.done, tally.total)
+        : count != null
+            ? '$count'
+            : null;
 
     return Semantics(
       label: [phase.label, stateLabel, if (tallyLabel != null) tallyLabel]

@@ -128,12 +128,14 @@ PlanPhase _$PlanPhaseFromJson(Map<String, dynamic> json) => PlanPhase(
       progress: json['progress'] == null
           ? null
           : PhaseProgress.fromJson(json['progress'] as Map<String, dynamic>),
+      count: (json['count'] as num?)?.toInt(),
     );
 
 Map<String, dynamic> _$PlanPhaseToJson(PlanPhase instance) => <String, dynamic>{
       'id': instance.id,
       'label': instance.label,
       'progress': instance.progress,
+      'count': instance.count,
     };
 
 PhaseProgress _$PhaseProgressFromJson(Map<String, dynamic> json) =>

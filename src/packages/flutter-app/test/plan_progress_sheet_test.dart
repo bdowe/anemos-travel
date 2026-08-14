@@ -12,7 +12,7 @@ import 'support/l10n_test_app.dart';
 
 const _phases = [
   PlanPhase(id: 'dates', label: 'Set your travel dates'),
-  PlanPhase(id: 'itinerary', label: 'Add your destinations'),
+  PlanPhase(id: 'itinerary', label: 'Add your destinations', count: 10),
   PlanPhase(
     id: 'bookings',
     label: 'Book travel & stays',
@@ -108,6 +108,22 @@ void main() {
     // The header pill is the ladder's own counter; no other rung invents one.
     expect(find.textContaining(' of '),
         findsNWidgets(3)); // "3 of 6" + "4 of 11" + "0 of 37"
+  });
+
+  // Adding destinations has no target to progress toward, so that rung carries
+  // a bare count. Rendered as a tally it would read "10 of 10" — finished.
+  testWidgets('a rung with a count shows the bare number', (tester) async {
+    await tester.pumpWidget(_app(const PlanProgressSheetBody(
+      progress: PlanProgress(done: 2, total: 6, phases: _phases),
+      currentStep: _step,
+    )));
+
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('plan-phase-itinerary')),
+            matching: find.text('10')),
+        findsOneWidget);
+    expect(find.text('10 of 10'), findsNothing);
   });
 
   // The days rung's step title IS its label, so printing both would say "Plan

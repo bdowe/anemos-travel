@@ -55,10 +55,14 @@ func assertLadderJSON(t *testing.T, progress map[string]any) {
 			t.Fatalf("phase %d (%v) has no label", i, p["id"])
 		}
 		// Only the bookings (derived slots) and schedule (plannable days) rungs
-		// have an exact denominator to report.
+		// have an exact denominator to report; the bare count belongs only to
+		// the destinations rung, which has none.
 		if _, has := p["progress"]; has &&
 			p["id"] != planPhaseBookings && p["id"] != planPhaseSchedule {
 			t.Fatalf("phase %v must not carry a tally: %v", p["id"], p["progress"])
+		}
+		if _, has := p["count"]; has && p["id"] != planPhaseItinerary {
+			t.Fatalf("phase %v must not carry a count: %v", p["id"], p["count"])
 		}
 	}
 }

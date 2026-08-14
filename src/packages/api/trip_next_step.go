@@ -67,14 +67,21 @@ type PlanProgress struct {
 	Phases []PlanPhase `json:"phases,omitempty"`
 }
 
-// PlanPhase is one rung: a stable id, its localized short label, and — where
-// the rung has an exact denominator — its own internal tally. The id is the
-// identity clients and tests key on (locale-independent, unchanged when the
-// copy is reworded); the label is display copy and nothing else.
+// PlanPhase is one rung: a stable id, its localized short label, and at most
+// one trailing number. The id is the identity clients and tests key on
+// (locale-independent, unchanged when the copy is reworded); the label is
+// display copy and nothing else.
+//
+// Progress and Count are DIFFERENT claims and a rung carries at most one.
+// Progress is "how far through this rung are you" and needs an exact
+// denominator. Count is "how many of these do you have" — a rung whose work has
+// no target at all, where a denominator would have to be invented. Keeping them
+// as separate fields is what stops a count from being rendered as "10 of 10".
 type PlanPhase struct {
 	ID       string         `json:"id"`
 	Label    string         `json:"label"`
 	Progress *PhaseProgress `json:"progress,omitempty"`
+	Count    *int           `json:"count,omitempty"`
 }
 
 // PhaseProgress is a rung's INTERNAL progress — the units of work inside one
@@ -97,12 +104,14 @@ type PhaseProgress struct {
 	Total int `json:"total"`
 }
 
-// planPhaseBookings / planPhaseSchedule are the rungs the two walks tally —
-// named so the ladder table above and the tallies below refer to the same rung
-// explicitly, rather than agreeing on a bare string in two places.
+// planPhaseItinerary / planPhaseBookings / planPhaseSchedule are the rungs that
+// carry a trailing number — named so the ladder table above and the numbers
+// below refer to the same rung explicitly, rather than agreeing on a bare
+// string in two places.
 const (
-	planPhaseBookings = "bookings"
-	planPhaseSchedule = "schedule"
+	planPhaseItinerary = "itinerary"
+	planPhaseBookings  = "bookings"
+	planPhaseSchedule  = "schedule"
 )
 
 // planLadder IS the ladder, in order — the phase ids paired with the catalog
@@ -119,7 +128,7 @@ const (
 // checks.
 var planLadder = [...]struct{ ID, Key string }{
 	{"dates", "review.next.setDates.title"},
-	{"itinerary", "review.next.planItinerary.title"},
+	{planPhaseItinerary, "review.next.planItinerary.title"},
 	{planPhaseBookings, "review.ladder.bookings"},
 	{planPhaseSchedule, "review.ladder.days"},
 	{"confirm", "review.next.book.title"},
@@ -130,16 +139,35 @@ var planLadder = [...]struct{ ID, Key string }{
 // the single source of the total the phases below already imply.
 const planLadderTotal = len(planLadder)
 
-// planLadderPhases renders the ladder for one locale, hanging each walk's tally
-// on the rung that owns it. Both walks are passed in rather than re-run here:
-// they are the same single passes phases 3 and 4 decide on, so the sheet's
-// "4 of 11" and "12 of 37" can never come from different counts than the card's
-// step.
-func planLadderPhases(locale string, slots bookingWalk, days dayCoverage) []PlanPhase {
+// countDestinations counts the trip's rendered city legs — the stops the map
+// chips and the itinerary headers show — so the number beside "Add your
+// destinations" is the number already on screen rather than a second opinion
+// about what a destination is. Hubless runs ("Other places") never count: the
+// same reason namesAPlace rejects that label, it is a grouping placeholder, not
+// somewhere anyone goes. A revisited city counts once per visit, because that
+// is how the trip renders it.
+func countDestinations(d exportData) int {
+	n := 0
+	for _, leg := range computeTripLegs(d.Trip, d.Items, d.Accommodations) {
+		if leg.Hub != nil {
+			n++
+		}
+	}
+	return n
+}
+
+// planLadderPhases renders the ladder for one locale, hanging each walk's
+// number on the rung that owns it. The walks are passed in rather than re-run
+// here: they are the same single passes phases 2–4 decide on, so the sheet's
+// "10", "4 of 11" and "12 of 37" can never come from different counts than the
+// card's step.
+func planLadderPhases(locale string, slots bookingWalk, days dayCoverage, destinations int) []PlanPhase {
 	phases := make([]PlanPhase, 0, len(planLadder))
 	for _, p := range planLadder {
 		phase := PlanPhase{ID: p.ID, Label: tr(locale, p.Key)}
 		switch {
+		case p.ID == planPhaseItinerary && destinations > 0:
+			phase.Count = ptrTo(destinations)
 		case p.ID == planPhaseBookings && slots.Total > 0:
 			phase.Progress = &PhaseProgress{Done: slots.Closed, Total: slots.Total}
 		case p.ID == planPhaseSchedule && days.Total > 0:
@@ -161,19 +189,20 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 		return nil, nil
 	}
 
-	// One pass each over the booking checklist and the trip's days, up front:
-	// phases 3 and 4 pick their steps from them below, and EVERY phase's
-	// payload carries both tallies — a trip stopped at "set your dates" still
-	// gets to see how much of the booking and day-planning rungs is already
-	// done.
+	// One pass each over the booking checklist, the trip's days and its legs,
+	// up front: phases 3 and 4 pick their steps from the first two below, and
+	// EVERY phase's payload carries all three numbers — a trip stopped at "set
+	// your dates" still gets to see how many stops it has and how much of the
+	// booking and day-planning rungs is already done.
 	slots := walkBookingSlots(data)
 	days := walkDayCoverage(data)
+	destinations := countDestinations(data)
 
 	progress := func(done int) *PlanProgress {
 		return &PlanProgress{
 			Done:   done,
 			Total:  planLadderTotal,
-			Phases: planLadderPhases(locale, slots, days),
+			Phases: planLadderPhases(locale, slots, days, destinations),
 		}
 	}
 
