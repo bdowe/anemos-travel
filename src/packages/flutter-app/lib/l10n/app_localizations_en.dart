@@ -2352,6 +2352,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifTitle => 'Notifications';
 
   @override
+  String get notifMoreActions => 'More options';
+
+  @override
+  String get notifClearAll => 'Clear all';
+
+  @override
+  String get notifClearAllTitle => 'Clear all notifications?';
+
+  @override
+  String get notifClearAllBody =>
+      'This removes every notification, including unread ones. This cannot be undone.';
+
+  @override
+  String notifClearAllFailed(String error) {
+    return 'Could not clear notifications: $error';
+  }
+
+  @override
   String get notifLoadErrorTitle => 'Could not load notifications';
 
   @override

@@ -5,6 +5,66 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-14 — notification-center dogfooding (no way to clear)
+
+- **[app] Friction → fixed (Clear all + 45-day retention,
+  specs/clear-notifications):** the notification center was a wall of stale
+  "System degraded · backups stale" cards with no way to remove any of them —
+  the server had list / mark-all-read / unread-count and **no DELETE query
+  anywhere**, so rows lived forever while the hourly janitor pruned sessions,
+  stale chats and health samples but never notifications. (The ops stream
+  repeats by design: `healthMonitor.lastReasons` is in-memory, so every deploy
+  restart re-fires a standing reason, and a reason-set flip never yields a
+  recovery — PR #367 made those cards readable and deliberately deferred
+  clearing.) Fixed with the missing removal half of the lifecycle: `DELETE
+  /api/v1/notifications` (user-scoped, **idempotent 204** — clear-all names no
+  resource, so unlike `deleteChatSessionHandler` there is no 404 case) behind
+  an app-bar ⋮ + confirm dialog (the trip-delete destructive convention), plus
+  a fourth janitor prune. Retention keys on **`read_at`, not `created_at`** —
+  "anything you've seen sticks around ~6 more weeks" is a guarantee
+  expressible to a user — and `read_at IS NOT NULL` makes "unread never
+  expires" structural rather than conventional. Hard delete, **no migration**,
+  which also kept the lane clear of the double-claimed 00058 slot (next free
+  is 00060).
+- **[dev] BREAKAGE (self-inflicted, caught before merge): a proxy check
+  can confirm the absence of the very thing it was meant to prove.** I
+  verified a revert-restore with `grep -c maybeWhen` — which matched the word
+  inside the *comment* I had just written above the code, so a silently failed
+  `cp` (aliased to `-i`, sitting on a prompt) read as success and the buggy
+  line survived into two later test runs. Twice more the same shape: a
+  backgrounded `flutter test` exited **0** printing "Test directory not
+  found" because the shell cwd had reset to the repo root. Lessons: grep the
+  **code line** (`grep -n 'final hasRows' -A1`), never a token that also
+  appears in prose; use `/bin/cp -f` in scripted restores; and treat a green
+  test run with no `All tests passed` line as a failed run, not a quiet one.
+- **[dev] A regression test that passes both ways is not a test.** The first
+  version of the menu-visibility test leaned on incidental settle ordering
+  (initState's mark-read invalidate racing the first fetch), so a reviewer
+  could argue it passed vacuously — and one did. Rewritten to assert the
+  precondition (menu visible over real `AsyncData` rows) and *then* drive an
+  explicit `ProviderScope.containerOf(...).invalidate(...)` against a
+  `failNextList` fake. **Prove a regression test by reverting the fix and
+  watching it fail**, not by watching it go green.
+- **[dev] An agent-review workflow that reports `<failures>` is reporting
+  nothing.** The first review run hit a model spend limit: 6 of 8 agents died,
+  every verifier among them, and the workflow returned a clean
+  `{confirmed: [], refuted: []}` — an empty verdict that reads exactly like a
+  pass. The findings existed; they were dropped when their verifiers errored.
+  Same trap as the 2026-08-01 PR #260 entry. **Read `journal.jsonl` before
+  believing an empty result**, and resume (`resumeFromRunId`) instead of
+  trusting the summary. On resume, two lenses (Go correctness, adversarial
+  edge cases) still died on the limit; that coverage was replaced by a manual
+  read of the ~50-line Go diff and is recorded here rather than papered over.
+- **[app] Known debt, deliberately not fixed here:** a failed clear shows
+  `errorGeneric` for HTTP-status failures (401/429/503) because the service
+  throws a bare `Exception` and `friendlyError` only classifies
+  `ApiException`/`AuthException`/`ClientException`. Reviewed and **refuted as
+  a merge blocker**: bare-`Exception` + `friendlyError` is the dominant house
+  convention (~82 sites vs 20), the offline case already resolves to
+  `errorNetwork`, and surfacing the raw server string would violate the
+  deliberately-unlocalized `writeJSONError` doctrine (`i18n.go`). The real fix
+  is an app-wide move to `ApiException` with machine-readable codes.
+
 ## 2026-08-13 — trip-detail dogfooding (Bookings tab counter → pill)
 
 - **[app] Friction → fixed (counter styling unified):** with the wear/pack

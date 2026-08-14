@@ -2,8 +2,9 @@ import 'dart:convert';
 import '../models/notification.dart';
 import 'api_client.dart';
 
-/// Client for the generalized notifications feed (Wave 16): `/notifications`,
-/// `/notifications/read`, `/notifications/unread-count`.
+/// Client for the generalized notifications feed (Wave 16): `/notifications`
+/// (GET list / DELETE clear-all), `/notifications/read`,
+/// `/notifications/unread-count`.
 class NotificationsApiService {
   final ApiClient apiClient;
 
@@ -39,6 +40,19 @@ class NotificationsApiService {
   Future<void> markRead() async {
     final res = await apiClient.httpClient.post(
       Uri.parse('${apiClient.baseUrl}/notifications/read'),
+      headers: apiClient.jsonHeaders(),
+    );
+    if (res.statusCode != 204) {
+      throw Exception(_errorMessage(res.body, res.statusCode));
+    }
+  }
+
+  /// Deletes every notification for the caller (clear-all — the delete model
+  /// mirrors markRead's mark-all). Idempotent; returns 204. Post-state is
+  /// observed by refetching the list and unread count.
+  Future<void> clearAll() async {
+    final res = await apiClient.httpClient.delete(
+      Uri.parse('${apiClient.baseUrl}/notifications'),
       headers: apiClient.jsonHeaders(),
     );
     if (res.statusCode != 204) {

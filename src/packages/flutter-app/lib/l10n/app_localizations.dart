@@ -4100,6 +4100,36 @@ abstract class AppLocalizations {
   /// **'Notifications'**
   String get notifTitle;
 
+  /// No description provided for @notifMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More options'**
+  String get notifMoreActions;
+
+  /// No description provided for @notifClearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all'**
+  String get notifClearAll;
+
+  /// No description provided for @notifClearAllTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all notifications?'**
+  String get notifClearAllTitle;
+
+  /// No description provided for @notifClearAllBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes every notification, including unread ones. This cannot be undone.'**
+  String get notifClearAllBody;
+
+  /// No description provided for @notifClearAllFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not clear notifications: {error}'**
+  String notifClearAllFailed(String error);
+
   /// No description provided for @notifLoadErrorTitle.
   ///
   /// In en, this message translates to:

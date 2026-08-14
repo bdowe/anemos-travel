@@ -24,6 +24,41 @@ func (q *Queries) CountUnreadNotifications(ctx context.Context, userID uuid.UUID
 	return count, err
 }
 
+const deleteNotificationsByUser = `-- name: DeleteNotificationsByUser :execrows
+DELETE FROM notifications
+WHERE user_id = $1
+`
+
+// Clear-all is the delete model, mirroring MarkNotificationsRead's mark-all:
+// one user-scoped wholesale action, no per-notification variant. Hard delete —
+// a notification is an ephemeral signal, not a record of account activity.
+func (q *Queries) DeleteNotificationsByUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteNotificationsByUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteOldReadNotifications = `-- name: DeleteOldReadNotifications :exec
+DELETE FROM notifications
+WHERE read_at IS NOT NULL
+  AND read_at < now() - interval '45 days'
+`
+
+// Retention (janitor): read rows expire 45 days after they were SEEN (read_at,
+// not created_at), so "anything you've seen sticks around ~6 more weeks" is a
+// guarantee expressible to a user. read_at IS NOT NULL makes "unread never
+// expires" structural — an unseen signal must not vanish silently. No
+// supporting index on purpose: neither existing index covers a read_at range
+// scan, an hourly seq scan is fine at current scale, and a partial index would
+// cost the migration this feature deliberately avoids (precedent:
+// DeleteOldHealthSamples, also an unindexed interval scan).
+func (q *Queries) DeleteOldReadNotifications(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteOldReadNotifications)
+	return err
+}
+
 const insertCollabEditNotifications = `-- name: InsertCollabEditNotifications :execrows
 WITH src AS (
     SELECT tr.id AS trip_id, tr.user_id AS owner_id, tr.chat_id,

@@ -154,6 +154,100 @@ func TestNotificationsListReadAndIsolation(t *testing.T) {
 	}
 }
 
+// readNotificationAgo stamps a row as read `by` ago — the sibling of
+// ageNotification for the retention prune's axis (read_at, not created_at).
+func readNotificationAgo(t *testing.T, id uuid.UUID, by time.Duration) {
+	t.Helper()
+	if _, err := dbPool.Exec(context.Background(),
+		`UPDATE notifications SET read_at = now() - $2::interval WHERE id = $1`,
+		id, by.String()); err != nil {
+		t.Fatalf("stamp notification read: %v", err)
+	}
+}
+
+// Clear-all deletes the caller's whole feed and nothing else: user-scoped,
+// idempotent (204 even on an empty feed — no resource is named, so there is
+// no 404 case), and auth-gated like its siblings.
+func TestNotificationsClearAll(t *testing.T) {
+	resetDB(t)
+	owner, ownerToken := createTestUser(t, "notif-clear-owner@example.com")
+	other, otherToken := createTestUser(t, "notif-clear-other@example.com")
+
+	read := insertTestNotification(t, owner.ID, "price_drop", map[string]any{"price": 450.0}, nil)
+	readNotificationAgo(t, read.ID, time.Hour)
+	insertTestNotification(t, owner.ID, "trip_reminder", map[string]any{"title": "soon"}, nil)
+	insertTestNotification(t, other.ID, "weekly_nudge", map[string]any{"reason": "resume_planning"}, nil)
+
+	// The other user's clear empties only their own feed.
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications", otherToken, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("other clear = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+	if got := decodeNotifList(t, doJSON(t, "GET", "/api/v1/notifications", otherToken, nil).Body.Bytes()); len(got) != 0 {
+		t.Fatalf("other feed after own clear = %d rows, want 0", len(got))
+	}
+	if got := decodeNotifList(t, doJSON(t, "GET", "/api/v1/notifications", ownerToken, nil).Body.Bytes()); len(got) != 2 {
+		t.Fatalf("owner feed after other's clear = %d rows, want 2 (cross-user clear leaked)", len(got))
+	}
+
+	// The owner's clear removes read and unread rows alike.
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications", ownerToken, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("owner clear = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+	if got := decodeNotifList(t, doJSON(t, "GET", "/api/v1/notifications", ownerToken, nil).Body.Bytes()); len(got) != 0 {
+		t.Fatalf("owner feed after clear = %d rows, want 0", len(got))
+	}
+	if n := notifUnreadCount(t, ownerToken); n != 0 {
+		t.Fatalf("unread after clear = %v, want 0", n)
+	}
+
+	// Idempotent: clearing an already-empty feed is a success, not a 404.
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications", ownerToken, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("second clear = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications", "", nil); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous clear = %d, want 401", rec.Code)
+	}
+}
+
+// The retention prune expires READ rows 45 days after read_at and never
+// touches unread rows, however old. Runs through janitorTick itself so the
+// wiring (not just the query) is pinned — this is the first janitor test.
+func TestJanitorPrunesOldReadNotifications(t *testing.T) {
+	resetDB(t)
+	owner, ownerToken := createTestUser(t, "notif-prune@example.com")
+
+	expired := insertTestNotification(t, owner.ID, "price_drop", map[string]any{"price": 1.0}, nil)
+	readNotificationAgo(t, expired.ID, 46*24*time.Hour)
+	readRecent := insertTestNotification(t, owner.ID, "trip_reminder", map[string]any{"title": "kept"}, nil)
+	readNotificationAgo(t, readRecent.ID, 10*24*time.Hour)
+	// Unread rows never expire — even one far older than the read cutoff.
+	unreadOld := insertTestNotification(t, owner.ID, "weekly_nudge", map[string]any{"reason": "resume_planning"}, nil)
+	ageNotification(t, unreadOld.ID, 200*24*time.Hour)
+	unreadFresh := insertTestNotification(t, owner.ID, "share_joined", map[string]any{"joiner_name": "Ana"}, nil)
+
+	janitorTick(context.Background())
+
+	after := decodeNotifList(t, doJSON(t, "GET", "/api/v1/notifications", ownerToken, nil).Body.Bytes())
+	got := map[string]bool{}
+	for _, n := range after {
+		got[n["id"].(string)] = true
+	}
+	if got[expired.ID.String()] {
+		t.Fatalf("read-46-days-ago row survived the prune: %v", after)
+	}
+	for name, id := range map[string]uuid.UUID{
+		"read-10-days-ago": readRecent.ID, "unread-200-days-old": unreadOld.ID, "unread-fresh": unreadFresh.ID,
+	} {
+		if !got[id.String()] {
+			t.Fatalf("%s row was pruned but must survive: %v", name, after)
+		}
+	}
+	if len(after) != 3 {
+		t.Fatalf("rows after prune = %d, want 3: %v", len(after), after)
+	}
+}
+
 // Deleting a user cascades their notifications away (ON DELETE CASCADE).
 func TestNotificationsCascadeOnUserDelete(t *testing.T) {
 	resetDB(t)

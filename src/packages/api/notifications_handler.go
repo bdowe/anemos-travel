@@ -11,12 +11,13 @@ import (
 	"travel-route-planner/store"
 )
 
-// Generalized notifications read API (Wave 16): the notification-center spine.
+// Generalized notifications API (Wave 16): the notification-center spine.
 // Type-agnostic: each row carries a `type` discriminator and a `payload` JSON
 // bag the client switches on. Writers: the re-engagement checkers (trip
 // reminders, weekly nudge), collab/share activity (notifications_writer.go),
-// and the ops self-check monitor (admin-only rows). This file only reads and
-// marks. All routes require auth.
+// and the ops self-check monitor (admin-only rows). This file reads, marks,
+// and clears (clear-all is the one delete: user-initiated, whole-feed). All
+// routes require auth.
 
 const (
 	defaultNotificationsLimit = 50
@@ -90,6 +91,25 @@ func markNotificationsReadHandler(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFromContext(r.Context())
 	if _, err := store.New(dbPool).MarkNotificationsRead(r.Context(), user.ID); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not mark notifications read")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// clearNotificationsHandler deletes every notification belonging to the
+// caller ("Clear all"). It mirrors mark-all-read, not the single-resource
+// deletes (which 404 on zero rows): clear-all names no resource, ownership is
+// structural in the query's WHERE clause, and an empty feed is a valid
+// pre-state — so the result is an idempotent 204 either way. The client
+// observes post-state by refetching the list and unread count.
+func clearNotificationsHandler(w http.ResponseWriter, r *http.Request) {
+	if dbPool == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "database unavailable")
+		return
+	}
+	user, _ := userFromContext(r.Context())
+	if _, err := store.New(dbPool).DeleteNotificationsByUser(r.Context(), user.ID); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "could not clear notifications")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

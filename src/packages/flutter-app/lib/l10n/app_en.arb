@@ -1509,6 +1509,18 @@
   "nextStepPackingAction": "Open packing list",
   "nextStepAllSetDismiss": "Dismiss",
   "notifTitle": "Notifications",
+  "notifMoreActions": "More options",
+  "notifClearAll": "Clear all",
+  "notifClearAllTitle": "Clear all notifications?",
+  "notifClearAllBody": "This removes every notification, including unread ones. This cannot be undone.",
+  "notifClearAllFailed": "Could not clear notifications: {error}",
+  "@notifClearAllFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "notifLoadErrorTitle": "Could not load notifications",
   "notifEmptyTitle": "No notifications yet",
   "notifEmptyMessage": "Trip reminders and co-planning updates will show up here.",

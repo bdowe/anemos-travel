@@ -66,7 +66,7 @@ func runJanitor(ctx context.Context) {
 	}
 }
 
-// janitorTick runs both prunes under one bounded context. The sqlc queries
+// janitorTick runs the prunes under one bounded context. The sqlc queries
 // are :exec (no affected-row count comes back), so the debug lines record
 // that the prune ran, not how many rows it reclaimed.
 func janitorTick(ctx context.Context) {
@@ -87,5 +87,13 @@ func janitorTick(ctx context.Context) {
 		slog.Warn("janitor: delete old health samples failed", "error", err)
 	} else {
 		slog.Debug("janitor: pruned old health samples")
+	}
+	// Notification retention (specs/clear-notifications): read rows expire 45
+	// days after they were seen; unread rows never expire (structural in the
+	// query's predicate).
+	if err := q.DeleteOldReadNotifications(tickCtx); err != nil {
+		slog.Warn("janitor: delete old read notifications failed", "error", err)
+	} else {
+		slog.Debug("janitor: pruned old read notifications")
 	}
 }
