@@ -102,6 +102,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Se usa como origen predeterminado al planificar vuelos.';
 
   @override
+  String get prefsHomeAirportPickOne =>
+      'Elige un aeropuerto de la lista o vacía el campo.';
+
+  @override
   String get prefsProfileNotes => 'Notas del perfil';
 
   @override

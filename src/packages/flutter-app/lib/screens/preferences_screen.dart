@@ -59,6 +59,16 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   String? _outdoorIntensity;
   final Set<String> _interests = {};
   Airport? _homeAirport;
+
+  /// Mirror of the airport field's raw text. `_homeAirport == null` is two
+  /// different states — "no home airport" and "typed something, never picked
+  /// it" — and only this tells them apart. Saving the second as the first is
+  /// what used to discard an edit under a "Preferences saved" toast.
+  String _homeAirportText = '';
+  String? _homeAirportError;
+
+  bool get _homeAirportUnresolved =>
+      _homeAirport == null && _homeAirportText.trim().isNotEmpty;
   final _notesController = TextEditingController();
   bool _initialized = false;
 
@@ -88,14 +98,26 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
         _fitnessRoutine = prefs.fitnessRoutine;
         _outdoorIntensity = prefs.outdoorIntensity;
         _interests.addAll(prefs.interests);
-        final home = prefs.homeAirport;
-        if (home != null && home.isNotEmpty) {
-          _homeAirport = Airport(iataCode: home, name: home);
-        }
+        _seedHomeAirport(prefs.homeAirport);
         _notesController.text = prefs.profileNotes ?? '';
       }
       _initialized = true;
     });
+  }
+
+  /// Seeds (or re-seeds) the airport field from a server value. Call inside a
+  /// setState. An absent code resets the field rather than leaving the previous
+  /// one on screen — after a clear, the form has to show what was actually
+  /// stored, not what the user hoped for.
+  void _seedHomeAirport(String? code) {
+    if (code != null && code.isNotEmpty) {
+      _homeAirport = Airport(iataCode: code, name: code);
+      _homeAirportText = _homeAirport!.label;
+    } else {
+      _homeAirport = null;
+      _homeAirportText = '';
+    }
+    _homeAirportError = null;
   }
 
   @override
@@ -105,6 +127,13 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   }
 
   Future<void> _save() async {
+    // An unresolved airport edit is refused rather than dropped. Sending it as
+    // "no change" would return 200 with the old code still stored, and the user
+    // would get "Preferences saved" for an edit that never happened.
+    if (_homeAirportUnresolved) {
+      setState(() => _homeAirportError = context.l10n.prefsHomeAirportPickOne);
+      return;
+    }
     final ok = await ref.read(preferencesProvider.notifier).save(
           budget: _budget,
           pace: _pace,
@@ -113,11 +142,19 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
           fitnessRoutine: _fitnessRoutine,
           outdoorIntensity: _outdoorIntensity,
           interests: _interests.toList(),
-          homeAirport: _homeAirport?.iataCode,
+          // "" is an explicit clear, not an omission — null would be COALESCEd
+          // back to the stored code, making a home airport unremovable.
+          homeAirport: _homeAirport?.iataCode ?? '',
           // Always send the field's text: an emptied field clears the notes.
           profileNotes: _notesController.text.trim(),
         );
     if (!mounted) return;
+    if (ok) {
+      // Re-seed from what the server actually stored, so the form shows the
+      // post-state rather than a hopeful local one (docs/zen.md).
+      setState(
+          () => _seedHomeAirport(ref.read(preferencesProvider).prefs?.homeAirport));
+    }
     showSnack(
         context, ok ? context.l10n.prefsSaved : context.l10n.prefsSaveFailed);
   }
@@ -249,7 +286,16 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
                   label: l10n.prefsHomeAirport,
                   icon: Icons.home,
                   selected: _homeAirport,
-                  onSelected: (a) => setState(() => _homeAirport = a),
+                  errorText: _homeAirportError,
+                  onSelected: (a) => setState(() {
+                    _homeAirport = a;
+                    if (a != null) _homeAirportError = null;
+                  }),
+                  onQueryChanged: (t) => setState(() {
+                    _homeAirportText = t;
+                    // Any edit retracts the complaint; Save re-checks.
+                    _homeAirportError = null;
+                  }),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 SectionHeader(title: l10n.prefsProfileNotes),

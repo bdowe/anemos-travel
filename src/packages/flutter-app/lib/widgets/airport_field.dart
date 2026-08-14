@@ -34,12 +34,26 @@ class AirportField extends ConsumerStatefulWidget {
   final Airport? selected;
   final ValueChanged<Airport?> onSelected;
 
+  /// Mirrors the raw field text to the parent on every change, including the
+  /// programmatic writes made when a suggestion is picked or the field cleared.
+  ///
+  /// A parent that saves needs this: [selected] alone cannot tell "no airport"
+  /// apart from "typed something and never picked it", and those must not be
+  /// treated the same — silently saving the second as the first is how an edit
+  /// gets thrown away under a success message.
+  final ValueChanged<String>? onQueryChanged;
+
+  /// Shown under the field, e.g. to say an edit is unresolved.
+  final String? errorText;
+
   const AirportField({
     super.key,
     required this.label,
     required this.icon,
     required this.selected,
     required this.onSelected,
+    this.onQueryChanged,
+    this.errorText,
   });
 
   @override
@@ -182,8 +196,12 @@ class _AirportFieldState extends ConsumerState<AirportField> {
   }
 
   /// Commits a pick: the field shows the chosen label and the list closes.
+  /// [AirportField.onQueryChanged] fires before [AirportField.onSelected] here
+  /// and in [_clear], so a parent that derives "unresolved" from the pair never
+  /// observes the new text against the old selection.
   void _commit(Airport airport) {
     _debounce?.cancel();
+    widget.onQueryChanged?.call(airport.label);
     widget.onSelected(airport);
     setState(() {
       _setText(airport.label);
@@ -199,6 +217,7 @@ class _AirportFieldState extends ConsumerState<AirportField> {
   /// Clears both the text and the selection (the trailing X).
   void _clear() {
     _debounce?.cancel();
+    widget.onQueryChanged?.call('');
     widget.onSelected(null);
     setState(() {
       _controller.clear();
@@ -244,6 +263,7 @@ class _AirportFieldState extends ConsumerState<AirportField> {
               hintText: l10n.airportFieldHint,
               prefixIcon: Icon(widget.icon),
               border: const OutlineInputBorder(),
+              errorText: widget.errorText,
               suffixIcon: _controller.text.isEmpty
                   ? null
                   : IconButton(
@@ -265,6 +285,7 @@ class _AirportFieldState extends ConsumerState<AirportField> {
               // never reach onChanged, so this cannot loop with the
               // didUpdateWidget re-seed.
               if (widget.selected != null) widget.onSelected(null);
+              widget.onQueryChanged?.call(v);
               setState(() {
                 _dirty = true;
                 _dismissed = false;

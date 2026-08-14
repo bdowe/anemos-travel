@@ -766,13 +766,35 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 	}
 	json.Unmarshal(input, &in)
 
-	budget, _ := normalizeChoice(in.Budget, allowedBudgets, "budget")
-	pace, _ := normalizeChoice(in.Pace, allowedPaces, "pace")
-	workStyle, _ := normalizeChoice(in.WorkStyle, allowedWorkStyles, "work_style")
-	fitnessRoutine, _ := normalizeChoice(in.FitnessRoutine, allowedFitnessRoutines, "fitness_routine")
-	outdoorIntensity, _ := normalizeChoice(in.OutdoorIntensity, allowedOutdoorIntensities, "outdoor_intensity")
-	companions, _ := normalizeChoice(in.Companions, allowedCompanions, "companions")
-	homeAirport, _ := normalizeAirportCode(in.HomeAirport)
+	// A value the model got wrong is dropped, not saved — and the tool result is
+	// the only channel that can say so. It used to answer a flat "Preferences
+	// saved." while the rejected field kept its old value, so the model learned
+	// its write had landed; the field is absent from `changed` too, so nothing
+	// else contradicted it. Collect the rejections and report them.
+	var rejected []string
+	keep := func(v *string, err error) *string {
+		if err != nil {
+			rejected = append(rejected, err.Error())
+			return nil
+		}
+		return v
+	}
+
+	budget := keep(normalizeChoice(in.Budget, allowedBudgets, "budget"))
+	pace := keep(normalizeChoice(in.Pace, allowedPaces, "pace"))
+	workStyle := keep(normalizeChoice(in.WorkStyle, allowedWorkStyles, "work_style"))
+	fitnessRoutine := keep(normalizeChoice(in.FitnessRoutine, allowedFitnessRoutines, "fitness_routine"))
+	outdoorIntensity := keep(normalizeChoice(in.OutdoorIntensity, allowedOutdoorIntensities, "outdoor_intensity"))
+	companions := keep(normalizeChoice(in.Companions, allowedCompanions, "companions"))
+
+	// The clear flag is deliberately dropped: like profile_notes below, only the
+	// user (PUT) can empty a home airport — an agent sending "" means it had
+	// nothing to say, not that the traveler wants theirs removed.
+	homeAirport, _, airportErr := normalizeAirportCode(in.HomeAirport)
+	if airportErr != nil {
+		rejected = append(rejected, airportErr.Error())
+		homeAirport = nil
+	}
 	var interestsArg interface{}
 	if in.Interests != nil {
 		interestsArg = normalizeInterests(in.Interests)
@@ -821,6 +843,11 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 		sendSSE(s.w, "profile_updated", map[string]any{
 			"fields": changed, "notes_preview": notesPreview(notes),
 		})
+	}
+	if len(rejected) > 0 {
+		// Not an error result: whatever else was in the call did save.
+		return "Preferences saved, except: " + strings.Join(rejected, "; ") +
+			". Those fields were left unchanged — retry with a valid value.", false
 	}
 	return "Preferences saved.", false
 }

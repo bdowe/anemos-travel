@@ -133,7 +133,7 @@ func putPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	homeAirport, err := normalizeAirportCode(req.HomeAirport)
+	homeAirport, clearHomeAirport, err := normalizeAirportCode(req.HomeAirport)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -151,6 +151,7 @@ func putPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 		Pace:             pace,
 		Interests:        interestsArg,
 		HomeAirport:      homeAirport,
+		ClearHomeAirport: clearHomeAirport,
 		ProfileNotes:     normalizeNotes(req.ProfileNotes),
 		WorkStyle:        workStyle,
 		FitnessRoutine:   fitnessRoutine,
@@ -180,20 +181,32 @@ func normalizeChoice(v *string, allowed map[string]bool, field string) (*string,
 	return &s, nil
 }
 
-// normalizeAirportCode validates and upper-cases a home airport. Empty/nil ->
-// nil (omit, keep existing); anything other than a 3-letter IATA code -> error.
-func normalizeAirportCode(v *string) (*string, error) {
+// normalizeAirportCode validates and upper-cases a home airport, and reports
+// the three request shapes separately rather than folding two of them together:
+//
+//	nil        -> (nil, false, nil)  omitted: keep whatever is stored
+//	"" / "  "  -> (nil, true,  nil)  explicit clear: write NULL
+//	"bos"      -> ("BOS", false, nil)
+//	anything else                    -> error
+//
+// The empty case used to collapse into the omitted case, which made a home
+// airport impossible to remove: the upsert COALESCEs a nil back to the existing
+// value, so clearing the field returned 200 with the old code still stored. The
+// clear bool is what UpsertPreferences.ClearHomeAirport consumes. Mirrors the
+// omitted-vs-cleared split already documented on PutPreferencesRequest's
+// Interests and ProfileNotes.
+func normalizeAirportCode(v *string) (value *string, clear bool, err error) {
 	if v == nil {
-		return nil, nil
+		return nil, false, nil
 	}
 	s := strings.ToUpper(strings.TrimSpace(*v))
 	if s == "" {
-		return nil, nil
+		return nil, true, nil
 	}
 	if len(s) != 3 || !isAlpha(s) {
-		return nil, errors.New("home_airport must be a 3-letter IATA code")
+		return nil, false, errors.New("home_airport must be a 3-letter IATA code")
 	}
-	return &s, nil
+	return &s, false, nil
 }
 
 const maxProfileNotesLen = 2000
