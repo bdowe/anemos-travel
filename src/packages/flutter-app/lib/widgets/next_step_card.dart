@@ -34,6 +34,14 @@ class NextStepCard extends StatelessWidget {
   /// bool). Only rendered on the all_set variant.
   final VoidCallback? onDismiss;
 
+  /// Whether a transport step will hand off to a provider (in-app flight
+  /// search / Ferryhopper) rather than open the seeded chat. Only the screen
+  /// can know — the handoff needs a synced booking row the card never sees —
+  /// so it injects the fact and the card keeps owning the copy. False makes
+  /// the button say the generic "Find options" it actually does, instead of
+  /// promising "Find flights" and opening a chat.
+  final bool transportHandsOff;
+
   const NextStepCard({
     super.key,
     required this.step,
@@ -43,6 +51,7 @@ class NextStepCard extends StatelessWidget {
     this.onPrimary,
     this.onViewAll,
     this.onDismiss,
+    this.transportHandsOff = false,
   });
 
   static const _kindIcons = <String, IconData>{
@@ -68,7 +77,18 @@ class NextStepCard extends StatelessWidget {
       case 'add_lodging':
         return l10n.nextStepLodgingAction;
       case 'add_transport':
-        return l10n.nextStepTransportAction;
+        // The button names what the tap will DO. Only a step that hands off
+        // to a provider gets the row's own wording (specs/next-step-cta,
+        // itinerary-order walk) — so the card and the checklist row name the
+        // same handoff. Everything else (ground modes, a findings-fallback
+        // step whose fix carries a mode but has no synced row behind it, an
+        // older server) keeps the generic label and opens the seeded chat.
+        if (!transportHandsOff) return l10n.nextStepTransportAction;
+        return switch (s.fix?.mode) {
+          'flight' => l10n.tripFindFlights,
+          'ferry' => l10n.tripFindFerries,
+          _ => l10n.nextStepTransportAction,
+        };
       case 'schedule_items':
         return l10n.nextStepScheduleAction;
       case 'book_trip':

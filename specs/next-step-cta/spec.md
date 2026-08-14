@@ -8,9 +8,9 @@
 
 Trip Health lists everything wrong with a trip, but nothing orders those
 findings into a journey or tells the traveler what to do *next*. Planning a
-trip has a natural phase order — dates, itinerary, lodging, transport,
-scheduling, bookings, packing — and travelers stall when the next move isn't
-obvious. The Next Step card turns the existing health signals (plus a few gaps
+trip has a natural phase order — dates, itinerary, booking the trip leg by
+leg, scheduling, bookings, packing — and travelers stall when the next move
+isn't obvious. The Next Step card turns the existing health signals (plus a few gaps
 health doesn't cover) into a one-step-at-a-time guide: planning steps open the
 trip chat pre-seeded with a prompt for that section; mechanical steps jump
 straight to the right control.
@@ -27,7 +27,7 @@ straight to the right control.
   start the packing list) to open the right control directly so that two-tap
   jobs stay two taps.
 - As a **trip owner**, I want to see how far along the planning journey I am
-  ("Step 3 of 7") so that finishing feels within reach.
+  ("Step 3 of 6") so that finishing feels within reach.
 - As a **trip owner**, I want a clear "you're all set" moment when nothing is
   left so that I know the trip is genuinely ready.
 
@@ -35,24 +35,38 @@ straight to the right control.
 
 - [ ] A trip with unfinished planning shows one Next Step card at the top of
       the trip detail page (above the view tabs, visible from every tab), with
-      an eyebrow "Next step · N of 7", a title, an optional detail line, and a
+      an eyebrow "Next step · N of 6", a title, an optional detail line, and a
       primary action.
 - [ ] The step is the FIRST unmet phase of this fixed ladder, in order:
       1. **Set dates** — trip has no start/end dates.
       2. **Plan itinerary** — trip has no places, or none is assigned to a day.
-      3. **Add lodging** — some night has no confirmed stay (per-city ranges).
-      4. **Add transport** — a city-to-city hop has no connecting segment.
-      5. **Tidy schedule** — places with no day, or empty days mid-trip.
-      6. **Book everything** — any unbooked stay/segment/booking to-do remains.
-      7. **Start packing** — packing checklist is empty (only before the trip
+      3. **Book travel & stays, in itinerary order** — walks the synced
+         booking checklist (outbound leg → stay → next leg → … → return leg,
+         the order the trip is actually travelled) and names the first OPEN
+         slot: not checked off, and not covered by a real accommodation or
+         segment. Emitted as an `add_transport` or `add_lodging` step with
+         mode-aware copy ("Book your flight to Prague", "Book your ferry
+         home"). Trips with no synced checklist — imported, MCP- or
+         agent-created, never opened in the app — fall back to the lodging-
+         then-transport health findings. A satisfied walk never falls back: a
+         checked slot with no matching row means booked elsewhere.
+      4. **Tidy schedule** — places with no day, or empty days mid-trip.
+      5. **Book everything** — any unbooked stay/segment/booking to-do remains.
+      6. **Start packing** — packing checklist is empty (only before the trip
          starts).
-- [ ] Planning steps (2–5) open the trip-bound chat pre-seeded with a prompt
-      specific to the gap (city + dates for lodging, origin/destination for
-      transport, the empty days for scheduling); the seed renders as a compact
-      context chip, not a wall of text.
+- [ ] Booking guidance follows the trip, not the category: the outbound flight
+      surfaces before the first stay, and ticking a slot's checkbox advances
+      the card even when no accommodation or segment row exists.
+- [ ] Planning steps open the trip-bound chat pre-seeded with a prompt
+      specific to the gap (city + dates for lodging, the empty days for
+      scheduling, origin/destination for a transport step that has no synced
+      row to hand off to); the seed renders as a compact context chip, not a
+      wall of text.
 - [ ] Mechanical steps act directly: Set dates opens the date picker; Book
       everything switches to the "Not booked yet" bookings lens; Start packing
-      opens the packing sheet.
+      opens the packing sheet. A transport slot hands off exactly like its
+      checklist row — in-app flight search, Ferryhopper, or the ground link —
+      while stay slots keep the seeded chat (Brian, 2026-08-14).
 - [ ] Completing a step (via chat, via a direct action, or via a Trip Health
       fix) advances the card to the next step without a manual reload — even
       while the chat panel is open beside the trip.
@@ -78,7 +92,7 @@ straight to the right control.
   title/detail, optional day anchor, optional count (e.g. unbooked items),
   optional structured fix (same shape findings use), and a canonical-English
   `seed_prompt` for chat-driven steps. `plan_progress` — `done`/`total` phases
-  (total is 7). Both omitted for past trips. The step is identical whether or
+  (total is 6). Both omitted for past trips. The step is identical whether or
   not `check_hours` is requested.
 - **Errors:** unchanged (404 for viewers/missing trips).
 

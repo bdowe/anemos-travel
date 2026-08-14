@@ -1193,6 +1193,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       _showSnack(l10n.tripUpdateFailed(friendlyError(l10n, e)));
       return;
     }
+    // The booked flip IS the Next Step card's advance signal: phase 3 walks
+    // the booking slots and phase 5 aggregates them, so both read the flag
+    // this call just wrote (specs/next-step-cta). Only after the server
+    // accepted it — a rolled-back optimistic flip must not move the card.
+    if (mounted) _invalidateReview();
+
     // Budget autopopulate rides the flip only AFTER the server accepted it
     // (a rolled-back optimistic flip must never create or delete money).
     if (!mounted) return;
@@ -1476,6 +1482,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       setState(() => _bookingTodos = [
             for (final t in _bookingTodos) t.id == updated.id ? updated : t
           ]);
+      // A walk-derived Next Step reads this row's mode for its copy and its
+      // action label (specs/next-step-cta), and the sync below only
+      // invalidates when the DERIVED set changed — which a mode-only edit
+      // does not. Re-read the review explicitly so card and row agree.
+      _invalidateReview();
       final trip = _trip;
       if (trip != null) await _syncBookingTodos(trip);
     } catch (e) {
@@ -4305,6 +4316,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           progress: review?.planProgress,
           compact: _narrow,
           enabled: !_isOffline,
+          // Same lookup the tap performs, so the label can never promise a
+          // handoff the action won't make (specs/next-step-cta).
+          transportHandsOff: _transportHandsOff(step),
           onPrimary: allSet ? null : () => _onNextStepAction(trip, step),
           onViewAll: () => _openHealthSheet(trip),
           onDismiss:
@@ -4316,9 +4330,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   /// Routes the Next Step card's primary action: planning steps seed the trip
   /// chat with the server-built prompt; mechanical steps jump to the matching
-  /// control directly (mixed-actions decision, specs/next-step-cta). Unknown
-  /// kinds — future ladder phases from a newer server — fall back to the
-  /// step's fix, else the health sheet.
+  /// control directly (mixed-actions decision, specs/next-step-cta).
+  /// Walk-derived transport steps (itinerary-order walk) hand off exactly
+  /// like their checklist row — Find Flights / Ferryhopper / provider link —
+  /// with the seeded chat as the fallback. Unknown kinds — future ladder
+  /// phases from a newer server — fall back to the step's fix, else the
+  /// health sheet.
   Future<void> _onNextStepAction(Trip trip, NextStep step) async {
     switch (step.kind) {
       case 'set_dates':
@@ -4346,11 +4363,31 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         break;
       case 'plan_itinerary':
       case 'add_lodging':
-      case 'add_transport':
       case 'schedule_items':
         final seed = step.seedPrompt;
         if (seed == null || seed.isEmpty) return;
         _openSeededChat(trip, seed: seed, displayLabel: step.title);
+        break;
+      case 'add_transport':
+        // The fix's endpoints locate the client-synced todo, whose open
+        // callback is the same handoff the checklist row uses. Fire-and-forget
+        // exactly like the row's onOpen — deliberately NO _invalidateReview
+        // (mirrors the row path; the review advances via booked flips and
+        // trip_updated → _refresh → _invalidateReview). Chat is the fallback:
+        // no matching todo (sync still in flight, or a stale review) or an
+        // old server's fix-less step.
+        if (_guardOffline()) return;
+        final todo = _transportTodoForFix(step.fix);
+        final open = todo == null
+            ? null
+            : _openCallbackFor(todo, surface: 'next_step_card');
+        if (open != null) {
+          open();
+          break;
+        }
+        final transportSeed = step.seedPrompt;
+        if (transportSeed == null || transportSeed.isEmpty) return;
+        _openSeededChat(trip, seed: transportSeed, displayLabel: step.title);
         break;
       default:
         if (step.fix != null) {
@@ -5786,10 +5823,46 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     });
   }
 
+  /// Resolves a Next Step transport fix to its client-synced checklist row.
+  /// The fix's [FindingFix.origin]/[FindingFix.destination] are cased display
+  /// labels (the server splits the todo's 'A → B' title back apart), while
+  /// todo keys follow the documented lowercase
+  /// 'transport:origin>>destination' convention (specs/next-step-cta) —
+  /// lowercasing both sides absorbs the round trip. Null when the fix isn't a
+  /// transport one, an endpoint is missing (an older server's fix-less step),
+  /// or no synced todo matches; the caller falls back to the seeded chat.
+  /// Whether a transport step's tap will hand off to a provider rather than
+  /// open the seeded chat — the SAME resolution [_onNextStepAction] performs,
+  /// so the card's label can never promise a handoff the action won't make.
+  /// Building the callback is side-effect free (the tracking rides inside the
+  /// returned closure), so it is safe to ask during build.
+  bool _transportHandsOff(NextStep step) {
+    if (step.kind != 'add_transport') return false;
+    final todo = _transportTodoForFix(step.fix);
+    return todo != null && _openCallbackFor(todo) != null;
+  }
+
+  BookingTodo? _transportTodoForFix(FindingFix? fix) {
+    if (fix == null || fix.action != 'add_transport') return null;
+    final origin = fix.origin;
+    final destination = fix.destination;
+    if (origin == null || origin.isEmpty) return null;
+    if (destination == null || destination.isEmpty) return null;
+    final key =
+        'transport:${origin.toLowerCase()}>>${destination.toLowerCase()}';
+    for (final t in _bookingTodos) {
+      if (t.kind == 'transport' && t.todoKey.toLowerCase() == key) return t;
+    }
+    return null;
+  }
+
   /// The open action for a booking item: a transport item with a known flight
   /// leg opens the in-app Find Flights screen prefilled; everything else falls
-  /// back to its external provider search link.
-  VoidCallback? _openCallbackFor(BookingTodo todo) {
+  /// back to its external provider search link. [surface] is the analytics
+  /// attribution for where the tap came from — the checklist rows keep the
+  /// default; the Next Step card passes its own.
+  VoidCallback? _openCallbackFor(BookingTodo todo,
+      {String surface = 'booking_checklist'}) {
     // The attach-rate numerator (specs/instrumentation-events): opening any
     // booking handoff counts as a click. External links record-then-launch via
     // trackedLaunchUrl; the one in-app handoff (Find Flights) records via the
@@ -5797,7 +5870,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     if (todo.kind == 'transport') {
       final ferry = _ferryLegs[todo.todoKey];
       if (ferry != null) {
-        return () => _openFerry(ferry, todo);
+        return () => _openFerry(ferry, todo, surface: surface);
       }
       final leg = _flightLegs[todo.todoKey];
       if (leg != null) {
@@ -5805,7 +5878,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           trackBookingLinkClick(
             context,
             provider: 'duffel',
-            surface: 'booking_checklist',
+            surface: surface,
             tripId: widget.tripId,
             todoKey: todo.todoKey,
             kind: todo.kind,
@@ -5831,7 +5904,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           context,
           todo.searchUrl!,
           provider: (todo.provider ?? 'unknown').toLowerCase(),
-          surface: 'booking_checklist',
+          surface: surface,
           tripId: widget.tripId,
           todoKey: todo.todoKey,
           kind: todo.kind,
@@ -5846,8 +5919,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// correct port codes) is built server-side, so we fetch it on tap — a single
   /// quick GET — keeping the port-code map a single source of truth in the API.
   Future<void> _openFerry(
-      ({String origin, String destination, String? date}) leg,
-      BookingTodo todo) async {
+      ({String origin, String destination, String? date}) leg, BookingTodo todo,
+      {String surface = 'booking_checklist'}) async {
     final l10n = context.l10n;
     try {
       final options = await ref.read(ferryApiServiceProvider).searchFerries(
@@ -5861,7 +5934,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           context,
           options.first.bookingUrl,
           provider: 'ferryhopper',
-          surface: 'booking_checklist',
+          surface: surface,
           tripId: widget.tripId,
           todoKey: todo.todoKey,
           kind: todo.kind,
