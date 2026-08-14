@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:travel_route_planner/models/user.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/screens/sso_callback_screen.dart';
 import 'package:travel_route_planner/services/auth_service.dart';
 import 'package:travel_route_planner/services/auth_storage.dart';
+import 'package:travel_route_planner/services/pending_connect.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -63,7 +65,9 @@ Widget _wrap(_FakeAuthService service, _FakeAuthStorage storage, String code) {
           );
         }
         return MaterialPageRoute(
-          builder: (_) => const Scaffold(body: Text('HOME')),
+          builder: (_) => Scaffold(
+            body: Text(settings.name == '/' ? 'HOME' : 'ROUTE ${settings.name}'),
+          ),
         );
       },
     ),
@@ -71,6 +75,10 @@ Widget _wrap(_FakeAuthService service, _FakeAuthStorage storage, String code) {
 }
 
 void main() {
+  // The screen checks for a pending connector consent request after adopting
+  // the session (specs/mcp-connector), which reads device storage.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('exchanges the code, adopts the session, and lands on /',
       (tester) async {
     final service = _FakeAuthService(
@@ -83,6 +91,25 @@ void main() {
     expect(service.exchangedCode, 'one-time-code');
     expect(storage.token, 'sso-session');
     expect(find.text('HOME'), findsOneWidget);
+  });
+
+  testWidgets('a pending connector request resumes instead of landing on home',
+      (tester) async {
+    // The consent screen stored this before handing off to SSO, which then
+    // replaced the whole page. Without it the authorization is abandoned and
+    // the user believes they approved (production bug, 2026-08-14).
+    await const PendingConnectStore().save('gt_rq_pending');
+
+    final service = _FakeAuthService(
+        (code) async => AuthResponse(user: _testUser, token: 'sso-session'));
+    await tester.pumpWidget(
+        _wrap(service, _FakeAuthStorage(), 'one-time-code'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ROUTE /connect/gt_rq_pending'), findsOneWidget);
+    expect(find.text('HOME'), findsNothing);
+    // Consumed, so a later unrelated sign-in isn't hijacked by it.
+    expect(await const PendingConnectStore().take(), isNull);
   });
 
   testWidgets('code "error" shows the cancelled message without exchanging',
