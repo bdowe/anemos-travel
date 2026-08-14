@@ -6,12 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../models/ops_health.dart';
 import '../models/ops_metrics.dart';
+import '../models/ops_uptime.dart';
 import '../providers/ops_admin_provider.dart';
 import '../theme/spacing.dart';
 import 'empty_state.dart';
 import 'page_container.dart';
 import 'section_header.dart';
 import 'status_pill.dart';
+import 'uptime_strip.dart';
 
 /// The "Health" tab of the admin dashboard: a live snapshot of the API
 /// process, request mix, dependency health, and backup freshness. Auto-refreshes
@@ -51,10 +53,22 @@ class _HealthPaneState extends ConsumerState<HealthPane>
     _timer = Timer.periodic(_refreshInterval, (_) => _refresh());
   }
 
+  /// The 10s tick — instantaneous data ONLY. The 90-day uptime history is
+  /// deliberately not here: it changes at most every few minutes server-side,
+  /// so re-polling it every 10s would buy nothing (see opsUptimeProvider).
   void _refresh() {
     if (!mounted) return;
     ref.invalidate(opsMetricsProvider);
     ref.invalidate(opsHealthProvider);
+  }
+
+  /// Everything, including the uptime history — for the two events where a
+  /// stale history is plausible: returning from the background, and an
+  /// explicit pull-to-refresh.
+  void _refreshAll() {
+    if (!mounted) return;
+    _refresh();
+    ref.invalidate(opsUptimeProvider);
   }
 
   @override
@@ -62,7 +76,7 @@ class _HealthPaneState extends ConsumerState<HealthPane>
     // Pause polling in the background; resume (and refresh once) on return.
     if (state == AppLifecycleState.resumed) {
       _startTimer();
-      _refresh();
+      _refreshAll();
     } else {
       _timer?.cancel();
       _timer = null;
@@ -75,21 +89,41 @@ class _HealthPaneState extends ConsumerState<HealthPane>
     final l10n = context.l10n;
     final metrics = ref.watch(opsMetricsProvider);
     final health = ref.watch(opsHealthProvider);
+    final uptime = ref.watch(opsUptimeProvider);
 
     return PageContainer(
       child: RefreshIndicator(
         onRefresh: () async {
-          ref.invalidate(opsMetricsProvider);
-          ref.invalidate(opsHealthProvider);
+          _refreshAll();
           await Future.wait([
             ref.read(opsMetricsProvider.future),
             ref.read(opsHealthProvider.future),
+            ref.read(opsUptimeProvider.future),
           ]);
         },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
+            // The uptime history leads: it answers the pane's headline
+            // question ("has this been up?"), and it is the one block that is
+            // stable under the 10s refresh of everything below it.
+            uptime.when(
+              loading: () => const _UptimeSkeleton(),
+              error: (e, _) => EmptyState(
+                icon: Icons.cloud_off,
+                title: l10n.healthUptimeErrorTitle,
+                message: '$e',
+                actions: [
+                  FilledButton(
+                    onPressed: () => ref.invalidate(opsUptimeProvider),
+                    child: Text(l10n.commonRetry),
+                  ),
+                ],
+              ),
+              data: (u) => _UptimeSection(uptime: u),
+            ),
+            const SizedBox(height: AppSpacing.xl),
             metrics.when(
               loading: () => const Padding(
                 padding: EdgeInsets.all(AppSpacing.xl),
@@ -135,6 +169,104 @@ class _HealthPaneState extends ConsumerState<HealthPane>
   }
 }
 
+// --- Uptime history (specs/uptime-history) -----------------------------------
+
+/// The 90-day status strip section: one [UptimeStrip] per monitored component,
+/// led by a one-line honesty note — this is the API's self-check, which by
+/// construction cannot observe a gateway/tunnel/edge outage.
+class _UptimeSection extends StatelessWidget {
+  final OpsUptime uptime;
+  const _UptimeSection({required this.uptime});
+
+  /// Component key → localized display name. Keys are the wire contract
+  /// (ops_uptime.go uptimeComponentKeys); an unknown key renders verbatim
+  /// rather than dropping the row.
+  static String _componentLabel(AppLocalizations l10n, String key) =>
+      switch (key) {
+        'api' => l10n.healthUptimeComponentApi,
+        'database' => l10n.healthDatabase,
+        'ai_provider' => l10n.healthUptimeComponentAi,
+        'backups' => l10n.healthBackupsSection,
+        _ => key,
+      };
+
+  /// Status pill: up=green, down=red, no_data=neutral — the strip's status is
+  /// an instant (never "degraded"), see UptimeComponent.status.
+  static StatusPill _statusPill(
+      ThemeData theme, AppLocalizations l10n, String status) {
+    switch (status) {
+      case 'up':
+        return _pill(theme, l10n.healthPillOk, 'ok');
+      case 'down':
+        return _pill(theme, l10n.healthUptimePillDown, 'critical');
+      default:
+        return _pill(theme, l10n.healthPillUnknown, 'neutral');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    if (uptime.components.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(title: l10n.healthUptimeSection),
+        const SizedBox(height: AppSpacing.xs),
+        // The honesty label: self-observed, blind to edge/gateway outages.
+        Text(
+          l10n.healthUptimeSelfCheckNote,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        for (final c in uptime.components) ...[
+          UptimeStrip(
+            label: _componentLabel(l10n, c.key),
+            days: c.days,
+            uptimePct: c.uptimePct,
+            observedDays: c.observedDays,
+            monitoringSince: uptime.monitoringSince,
+            pill: _statusPill(theme, l10n, c.status),
+          ),
+          if (c != uptime.components.last)
+            const SizedBox(height: AppSpacing.lg),
+        ],
+      ],
+    );
+  }
+}
+
+/// Loading placeholder with the section's rough final extent so the Process
+/// tiles below don't jump when the data lands.
+class _UptimeSkeleton extends StatelessWidget {
+  const _UptimeSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(title: context.l10n.healthUptimeSection),
+        const SizedBox(height: AppSpacing.md),
+        for (var i = 0; i < 4; i++) ...[
+          Container(
+            height: kMinTouchTarget,
+            margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: AppRadius.mdAll,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 // --- KPI tiles ---------------------------------------------------------------
 
 /// Uptime + request-mix headline tiles.
@@ -153,7 +285,7 @@ class _MetricsSection extends StatelessWidget {
         SectionHeader(title: l10n.healthProcessSection),
         const SizedBox(height: AppSpacing.sm),
         _TileGrid(tiles: [
-          _Stat(l10n.healthUptime, _formatUptime(m.process.uptimeS)),
+          _Stat(l10n.healthProcessUptime, _formatUptime(m.process.uptimeS)),
           _Stat(l10n.healthRequests, _compact(m.requests.total),
               caption: _classCaption(m.requests.byClass)),
           _Stat(l10n.healthErrorRate, '${(errRate * 100).toStringAsFixed(1)}%',

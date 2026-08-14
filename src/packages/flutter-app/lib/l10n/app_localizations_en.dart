@@ -1811,7 +1811,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get healthRoutesSection => 'Routes';
 
   @override
-  String get healthUptime => 'Uptime';
+  String get healthProcessUptime => 'Process uptime';
 
   @override
   String get healthRequests => 'Requests';
@@ -1907,6 +1907,80 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notifOpsOpenHealth => 'View system health';
+
+  @override
+  String get healthUptimeSection => 'Uptime';
+
+  @override
+  String get healthUptimeSelfCheckNote =>
+      'Self-check — cannot see edge or gateway outages';
+
+  @override
+  String get healthUptimeComponentApi => 'API';
+
+  @override
+  String get healthUptimeComponentAi => 'AI provider';
+
+  @override
+  String get healthUptimePillDown => 'down';
+
+  @override
+  String healthUptimeDaysAgo(int days) {
+    return '$days days ago';
+  }
+
+  @override
+  String get healthUptimeToday => 'Today';
+
+  @override
+  String healthUptimeSummary(String pct) {
+    return '$pct % uptime';
+  }
+
+  @override
+  String healthUptimeSummaryPartial(String pct, int days) {
+    return '$pct % uptime · $days days observed';
+  }
+
+  @override
+  String get healthUptimeNoHistory => 'No history yet';
+
+  @override
+  String healthUptimeMonitoringSince(String date) {
+    return 'Monitoring since $date';
+  }
+
+  @override
+  String healthUptimeDayNoData(String date) {
+    return '$date · no data';
+  }
+
+  @override
+  String get healthUptimeNoIncidents => 'no incidents';
+
+  @override
+  String healthUptimeDown(String duration) {
+    return '$duration down';
+  }
+
+  @override
+  String get healthUptimeReasonDbUnreachable => 'database unreachable';
+
+  @override
+  String get healthUptimeReasonProcessDown => 'process down';
+
+  @override
+  String get healthUptimeReasonAiFailing => 'AI provider failing';
+
+  @override
+  String get healthUptimeReasonBackupsStale => 'backups stale';
+
+  @override
+  String get healthUptimeKeyboardHint =>
+      'Use the left and right arrow keys to inspect a day';
+
+  @override
+  String get healthUptimeErrorTitle => 'Could not load uptime';
 
   @override
   String get reviewSectionTitle => 'Trip health';

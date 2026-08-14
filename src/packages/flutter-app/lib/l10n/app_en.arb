@@ -1185,7 +1185,7 @@
   "healthHealthErrorTitle": "Could not load health",
   "healthProcessSection": "Process",
   "healthRoutesSection": "Routes",
-  "healthUptime": "Uptime",
+  "healthProcessUptime": "Process uptime",
   "healthRequests": "Requests",
   "healthErrorRate": "Error rate",
   "healthGoroutines": "Goroutines",
@@ -1243,6 +1243,71 @@
   "healthDegradedTitle": "System degraded",
   "healthRecoveredTitle": "System recovered",
   "notifOpsOpenHealth": "View system health",
+  "healthUptimeSection": "Uptime",
+  "healthUptimeSelfCheckNote": "Self-check — cannot see edge or gateway outages",
+  "healthUptimeComponentApi": "API",
+  "healthUptimeComponentAi": "AI provider",
+  "healthUptimePillDown": "down",
+  "healthUptimeDaysAgo": "{days} days ago",
+  "@healthUptimeDaysAgo": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "healthUptimeToday": "Today",
+  "healthUptimeSummary": "{pct} % uptime",
+  "@healthUptimeSummary": {
+    "placeholders": {
+      "pct": {
+        "type": "String"
+      }
+    }
+  },
+  "healthUptimeSummaryPartial": "{pct} % uptime · {days} days observed",
+  "@healthUptimeSummaryPartial": {
+    "placeholders": {
+      "pct": {
+        "type": "String"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "healthUptimeNoHistory": "No history yet",
+  "healthUptimeMonitoringSince": "Monitoring since {date}",
+  "@healthUptimeMonitoringSince": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "healthUptimeDayNoData": "{date} · no data",
+  "@healthUptimeDayNoData": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "healthUptimeNoIncidents": "no incidents",
+  "healthUptimeDown": "{duration} down",
+  "@healthUptimeDown": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "healthUptimeReasonDbUnreachable": "database unreachable",
+  "healthUptimeReasonProcessDown": "process down",
+  "healthUptimeReasonAiFailing": "AI provider failing",
+  "healthUptimeReasonBackupsStale": "backups stale",
+  "healthUptimeKeyboardHint": "Use the left and right arrow keys to inspect a day",
+  "healthUptimeErrorTitle": "Could not load uptime",
   "reviewSectionTitle": "Trip health",
   "reviewHeaderAttention": "{count, plural, one{Mostly ready — 1 to fix} other{Mostly ready — {count} to fix}}",
   "@reviewHeaderAttention": {
