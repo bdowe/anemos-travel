@@ -4553,7 +4553,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentScreenEmptyMessage.
   ///
   /// In en, this message translates to:
-  /// **'I\'m Ferdinand — I\'ll search for places and build you a day-by-day itinerary.'**
+  /// **'I\'ll search real places and build you a day-by-day itinerary.'**
   String get agentScreenEmptyMessage;
 
   /// No description provided for @agentScreenItineraryReady.
