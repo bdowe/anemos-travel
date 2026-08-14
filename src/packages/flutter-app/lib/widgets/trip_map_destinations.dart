@@ -9,7 +9,7 @@
 import 'package:latlong2/latlong.dart' show LatLng;
 
 import '../l10n/l10n.dart';
-import '../utils/date_formats.dart';
+import '../utils/date_formats.dart' show formatShortRange, mmmd;
 import '../utils/leg_ranges.dart';
 import '../utils/trip_legs.dart';
 import 'trip_map.dart';
@@ -18,6 +18,75 @@ import 'trip_map.dart';
 /// gets a translated label, every real city keeps the name as-is.
 String groupLabelText(AppLocalizations l10n, String label) =>
     label == kOtherPlacesLabel ? l10n.tripOtherPlaces : label;
+
+/// Chip entries for a map destination strip: one per leg in visit order,
+/// labels display-ready via [groupLabelText]. The ONE construction site for
+/// the strip's text — trip detail, the full-screen map (which inherits the
+/// detail derivation's list), and the shared view all speak this.
+///
+/// A trip that revisits a city yields two runs with the SAME label (Fira →
+/// Naxos → Fira), and two identical chips are two identical promises: nothing
+/// on screen says which stay a tap will focus. Repeated labels therefore carry
+/// a [qualifier] — and ONLY repeated ones, so the ordinary trip keeps bare
+/// city names and the strip stays narrow on a phone.
+///
+/// The qualifier is the leg's start date, read from [visibleRanges] — the
+/// dates the page RENDERS, never the raw ranges (leg_ranges.dart doctrine:
+/// anything promising something about the dates on screen derives from the
+/// dates on screen). It degrades to the visit number when dates cannot tell
+/// the runs apart, which is not a per-chip special case but one of two whole-
+/// strip modes: an undated trip has null ranges for EVERY leg (the allocation
+/// is all-or-nothing off `trip.startDate`), and a dense itinerary can collapse
+/// two runs onto the same day.
+///
+/// [qualifier] is kept OUT of [label] deliberately: the label is the city, and
+/// callers that speak it in a sentence — `tripNoPlacesInLeg` renders "No
+/// places pinned in Fira" — must not inherit "Fira · Sep 3".
+///
+/// [labelText] overrides how the [kOtherPlacesLabel] run is named. It exists
+/// for the shared view, which calls that run "Places" in its own section
+/// headers; defaulting it to [groupLabelText] there would have the chip say
+/// "Other places" directly above a header saying "Places".
+List<({String key, String label, String? qualifier})> mapLegChipEntries(
+  AppLocalizations l10n,
+  List<TripLeg> legs,
+  List<LegRange> visibleRanges, {
+  String Function(AppLocalizations, String)? labelText,
+}) {
+  assert(visibleRanges.length == legs.length,
+      'visibleRanges must be index-aligned with legs (both follow tripLegs order)');
+  final nameOf = labelText ?? groupLabelText;
+  final labels = [for (final leg in legs) nameOf(l10n, leg.label)];
+
+  // Visit-order positions of every label that occurs more than once.
+  final repeats = <String, List<int>>{};
+  for (var i = 0; i < labels.length; i++) {
+    repeats.putIfAbsent(labels[i], () => []).add(i);
+  }
+  repeats.removeWhere((_, positions) => positions.length < 2);
+
+  final qualifiers = <int, String>{};
+  for (final positions in repeats.values) {
+    final dates = [
+      for (final i in positions)
+        visibleRanges[i].start == null
+            ? null
+            : mmmd().format(visibleRanges[i].start!),
+    ];
+    // Only useful if every run has a date AND no two share one.
+    final datesDistinguish =
+        !dates.contains(null) && dates.toSet().length == positions.length;
+    for (var n = 0; n < positions.length; n++) {
+      qualifiers[positions[n]] =
+          datesDistinguish ? dates[n]! : l10n.mapLegVisitNumber(n + 1);
+    }
+  }
+
+  return [
+    for (var i = 0; i < legs.length; i++)
+      (key: legs[i].key, label: labels[i], qualifier: qualifiers[i]),
+  ];
+}
 
 /// Destination pins for the trip-overview map: one per location group with a
 /// real coordinate, in visit order; ungeocoded groups are skipped so the

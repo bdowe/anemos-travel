@@ -184,11 +184,11 @@ class TripDerivation {
   final Set<String> liveDayKeys;
 
   /// Chip entries for the map's destination strip (specs/map-city-focus):
-  /// one per FULL-itinerary leg in visit order, labels display-ready
-  /// ([groupLabelText] localizes the 'Other places' run). The strip renders
-  /// only with ≥2 entries — with fewer, destination-overview mode never
-  /// engages and "All" vs "the one leg" would draw the identical map.
-  final List<({String key, String label})> legChips;
+  /// one per FULL-itinerary leg in visit order, built by [mapLegChipEntries]
+  /// (localizes the 'Other places' run; qualifies revisited cities). The strip
+  /// renders only with ≥2 entries — with fewer, destination-overview mode
+  /// never engages and focusing the one leg would draw the identical map.
+  final List<({String key, String label, String? qualifier})> legChips;
 
   /// Legs that would plot something on the map — the muted-chip gate: a
   /// geocoded item in the run, or a confirmed geocoded stay covering one of
@@ -468,10 +468,7 @@ class TripDerivation {
           if (!isCityFiller(it) && it.day != null) '${g.key}#${it.day}',
     };
 
-    final legChips = <({String key, String label})>[
-      for (final leg in legs)
-        (key: leg.key, label: groupLabelText(l10n, leg.label)),
-    ];
+    final legChips = mapLegChipEntries(l10n, legs, visibleRanges);
 
     final geoStays = [
       for (final a in confirmedStays)

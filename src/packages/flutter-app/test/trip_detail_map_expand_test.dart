@@ -14,6 +14,7 @@ import 'package:travel_route_planner/screens/trip_map_screen.dart';
 import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
+import 'support/chip_finders.dart';
 import 'support/l10n_test_app.dart';
 
 class _FakeTripsApiService extends TripsApiService {
@@ -217,15 +218,16 @@ void main() {
     expect(find.text('Colosseum'), findsOneWidget);
   });
 
-  testWidgets('wide: the full-screen All chip resets the map only',
+  testWidgets('wide: the full-screen map reset resets the map only',
       (WidgetTester tester) async {
     await pumpScreen(tester, surface: const Size(1200, 800));
 
     await tester.tap(inMap(find.byIcon(Icons.fullscreen)));
     await tester.pumpAndSettle();
     await tapChip(tester, 'Rome');
-    // All deselects both ways, even reported back from the full-screen map.
-    await tapChip(tester, 'All');
+    // The reset deselects both ways, even reported back from the
+    // full-screen map.
+    await tapMapReset(tester);
 
     await tester.tap(find.byType(CloseButton));
     await tester.pumpAndSettle();
@@ -235,8 +237,8 @@ void main() {
     final inlineMap = tester.widget<TripMap>(find.byType(TripMap));
     expect(inlineMap.fitSignature, isNull);
     expect(find.text('Colosseum'), findsOneWidget,
-        reason: 'All resets the MAP only — the list is untouched, so the '
-            'previously focused group stays expanded');
+        reason: 'the reset clears the MAP only — the list is untouched, so '
+            'the previously focused group stays expanded');
   });
 
   testWidgets(

@@ -111,15 +111,22 @@ void main() {
     await tester.pumpWidget(_wrap(service));
     await tester.pump();
 
-    // Some managers fill by simulating keystrokes: many change events,
-    // milliseconds apart. Type each field character-by-character with real
-    // ~10ms gaps — well inside the 400ms per-field burst window.
+    // Some managers fill by simulating keystrokes: many change events inside
+    // one rapid burst. What matters here is the COUNT of change events landing
+    // within the 400ms per-field burst window — not any particular gap between
+    // them, so this deliberately does not sleep.
+    //
+    // The heuristic reads a real `DateTime.now()` (auth_screen.dart), so this
+    // test spends real wall-clock time and a slow enough machine will push the
+    // burst past the window and flip the expectation. It used to pay a
+    // `runAsync` round trip per character — each one tears down and restores
+    // the fake-async zone — which made 13 characters exceed 400ms as soon as
+    // the suite ran with enough parallel load to slow the host. Keep this loop
+    // free of real delays; the "human typing" case below is the one that wants
+    // them, and load only ever pushes it further into passing.
     Future<void> burstType(String label, String value) async {
       for (var i = 1; i <= value.length; i++) {
         await tester.enterText(_fieldByLabel(label), value.substring(0, i));
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 10)),
-        );
       }
     }
 

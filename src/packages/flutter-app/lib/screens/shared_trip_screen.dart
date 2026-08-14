@@ -24,6 +24,7 @@ import '../widgets/section_header.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/map_leg_chips.dart';
 import '../widgets/trip_map.dart';
+import '../widgets/trip_map_destinations.dart' show mapLegChipEntries;
 import 'auth_screen.dart';
 import 'trip_detail_screen.dart';
 import '../utils/snack.dart';
@@ -32,6 +33,13 @@ import '../utils/snack.dart';
 /// editor) or an emailed invite (single-use, editor). The two return the
 /// same payload from different endpoints and redeem differently.
 enum SharedLinkKind { share, invite }
+
+/// This view names the unresolved-locality run **"Places"**, not trip detail's
+/// "Other places" ([groupLabelText]) — three surfaces here speak it: the
+/// section headers, the map's destination pins, and the map chip strip. One
+/// definition so a chip can never disagree with the header beneath it.
+String _sharedLegLabel(AppLocalizations l10n, String label) =>
+    label == kOtherPlacesLabel ? l10n.sharedPlacesGroup : label;
 
 /// Public read-only view of a shared trip, reachable at /#/share/<token>
 /// without an account. Signed-in viewers can save a copy to their own trips.
@@ -115,12 +123,7 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
       AppLocalizations l10n) {
     return [
       for (final leg in tripLegs(_trip.items ?? const <ItineraryItem>[]))
-        (
-          label: leg.label == kOtherPlacesLabel
-              ? l10n.sharedPlacesGroup
-              : leg.label,
-          items: leg.items,
-        ),
+        (label: _sharedLegLabel(l10n, leg.label), items: leg.items),
     ];
   }
 
@@ -215,15 +218,12 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
         (legs.length < 2 || !legs.any((l) => l.key == _focusedLegKey))) {
       _focusedLegKey = null; // trip changed under a stale focus
     }
-    final legChips = <({String key, String label})>[
-      for (final leg in legs)
-        (
-          key: leg.key,
-          label: leg.label == kOtherPlacesLabel
-              ? l10n.sharedPlacesGroup
-              : leg.label,
-        ),
-    ];
+    // Revisited-city chips are qualified by their VISIBLE start date, so this
+    // view and trip detail name the same leg the same way (leg_ranges.dart:
+    // promises about on-screen dates derive from the rendered ranges). The
+    // raw ranges above stay the stay-coverage filter's input.
+    final legChips = mapLegChipEntries(l10n, legs, visibleLegRanges(trip),
+        labelText: _sharedLegLabel);
     // Legs that would plot something, so unmappable legs get muted chips: a
     // geocoded item in the run, or a geocoded stay on one of its nights —
     // the same rule as the owner's mappedLegKeys.
@@ -265,9 +265,7 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
             for (final leg in legs)
               if (leg.coord != null)
                 TripMapDestination(
-                  label: leg.label == kOtherPlacesLabel
-                      ? l10n.sharedPlacesGroup
-                      : leg.label,
+                  label: _sharedLegLabel(l10n, leg.label),
                   point: LatLng(leg.coord!.lat, leg.coord!.lng),
                 ),
           ];

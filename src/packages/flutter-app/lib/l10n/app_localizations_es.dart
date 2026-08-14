@@ -1403,9 +1403,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripAddPlace => 'Añadir lugar';
 
   @override
-  String get tripFilterAll => 'Todos';
-
-  @override
   String get tripFilterUnbooked => 'Sin reservar';
 
   @override
@@ -2400,6 +2397,14 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get mapResetMap => 'Restablecer mapa';
+
+  @override
+  String mapLegVisitNumber(int n) {
+    return 'Visita $n';
+  }
+
+  @override
+  String get mapShowAllPlaces => 'Mostrar todos los lugares';
 
   @override
   String mapHomeAirport(String code) {

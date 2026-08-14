@@ -11,6 +11,7 @@ import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
+import 'support/chip_finders.dart';
 import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
@@ -250,22 +251,25 @@ void main() {
         reason: 'Paris header should rest below map band + tab row');
   });
 
-  testWidgets('the All chip resets the map only: the list is untouched',
+  testWidgets('the map reset resets the map only: the list is untouched',
       (tester) async {
     _useSurface(tester, const Size(1200, 800));
     await _pump(tester, _threeCityTrip());
 
+    expect(mapResetButton, findsNothing,
+        reason: 'nothing to reset until a leg is focused');
     await _tapChip(tester, 'Rome');
     expect(_map(tester).fitSignature, 'Rome');
     expect(find.text('Roman Forum 0'), findsOneWidget);
 
-    // All = no focus: the camera returns to the overview, but expansion is
-    // list-only state — nothing collapses, no scroll happens.
-    await _tapChip(tester, 'All');
+    // Clearing the focus returns the camera to the overview, but expansion
+    // is list-only state — nothing collapses, no scroll happens.
+    await tapMapReset(tester);
     expect(_map(tester).fitSignature, isNull);
     expect(_map(tester).items, hasLength(11));
     expect(find.text('Roman Forum 0'), findsOneWidget,
-        reason: 'the All chip must leave the list untouched');
+        reason: 'the reset must leave the list untouched');
+    expect(mapResetButton, findsNothing);
   });
 
   testWidgets('phone chip tap focuses the map without scrolling the list',
@@ -563,7 +567,7 @@ testWidgets('adding a place focuses the added city on the map',
     );
 
     // The sole group lands expanded like every other; toggling it never
-    // writes focus — with one leg, "All" and "the leg" are the same map,
+    // writes focus — with one leg, the overview and the leg are the same map,
     // and a fit bump would snap a user-panned camera for no visible
     // change. The LIST still toggles through the same pure-toggle path
     // every header tap takes.

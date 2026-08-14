@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:travel_route_planner/widgets/app_map.dart';
+import 'package:travel_route_planner/widgets/map_leg_chips.dart';
+
 import 'city_groups.dart';
 
 /// Finders that scope city-header date-chip assertions to ONE city's row.
@@ -23,3 +26,20 @@ Finder headerRowOf(String cityLabel) => find
 /// A chip text inside one city's header row.
 Finder chipTextIn(String cityLabel, String text) =>
     find.descendant(of: headerRowOf(cityLabel), matching: find.text(text));
+
+/// The map strip's reset — the globe that returns a focused map to the
+/// whole-trip overview. It is a [MapControlButton], not a chip: the overview is
+/// the
+/// absence of a destination choice, so it is deliberately not rendered in the
+/// destinations' visual language (it replaced the old "All" chip). Present
+/// only while a leg is focused, so `findsNothing` is the resting assertion.
+Finder get mapResetButton => find.descendant(
+      of: find.byType(MapLegChips),
+      matching: find.byType(MapControlButton),
+    );
+
+/// Taps the map strip's reset and settles the camera re-fit behind it.
+Future<void> tapMapReset(WidgetTester tester) async {
+  await tester.tap(mapResetButton);
+  await tester.pumpAndSettle();
+}

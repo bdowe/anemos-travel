@@ -84,7 +84,7 @@ class TripMapScreen extends ConsumerStatefulWidget {
 
   /// One chip per full-itinerary leg, visit order, labels display-ready —
   /// the parent derivation's `legChips`. Frozen at push time.
-  final List<({String key, String label})> legChips;
+  final List<({String key, String label, String? qualifier})> legChips;
   final Set<String>? mappedLegKeys;
 
   /// Initial leg-chip selection; chip taps also report through
