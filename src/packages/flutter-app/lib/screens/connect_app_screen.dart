@@ -62,6 +62,7 @@ class _ConnectAppScreenState extends ConsumerState<ConnectAppScreen> {
   }
 
   Future<void> _signIn() async {
+    warmSsoAvailability(context);
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const AuthScreen()),
     );

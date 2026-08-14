@@ -127,6 +127,7 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
   /// Routes through sign-in if needed; true when a session exists after.
   Future<bool> _ensureSignedIn() async {
     if (ref.read(authProvider).isSignedIn) return true;
+    warmSsoAvailability(context);
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const AuthScreen()),
     );

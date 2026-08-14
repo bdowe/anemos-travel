@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+// widgets.dart (not foundation.dart) for the BuildContext that
+// warmSsoAvailability takes; it re-exports everything foundation does.
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user.dart';
 import '../services/api_client.dart';
@@ -28,6 +30,26 @@ final googleSsoAvailableProvider = FutureProvider<bool>((ref) {
 final appleSsoAvailableProvider = FutureProvider<bool>((ref) {
   return ref.watch(authServiceProvider).appleSignInAvailable();
 });
+
+/// Starts both SSO availability fetches on the tap that opens [AuthScreen],
+/// so the route transition covers the round trip and the screen's first frame
+/// already knows whether to draw the buttons. Without this the SSO block sits
+/// above the email form and un-collapses a round trip late, shoving the form
+/// down under the reader's finger.
+///
+/// Fire-and-forget, and deliberately not done at boot — these providers are
+/// non-autoDispose, so this is at most one request per provider per session
+/// and nothing at all on a second visit, while a boot-time fetch would join
+/// the cold-start burst.
+void warmSsoAvailability(BuildContext context) {
+  try {
+    final container = ProviderScope.containerOf(context, listen: false);
+    container.read(googleSsoAvailableProvider);
+    container.read(appleSsoAvailableProvider);
+  } catch (_) {
+    // A tree without a ProviderScope must never break navigation.
+  }
+}
 
 class AuthState {
   final UserModel? user;
