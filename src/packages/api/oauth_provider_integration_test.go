@@ -292,6 +292,54 @@ func TestOAuthDenyAndSingleUseConsent(t *testing.T) {
 	}
 }
 
+// A signed-out visitor can reach the consent screen — the request token is the
+// credential, so `context` renders for them on purpose. Approving is where a
+// session becomes mandatory, and the client relies on that answer being 401
+// specifically: it routes the user to sign-in and resumes the request, rather
+// than reporting a dead end (connect_app_screen.dart). The consent request must
+// survive the rejection so signing in and retrying still works.
+func TestOAuthDecisionRequiresSession(t *testing.T) {
+	resetDB(t)
+	mcpTestEnv(t)
+	const redirectURI = "https://ai.example/callback"
+	_, sessionToken := createTestUser(t, "signedout@example.com")
+	clientID := registerTestClient(t, redirectURI)
+
+	authURL := "/api/v1/oauth/authorize?" + url.Values{
+		"client_id": {clientID}, "redirect_uri": {redirectURI}, "response_type": {"code"},
+		"code_challenge": {pkceChallenge("v")}, "code_challenge_method": {"S256"}, "state": {"s1"},
+	}.Encode()
+	rec := doJSON(t, http.MethodGet, authURL, "", nil)
+	requestToken := strings.TrimPrefix(rec.Header().Get("Location"), "http://gt.test/connect/")
+
+	// The consent screen itself renders without a session.
+	if ctx := doJSON(t, http.MethodPost, "/api/v1/oauth/authorize/context", "",
+		map[string]any{"request_token": requestToken}); ctx.Code != http.StatusOK {
+		t.Fatalf("context while signed out: status = %d, want 200", ctx.Code)
+	}
+
+	// Approving without one does not.
+	anon := doJSON(t, http.MethodPost, "/api/v1/oauth/authorize/decision", "",
+		map[string]any{"request_token": requestToken, "approve": true})
+	if anon.Code != http.StatusUnauthorized {
+		t.Fatalf("decision while signed out: status = %d, want 401", anon.Code)
+	}
+
+	// Nothing was consumed: signing in and approving still completes.
+	after := doJSON(t, http.MethodPost, "/api/v1/oauth/authorize/decision", sessionToken,
+		map[string]any{"request_token": requestToken, "approve": true})
+	if after.Code != http.StatusOK {
+		t.Fatalf("decision after signing in: status = %d, body %s", after.Code, after.Body.String())
+	}
+	redirectURL, err := url.Parse(decode(t, after)["redirect_url"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := redirectURL.Query().Get("code"); !strings.HasPrefix(code, "gt_ac_") {
+		t.Fatalf("code = %q, want gt_ac_ prefix", code)
+	}
+}
+
 func TestOAuthRegisterValidation(t *testing.T) {
 	resetDB(t)
 	mcpTestEnv(t)

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
+import '../services/pending_connect.dart';
 import '../theme/spacing.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
@@ -50,9 +51,17 @@ class _SsoCallbackScreenState extends ConsumerState<SsoCallbackScreen> {
       final res =
           await ref.read(authServiceProvider).exchangeSsoCode(widget.code);
       await ref.read(authProvider.notifier).adoptSession(res.token, res.user);
+      // A connector consent request may have sent the user here to sign in
+      // (specs/mcp-connector). SSO replaced the page, so the only memory of it
+      // is on-device — resume it rather than stranding the user on home with
+      // an authorization the server never heard a decision about.
+      final pendingConnect = await const PendingConnectStore().take();
       if (mounted) {
         // AuthGate takes over: onboarding quiz for new users, app otherwise.
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          pendingConnect == null ? '/' : '/connect/$pendingConnect',
+          (route) => false,
+        );
       }
     } catch (_) {
       if (mounted) {

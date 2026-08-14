@@ -6,6 +6,7 @@ import '../l10n/l10n.dart';
 import '../providers/api_client_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/connect_app_service.dart';
+import '../services/pending_connect.dart';
 import '../theme/spacing.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
@@ -22,6 +23,22 @@ import 'auth_screen.dart';
 /// signed-out user can authenticate however they normally do and land right
 /// back on this screen (the URL drives the route — same pattern as the
 /// utility-screen deep links).
+///
+/// Landing here signed out is normal (the AI app sends the browser straight
+/// from its own settings), so this screen hands off to sign-in itself rather
+/// than rendering an approve button that cannot work. Two rules make the
+/// round trip survivable:
+///
+///  - the request token is persisted before leaving ([PendingConnectStore]),
+///    because SSO navigates the page away and returns at /sso/<code> with no
+///    memory of where it started;
+///  - "signed in" means [AuthState.initialized] as well, so a restoring
+///    session never renders an approve button backed by a dead token.
+///
+/// Both were absent when a signed-out user hit this screen in production
+/// 2026-08-14: the approve control they saw was really the sign-in button,
+/// Google sign-in then discarded the route, and no decision ever reached the
+/// server while the user believed they had approved.
 class ConnectAppScreen extends ConsumerStatefulWidget {
   final String requestToken;
   const ConnectAppScreen({super.key, required this.requestToken});
@@ -34,11 +51,23 @@ class _ConnectAppScreenState extends ConsumerState<ConnectAppScreen> {
   ConnectAppService get _service =>
       ConnectAppService(ref.read(apiClientProvider));
 
+  static const _pending = PendingConnectStore();
+
   ConnectAppRequest? _request;
   bool _loading = true;
   bool _expired = false;
   bool _submitting = false;
   String? _error;
+
+  /// The request couldn't be loaded for a reason that isn't "expired" — a
+  /// transport blip or a server error. Kept separate because those are worth
+  /// retrying, whereas an expired token can only be restarted from the AI app.
+  bool _loadFailed = false;
+
+  /// Whether the automatic hand-off to sign-in has already fired. Latched so
+  /// that a user who backs out of sign-in gets the manual button instead of
+  /// being shoved into a loop they can't escape.
+  bool _promptedSignIn = false;
 
   @override
   void initState() {
@@ -47,6 +76,10 @@ class _ConnectAppScreenState extends ConsumerState<ConnectAppScreen> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _loadFailed = false;
+    });
     try {
       final req = await _service.fetchRequest(widget.requestToken);
       if (!mounted) return;
@@ -57,15 +90,27 @@ class _ConnectAppScreenState extends ConsumerState<ConnectAppScreen> {
     } on ConnectAppExpired {
       if (mounted) setState(() => (_loading = false, _expired = true));
     } catch (_) {
-      if (mounted) setState(() => (_loading = false, _expired = true));
+      // Not "expired": saying so would send the user back to their AI app to
+      // start over when a retry is what's actually needed.
+      if (mounted) setState(() => (_loading = false, _loadFailed = true));
     }
   }
 
+  /// Hands off to sign-in, remembering the request first so the browser can
+  /// come back here even when SSO replaces the whole page.
   Future<void> _signIn() async {
+    // Before any await, while this context is still current.
     warmSsoAvailability(context);
+    _promptedSignIn = true;
+    await _pending.save(widget.requestToken);
+    if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const AuthScreen()),
     );
+    // Only the email/password path returns here — SSO never does, because it
+    // navigated away and comes back through SsoCallbackScreen. Drop the
+    // reminder so it can't redirect a later, unrelated sign-in.
+    await _pending.clear();
     if (mounted) setState(() {});
   }
 
@@ -83,6 +128,12 @@ class _ConnectAppScreenState extends ConsumerState<ConnectAppScreen> {
       if (mounted) setState(() => _submitting = false);
     } on ConnectAppExpired {
       if (mounted) setState(() => (_submitting = false, _expired = true));
+    } on ConnectAppUnauthorized {
+      // The session died between rendering and approving. Recoverable, so
+      // route to sign-in rather than reporting a dead end.
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      await _signIn();
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -103,11 +154,45 @@ class _ConnectAppScreenState extends ConsumerState<ConnectAppScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    final signedIn = ref.watch(authProvider).isSignedIn;
+    final auth = ref.watch(authProvider);
+    // `isSignedIn` alone is optimistic: a warm boot restores a cached user
+    // before revalidating the token, so trusting it here can render an approve
+    // button whose request will 401.
+    final sessionResolved = auth.initialized;
+    final signedIn = sessionResolved && auth.isSignedIn;
+
+    // Signed out with a request in hand: go get a session and come straight
+    // back. Fires once (see [_promptedSignIn]).
+    if (sessionResolved &&
+        !auth.isSignedIn &&
+        !_loading &&
+        !_expired &&
+        !_loadFailed &&
+        !_promptedSignIn) {
+      _promptedSignIn = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _signIn();
+      });
+    }
 
     Widget body;
-    if (_loading) {
+    if (_loading || !sessionResolved) {
       body = const Center(child: CircularProgressIndicator());
+    } else if (_loadFailed) {
+      body = PageContainer(
+        maxWidth: 420,
+        child: EmptyState(
+          icon: Icons.cloud_off,
+          title: l10n.errorGeneric,
+          iconColor: theme.colorScheme.error,
+          actions: [
+            FilledButton(
+              onPressed: _load,
+              child: Text(l10n.commonRetry),
+            ),
+          ],
+        ),
+      );
     } else if (_expired) {
       body = PageContainer(
         maxWidth: 420,

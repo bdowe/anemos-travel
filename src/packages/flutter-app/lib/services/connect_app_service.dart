@@ -25,6 +25,14 @@ class ConnectAppExpired implements Exception {
   const ConnectAppExpired();
 }
 
+/// Raised when the decision call has no usable session behind it. Distinct
+/// from a generic failure on purpose: "you are signed out" has a cure (sign
+/// in and come back), so the screen routes there instead of showing an error
+/// the user can only stare at.
+class ConnectAppUnauthorized implements Exception {
+  const ConnectAppUnauthorized();
+}
+
 /// Talks to the OAuth consent endpoints. The request token itself is the
 /// credential for [fetchRequest] (the screen must render before sign-in);
 /// [decide] is authenticated and binds the grant to the signed-in user.
@@ -63,6 +71,10 @@ class ConnectAppService {
     }
     if (res.statusCode == 410) {
       throw const ConnectAppExpired();
+    }
+    // authMiddleware answers 401 for a missing, revoked, or expired session.
+    if (res.statusCode == 401) {
+      throw const ConnectAppUnauthorized();
     }
     throw Exception('Could not complete authorization (${res.statusCode})');
   }
