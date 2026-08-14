@@ -169,11 +169,22 @@ the next PR immediately; do NOT wait for the deploy**.
 
 The prod deploy each merge triggers is self-verifying and runs off the
 critical path. Check the ones already in flight between merges, and **the
-moment one goes red, stop the queue** — fix forward on main (or revert) and
+moment one FAILS, stop the queue** — fix forward on main (or revert) and
 resume only when prod is green, because a broken deploy under a stacked queue
-is un-bisectable. Every deploy the wave started must be accounted for in the
-final summary; not blocking is a bet that deploys usually pass, never a reason
-to leave one unchecked.
+is un-bisectable.
+
+**A `cancelled` main run is not a failure.** Back-to-back merges queue their
+deploys, and GitHub keeps only the newest *pending* run in the concurrency
+group (`cancel-in-progress` is false for main, so nothing is ever killed
+mid-deploy). Superseded runs are cancelled before executing a single job —
+check `gh run view <id> --json jobs`: `0` jobs means superseded, not broken.
+The surviving run builds a main that already contains the cancelled runs'
+commits.
+
+So the wave is verified by its **last** deploy, not by each one: watch that
+run to green and confirm prod serves the new SHA before calling the wave
+done. Not blocking is a bet that deploys usually pass, never a reason to skip
+that final check.
 
 Who fixes a red check: **the integrator fixes anything integration created**
 (hub resolution, cross-lane contract parity, codegen drift, fmt);

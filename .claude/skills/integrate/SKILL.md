@@ -66,19 +66,39 @@ here: `docs/parallel-dev.md` §3–6.
 
    **The safety valve stays — it is just moved, not removed.** Check the
    deploys you already started between merges (a non-blocking
-   `gh run list --branch main --limit 3` is enough), and the moment one goes
-   red: **stop the queue**, fix forward on main (or revert), resume only when
-   prod is green. A broken deploy under a stacked queue is un-bisectable, so
-   not-blocking is a bet that deploys usually pass — never a licence to leave
-   a failure unnoticed. Every deploy must be accounted for by step 10.
+   `gh run list --branch main --limit 5` is enough), and the moment one
+   **fails**: stop the queue, fix forward on main (or revert), resume only
+   when prod is green. A broken deploy under a stacked queue is un-bisectable,
+   so not-blocking is a bet that deploys usually pass — never a licence to
+   leave a failure unnoticed.
+
+   **`cancelled` on a main run is normal here — do NOT treat it as a
+   failure.** Merging back-to-back is exactly what this step now encourages,
+   so main deploy runs queue up, and GitHub keeps only the newest *pending*
+   run in the concurrency group (`ci-${{ github.ref }}`, `cancel-in-progress`
+   is false for main — see `.github/workflows/ci.yml`). The superseded ones
+   are cancelled **before running a single job**, so nothing was interrupted
+   mid-deploy and nothing is lost: the surviving run builds the newest main,
+   which already contains every commit the cancelled ones would have shipped.
+   Tell the two apart by the jobs list, not the badge —
+   `gh run view <id> --json jobs --jq '.jobs|length'` returns `0` for a
+   superseded run and non-zero for one that actually ran and broke.
+
+   The consequence: **a wave is only verified when its LAST deploy succeeds.**
+   Intermediate `cancelled` runs prove nothing either way, so step 10's
+   accounting is now load-bearing rather than a formality.
 
 10. **Next PR.** When the queue is empty: return to the main checkout,
     `git checkout main && git pull`, then `make wt-rm NAME=<lane>` for each
     merged lane (from the main checkout — it deletes the lane's worktree and
-    branch), and report the wave summary — PRs merged, **the outcome of every
-    deploy the wave started** (confirm each one actually landed before
-    declaring the wave done; this is where the step-9 watch was traded for),
-    final prod SHA.
+    branch), and report the wave summary — PRs merged, and **the wave's final
+    deploy watched to a green finish** (`gh run watch <id> --exit-status`),
+    since that is the run that actually ships every merge in the wave.
+    Superseded `cancelled` runs are expected and need no action; a `failure`
+    at any point does. Confirm prod serves the new SHA — `/health` `release`
+    or `/app/version.json` — before declaring the wave done. This accounting
+    is what step 9's per-merge watch was traded for, so it is the one deploy
+    check that must not be skipped.
 
 ## Notes
 
