@@ -88,7 +88,10 @@ None. No persistence changes.
 - Compaction failure emits nothing of its own → the next `thinking` frame
   retires the summarizing chip instead of it lingering until the first token.
 - A model response with several tool calls announces each chip as the model
-  writes it; chips retire one by one as the tools finish executing.
+  writes it; chips retire one by one as the tools finish executing. Calls that
+  render the same label (parallel `search_places`, or two unnamed quick
+  writes both showing "Working…") collapse into a single chip that clears
+  when the last matching call finishes.
 - Older deployed clients that don't know `thinking` ignore unknown SSE event
   types by falling through their event switch — the stream stays compatible.
 
