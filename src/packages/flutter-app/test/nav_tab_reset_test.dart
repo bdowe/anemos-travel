@@ -11,6 +11,7 @@ import 'package:travel_route_planner/providers/live_trip_provider.dart';
 import 'package:travel_route_planner/providers/resumable_chats_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
+import 'package:travel_route_planner/widgets/brand_logo.dart';
 
 import 'support/url_sync_fakes.dart';
 
@@ -107,6 +108,23 @@ void main() {
     // Pop-before-switch: the stacked page's didPop drains while Trips is
     // still the active tab, so '/preferences' never reaches the address bar.
     expect(reports.sublist(reportsAfterTrips), isNot(contains('/preferences')));
+  });
+
+  testWidgets('the rail brand mark taps through to the Home root',
+      (tester) async {
+    // Logo-links-home through the real rail: the brand mark at the top of the
+    // rail is a bare BrandLogo with its own InkWell (no BrandBadge plate), so
+    // pin that the tap surface survived the plate's removal.
+    final container = await pumpApp(tester);
+
+    await tester.tap(railDestination('Trips'));
+    await tester.pumpAndSettle();
+    expect(container.read(navIndexProvider), AppTab.trips.index);
+
+    await tester.tap(find.descendant(
+        of: find.byType(NavigationRail), matching: find.byType(BrandLogo)));
+    await tester.pumpAndSettle();
+    expect(container.read(navIndexProvider), AppTab.home.index);
   });
 
   testWidgets('re-tapping the active Trips tab pops it to root',

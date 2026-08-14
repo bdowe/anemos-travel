@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../constants/app_info.dart';
 import '../l10n/l10n.dart';
 import '../providers/analytics_provider.dart';
 import '../theme/app_colors.dart';
@@ -227,15 +228,34 @@ class _LandingHero extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    BrandBadge(
-                      padding: narrow
-                          ? const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md,
-                              vertical: AppSpacing.sm)
-                          : const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.lg,
-                              vertical: AppSpacing.md),
-                      child: BrandLogo.lockup(height: narrow ? 72 : 132),
+                    // Bare mark + white wordmark floating on the scrimmed
+                    // photo, matching the auth screen's plateless mark. The
+                    // lockup PNG's baked-in charcoal wordmark needed the
+                    // white badge plate; white Playfair text does not.
+                    BrandLogo.mark(size: narrow ? 52 : 96),
+                    const SizedBox(height: AppSpacing.sm),
+                    ExcludeSemantics(
+                      // The mark's Image already carries the "Anemos"
+                      // semantic label.
+                      child: Text(
+                        AppInfo.name,
+                        style: TextStyle(
+                          fontFamily: 'Playfair Display',
+                          fontWeight: FontWeight.w600,
+                          fontSize: narrow ? 26 : 44,
+                          height: 1.1,
+                          letterSpacing: 0.5,
+                          color: Colors.white,
+                          // Guards the scrim's lighter top-right corner
+                          // (alpha 0.35) against bright photo patches.
+                          shadows: const [
+                            Shadow(
+                                color: Colors.black26,
+                                blurRadius: 8,
+                                offset: Offset(0, 2)),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     Text(
