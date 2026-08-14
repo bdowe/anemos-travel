@@ -2659,7 +2659,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get agentScreenEmptyMessage =>
-      'Soy Ferdinand: buscaré lugares y crearé un itinerario día a día para ti.';
+      'Buscaré lugares reales y crearé un itinerario día a día para ti.';
 
   @override
   String agentScreenItineraryReady(int count) {

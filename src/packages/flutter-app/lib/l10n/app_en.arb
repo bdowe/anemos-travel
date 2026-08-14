@@ -1698,7 +1698,7 @@
   "agentScreenTitle": "Plan your trip",
   "agentScreenStartOver": "Start over",
   "agentScreenEmptyTitle": "Tell me about your dream trip",
-  "agentScreenEmptyMessage": "I'm Ferdinand — I'll search for places and build you a day-by-day itinerary.",
+  "agentScreenEmptyMessage": "I'll search real places and build you a day-by-day itinerary.",
   "agentScreenItineraryReady": "Itinerary ready — {count} locations",
   "@agentScreenItineraryReady": {
     "placeholders": {
