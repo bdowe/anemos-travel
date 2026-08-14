@@ -23,6 +23,24 @@ int? tripDayOn(String? startDate, String? endDate, DateTime when) {
   return day;
 }
 
+/// Whole days from [today]'s **device-local calendar date** until the trip's
+/// start date: 0 = starts today, 1 = starts tomorrow. Null when [startDate]
+/// is missing/unparseable or already behind today — a started trip has no
+/// countdown (it belongs to [tripDayOn]'s "Day N" territory instead).
+///
+/// [today]'s time of day is ignored (truncated to the local date), so passing
+/// `DateTime.now()` answers "how many sleeps until the trip?".
+int? daysUntilTrip(String? startDate, DateTime today) {
+  final start = DateTime.tryParse(startDate ?? '');
+  if (start == null) return null;
+  // UTC-normalized like nightsBetween/stayCoversAnyNight, so a DST
+  // transition between today and the start can't drop a calendar day.
+  final days = DateTime.utc(start.year, start.month, start.day)
+      .difference(DateTime.utc(today.year, today.month, today.day))
+      .inDays;
+  return days < 0 ? null : days;
+}
+
 /// Whether the trip is entirely behind [today]'s device-local calendar date:
 /// its last day — [endDate], falling back to [startDate] for end-less trips —
 /// is strictly before today. A trip ending today is not past; trips with no

@@ -1068,6 +1068,41 @@
       }
     }
   },
+  "tripsListUpcoming": "Upcoming",
+  "tripsListNewTrip": "New trip",
+  "tripsListStatsUpcoming": "{count, plural, one{1 upcoming trip} other{{count} upcoming trips}}",
+  "@tripsListStatsUpcoming": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripDurationDays": "{count, plural, one{1 day} other{{count} days}}",
+  "@tripDurationDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripCitiesCount": "{count, plural, one{1 city} other{{count} cities}}",
+  "@tripCitiesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "upNextEyebrow": "UP NEXT",
+  "upNextStartsIn": "{days, plural, =0{Starts today} =1{Starts tomorrow} other{Starts in {days} days}}",
+  "@upNextStartsIn": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "tripsListCreated": "Created {date}",
   "@tripsListCreated": {
     "placeholders": {

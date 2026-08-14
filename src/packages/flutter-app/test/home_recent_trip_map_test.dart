@@ -169,7 +169,7 @@ Future<void> _pumpHome(
     ),
   );
   // Flush the prefs read behind recentTripProvider, then the chained cache
-  // read behind recentTripDetailProvider (which only starts once the card —
+  // read behind cachedTripDetailProvider (which only starts once the card —
   // and with it the band — is mounted).
   await tester.pump();
   await tester.pump();

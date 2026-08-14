@@ -115,7 +115,9 @@ void main() {
     ]);
     await tester.pumpAndSettle();
 
-    // Not the empty state: the collapsed row is the whole list.
+    // Not the empty state: the Upcoming header (deliberately kept — it
+    // carries the list's only create affordance) sits above the collapsed
+    // row, which holds every trip.
     expect(find.text('No trips yet'), findsNothing);
     expect(find.text('Past trips'), findsOneWidget);
 

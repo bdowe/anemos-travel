@@ -51,6 +51,47 @@ import 'trip_days.dart';
   return (upcoming: [...dated, ...undated], past: past);
 }
 
+/// The trip the "Up next" hero promotes: the first (soonest) trip of a
+/// [partitionTripsForList] `upcoming` group, when its START date parses and
+/// is today or later. Null when the soonest trip is undated (dated trips
+/// sort first, so an undated head means no dated upcoming exist), has
+/// already started (an in-progress trip belongs to the live-trip spotlight,
+/// and the caller suppresses the hero entirely while one exists), or is
+/// end-date-only ([_firstDay]'s endDate fallback sorts it, but a hero with
+/// no countdown and no range would show LESS than the plain card it
+/// replaces — the start requirement keeps "promoted" a strict upgrade).
+Trip? upNextTrip(List<Trip> upcoming, DateTime today) {
+  if (upcoming.isEmpty) return null;
+  // Started-or-not via the countdown helper, so the hero and its pill can
+  // never disagree: promoted ⇔ daysUntilTrip is non-null.
+  return daysUntilTrip(upcoming.first.startDate, today) == null
+      ? null
+      : upcoming.first;
+}
+
+/// Aggregate line for the Upcoming section header: trip count, summed dated
+/// travel days, and distinct hub cities. Counts only trips that haven't
+/// started — the `upcoming` group deliberately retains in-progress trips
+/// (the live-trip past-exemption), but a line saying "upcoming" must not
+/// count the trip the user is on right now under its own HAPPENING NOW
+/// spotlight. Undated drafts count (not started), contributing zeros the
+/// caller drops segment-wise. Pure and payload-only.
+({int trips, int travelDays, int cities}) upcomingStats(
+    List<Trip> upcoming, DateTime today) {
+  var trips = 0;
+  var days = 0;
+  final cities = <String>{};
+  for (final t in upcoming) {
+    final started = DateTime.tryParse(t.startDate ?? '') != null &&
+        daysUntilTrip(t.startDate, today) == null;
+    if (started) continue;
+    trips++;
+    days += dayCount(t.startDate, t.endDate, const <int?>[]);
+    cities.addAll(t.cities ?? const <String>[]);
+  }
+  return (trips: trips, travelDays: days, cities: cities.length);
+}
+
 /// Sort key for upcoming trips; null means the trip is undated. Falls back to
 /// [Trip.endDate] so an end-only trip still sorts by date instead of dropping
 /// into the drafts bucket.

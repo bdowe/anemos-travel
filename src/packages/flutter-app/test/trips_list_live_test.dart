@@ -15,6 +15,7 @@ import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trip_cache.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/widgets/live_trip_card.dart';
+import 'package:travel_route_planner/widgets/up_next_trip_card.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -200,16 +201,18 @@ void main() {
     await _pumpList(tester, service);
     await tester.pumpAndSettle();
 
-    final wideCard = tester.getSize(find.byType(Card).first);
+    // The single future-dated trip renders as the promoted Up-next hero, so
+    // it is the measured content (same 700px PageContainer cap either way).
+    final wideCard = tester.getSize(find.byType(UpNextTripCard));
     expect(wideCard.width, lessThanOrEqualTo(700));
     // Centered: symmetric gutters.
-    final left = tester.getTopLeft(find.byType(Card).first).dx;
-    final right = 1200 - tester.getTopRight(find.byType(Card).first).dx;
+    final left = tester.getTopLeft(find.byType(UpNextTripCard)).dx;
+    final right = 1200 - tester.getTopRight(find.byType(UpNextTripCard)).dx;
     expect((left - right).abs(), lessThan(2));
 
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpAndSettle();
-    final phoneCard = tester.getSize(find.byType(Card).first);
+    final phoneCard = tester.getSize(find.byType(UpNextTripCard));
     expect(phoneCard.width, greaterThan(340)); // full width minus padding
   });
 

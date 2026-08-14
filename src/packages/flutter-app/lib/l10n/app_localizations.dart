@@ -3032,6 +3032,48 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{1 trip} other{{count} trips}}'**
   String tripsListPastTripsCount(int count);
 
+  /// No description provided for @tripsListUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get tripsListUpcoming;
+
+  /// No description provided for @tripsListNewTrip.
+  ///
+  /// In en, this message translates to:
+  /// **'New trip'**
+  String get tripsListNewTrip;
+
+  /// No description provided for @tripsListStatsUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 upcoming trip} other{{count} upcoming trips}}'**
+  String tripsListStatsUpcoming(int count);
+
+  /// No description provided for @tripDurationDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 day} other{{count} days}}'**
+  String tripDurationDays(int count);
+
+  /// No description provided for @tripCitiesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 city} other{{count} cities}}'**
+  String tripCitiesCount(int count);
+
+  /// No description provided for @upNextEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'UP NEXT'**
+  String get upNextEyebrow;
+
+  /// No description provided for @upNextStartsIn.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =0{Starts today} =1{Starts tomorrow} other{Starts in {days} days}}'**
+  String upNextStartsIn(int days);
+
   /// No description provided for @tripsListCreated.
   ///
   /// In en, this message translates to:
