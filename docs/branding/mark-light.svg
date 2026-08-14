@@ -1,11 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 540">
-  <!-- Anemos brand mark: an 8-point wind rose (άνεμος = wind).
-       Long cardinal points in the app's deep teal, short intercardinal
-       points in the heritage gold. Each point is split into a light left
-       half and a dark right half (classic portolan-chart shading).
-       Transparent background; must stay legible at 16px (favicon).
-       mark-light.svg is the reversed variant for teal fields — if you
-       change point geometry here, mirror it there. -->
+  <!-- Anemos brand mark, LIGHT (reversed) variant for teal fields: the boot
+       splash gradient, where the dark mark's teal cardinals would vanish.
+       Cardinal halves are recolored white / teal-100 (#B2DFDB); the gold
+       intercardinals and white-dot hub are shared with mark.svg unchanged.
+       Geometry is mirrored from mark.svg — if you change point geometry
+       there, mirror it here. Transparent background. -->
 
   <!-- Intercardinal (diagonal) points — gold, short; drawn first so the
        cardinal points sit on top of their inner ends. -->
@@ -29,27 +28,27 @@
       </g>
     </g>
 
-    <!-- Cardinal points — teal, long. -->
+    <!-- Cardinal points — white/teal-100 (light-left, dark-right shading). -->
     <g id="card">
       <g>
-        <polygon points="0,-252 -44,-68 0,0" fill="#00796B"/>
-        <polygon points="0,-252 44,-68 0,0" fill="#004D40"/>
+        <polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/>
+        <polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/>
       </g>
       <g transform="rotate(90)">
-        <polygon points="0,-252 -44,-68 0,0" fill="#00796B"/>
-        <polygon points="0,-252 44,-68 0,0" fill="#004D40"/>
+        <polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/>
+        <polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/>
       </g>
       <g transform="rotate(180)">
-        <polygon points="0,-252 -44,-68 0,0" fill="#00796B"/>
-        <polygon points="0,-252 44,-68 0,0" fill="#004D40"/>
+        <polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/>
+        <polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/>
       </g>
       <g transform="rotate(270)">
-        <polygon points="0,-252 -44,-68 0,0" fill="#00796B"/>
-        <polygon points="0,-252 44,-68 0,0" fill="#004D40"/>
+        <polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/>
+        <polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/>
       </g>
     </g>
 
-    <!-- Hub: white dot with a teal ring. -->
+    <!-- Hub: white dot with a teal ring (same as mark.svg). -->
     <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
   </g>
 </svg>

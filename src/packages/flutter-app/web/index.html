@@ -67,9 +67,10 @@
   <!--
     Boot splash shown while flutter_bootstrap.js + main.dart.js download and
     the engine starts. Pixel-matched to the in-app SplashScreen (lib/screens/
-    splash_screen.dart) — same gradient, badge geometry, and spinner position —
-    so the flutter-first-frame handoff reads as one continuous screen. If you
-    change dimensions here, change splash_screen.dart too.
+    splash_screen.dart) — same gradient, mark geometry (96px bare light mark,
+    no plate), and spinner position — so the flutter-first-frame handoff reads
+    as one continuous screen. If you change dimensions here, change
+    splash_screen.dart too.
   -->
   <style>
     html {
@@ -92,24 +93,22 @@
       pointer-events: none;
     }
     #splash.splash-hidden { opacity: 0; }
-    .splash-badge {
+    .splash-mark {
       position: absolute;
       top: 50%;
       left: 50%;
       /* The pulse animates `transform`, so the keyframes must repeat this
          centering translate or the animation stomps it. */
       transform: translate(-50%, -50%);
-      width: 120px;
-      height: 120px;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.92);
+      width: 96px;
+      height: 96px;
       display: grid;
       place-items: center;
       animation: splash-pulse 1.8s ease-in-out infinite alternate;
     }
-    .splash-badge img {
-      width: 72px;
-      height: 72px;
+    .splash-mark img {
+      width: 96px;
+      height: 96px;
       object-fit: contain;
     }
     @keyframes splash-pulse {
@@ -134,8 +133,8 @@
 </head>
 <body>
   <div id="splash">
-    <div class="splash-badge">
-      <img src="splash/anemos_mark.png" alt="Anemos">
+    <div class="splash-mark">
+      <img src="splash/anemos_mark_light.png" alt="Anemos">
     </div>
     <div class="splash-spinner"></div>
   </div>

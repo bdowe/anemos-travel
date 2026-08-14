@@ -31,8 +31,18 @@ shrink() { sips -z "$2" "$2" "$1" --out "$3" >/dev/null; }
 echo "· mark (1080 master)"
 render mark.html 1080,1080 "$TMP/mark1080.png"
 shrink "$TMP/mark1080.png" 540 "$APP/assets/images/anemos_mark.png"
-cp "$APP/assets/images/anemos_mark.png" "$APP/web/splash/anemos_mark.png"
 shrink "$TMP/mark1080.png" 64 "$APP/web/favicon.png"
+
+echo "· mark-light (1080 master)"
+render mark-light.html 1080,1080 "$TMP/marklight1080.png"
+shrink "$TMP/marklight1080.png" 540 "$APP/assets/images/anemos_mark_light.png"
+mkdir -p "$APP/web/splash"
+cp "$APP/assets/images/anemos_mark_light.png" "$APP/web/splash/anemos_mark_light.png"
+
+echo "· native splash seeds (light mark)"
+mkdir -p "$APP/assets/splash"
+shrink "$TMP/marklight1080.png" 384 "$APP/assets/splash/mark_light_4x.png"
+render splash-android12.html 1152,1152 "$APP/assets/splash/mark_light_android12.png"
 
 echo "· PWA icons (84% crop)"
 render icon84.html 1024,1024 "$APP/web/icons/Icon-512.png"
@@ -41,9 +51,6 @@ shrink "$APP/web/icons/Icon-512.png" 384 "$APP/web/icons/Icon-192.png"
 echo "· PWA maskable icons (64% on white)"
 render maskable.html 1024,1024 "$APP/web/icons/Icon-maskable-512.png"
 shrink "$APP/web/icons/Icon-maskable-512.png" 384 "$APP/web/icons/Icon-maskable-192.png"
-
-echo "· native splash badge"
-render badge.html 480,480 "$APP/assets/splash/badge_4x.png"
 
 echo "· lockup"
 render lockup.html 1024,1024 "$APP/assets/images/anemos_logo.png"

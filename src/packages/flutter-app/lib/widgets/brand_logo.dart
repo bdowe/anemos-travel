@@ -1,39 +1,55 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 
 /// Anemos brand mark: an 8-point wind rose (άνεμος = wind) — teal cardinal
 /// points, gold intercardinals. Source SVGs live in docs/branding/; PNGs are
 /// rendered by scripts/brand-render.sh. (The old horse mark retired with the
 /// Golden Tempo name; the agent persona "Ferdinand" keeps the equine nod.)
-/// Two forms:
+/// Three forms:
 /// - [BrandLogo.lockup] — the full rose + "Anemos" wordmark image, for spots
 ///   with horizontal room (app-bar titles).
 /// - [BrandLogo.mark] — the rose icon only, for tight spots (nav rail,
 ///   landing hero).
+/// - [BrandLogo.markLight] — the reversed rose (white/teal-100 cardinals),
+///   for teal fields (the boot splash).
 ///
-/// The artwork is teal + gold on a transparent background. It floats bare on
-/// page surfaces and scrimmed imagery (auth screen, nav rail, landing hero);
-/// only on flat teal chrome — gradient app bars, the splash field — does the
-/// teal rose need a light plate behind it. Wrap in [BrandBadge] there.
+/// The dark artwork is teal + gold on a transparent background. It floats
+/// bare on page surfaces and scrimmed imagery (auth screen, nav rail, landing
+/// hero); on gradient app bars it still needs a light plate behind it — wrap
+/// in [BrandBadge] there. The splash field carries no plate: the bare
+/// [BrandLogo.markLight] floats directly on the teal gradient.
 class BrandLogo extends StatelessWidget {
   static const String _lockupAsset = 'assets/images/anemos_logo.png';
   static const String _markAsset = 'assets/images/anemos_mark.png';
+  static const String _markLightAsset = 'assets/images/anemos_mark_light.png';
 
   final String _asset;
   final double _height;
   final bool _isLockup;
+  final bool _isLight;
 
   /// Full lockup (wind-rose mark + wordmark), sized by [height].
   const BrandLogo.lockup({super.key, double height = 36})
       : _asset = _lockupAsset,
         _height = height,
-        _isLockup = true;
+        _isLockup = true,
+        _isLight = false;
 
   /// Wind-rose mark only, rendered as a [size]×[size] square.
   const BrandLogo.mark({super.key, double size = 28})
       : _asset = _markAsset,
         _height = size,
-        _isLockup = false;
+        _isLockup = false,
+        _isLight = false;
+
+  /// Reversed wind-rose mark (white/teal-100 cardinals) for teal fields,
+  /// rendered as a [size]×[size] square.
+  const BrandLogo.markLight({super.key, double size = 28})
+      : _asset = _markLightAsset,
+        _height = size,
+        _isLockup = false,
+        _isLight = true;
 
   @override
   Widget build(BuildContext context) {
@@ -46,18 +62,20 @@ class BrandLogo extends StatelessWidget {
       // back to a "GT" monogram, the lockup to the wordmark.
       errorBuilder: (context, _, __) => _isLockup
           ? _WordmarkFallback(height: _height)
-          : _MonogramFallback(size: _height),
+          : _MonogramFallback(size: _height, light: _isLight),
     );
   }
 }
 
 /// "A" monogram stand-in for the wind-rose mark when the image asset is
 /// unavailable. Fills the same [size]×[size] square the icon glyph did, so
-/// layout is identical either way. Its own black87 tile keeps it readable on
-/// any surface — badge plate or bare page background alike.
+/// layout is identical either way. The dark form's black87 tile keeps it
+/// readable on any page surface; the [light] form inverts to a white tile
+/// with a dark glyph so it still reads on the splash's teal field.
 class _MonogramFallback extends StatelessWidget {
   final double size;
-  const _MonogramFallback({required this.size});
+  final bool light;
+  const _MonogramFallback({required this.size, this.light = false});
 
   @override
   Widget build(BuildContext context) {
@@ -65,8 +83,8 @@ class _MonogramFallback extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(
-        color: Colors.black87,
+      decoration: BoxDecoration(
+        color: light ? Colors.white.withValues(alpha: 0.92) : Colors.black87,
         borderRadius: AppRadius.smAll,
       ),
       child: Text(
@@ -76,7 +94,7 @@ class _MonogramFallback extends StatelessWidget {
           fontWeight: FontWeight.w600,
           fontSize: size * 0.42,
           height: 1,
-          color: Colors.white,
+          color: light ? AppColors.brandDark : Colors.white,
           letterSpacing: 0.5,
         ),
       ),
