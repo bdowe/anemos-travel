@@ -1,6 +1,6 @@
 {
   "@@locale": "en",
-  "appTitle": "Golden Tempo Travel",
+  "appTitle": "Anemos",
   "@appTitle": {
     "description": "Product name. Not translated — it is a brand name."
   },
@@ -1118,7 +1118,7 @@
     }
   },
   "connectAppBarTitle": "Connect app",
-  "connectTitle": "Connect {app} to Golden Tempo?",
+  "connectTitle": "Connect {app} to Anemos?",
   "@connectTitle": {
     "placeholders": {
       "app": {
@@ -1129,8 +1129,8 @@
   "connectUnverifiedCaution": "This name was provided by the app itself and hasn't been verified by us. Only continue if you started this from an app you trust.",
   "connectWillBeAbleTo": "It will be able to:",
   "connectScopeTripsWrite": "Create trips in your account and see your trip list",
-  "connectScopeRecsRead": "Search Golden Tempo's local recommendations",
-  "connectSignInPrompt": "Sign in to your Golden Tempo account to continue.",
+  "connectScopeRecsRead": "Search Anemos's local recommendations",
+  "connectSignInPrompt": "Sign in to your Anemos account to continue.",
   "connectSignInCta": "Sign in",
   "connectApprove": "Connect",
   "connectDeny": "Cancel",
@@ -1663,7 +1663,7 @@
   "agentScreenTitle": "Plan your trip",
   "agentScreenStartOver": "Start over",
   "agentScreenEmptyTitle": "Tell me about your dream trip",
-  "agentScreenEmptyMessage": "I'll search for places and build you a day-by-day itinerary.",
+  "agentScreenEmptyMessage": "I'm Ferdinand — I'll search for places and build you a day-by-day itinerary.",
   "agentScreenSuggestionParis": "2 days in Paris",
   "agentScreenSuggestionRome": "Museums in Rome",
   "agentScreenSuggestionTokyo": "Weekend in Tokyo",

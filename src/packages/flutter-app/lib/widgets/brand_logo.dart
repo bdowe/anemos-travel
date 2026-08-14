@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import '../theme/spacing.dart';
 
-/// Golden Tempo Travel brand mark: a horse head inside an omega-shaped gold
-/// horseshoe (the company is named for the horse whose Derby win funded it).
+/// Anemos brand mark: a horse head inside an omega-shaped gold horseshoe
+/// (originally drawn for "Golden Tempo", the horse whose Derby win funded the
+/// company; retained until the new Anemos art lands — the in-app agent
+/// persona "Ferdinand" keeps the equine nod).
+/// NOTE: the PNG artwork still carries the old "GOLDEN TEMPO" wordmark until
+/// the new art lands — only the text layer here has been renamed.
 /// Two forms:
 /// - [BrandLogo.lockup] — the full horseshoe + wordmark image, for spots with
 ///   horizontal room (app-bar titles).
@@ -20,7 +24,7 @@ class BrandLogo extends StatelessWidget {
   final double _height;
   final bool _isLockup;
 
-  /// Full lockup (horseshoe mark + "GOLDEN TEMPO" wordmark), sized by [height].
+  /// Full lockup (horseshoe mark + wordmark), sized by [height].
   const BrandLogo.lockup({super.key, double height = 36})
       : _asset = _lockupAsset,
         _height = height,
@@ -38,7 +42,7 @@ class BrandLogo extends StatelessWidget {
       _asset,
       height: _height,
       fit: BoxFit.contain,
-      semanticLabel: 'Golden Tempo Travel',
+      semanticLabel: 'Anemos',
       // Degrade gracefully if the image asset fails to load: the mark falls
       // back to a "GT" monogram, the lockup to the wordmark.
       errorBuilder: (context, _, __) => _isLockup
@@ -48,7 +52,7 @@ class BrandLogo extends StatelessWidget {
   }
 }
 
-/// "GT" monogram stand-in for the horseshoe mark when the image asset is
+/// "A" monogram stand-in for the horseshoe mark when the image asset is
 /// unavailable. Fills the same [size]×[size] square the icon glyph did, so
 /// layout is identical either way, and uses the same black-on-light palette
 /// as the artwork (it sits on a light [BrandBadge] surface).
@@ -67,7 +71,7 @@ class _MonogramFallback extends StatelessWidget {
         borderRadius: AppRadius.smAll,
       ),
       child: Text(
-        'GT',
+        'A',
         style: TextStyle(
           fontFamily: 'Playfair Display',
           fontWeight: FontWeight.w600,
@@ -94,7 +98,7 @@ class _WordmarkFallback extends StatelessWidget {
         _MonogramFallback(size: height),
         const SizedBox(width: AppSpacing.sm),
         Text(
-          'Golden Tempo',
+          'Anemos',
           style: TextStyle(
             fontFamily: 'Playfair Display',
             fontWeight: FontWeight.w600,

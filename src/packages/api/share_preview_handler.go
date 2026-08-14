@@ -20,9 +20,9 @@ var sharePreviewTmpl = template.Must(template.New("share-preview").Parse(`<!DOCT
 <html lang="{{.Lang}}">
 <head>
   <meta charset="utf-8">
-  <title>{{.Title}} — Golden Tempo Travel</title>
+  <title>{{.Title}} — Anemos</title>
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Golden Tempo Travel">
+  <meta property="og:site_name" content="Anemos">
   <meta property="og:title" content="{{.Title}}">
   <meta property="og:description" content="{{.Description}}">
   <meta property="og:url" content="{{.URL}}">

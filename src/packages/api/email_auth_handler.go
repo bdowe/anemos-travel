@@ -194,7 +194,7 @@ func verifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		// The brand link is substituted as markup so the sentence around it can
 		// reorder per language without splitting the anchor.
-		homeLink := fmt.Sprintf("<a href=%q>Golden Tempo Travel</a>", publicBaseURL())
+		homeLink := fmt.Sprintf("<a href=%q>Anemos</a>", publicBaseURL())
 		fmt.Fprintf(w, "<html lang=%q><body><h2>%s</h2><p>%s</p></body></html>",
 			locale, tr(locale, "page.verify.ok.title"), tr(locale, "page.verify.ok.body", homeLink))
 		return

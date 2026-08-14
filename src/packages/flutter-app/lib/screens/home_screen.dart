@@ -53,9 +53,9 @@ String greetingText(AppLocalizations l10n, Greeting greeting) =>
     };
 
 /// Below this app-bar-title width the wordmark would ellipsize next to the
-/// badge (Playfair 20px "Golden Tempo Travel" ≈ 210px + badge + gap), so the
+/// badge (Playfair 20px "Anemos" ≈ 75px + badge + gap), so the
 /// header drops to the brand mark alone.
-const double _wordmarkMinWidth = 280;
+const double _wordmarkMinWidth = 145;
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -120,9 +120,9 @@ class HomeScreen extends ConsumerWidget {
         //    be a duplicate. Static: the rail brand is the logo-home tap.
         //  - no rail: brand mark on a light badge (so the black/gold logo
         //    reads on the teal app bar) next to the wordmark in white.
-        //  - compact title slot (< _wordmarkMinWidth): with the globe + avatar
-        //    actions a phone can't fit the full wordmark ("Golden Tempo
-        //    Tra…"), so the badge shows alone rather than an ellipsized brand.
+        //  - compact title slot (< _wordmarkMinWidth): if the title slot can't
+        //    fit the full wordmark, the badge shows alone rather than an
+        //    ellipsized brand.
         title: LayoutBuilder(
           builder: (context, constraints) {
             final hasRail =

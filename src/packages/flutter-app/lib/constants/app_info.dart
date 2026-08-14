@@ -7,5 +7,5 @@
 /// - ios/Runner/Info.plist (CFBundleDisplayName)
 /// - android/app/src/main/AndroidManifest.xml (android:label)
 abstract final class AppInfo {
-  static const String name = 'Golden Tempo Travel';
+  static const String name = 'Anemos';
 }

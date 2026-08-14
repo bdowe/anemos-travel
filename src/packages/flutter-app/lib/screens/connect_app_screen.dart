@@ -12,7 +12,7 @@ import '../widgets/gradient_app_bar.dart';
 import '../widgets/page_container.dart';
 import 'auth_screen.dart';
 
-/// Consent screen for an AI connector linking a Golden Tempo account
+/// Consent screen for an AI connector linking an Anemos account
 /// (specs/mcp-connector). ChatGPT/claude.ai send the browser here at
 /// /connect/<request-token>; approving mints the authorization code and sends
 /// the browser back to the AI app.
