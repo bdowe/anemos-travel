@@ -1825,7 +1825,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get healthRoutesSection => 'Rutas';
 
   @override
-  String get healthUptime => 'Tiempo activo';
+  String get healthProcessUptime => 'Proceso activo';
 
   @override
   String get healthRequests => 'Solicitudes';
@@ -1921,6 +1921,81 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get notifOpsOpenHealth => 'Ver el estado del sistema';
+
+  @override
+  String get healthUptimeSection => 'Disponibilidad';
+
+  @override
+  String get healthUptimeSelfCheckNote =>
+      'Autodiagnóstico — no detecta caídas del edge ni del gateway';
+
+  @override
+  String get healthUptimeComponentApi => 'API';
+
+  @override
+  String get healthUptimeComponentAi => 'Proveedor de IA';
+
+  @override
+  String get healthUptimePillDown => 'caído';
+
+  @override
+  String healthUptimeDaysAgo(int days) {
+    return 'hace $days días';
+  }
+
+  @override
+  String get healthUptimeToday => 'Hoy';
+
+  @override
+  String healthUptimeSummary(String pct) {
+    return '$pct % de disponibilidad';
+  }
+
+  @override
+  String healthUptimeSummaryPartial(String pct, int days) {
+    return '$pct % · $days días observados';
+  }
+
+  @override
+  String get healthUptimeNoHistory => 'Aún no hay historial';
+
+  @override
+  String healthUptimeMonitoringSince(String date) {
+    return 'Monitorizando desde $date';
+  }
+
+  @override
+  String healthUptimeDayNoData(String date) {
+    return '$date · sin datos';
+  }
+
+  @override
+  String get healthUptimeNoIncidents => 'sin incidencias';
+
+  @override
+  String healthUptimeDown(String duration) {
+    return '$duration caído';
+  }
+
+  @override
+  String get healthUptimeReasonDbUnreachable => 'base de datos inaccesible';
+
+  @override
+  String get healthUptimeReasonProcessDown => 'proceso caído';
+
+  @override
+  String get healthUptimeReasonAiFailing => 'proveedor de IA fallando';
+
+  @override
+  String get healthUptimeReasonBackupsStale =>
+      'copias de seguridad desactualizadas';
+
+  @override
+  String get healthUptimeKeyboardHint =>
+      'Usa las flechas izquierda y derecha para revisar un día';
+
+  @override
+  String get healthUptimeErrorTitle => 'No se pudo cargar la disponibilidad';
 
   @override
   String get reviewSectionTitle => 'Estado del viaje';

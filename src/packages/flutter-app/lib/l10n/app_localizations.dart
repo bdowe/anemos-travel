@@ -3236,11 +3236,11 @@ abstract class AppLocalizations {
   /// **'Routes'**
   String get healthRoutesSection;
 
-  /// No description provided for @healthUptime.
+  /// No description provided for @healthProcessUptime.
   ///
   /// In en, this message translates to:
-  /// **'Uptime'**
-  String get healthUptime;
+  /// **'Process uptime'**
+  String get healthProcessUptime;
 
   /// No description provided for @healthRequests.
   ///
@@ -3415,6 +3415,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View system health'**
   String get notifOpsOpenHealth;
+
+  /// No description provided for @healthUptimeSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Uptime'**
+  String get healthUptimeSection;
+
+  /// No description provided for @healthUptimeSelfCheckNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Self-check — cannot see edge or gateway outages'**
+  String get healthUptimeSelfCheckNote;
+
+  /// No description provided for @healthUptimeComponentApi.
+  ///
+  /// In en, this message translates to:
+  /// **'API'**
+  String get healthUptimeComponentApi;
+
+  /// No description provided for @healthUptimeComponentAi.
+  ///
+  /// In en, this message translates to:
+  /// **'AI provider'**
+  String get healthUptimeComponentAi;
+
+  /// No description provided for @healthUptimePillDown.
+  ///
+  /// In en, this message translates to:
+  /// **'down'**
+  String get healthUptimePillDown;
+
+  /// No description provided for @healthUptimeDaysAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} days ago'**
+  String healthUptimeDaysAgo(int days);
+
+  /// No description provided for @healthUptimeToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get healthUptimeToday;
+
+  /// No description provided for @healthUptimeSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{pct} % uptime'**
+  String healthUptimeSummary(String pct);
+
+  /// No description provided for @healthUptimeSummaryPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'{pct} % uptime · {days} days observed'**
+  String healthUptimeSummaryPartial(String pct, int days);
+
+  /// No description provided for @healthUptimeNoHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'No history yet'**
+  String get healthUptimeNoHistory;
+
+  /// No description provided for @healthUptimeMonitoringSince.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitoring since {date}'**
+  String healthUptimeMonitoringSince(String date);
+
+  /// No description provided for @healthUptimeDayNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'{date} · no data'**
+  String healthUptimeDayNoData(String date);
+
+  /// No description provided for @healthUptimeNoIncidents.
+  ///
+  /// In en, this message translates to:
+  /// **'no incidents'**
+  String get healthUptimeNoIncidents;
+
+  /// No description provided for @healthUptimeDown.
+  ///
+  /// In en, this message translates to:
+  /// **'{duration} down'**
+  String healthUptimeDown(String duration);
+
+  /// No description provided for @healthUptimeReasonDbUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'database unreachable'**
+  String get healthUptimeReasonDbUnreachable;
+
+  /// No description provided for @healthUptimeReasonProcessDown.
+  ///
+  /// In en, this message translates to:
+  /// **'process down'**
+  String get healthUptimeReasonProcessDown;
+
+  /// No description provided for @healthUptimeReasonAiFailing.
+  ///
+  /// In en, this message translates to:
+  /// **'AI provider failing'**
+  String get healthUptimeReasonAiFailing;
+
+  /// No description provided for @healthUptimeReasonBackupsStale.
+  ///
+  /// In en, this message translates to:
+  /// **'backups stale'**
+  String get healthUptimeReasonBackupsStale;
+
+  /// No description provided for @healthUptimeKeyboardHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the left and right arrow keys to inspect a day'**
+  String get healthUptimeKeyboardHint;
+
+  /// No description provided for @healthUptimeErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load uptime'**
+  String get healthUptimeErrorTitle;
 
   /// No description provided for @reviewSectionTitle.
   ///
