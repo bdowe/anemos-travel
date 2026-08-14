@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
 import '../models/booking_todo.dart';
+import '../utils/travel_mode.dart';
 import 'booking_sheets.dart' show transportModeIcon, transportModeLabel;
 
 IconData _kindIcon(BookingTodo todo) {
@@ -186,6 +187,12 @@ class BookingTodoRow extends StatelessWidget {
   /// whose mode truth is a confirmed segment) keeps the plain icon.
   final ValueChanged<String>? onModeChanged;
 
+  /// The trip's `travel_mode`, so a leg with no override can still name the
+  /// mode it was derived in. Without it a Rome2Rio ground leg has nothing to
+  /// point at — 'rome2rio' alone doesn't say car, train or bus — and the menu
+  /// opens with nothing checked on a trip that plainly stated how it travels.
+  final String? tripTravelMode;
+
   const BookingTodoRow({
     super.key,
     required this.todo,
@@ -195,6 +202,7 @@ class BookingTodoRow extends StatelessWidget {
     this.onAddDetails,
     this.compact = false,
     this.onModeChanged,
+    this.tripTravelMode,
   });
 
   @override
@@ -213,7 +221,10 @@ class BookingTodoRow extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               child: todo.kind == 'transport' && onModeChanged != null
-                  ? _ModeMenu(todo: todo, onModeChanged: onModeChanged!)
+                  ? _ModeMenu(
+                      todo: todo,
+                      tripTravelMode: tripTravelMode,
+                      onModeChanged: onModeChanged!)
                   : Icon(_kindIcon(todo),
                       size: 18, color: theme.colorScheme.primary),
             ),
@@ -302,22 +313,32 @@ class BookingTodoRow extends StatelessWidget {
 }
 
 /// The row's per-leg mode picker: the kind icon plus a dropdown caret, opening
-/// a menu of the five leg modes. The current mode (the override when set, else
-/// the one the provider implies) is checkmarked; 'rome2rio' alone can't name a
-/// ground mode, so such rows simply show no checkmark until overridden.
+/// a menu of the five leg modes, with the current mode checkmarked.
+///
+/// "Current" is the same ladder the server walks in `transportSlotMode`
+/// (trip_next_step.go): an explicit per-leg override, else what the provider
+/// implies, else the trip's own ground mode. That last rung matters because
+/// 'rome2rio' is the link for driving, training and busing alike — without the
+/// trip to ask, a car trip's legs opened this menu with nothing checked.
 class _ModeMenu extends StatelessWidget {
   static const _legModes = ['flight', 'car', 'train', 'bus', 'ferry'];
 
   final BookingTodo todo;
+  final String? tripTravelMode;
   final ValueChanged<String> onModeChanged;
 
-  const _ModeMenu({required this.todo, required this.onModeChanged});
+  const _ModeMenu({
+    required this.todo,
+    required this.onModeChanged,
+    this.tripTravelMode,
+  });
 
   String? get _currentMode =>
       todo.mode ??
       switch (todo.provider) {
         'ferry' => 'ferry',
         'google_flights' => 'flight',
+        'rome2rio' => groundTravelMode(tripTravelMode),
         _ => null,
       };
 

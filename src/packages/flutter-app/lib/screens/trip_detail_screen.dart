@@ -52,6 +52,7 @@ import '../utils/money_format.dart';
 import '../utils/share_link.dart';
 import '../utils/tracked_launch.dart';
 import '../utils/trip_days.dart';
+import '../utils/travel_mode.dart';
 import '../utils/trip_format.dart';
 import '../utils/trip_legs.dart';
 import '../widgets/add_itinerary_item_dialog.dart';
@@ -897,13 +898,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// The trip's stated non-flight travel mode ('car'|'train'|'bus'|'ferry')
   /// when set, else null. Such trips derive their legs in that mode with
   /// Rome2Rio route links instead of flight defaults; flight/mixed and unset
-  /// keep the legacy Greek-ferry-else-flight behavior.
-  static String? _groundModeOf(Trip trip) {
-    final tm = trip.travelMode;
-    return (tm == 'car' || tm == 'train' || tm == 'bus' || tm == 'ferry')
-        ? tm
-        : null;
-  }
+  /// keep the legacy Greek-ferry-else-flight behavior. Shared with the map's
+  /// home-leg gate — see [groundTravelMode].
+  static String? _groundModeOf(Trip trip) => groundTravelMode(trip.travelMode);
 
   /// Computes per-leg travel times for the itinerary in its existing display
   /// order by calling /optimize-route in preserve-order mode (no reordering).
@@ -2852,6 +2849,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         if (e.todo case final todo?)
           BookingTodoRow(
             todo: todo,
+            tripTravelMode: _trip?.travelMode,
             compact: _narrow,
             onBookedChanged: (v) => _setRowBooked(v,
                 todo: todo, stay: e.stay, segment: e.segment),
@@ -4897,6 +4895,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             final home = homeOverlayFor(
               ref,
               homeAirport: _homeAirport,
+              travelMode: trip.travelMode,
               focusedLegIndex:
                   focusKey == null ? null : derivation.legIndexOf(focusKey),
               legCount: derivation.legs.length,
@@ -5068,6 +5067,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           title: _displayTitle(trip),
           destinations: derivation.mapDestinations,
           homeAirport: _homeAirport,
+          travelMode: trip.travelMode,
           firstCityPoint: endpoints.first,
           lastCityPoint: endpoints.last,
           itemsForLeg: (k) {
