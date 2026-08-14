@@ -9,6 +9,7 @@ import 'package:travel_route_planner/models/chat_session.dart';
 import 'package:travel_route_planner/models/user.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/live_trip_provider.dart';
+import 'package:travel_route_planner/providers/recent_trip_provider.dart';
 import 'package:travel_route_planner/providers/resumable_chats_provider.dart';
 import 'package:travel_route_planner/screens/home_screen.dart';
 import 'package:travel_route_planner/widgets/continue_chats_section.dart';
@@ -82,6 +83,7 @@ void _seedRecentTrip(String tripId, String title) {
 Future<void> _pumpHome(
   WidgetTester tester, {
   List<ChatSessionSummary> chats = const [],
+  ContinueTrip? continueTrip,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -89,6 +91,12 @@ Future<void> _pumpHome(
         authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
         liveTripProvider.overrideWithValue(null),
         resumableChatsProvider.overrideWith((ref) async => chats),
+        // Left un-overridden by default so the seeded-prefs cases above still
+        // exercise the real derivation (empty trips list => the stored
+        // snapshot). Supplied only where the point is a trip the device has
+        // no record of.
+        if (continueTrip != null)
+          continueTripProvider.overrideWithValue(continueTrip),
       ],
       child: MaterialApp(
       localizationsDelegates: testLocalizationsDelegates,home: HomeScreen()),
@@ -126,6 +134,23 @@ void main() {
 
     expect(find.text('Continue where you left off'), findsOneWidget);
     expect(find.text('Lisbon Trip'), findsOneWidget);
+    expect(find.byType(ContinueChatCard), findsNothing);
+  });
+
+  testWidgets('a trip this device has no record of still carries the section',
+      (WidgetTester tester) async {
+    // No seeded prefs — the post-cutover state: origin-scoped storage is
+    // empty, but the account still has trips, so the section must not
+    // collapse the way it did on anemos.travel launch day.
+    await _pumpHome(tester, continueTrip: (
+      tripId: 't9',
+      title: 'Athens & the islands',
+      dateRange: 'Sep 1 – Sep 8',
+    ));
+
+    expect(find.text('Continue where you left off'), findsOneWidget);
+    expect(find.text('Athens & the islands'), findsOneWidget);
+    expect(find.text('Sep 1 – Sep 8'), findsOneWidget);
     expect(find.byType(ContinueChatCard), findsNothing);
   });
 
