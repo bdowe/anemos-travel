@@ -2356,7 +2356,7 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get chatInputHint => 'Describe tu viaje...';
+  String get chatInputHint => '¿A dónde quieres ir?';
 
   @override
   String get chatFollowUpHint => 'Haz una pregunta de seguimiento…';
@@ -2553,7 +2553,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get agentScreenEmptyMessage =>
-      'Buscaré lugares y crearé un itinerario día a día para tu viaje.';
+      'Buscaré lugares y crearé un itinerario día a día para ti.';
 
   @override
   String get agentScreenSuggestionParis => '2 días en París';

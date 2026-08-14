@@ -1562,7 +1562,7 @@
       }
     }
   },
-  "chatInputHint": "Describe your trip...",
+  "chatInputHint": "Where do you want to go?",
   "chatFollowUpHint": "Ask a follow-up…",
   "chatSend": "Send",
   "chatStopGenerating": "Stop generating",
@@ -1663,7 +1663,7 @@
   "agentScreenTitle": "Plan your trip",
   "agentScreenStartOver": "Start over",
   "agentScreenEmptyTitle": "Tell me about your dream trip",
-  "agentScreenEmptyMessage": "I'll search for places and build a day-by-day itinerary for your trip.",
+  "agentScreenEmptyMessage": "I'll search for places and build you a day-by-day itinerary.",
   "agentScreenSuggestionParis": "2 days in Paris",
   "agentScreenSuggestionRome": "Museums in Rome",
   "agentScreenSuggestionTokyo": "Weekend in Tokyo",

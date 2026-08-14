@@ -4073,7 +4073,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatInputHint.
   ///
   /// In en, this message translates to:
-  /// **'Describe your trip...'**
+  /// **'Where do you want to go?'**
   String get chatInputHint;
 
   /// No description provided for @chatFollowUpHint.
@@ -4343,7 +4343,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentScreenEmptyMessage.
   ///
   /// In en, this message translates to:
-  /// **'I\'ll search for places and build a day-by-day itinerary for your trip.'**
+  /// **'I\'ll search for places and build you a day-by-day itinerary.'**
   String get agentScreenEmptyMessage;
 
   /// No description provided for @agentScreenSuggestionParis.
