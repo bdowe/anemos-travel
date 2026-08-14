@@ -128,9 +128,10 @@ func mustLadder(t *testing.T, progress *PlanProgress) {
 		if p.Label == "" {
 			t.Fatalf("phase %d (%s) has no label", i, p.ID)
 		}
-		// Only the bookings rung has an exact denominator; every other rung
-		// stays silent rather than inventing one.
-		if p.Progress != nil && p.ID != planPhaseBookings {
+		// Only the bookings (derived slots) and schedule (plannable days) rungs
+		// have an exact denominator; every other rung stays silent rather than
+		// inventing one.
+		if p.Progress != nil && p.ID != planPhaseBookings && p.ID != planPhaseSchedule {
 			t.Fatalf("phase %s must not carry a tally: %+v", p.ID, p.Progress)
 		}
 		if p.Progress != nil && (p.Progress.Total <= 0 || p.Progress.Done > p.Progress.Total) {
@@ -143,12 +144,18 @@ func mustLadder(t *testing.T, progress *PlanProgress) {
 // bookingsTally returns the bookings rung's tally (nil when it has none).
 func bookingsTally(t *testing.T, progress *PlanProgress) *PhaseProgress {
 	t.Helper()
+	return rungTally(t, progress, planPhaseBookings)
+}
+
+// rungTally returns one rung's tally (nil when it has none).
+func rungTally(t *testing.T, progress *PlanProgress, id string) *PhaseProgress {
+	t.Helper()
 	for _, p := range progress.Phases {
-		if p.ID == planPhaseBookings {
+		if p.ID == id {
 			return p.Progress
 		}
 	}
-	t.Fatalf("no %q rung in %+v", planPhaseBookings, progress.Phases)
+	t.Fatalf("no %q rung in %+v", id, progress.Phases)
 	return nil
 }
 
@@ -426,8 +433,12 @@ func TestNextStep_WalkNeverFallsThroughToFindings(t *testing.T) {
 // no lodging.
 func TestNextStep_WalkUnslottedNightsStillSurface(t *testing.T) {
 	d := nextStepFixture(t)
-	// Stretch the trip two nights past the last slot's checkout.
+	// Stretch the trip two nights past the last slot's checkout. The stretched
+	// days need something planned on them too, or phase 4 (which now walks the
+	// whole trip) would answer before the lodging gap this test is about.
 	d.Trip.EndDate = dateVal(t, "2026-09-06")
+	d.Items = append(d.Items, store.ItineraryItem{
+		ID: uuid.New(), Name: "Presqu'île stroll", City: strp("Lyon"), Day: i32p(5), Position: 5})
 	d.BookingTodos = bookSlots(walkTodos(t),
 		"transport:ewr>>paris", "stay:paris", "transport:paris>>lyon",
 		"stay:lyon", "transport:lyon>>ewr")
@@ -712,6 +723,92 @@ func TestNextStep_ScheduleCleanup_EmptyDayAnchor(t *testing.T) {
 	if !strings.Contains(step.SeedPrompt, "day 2 is empty") {
 		t.Fatalf("empty-day seed off:\n%s", step.SeedPrompt)
 	}
+	// The rung says "Plan your days" when a day is what's missing; "Tidy up
+	// your schedule" is for loose places, and this trip has none.
+	if step.Title != "Plan your days" {
+		t.Fatalf("empty-day step title = %q", step.Title)
+	}
+}
+
+// The regression this whole change exists for (Brian, 2026-08-14): a dated
+// multi-city trip whose only itinerary rows are the AI's city fillers — the
+// tiles the app HIDES. The old ladder read "some item has a day", checked
+// "Plan your days" off, and moved on; the traveler had planned nothing.
+//
+// The rung the traveler is on must not move, though: they are booking eleven
+// flights, and holding booking guidance hostage to day planning would be a
+// worse ladder than the wrong checkmark.
+func TestNextStep_CityFillersAreNotAPlannedDay(t *testing.T) {
+	d := nextStepFixture(t)
+	// One filler per city, on the day the traveler arrives there — exactly what
+	// create_itinerary emits for a day with no specific activities.
+	d.Items = []store.ItineraryItem{
+		{ID: uuid.New(), Name: "Paris", City: strp("Paris"), Day: i32p(1), Position: 1},
+		{ID: uuid.New(), Name: "Lyon", City: strp("Lyon"), Day: i32p(3), Position: 2},
+	}
+
+	// Rung 2 still passes — a filler IS a destination pin, and the rung is
+	// named for adding those. Rung 3 (booking) is where the traveler stands.
+	open := d
+	open.Accommodations, open.Segments, open.BookingTodos = nil, nil, nil
+	step, progress := derive("en", nextStepNow, open)
+	mustStep(t, step, progress, "add_lodging", 2)
+
+	// …and the day rung reports the truth underneath it: nothing planned, out
+	// of the trip's three plannable days (4-day span minus the departure day).
+	tally := rungTally(t, progress, planPhaseSchedule)
+	if tally == nil || tally.Done != 0 || tally.Total != 3 {
+		t.Fatalf("schedule tally = %+v, want 0 of 3", tally)
+	}
+
+	// With the booking rung closed (the fixture's booked stays and segment) the
+	// ladder stops AT the day rung rather than sailing past it to "all set".
+	step, progress = derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "schedule_items", 3)
+	if step.Title != "Plan your days" {
+		t.Fatalf("step title = %q, want the day rung's own name", step.Title)
+	}
+
+	// One real activity does NOT re-satisfy the rung: the old min..max window
+	// would have collapsed to that single day and declared the trip scheduled.
+	d.Items = append(d.Items, store.ItineraryItem{
+		ID: uuid.New(), Name: "Louvre", City: strp("Paris"), Day: i32p(1), Position: 3})
+	step, progress = derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "schedule_items", 3)
+	if tally := rungTally(t, progress, planPhaseSchedule); tally == nil || tally.Done != 1 {
+		t.Fatalf("schedule tally = %+v, want 1 planned day", tally)
+	}
+	if step.Day == nil || *step.Day != 2 {
+		t.Fatalf("day anchor = %v, want the first day with nothing on it", step.Day)
+	}
+}
+
+// Travel days are planned days: the traveller is on a train, and a rung that
+// called that "nothing planned" would trade one lie for another.
+func TestNextStep_TravelDayCountsAsPlanned(t *testing.T) {
+	d := nextStepFixture(t)
+	d.Items = []store.ItineraryItem{
+		{ID: uuid.New(), Name: "Louvre", City: strp("Paris"), Day: i32p(1), Position: 1},
+		{ID: uuid.New(), Name: "Vieux Lyon", City: strp("Lyon"), Day: i32p(3), Position: 2},
+	}
+	// Day 2 is empty…
+	step, progress := derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "schedule_items", 3)
+
+	// …until the Paris→Lyon train is a real booked segment ON it.
+	d.Segments[0].DepartDate = dateVal(t, "2026-09-02")
+	step, progress = derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "all_set", planLadderTotal)
+	if tally := rungTally(t, progress, planPhaseSchedule); tally == nil ||
+		tally.Done != tally.Total {
+		t.Fatalf("schedule tally = %+v, want every plannable day planned", tally)
+	}
+
+	// An auto (itinerary-seeded draft) segment is not a booking anyone made,
+	// so it must not silently fill the day either.
+	d.Segments[0].Auto = true
+	step, progress = derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "schedule_items", 3)
 }
 
 func TestNextStep_BookAggregateDedupe(t *testing.T) {
@@ -849,11 +946,15 @@ func TestNextStep_LadderPhases(t *testing.T) {
 	mustLadder(t, es)
 
 	wantIDs := []string{"dates", "itinerary", "bookings", "schedule", "confirm", "packing"}
+	// A rung's label is a promise about its TEST. Rung 2 asks only whether some
+	// place sits on some day, so it says "Add your destinations"; the "Plan your
+	// days" promise belongs to rung 4, the one that walks the days (Brian,
+	// 2026-08-14 — ten city pins over 37 empty days used to check rung 2 off).
 	wantEN := []string{
 		"Set your travel dates",
-		"Plan your days",
+		"Add your destinations",
 		"Book travel & stays",
-		"Tidy up your schedule",
+		"Plan your days",
 		"Book everything",
 		"Start your packing list",
 	}

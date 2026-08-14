@@ -90,7 +90,8 @@ const _draftStay = Accommodation(
   auto: true,
 );
 
-BookingTodo _todo(String key, {String kind = 'transport', bool booked = false}) =>
+BookingTodo _todo(String key,
+        {String kind = 'transport', bool booked = false}) =>
     BookingTodo(
       id: 'todo-$key',
       kind: kind,
@@ -230,8 +231,8 @@ void main() {
       final d = _compute();
       expect([for (final g in d.groups) g.key], ['Paris', 'Rome', 'Paris#2']);
       expect([for (final g in d.groups) g.label], ['Paris', 'Rome', 'Paris']);
-      expect([for (final i in d.groups[1].items) i.name],
-          ['Colosseum', 'Trevi']);
+      expect(
+          [for (final i in d.groups[1].items) i.name], ['Colosseum', 'Trevi']);
       expect([for (final i in d.groups[2].items) i.name], ['Louvre Again']);
       // legs (the unfiltered split) mirrors the same runs.
       expect([for (final l in d.legs) l.key], ['Paris', 'Rome', 'Paris#2']);
@@ -281,8 +282,7 @@ void main() {
         _todo('transport:paris>>home'),
         _todo('custom:helicopter', kind: 'other'),
       ];
-      final d = _compute(
-          bookingTodos: todos, stays: [_parisStay, _draftStay]);
+      final d = _compute(bookingTodos: todos, stays: [_parisStay, _draftStay]);
       final grouped = d.groupedBookings;
       // One slot per leg label (Paris, Rome, Paris-revisit).
       expect(d.legLabels, ['Paris', 'Rome', 'Paris']);
@@ -299,8 +299,8 @@ void main() {
       expect(grouped.slots[0].departure, isNull);
       expect(grouped.slots[2].departure?.todoKey, 'transport:paris>>home');
       // Residuals: the custom todo; the auto draft stay is excluded entirely.
-      expect([for (final t in grouped.residual) t.todoKey],
-          ['custom:helicopter']);
+      expect(
+          [for (final t in grouped.residual) t.todoKey], ['custom:helicopter']);
       expect(grouped.residualStays, isEmpty);
       expect(grouped.residualSegments, isEmpty);
     });
@@ -353,8 +353,7 @@ void main() {
     test('legChips: full-leg keys in visit order, localized labels', () {
       final d = _compute();
       expect([for (final c in d.legChips) c.key], ['Paris', 'Rome', 'Paris#2']);
-      expect(
-          [for (final c in d.legChips) c.label], ['Paris', 'Rome', 'Paris']);
+      expect([for (final c in d.legChips) c.label], ['Paris', 'Rome', 'Paris']);
       // A single-leg trip still yields its one entry — hiding the <2-leg
       // strip is the widget's rule, so the gate has one home.
       final solo = _compute(
@@ -402,8 +401,7 @@ void main() {
         checkIn: '2026-09-03',
         checkOut: '2026-09-05',
       );
-      final withStay =
-          _compute(trip: _trip(items: items, stays: [romeStay]));
+      final withStay = _compute(trip: _trip(items: items, stays: [romeStay]));
       expect(withStay.mappedLegKeys, {'Paris', 'Rome'});
     });
 
@@ -417,7 +415,8 @@ void main() {
       expect(d.legFilteredItems('Nowhere'), isEmpty);
       expect(identical(d.legFilteredItems(null), d.items), isTrue);
       expect(identical(d.legFilteredItems('Rome'), d.legFilteredItems('Rome')),
-          isTrue, reason: 'stable identity per (derivation, key)');
+          isTrue,
+          reason: 'stable identity per (derivation, key)');
     });
 
     test('legFilteredStays: raw-range night overlap, checkout-exclusive', () {
@@ -433,8 +432,7 @@ void main() {
       expect([for (final a in d.legFilteredStays('Paris#2')) a.id], ['a1']);
       expect(identical(d.legFilteredStays(null), d.confirmedStays), isTrue);
       expect(
-          identical(
-              d.legFilteredStays('Paris'), d.legFilteredStays('Paris')),
+          identical(d.legFilteredStays('Paris'), d.legFilteredStays('Paris')),
           isTrue,
           reason: 'stable identity per (derivation, key)');
       expect(d.legFilteredStays('Nowhere'), isEmpty);
@@ -461,8 +459,8 @@ void main() {
         ),
       );
       expect(squeezed.legFilteredStays('Prague'), isEmpty);
-      expect([for (final a in squeezed.legFilteredStays('Vienna')) a.id],
-          ['a4']);
+      expect(
+          [for (final a in squeezed.legFilteredStays('Vienna')) a.id], ['a4']);
 
       // An undated leg (no parseable range) plots no stays.
       final undated = _compute(
@@ -537,4 +535,98 @@ void main() {
       expect(d.liveDayKeys, {'Prague#2'});
     });
   });
+
+  // TWIN of TestIsCityFillerParity in api/city_filler_test.go. Same cases, same
+  // expectations, in the same order — docs/zen.md requires the parity contract
+  // because "city filler" has two implementations now: this one, which HIDES
+  // these rows, and the server's, which must not count what this one hides
+  // (a 37-day trip of bare city pins used to check "Plan your days" off).
+  // Change one table, change the other.
+  group('isCityFiller parity with the Go server', () {
+    // dartOnly marks the ONE documented divergence: this predicate compares the
+    // name against cityOf(), which falls back to a regex over the address when
+    // the city field is empty. The server reads the explicit columns only —
+    // a second regex would drift, and AI-emitted fillers always set city.
+    final cases =
+        <({String desc, ItineraryItem item, bool want, bool dartOnly})>[
+      (
+        desc: 'name equals city',
+        item: _filler(name: 'Prague', city: 'Prague'),
+        want: true,
+        dartOnly: false
+      ),
+      (
+        desc: 'real activity in a city',
+        item: _filler(name: 'Charles Bridge', city: 'Prague'),
+        want: false,
+        dartOnly: false
+      ),
+      (
+        desc: 'case and space insensitive',
+        item: _filler(name: '  prague ', city: 'Prague'),
+        want: true,
+        dartOnly: false
+      ),
+      (
+        desc: 'name equals the day-trip hub',
+        item: _filler(name: 'Kyoto', city: 'Nara', dayTripFrom: 'Kyoto'),
+        want: true,
+        dartOnly: false
+      ),
+      (
+        desc: 'hub set, name is a real place',
+        item:
+            _filler(name: 'Fushimi Inari', city: 'Nara', dayTripFrom: 'Kyoto'),
+        want: false,
+        dartOnly: false
+      ),
+      (
+        desc: 'no city and no hub',
+        item: _filler(name: 'Prague'),
+        want: false,
+        dartOnly: false
+      ),
+      (
+        desc: 'empty name is never a filler',
+        item: _filler(name: '   ', city: 'Prague'),
+        want: false,
+        dartOnly: false
+      ),
+      (
+        desc: 'city empty, name matches the address city',
+        item: _filler(
+            name: 'Prague', city: '', address: 'Old Town, Prague, Czechia'),
+        want: true,
+        dartOnly: true
+      ),
+    ];
+
+    for (final c in cases) {
+      test(c.desc, () {
+        expect(isCityFiller(c.item), c.want,
+            reason: c.dartOnly
+                ? 'documented divergence: the Go twin expects false here'
+                : 'the Go twin must agree');
+      });
+    }
+  });
 }
+
+/// Bare item for the parity table — no address is synthesized (unlike [_item]),
+/// because the address is one of the inputs under test.
+ItineraryItem _filler({
+  required String name,
+  String? city,
+  String? dayTripFrom,
+  String? address,
+}) =>
+    ItineraryItem(
+      id: 'filler-$name',
+      position: 0,
+      name: name,
+      address: address,
+      latitude: 0,
+      longitude: 0,
+      city: city,
+      dayTripFrom: dayTripFrom,
+    );

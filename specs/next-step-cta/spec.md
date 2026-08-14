@@ -42,7 +42,14 @@ straight to the right control.
       primary action.
 - [ ] The step is the FIRST unmet phase of this fixed ladder, in order:
       1. **Set dates** — trip has no start/end dates.
-      2. **Plan itinerary** — trip has no places, or none is assigned to a day.
+      2. **Add your destinations** — trip has no places, or none is assigned to
+         a day. The test is deliberately weak (one dated place clears it), so
+         the rung is NAMED for it. It used to be labelled "Plan your days",
+         which promised a filled calendar and then checked itself off against
+         ten bare city pins over 37 empty days (Brian, 2026-08-14). A rung's
+         label is a promise about its test. City-filler rows — the placeholders
+         the app hides, whose name is just their city — count here, because a
+         filler is still a destination pin.
       3. **Book travel & stays, in itinerary order** — walks the synced
          booking checklist (outbound leg → stay → next leg → … → return leg,
          the order the trip is actually travelled) and names the first OPEN
@@ -53,7 +60,16 @@ straight to the right control.
          agent-created, never opened in the app — fall back to the lodging-
          then-transport health findings. A satisfied walk never falls back: a
          checked slot with no matching row means booked elsewhere.
-      4. **Tidy schedule** — places with no day, or empty days mid-trip.
+      4. **Plan your days** — places with no day, or days with nothing planned.
+         One walk defines "a planned day", and Trip Health's empty-day findings
+         read the same one: a day counts planned when it carries a non-filler
+         itinerary item OR a real transport segment (travel days are planned
+         days — otherwise the rung calls the day you fly to Kraków empty). The
+         window is the WHOLE trip minus its departure day — its nights — not
+         the first-to-last scheduled day, which let one dated item declare a
+         37-day trip scheduled and hid every day past the last one. The step
+         is titled "Tidy up your schedule" when loose places drive it and
+         "Plan your days" when an empty day does.
       5. **Book everything** — any unbooked stay/segment/booking to-do remains.
       6. **Start packing** — packing checklist is empty (only before the trip
          starts).
@@ -65,15 +81,17 @@ straight to the right control.
       since prefix progress cannot speak for phases past the current one. A
       payload with no ladder (older server, cached response) simply renders the
       plain eyebrow.
-- [ ] The **bookings rung carries its own tally** ("4 of 11"): a many-city trip
-      closes eleven booking slots under one rung, so the ladder's "3 of 6"
-      cannot move for weeks and the rung's sub-progress is the only honest
-      signal of movement. Its units are the derived booking slots and a slot
-      counts done whichever way the walk closes it — checked off, or covered by
-      a real accommodation/segment — so the tally and the rung's completion
-      can never disagree. Rungs without an exact denominator (unscheduled
-      places, the book_trip aggregate) show no tally rather than a made-up one,
-      and a trip with no derived slots shows none at all.
+- [ ] **Rungs with an exact denominator carry their own tally** ("4 of 11",
+      "0 of 36"): a many-city trip closes eleven booking slots and fills
+      thirty-six days under two rungs, so the ladder's "3 of 6" cannot move for
+      weeks and the sub-progress is the only honest signal of movement — and on
+      the days rung it is what makes "nothing planned yet" visible while the
+      rung is still ahead. Each tally's Done is counted by the very test that
+      decides its rung is satisfied — a booking slot closed either way the walk
+      closes it, a day planned either way the day walk fills it — so a tally
+      and its rung can never disagree. Rungs without an exact denominator
+      (destinations, the book_trip aggregate) show no tally rather than a
+      made-up one; a trip with no derived slots and an undated trip show none.
 - [ ] The card's secondary entry names its destination — "Trip health", the
       title of the sheet it opens — rather than "View all", which beside a step
       counter promised the steps and delivered the findings list.
@@ -119,12 +137,14 @@ straight to the right control.
   `seed_prompt` for chat-driven steps. `plan_progress` — `done`/`total` phases
   (total is 6) plus `phases[]`, the ladder itself: `{id, label}` per rung, in
   order, ids stable across rewordings and locales (`dates`, `itinerary`,
-  `bookings`, `schedule`, `confirm`, `packing`), labels localized. No per-rung
-  DONE state ships: `done` already defines it (index < done complete, == done
-  current, > done later), so the client derives it in one place. A rung MAY
-  carry `progress: {done, total}` — its internal tally, present only where the
-  denominator is exact (today: the bookings rung's derived slots, absent when
-  the trip has none). Both omitted for past trips. The step is identical
+  `bookings`, `schedule`, `confirm`, `packing` — the ids did NOT move when
+  rungs 2 and 4 were renamed; ids are identity, labels are copy), labels
+  localized. No per-rung DONE state ships: `done` already defines it (index <
+  done complete, == done current, > done later), so the client derives it in one
+  place. A rung MAY carry `progress: {done, total}` — its internal tally,
+  present only where the denominator is exact: the bookings rung's derived slots
+  (absent when the trip has none) and the schedule rung's plannable days (absent
+  when the trip is undated). Both omitted for past trips. The step is identical
   whether or not `check_hours` is requested.
 - **Errors:** unchanged (404 for viewers/missing trips).
 
