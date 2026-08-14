@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"travel-route-planner/store"
 )
@@ -290,5 +292,231 @@ func TestHealthMonitorNoEmailWhenUnconfigured(t *testing.T) {
 	}
 	if mailbox.count() != 0 {
 		t.Fatalf("email sent while SMTP unconfigured: %d", mailbox.count())
+	}
+}
+
+// --- Uptime-history sampling (specs/uptime-history) ---------------------------
+
+// sampleRecorder is the insertSample seam for sampling tests: records params,
+// optionally failing while failWrites is set. No DB involved — sampling is a
+// pure seam, which is the point of it being separate from the alerting seams.
+type sampleRecorder struct {
+	mu         sync.Mutex
+	written    []store.InsertHealthSampleParams
+	failWrites bool
+}
+
+func (r *sampleRecorder) insert(_ context.Context, p store.InsertHealthSampleParams) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.failWrites {
+		return errors.New("db down")
+	}
+	r.written = append(r.written, p)
+	return nil
+}
+
+func (r *sampleRecorder) rows() []store.InsertHealthSampleParams {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]store.InsertHealthSampleParams(nil), r.written...)
+}
+
+// newSamplingMonitor builds a DB-free monitor with alerting no-oped and the
+// sampling seam wired to rec.
+func newSamplingMonitor(rec *sampleRecorder, release string) *healthMonitor {
+	return &healthMonitor{
+		interval:     5 * time.Minute,
+		release:      release,
+		listAdmins:   func(context.Context) ([]store.ListAdminUsersRow, error) { return nil, nil },
+		insertNotify: func(context.Context, store.InsertNotificationParams) error { return nil },
+		sendEmail:    func(string, string, string) error { return nil },
+		emailEnabled: func() bool { return false },
+		pingDBFn:     func(context.Context) bool { return true },
+		aiStateFn:    func() aiHealthState { return aiHealthState{} },
+		insertSample: rec.insert,
+	}
+}
+
+// Boot gap causes: same release = unexplained (crash/OOM/reboot -> downtime),
+// changed release = deploy (unobserved), empty table = no gap row at all.
+func TestBootstrapSamplesGapCause(t *testing.T) {
+	now := time.Date(2026, 8, 12, 10, 0, 0, 0, time.UTC)
+	last := now.Add(-42 * time.Minute)
+
+	cases := []struct {
+		name        string
+		lastRelease string
+		bootRelease string
+		wantCause   string
+	}{
+		{"same release is unexplained", "abc123", "abc123", healthGapUnknown},
+		{"changed release is a deploy", "abc123", "def456", healthGapDeploy},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &sampleRecorder{}
+			m := newSamplingMonitor(rec, tc.bootRelease)
+			m.bootstrapSamples(context.Background(), now, func(context.Context) (store.LastHealthSampleRow, error) {
+				return store.LastHealthSampleRow{ObservedAt: last, Release: tc.lastRelease}, nil
+			})
+			rows := rec.rows()
+			if len(rows) != 1 {
+				t.Fatalf("wrote %d rows, want 1", len(rows))
+			}
+			g := rows[0]
+			if g.Kind != healthSampleGap || g.GapCause == nil || *g.GapCause != tc.wantCause {
+				t.Fatalf("gap row = %+v, want cause %s", g, tc.wantCause)
+			}
+			if !g.CoversFrom.Equal(last) || !g.ObservedAt.Equal(now) {
+				t.Fatalf("gap span = [%v, %v], want [%v, %v]", g.CoversFrom, g.ObservedAt, last, now)
+			}
+			if !m.lastSampleAt.Equal(now) {
+				t.Fatalf("lastSampleAt = %v, want %v", m.lastSampleAt, now)
+			}
+		})
+	}
+
+	t.Run("empty table writes nothing", func(t *testing.T) {
+		rec := &sampleRecorder{}
+		m := newSamplingMonitor(rec, "abc123")
+		m.bootstrapSamples(context.Background(), now, func(context.Context) (store.LastHealthSampleRow, error) {
+			return store.LastHealthSampleRow{}, pgx.ErrNoRows
+		})
+		if len(rec.rows()) != 0 {
+			t.Fatalf("empty table wrote %d rows", len(rec.rows()))
+		}
+		if !m.lastSampleAt.Equal(now) {
+			t.Fatalf("lastSampleAt = %v, want %v", m.lastSampleAt, now)
+		}
+	})
+}
+
+// A tick covers exactly [lastSampleAt, now] with the observed booleans, and a
+// stalled sampler (gap > 2x interval) vouches only for its last interval —
+// the excess becomes an explicit unknown-gap row.
+func TestRecordTickIntervalsAndStall(t *testing.T) {
+	base := time.Date(2026, 8, 12, 10, 0, 0, 0, time.UTC)
+
+	rec := &sampleRecorder{}
+	m := newSamplingMonitor(rec, "abc123")
+	m.lastSampleAt = base
+
+	m.recordTick(context.Background(), base.Add(5*time.Minute), true, false, true)
+	rows := rec.rows()
+	if len(rows) != 1 {
+		t.Fatalf("wrote %d rows, want 1", len(rows))
+	}
+	tick := rows[0]
+	if tick.Kind != healthSampleTick || !tick.CoversFrom.Equal(base) || !tick.ObservedAt.Equal(base.Add(5*time.Minute)) {
+		t.Fatalf("tick row = %+v", tick)
+	}
+	if tick.DbOk == nil || !*tick.DbOk || tick.BackupsOk == nil || *tick.BackupsOk || tick.AiOk == nil || !*tick.AiOk {
+		t.Fatalf("tick booleans = db:%v ai:%v backups:%v, want true/true/false", tick.DbOk, tick.AiOk, tick.BackupsOk)
+	}
+
+	// Stall: next tick lands 30 minutes later (interval is 5m). Excess is an
+	// unknown gap; the tick claims only the final interval.
+	stallNow := base.Add(35 * time.Minute)
+	m.recordTick(context.Background(), stallNow, true, true, true)
+	rows = rec.rows()
+	if len(rows) != 3 {
+		t.Fatalf("after stall wrote %d rows total, want 3", len(rows))
+	}
+	gap, tick2 := rows[1], rows[2]
+	if gap.Kind != healthSampleGap || gap.GapCause == nil || *gap.GapCause != healthGapUnknown {
+		t.Fatalf("stall gap row = %+v", gap)
+	}
+	if !gap.CoversFrom.Equal(base.Add(5*time.Minute)) || !gap.ObservedAt.Equal(stallNow.Add(-5*time.Minute)) {
+		t.Fatalf("stall gap span = [%v, %v]", gap.CoversFrom, gap.ObservedAt)
+	}
+	if !tick2.CoversFrom.Equal(stallNow.Add(-5*time.Minute)) || !tick2.ObservedAt.Equal(stallNow) {
+		t.Fatalf("post-stall tick span = [%v, %v]", tick2.CoversFrom, tick2.ObservedAt)
+	}
+}
+
+// A failed write buffers the sample; the next success flushes it with its
+// ORIGINAL timestamps (delayed writes of real observations, never back-dated
+// inventions). The buffer is bounded: the oldest are dropped past the cap.
+func TestWriteSampleBufferAndFlush(t *testing.T) {
+	base := time.Date(2026, 8, 12, 10, 0, 0, 0, time.UTC)
+	rec := &sampleRecorder{failWrites: true}
+	m := newSamplingMonitor(rec, "abc123")
+	m.lastSampleAt = base
+
+	// Two ticks while the DB is down: nothing written, both held.
+	m.recordTick(context.Background(), base.Add(5*time.Minute), false, true, true)
+	m.recordTick(context.Background(), base.Add(10*time.Minute), false, true, true)
+	if got := len(rec.rows()); got != 0 {
+		t.Fatalf("wrote %d rows while failing, want 0", got)
+	}
+	if got := len(m.pending); got != 2 {
+		t.Fatalf("pending = %d, want 2", got)
+	}
+
+	// DB recovers: the next tick writes itself AND flushes the held two.
+	rec.failWrites = false
+	m.recordTick(context.Background(), base.Add(15*time.Minute), true, true, true)
+	rows := rec.rows()
+	if len(rows) != 3 {
+		t.Fatalf("after recovery wrote %d rows, want 3", len(rows))
+	}
+	if len(m.pending) != 0 {
+		t.Fatalf("pending = %d after flush, want 0", len(m.pending))
+	}
+	// The flushed rows keep their original observation times.
+	if !rows[1].ObservedAt.Equal(base.Add(5*time.Minute)) || !rows[2].ObservedAt.Equal(base.Add(10*time.Minute)) {
+		t.Fatalf("flushed timestamps = %v, %v", rows[1].ObservedAt, rows[2].ObservedAt)
+	}
+	// And the held db_ok=false observations survived intact — the reason the
+	// buffer exists: a DB outage records itself.
+	if rows[1].DbOk == nil || *rows[1].DbOk {
+		t.Fatalf("flushed row lost its db_ok=false: %+v", rows[1])
+	}
+
+	// Bound: overfill and confirm the oldest are dropped, newest kept.
+	rec.failWrites = true
+	for i := 0; i < healthSampleBufferMax+10; i++ {
+		m.writeSample(context.Background(), store.InsertHealthSampleParams{
+			ObservedAt: base.Add(time.Duration(i) * time.Second),
+			CoversFrom: base,
+			Kind:       healthSampleTick,
+		})
+	}
+	if got := len(m.pending); got != healthSampleBufferMax {
+		t.Fatalf("pending = %d, want cap %d", got, healthSampleBufferMax)
+	}
+	if !m.pending[len(m.pending)-1].ObservedAt.Equal(base.Add(time.Duration(healthSampleBufferMax+9) * time.Second)) {
+		t.Fatalf("cap dropped the newest instead of the oldest")
+	}
+}
+
+// Sampling failures never touch the alert path: with writes failing, a
+// degraded transition still alerts exactly as before (and a monitor with no
+// sampling seam at all — the older tests above — still runs runOnce fine).
+func TestSamplingFailureDoesNotPerturbAlerts(t *testing.T) {
+	requireDB(t)
+	resetDB(t)
+	writeFreshHeartbeat(t, time.Now())
+
+	admin, _ := createTestUser(t, "opssample@example.com")
+	makeAdmin(t, admin.ID)
+
+	mailbox := &fakeMailbox{}
+	dbUp := true
+	m := newTestMonitor(mailbox, true, &dbUp, &aiHealthState{})
+	rec := &sampleRecorder{failWrites: true}
+	m.insertSample = rec.insert
+	m.lastSampleAt = time.Now().Add(-5 * time.Minute)
+
+	ctx := context.Background()
+	m.runOnce(ctx, time.Now()) // healthy: no alert, sample write fails silently
+	dbUp = false
+	m.runOnce(ctx, time.Now()) // degraded transition: alert fires despite sampling failure
+	if c := opsNotifCount(t, admin.ID, notificationTypeOpsAlert); c != 1 {
+		t.Fatalf("ops_alert count with failing sample writes = %d, want 1", c)
+	}
+	if len(m.pending) == 0 {
+		t.Fatalf("failed sample writes were not buffered")
 	}
 }

@@ -3,13 +3,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"math/rand"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"travel-route-planner/store"
@@ -30,6 +34,13 @@ import (
 // lives in memory on the checker, so a restart while still degraded re-alerts
 // once — acceptable (Brian) and not worth a table.
 //
+// The tick ALSO persists what it saw, one row per tick, for the Health pane's
+// 90-day uptime strip (specs/uptime-history, rollup in ops_uptime.go). That is
+// history, not alerting: it is written every tick, before the transition dedup
+// returns, and a write failure never touches the alert path. The "not worth a
+// table" call above still stands for the alerting dedup — a graph is what
+// needed one.
+//
 // Three channels fire on a transition:
 //   - slog.Error on degrade (teed to Sentry via sentry_slog.go); slog.Info on
 //     recovery.
@@ -45,6 +56,27 @@ const (
 
 	notificationTypeOpsAlert     = "ops_alert"
 	notificationTypeOpsRecovered = "ops_recovered"
+
+	// Uptime-history sample kinds and gap causes (health_samples.kind /
+	// .gap_cause, migration 00059). Mirrored by the rollup in ops_uptime.go.
+	healthSampleTick = "tick"
+	healthSampleGap  = "gap"
+	// healthGapDeploy is a gap explained by a release change: the container was
+	// replaced. Unobserved time, charged to nobody — 6-12 deploys/day would
+	// otherwise invent ~4%/day of downtime out of nothing.
+	healthGapDeploy = "deploy"
+	// healthGapUnknown is a gap on the SAME release: a crash, an OOM kill, a
+	// host reboot. Charged as downtime — it is the only thing that can redden a
+	// bar without a health signal itself having failed.
+	healthGapUnknown = "unknown"
+
+	// healthSampleBufferMax bounds the retry buffer at one day of ticks at the
+	// default cadence. Past that the oldest held sample is dropped.
+	healthSampleBufferMax = 288
+
+	// healthSampleTimeout bounds one sample write so a wedged database cannot
+	// pin a tick; the next tick retries from the buffer anyway.
+	healthSampleTimeout = 10 * time.Second
 )
 
 type healthMonitor struct {
@@ -63,6 +95,32 @@ type healthMonitor struct {
 	emailEnabled func() bool
 	pingDBFn     func(context.Context) bool
 	aiStateFn    func() aiHealthState
+
+	// Uptime-history persistence (specs/uptime-history). Its OWN seam, separate
+	// from the alerting ones, so a test can fail sample writes without
+	// perturbing the transition alerts (and vice versa).
+	insertSample func(context.Context, store.InsertHealthSampleParams) error
+
+	// release is SENTRY_RELEASE at boot, stamped onto every sample; the boot
+	// gap's cause is decided by comparing it against the previous row's.
+	release string
+
+	// lastSampleAt is the end of the last interval this process accounted for
+	// (sample written OR buffered — it advances either way, so a failed write
+	// never double-counts its interval on the next tick). Set by
+	// bootstrapSamples, read/written only on the ticker goroutine.
+	lastSampleAt time.Time
+
+	// sampleMu guards pending: the retry buffer holding samples whose write
+	// failed. The buffer is the reason a DATABASE outage is visible in its own
+	// history at all — a tick that observes db_ok=false cannot write that
+	// observation because the database is what's down, so it is held (with its
+	// real timestamps, delayed writes of real observations, never back-dated
+	// inventions) and flushed on the next successful write. A crash while
+	// holding loses them; that time then reads as a gap → downtime, which is
+	// conservative in the right direction. Bounded at healthSampleBufferMax.
+	sampleMu sync.Mutex
+	pending  []store.InsertHealthSampleParams
 }
 
 // startHealthMonitor launches the background loop. No-ops (with a log line)
@@ -89,7 +147,16 @@ func startHealthMonitor(ctx context.Context) {
 		// Same source the /admin/ops/health endpoint reads, so the endpoint
 		// and the alert loop can never disagree about the AI signal.
 		aiStateFn: aiHealth.state,
+		insertSample: func(ctx context.Context, p store.InsertHealthSampleParams) error {
+			return store.New(dbPool).InsertHealthSample(ctx, p)
+		},
+		release: os.Getenv("SENTRY_RELEASE"),
 	}
+	// Close the previous process's gap BEFORE the loop starts: every
+	// millisecond boot is delayed is a millisecond the gap row grows by.
+	m.bootstrapSamples(ctx, time.Now(), func(ctx context.Context) (store.LastHealthSampleRow, error) {
+		return store.New(dbPool).LastHealthSample(ctx)
+	})
 	go m.run(ctx)
 	log.Printf("ops health: monitor started (tick %s)", m.interval)
 }
@@ -123,7 +190,14 @@ func (m *healthMonitor) run(ctx context.Context) {
 func (m *healthMonitor) runOnce(ctx context.Context, now time.Time) {
 	dbOK := m.pingDBFn(ctx)
 	backups := readBackupHealth(now)
-	state := computeHealthState(dbOK, backups.Stale, m.aiStateFn())
+	ai := m.aiStateFn()
+	state := computeHealthState(dbOK, backups.Stale, ai)
+
+	// Persist the observation BEFORE the transition dedup returns: history
+	// records every tick, alerting only changes (specs/uptime-history). Same
+	// signal reads as the alert verdict, so the row and the alert can never
+	// disagree about one tick.
+	m.recordTick(ctx, now, dbOK, !backups.Stale, !ai.Failing)
 
 	reasonsKey := strings.Join(state.reasons, "|")
 	if reasonsKey == m.lastReasons {
@@ -131,6 +205,124 @@ func (m *healthMonitor) runOnce(ctx context.Context, now time.Time) {
 	}
 	m.lastReasons = reasonsKey
 	m.alertTransition(ctx, state)
+}
+
+// --- Uptime-history sampling (specs/uptime-history) --------------------------
+
+// bootstrapSamples writes the boot gap row: the span between the previous
+// process's last observation and now, which nobody observed. Its cause is
+// decided by the release comparison — changed release = the container was
+// replaced (a deploy; unobserved time, charged to nobody), same release = a
+// crash/OOM/host reboot (downtime). An empty table means monitoring simply
+// starts now; a failed read is logged and skipped (worst case the gap merges
+// into the next boot's, same span, same verdict). lastSampleAt starts at now
+// either way, so the first tick covers [boot, first tick] — time this process
+// was verifiably alive.
+func (m *healthMonitor) bootstrapSamples(ctx context.Context, now time.Time, lastSample func(context.Context) (store.LastHealthSampleRow, error)) {
+	m.lastSampleAt = now
+	last, err := lastSample(ctx)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			slog.Warn("ops health: read last sample failed; boot gap not recorded", "error", err)
+		}
+		return
+	}
+	if !last.ObservedAt.Before(now) {
+		return // clock skew backwards; refuse to write a negative interval
+	}
+	cause := healthGapUnknown
+	if last.Release != m.release {
+		cause = healthGapDeploy
+	}
+	m.writeSample(ctx, store.InsertHealthSampleParams{
+		ObservedAt: now,
+		CoversFrom: last.ObservedAt,
+		Kind:       healthSampleGap,
+		Release:    m.release,
+		GapCause:   &cause,
+	})
+}
+
+// recordTick persists one tick's verdict as the interval [lastSampleAt, now].
+// If the sampler itself stalled (paused VM, wedged goroutine — the gap exceeds
+// 2× the cadence), only the last interval is vouched for; the excess becomes
+// an explicit unknown-gap row first, so a stall can never silently claim hours
+// of health it did not observe.
+func (m *healthMonitor) recordTick(ctx context.Context, now time.Time, dbOK, backupsOK, aiOK bool) {
+	// Sampling disabled (no seam wired — alerting-focused tests) or not yet
+	// anchored (bootstrapSamples not run): advance the anchor only, so a later
+	// tick can never claim time nobody observed.
+	if m.insertSample == nil || m.lastSampleAt.IsZero() {
+		m.lastSampleAt = now
+		return
+	}
+	from := m.lastSampleAt
+	if !from.Before(now) {
+		return // clock skew backwards; skip rather than write a negative interval
+	}
+	if stallLimit := 2 * m.interval; now.Sub(from) > stallLimit {
+		cause := healthGapUnknown
+		gapEnd := now.Add(-m.interval)
+		m.writeSample(ctx, store.InsertHealthSampleParams{
+			ObservedAt: gapEnd,
+			CoversFrom: from,
+			Kind:       healthSampleGap,
+			Release:    m.release,
+			GapCause:   &cause,
+		})
+		from = gapEnd
+	}
+	m.lastSampleAt = now
+	m.writeSample(ctx, store.InsertHealthSampleParams{
+		ObservedAt: now,
+		CoversFrom: from,
+		Kind:       healthSampleTick,
+		Release:    m.release,
+		DbOk:       &dbOK,
+		AiOk:       &aiOK,
+		BackupsOk:  &backupsOK,
+	})
+}
+
+// writeSample inserts one sample, buffering it on failure and flushing any
+// previously buffered samples on success — see the pending field's comment for
+// why the buffer exists. Never returns an error: sampling must not perturb the
+// alert path.
+func (m *healthMonitor) writeSample(ctx context.Context, p store.InsertHealthSampleParams) {
+	writeCtx, cancel := context.WithTimeout(ctx, healthSampleTimeout)
+	defer cancel()
+
+	if err := m.insertSample(writeCtx, p); err != nil {
+		m.sampleMu.Lock()
+		m.pending = append(m.pending, p)
+		if len(m.pending) > healthSampleBufferMax {
+			m.pending = m.pending[len(m.pending)-healthSampleBufferMax:]
+			slog.Warn("ops health: sample buffer full; dropped oldest",
+				"buffered", len(m.pending))
+		}
+		m.sampleMu.Unlock()
+		slog.Warn("ops health: sample write failed; buffered", "error", err)
+		return
+	}
+
+	// Success — flush anything held from earlier failures, oldest first,
+	// stopping at the first error (the rest stay buffered for next time).
+	m.sampleMu.Lock()
+	held := m.pending
+	m.pending = nil
+	m.sampleMu.Unlock()
+	for i, hp := range held {
+		if err := m.insertSample(writeCtx, hp); err != nil {
+			m.sampleMu.Lock()
+			m.pending = append(held[i:], m.pending...)
+			m.sampleMu.Unlock()
+			slog.Warn("ops health: sample flush interrupted", "remaining", len(held)-i, "error", err)
+			return
+		}
+	}
+	if len(held) > 0 {
+		slog.Info("ops health: flushed buffered samples", "count", len(held))
+	}
 }
 
 // alertTransition fires all three channels for one healthy<->degraded flip.
