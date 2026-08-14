@@ -634,7 +634,7 @@ func runCreateItineraryTool(s *planSession, input json.RawMessage) (string, bool
 	// Persist the trip only for signed-in callers; anonymous sessions
 	// stay ephemeral (no trip_id in the done event).
 	if s.authed {
-		if tripID, newLineage, err := persistTrip(s.ctx, s.uid, s.req.ChatID, in.Title, in.Summary, in.StartDate, in.EndDate, s.travelMode, in.Locations); err != nil {
+		if tripID, newLineage, err := persistTrip(s.ctx, s.uid, s.req.ChatID, in.Title, in.Summary, in.StartDate, in.EndDate, s.travelMode, "", in.Locations); err != nil {
 			log.Printf("failed to persist trip: %v", err)
 		} else {
 			donePayload["trip_id"] = tripID

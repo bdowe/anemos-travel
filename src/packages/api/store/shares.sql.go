@@ -95,7 +95,7 @@ func (q *Queries) GetActiveShareByToken(ctx context.Context, token string) (Trip
 }
 
 const getLatestTripByOwnerAndChat = `-- name: GetLatestTripByOwnerAndChat :one
-SELECT id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode FROM trips
+SELECT id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin FROM trips
 WHERE user_id = $1 AND chat_id = $2
 ORDER BY created_at DESC
 LIMIT 1
@@ -122,6 +122,7 @@ func (q *Queries) GetLatestTripByOwnerAndChat(ctx context.Context, arg GetLatest
 		&i.Summary,
 		&i.UpdatedBy,
 		&i.TravelMode,
+		&i.Origin,
 	)
 	return i, err
 }

@@ -48,6 +48,7 @@ type createTripInput struct {
 	StartDate  string            `json:"start_date,omitempty" jsonschema:"YYYY-MM-DD, only if the traveler stated dates"`
 	EndDate    string            `json:"end_date,omitempty" jsonschema:"YYYY-MM-DD, only if the traveler stated dates"`
 	TravelMode string            `json:"travel_mode,omitempty" jsonschema:"how they move between cities: flight, car, train, bus, ferry or mixed"`
+	Origin     string            `json:"origin,omitempty" jsonschema:"where the traveler sets out from, as they said it, e.g. 'Lake George, NY' — only if they stated it; omitted means their saved home airport is assumed"`
 	Locations  []mcpTripLocation `json:"locations" jsonschema:"the itinerary's places, in order"`
 }
 
@@ -164,7 +165,7 @@ func mcpCreateTrip(ctx context.Context, caller mcpCaller, in createTripInput) (*
 		return toolError("Anemos couldn't save the trip just now."), zero, nil
 	}
 	tripID, newLineage, err := persistTrip(ctx, caller.userID, "chat-"+chatToken,
-		in.Title, in.Summary, in.StartDate, in.EndDate, in.TravelMode, resolved)
+		in.Title, in.Summary, in.StartDate, in.EndDate, in.TravelMode, in.Origin, resolved)
 	if err != nil {
 		// persistTrip's cap message is written for people — pass it through.
 		if strings.Contains(err.Error(), "trip limit reached") {

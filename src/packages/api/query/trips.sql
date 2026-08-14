@@ -1,6 +1,8 @@
 -- name: CreateTrip :one
-INSERT INTO trips (user_id, title, chat_id, summary, travel_mode, updated_by)
-VALUES ($1, $2, $3, $4, $5, $1)
+-- `origin` is set here and only here — see 00062_trip_origin.sql for why it
+-- never joins UpdateTrip's COALESCE set.
+INSERT INTO trips (user_id, title, chat_id, summary, travel_mode, origin, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $1)
 RETURNING *;
 
 -- name: CreateItineraryItem :one

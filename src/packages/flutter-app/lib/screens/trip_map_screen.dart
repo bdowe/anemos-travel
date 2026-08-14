@@ -27,6 +27,7 @@ TripMapHome? homeOverlayFor(
   WidgetRef ref, {
   required String? homeAirport,
   required String? travelMode,
+  required String? tripOrigin,
   required int? focusedLegIndex, // null = All
   required int legCount,
   required LatLng? firstCityPoint,
@@ -37,6 +38,10 @@ TripMapHome? homeOverlayFor(
   // upstate New York does not set out from Newark — so drawing a leg from it
   // would invent a journey the trip never described. Say nothing instead.
   if (groundTravelMode(travelMode) != null) return null;
+  // Same rule for a trip that named its own origin: the saved airport is then
+  // known to be the wrong start, and the stated one is free text we hold no
+  // coordinates for. The booking legs still carry it by name.
+  if ((tripOrigin?.trim() ?? '').isNotEmpty) return null;
   final code = homeAirport;
   if (code == null || code.isEmpty) return null;
   final point = ref.watch(homeAirportPointProvider(code)).valueOrNull;
@@ -101,6 +106,10 @@ class TripMapScreen extends ConsumerStatefulWidget {
   /// The trip's `travel_mode`. A stated ground mode suppresses the home-airport
   /// overlay entirely (see [homeOverlayFor]).
   final String? travelMode;
+
+  /// The trip's stated origin; like a ground [travelMode], its presence
+  /// suppresses the home-airport overlay.
+  final String? tripOrigin;
   final LatLng? firstCityPoint;
   final LatLng? lastCityPoint;
 
@@ -123,6 +132,7 @@ class TripMapScreen extends ConsumerStatefulWidget {
     this.onAddPlace,
     this.homeAirport,
     this.travelMode,
+    this.tripOrigin,
     this.firstCityPoint,
     this.lastCityPoint,
     this.destinations,
@@ -140,6 +150,7 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
         ref,
         homeAirport: widget.homeAirport,
         travelMode: widget.travelMode,
+        tripOrigin: widget.tripOrigin,
         focusedLegIndex: _legKey == null
             ? null
             : widget.legChips.indexWhere((c) => c.key == _legKey),

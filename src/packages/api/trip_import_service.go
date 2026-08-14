@@ -394,7 +394,9 @@ func importTripCore(ctx context.Context, client anthropic.Client, userID uuid.UU
 
 	tripID, newLineage, err := persistTrip(ctx, userID, chatID,
 		extracted.Title, extracted.Summary, extracted.StartDate, extracted.EndDate,
-		extracted.TravelMode, locations)
+		// The paste-import extractor has no origin field yet; a pasted chat
+		// rarely states one explicitly. Empty keeps the home-airport default.
+		extracted.TravelMode, "", locations)
 	if err != nil {
 		return importResult{}, &importPhaseError{phase: "persist", err: err}
 	}

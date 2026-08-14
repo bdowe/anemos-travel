@@ -52,7 +52,7 @@ func (q *Queries) CreateTripCollaborator(ctx context.Context, arg CreateTripColl
 }
 
 const getEditableTripByID = `-- name: GetEditableTripByID :one
-SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode FROM trips t
+SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, t.origin FROM trips t
 WHERE t.id = $1
   AND (t.user_id = $2 OR EXISTS (
         SELECT 1 FROM trip_collaborators c
@@ -83,12 +83,13 @@ func (q *Queries) GetEditableTripByID(ctx context.Context, arg GetEditableTripBy
 		&i.Summary,
 		&i.UpdatedBy,
 		&i.TravelMode,
+		&i.Origin,
 	)
 	return i, err
 }
 
 const getViewableTripByID = `-- name: GetViewableTripByID :one
-SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, CASE WHEN t.user_id = $2 THEN 'owner' ELSE c.role END::text AS access
+SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, t.origin, CASE WHEN t.user_id = $2 THEN 'owner' ELSE c.role END::text AS access
 FROM trips t
 LEFT JOIN trip_collaborators c ON c.owner_id = t.user_id AND c.chat_id = t.chat_id
      AND c.user_id = $2 AND c.revoked_at IS NULL
@@ -112,6 +113,7 @@ type GetViewableTripByIDRow struct {
 	Summary    *string     `json:"summary"`
 	UpdatedBy  pgtype.UUID `json:"updated_by"`
 	TravelMode *string     `json:"travel_mode"`
+	Origin     *string     `json:"origin"`
 	Access     string      `json:"access"`
 }
 
@@ -134,6 +136,7 @@ func (q *Queries) GetViewableTripByID(ctx context.Context, arg GetViewableTripBy
 		&i.Summary,
 		&i.UpdatedBy,
 		&i.TravelMode,
+		&i.Origin,
 		&i.Access,
 	)
 	return i, err

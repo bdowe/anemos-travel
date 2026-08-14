@@ -278,6 +278,7 @@ type Trip struct {
 	Summary    *string     `json:"summary"`
 	UpdatedBy  pgtype.UUID `json:"updated_by"`
 	TravelMode *string     `json:"travel_mode"`
+	Origin     *string     `json:"origin"`
 }
 
 type TripBudget struct {
