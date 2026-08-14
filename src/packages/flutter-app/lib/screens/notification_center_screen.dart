@@ -8,6 +8,7 @@ import '../providers/notifications_provider.dart';
 import '../theme/spacing.dart';
 import '../utils/errors.dart';
 import '../utils/money_format.dart';
+import '../utils/snack.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/offline_banner.dart' show relativeTime;
@@ -49,12 +50,80 @@ class _NotificationCenterScreenState
     ref.invalidate(notificationsProvider);
   }
 
+  // Clear-all: confirm, delete server-side, then refetch. The failure path
+  // deliberately does NOT invalidate — the feed must keep showing the rows the
+  // server still has, never a false empty state; the snackbar carries the why.
+  Future<void> _clearAll() async {
+    final l10n = context.l10n;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.notifClearAllTitle),
+        content: Text(l10n.notifClearAllBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.commonDelete),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    try {
+      await ref.read(notificationsApiServiceProvider).clearAll();
+    } catch (e) {
+      if (mounted) {
+        showSnack(context, l10n.notifClearAllFailed(friendlyError(l10n, e)));
+      }
+      return;
+    }
+    if (!mounted) return;
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(notificationsUnreadCountProvider);
+  }
+
   @override
   Widget build(BuildContext context) {
     final notifs = ref.watch(notificationsProvider);
     final l10n = context.l10n;
+    // The overflow menu renders only while the feed has loaded with rows —
+    // there is nothing to clear during loading/error/empty, and a destructive
+    // affordance over an unknown feed is noise. Watching the provider means it
+    // disappears by itself right after a successful clear.
+    final hasRows = notifs.valueOrNull?.isNotEmpty ?? false;
     return Scaffold(
-      appBar: GradientAppBar(title: Text(l10n.notifTitle)),
+      appBar: GradientAppBar(
+        title: Text(l10n.notifTitle),
+        actions: [
+          if (hasRows)
+            // Destructive exits live behind an overflow menu, not a bare icon
+            // (the trip-detail convention); the dialog is the second gate.
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              tooltip: l10n.notifMoreActions,
+              onSelected: (_) => _clearAll(),
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'clear',
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline,
+                        color: Theme.of(context).colorScheme.error),
+                    title: Text(l10n.notifClearAll,
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error)),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
       body: notifs.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => PageContainer(

@@ -42,11 +42,23 @@ class _FakeAuthNotifier extends StateNotifier<AuthState>
 class _FakeNotificationsApiService extends NotificationsApiService {
   final List<AppNotification> notifications;
   bool markReadCalled = false;
+  bool clearAllCalled = false;
+  Exception? clearAllError; // set to make clearAll throw
   _FakeNotificationsApiService(this.notifications)
       : super(ApiClient(baseUrl: 'http://test'));
 
+  // Post-clear refetches observe the cleared feed, matching the real
+  // contract (the client re-lists to see post-state).
   @override
-  Future<List<AppNotification>> list({int limit = 50}) async => notifications;
+  Future<List<AppNotification>> list({int limit = 50}) async =>
+      clearAllCalled ? const [] : notifications;
+
+  @override
+  Future<void> clearAll() async {
+    final err = clearAllError;
+    if (err != null) throw err;
+    clearAllCalled = true;
+  }
 
   @override
   Future<void> markRead() async {
@@ -300,18 +312,18 @@ void main() {
   testWidgets('ops rows are tappable; other rows are not', (tester) async {
     // The affordance is what this screen lacked; the destination is asserted
     // in admin_metrics_screen_test.dart, since pushOnActiveTab needs mounted
-    // tab navigators this harness deliberately doesn't build.
+    // tab navigators this harness deliberately doesn't build. Scoped to the
+    // tile Card because the app bar's clear-all menu is also an InkWell.
+    Finder tappableTile() => find.descendant(
+          of: find.byType(Card),
+          matching: find.byWidgetPredicate((w) => w is InkWell && w.onTap != null),
+        );
+
     await _pump(tester, [_ops()]);
-    expect(
-      find.byWidgetPredicate((w) => w is InkWell && w.onTap != null),
-      findsOneWidget,
-    );
+    expect(tappableTile(), findsOneWidget);
 
     await _pump(tester, [_priceDrop()]);
-    expect(
-      find.byWidgetPredicate((w) => w is InkWell && w.onTap != null),
-      findsNothing,
-    );
+    expect(tappableTile(), findsNothing);
   });
 
   testWidgets('tapping an ops row does not throw without a nav host',
@@ -347,5 +359,67 @@ void main() {
     // No FormatException red screen; the row itself still renders.
     expect(tester.takeException(), isNull);
     expect(find.text('Paris trip starts soon'), findsOneWidget);
+  });
+
+  group('clear all', () {
+    testWidgets('overflow menu hidden on an empty feed, shown with rows',
+        (tester) async {
+      // Nothing to clear → no destructive affordance.
+      await _pump(tester, const []);
+      expect(find.byIcon(Icons.more_vert), findsNothing);
+
+      await _pump(tester, [_priceDrop()]);
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    });
+
+    testWidgets('cancel keeps the feed and calls nothing', (tester) async {
+      final service = await _pump(tester, [_ops()]);
+      await tester.tap(find.byTooltip('More options'));
+      await tester.pumpAndSettle();
+      expect(find.text('Clear all'), findsOneWidget);
+      await tester.tap(find.text('Clear all'));
+      await tester.pumpAndSettle();
+      expect(find.text('Clear all notifications?'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(service.clearAllCalled, isFalse);
+      expect(find.text('Clear all notifications?'), findsNothing);
+      expect(find.text('System degraded'), findsOneWidget);
+    });
+
+    testWidgets('confirm clears, shows the empty state, and drops the menu',
+        (tester) async {
+      final service = await _pump(tester, [_ops(), _priceDrop()]);
+      await tester.tap(find.byTooltip('More options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Clear all'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(service.clearAllCalled, isTrue);
+      expect(find.text('No notifications yet'), findsOneWidget);
+      // The visibility rule holds post-clear: nothing left to clear, no menu.
+      expect(find.byIcon(Icons.more_vert), findsNothing);
+    });
+
+    testWidgets('a failed clear shows a snackbar and keeps the rows',
+        (tester) async {
+      final service = await _pump(tester, [_ops()]);
+      service.clearAllError = Exception('boom');
+      await tester.tap(find.byTooltip('More options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Clear all'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      // The feed must never show a false empty state on failure.
+      expect(find.textContaining('Could not clear notifications'),
+          findsOneWidget);
+      expect(find.text('System degraded'), findsOneWidget);
+      expect(find.text('No notifications yet'), findsNothing);
+    });
   });
 }

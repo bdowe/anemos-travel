@@ -2368,6 +2368,24 @@ class AppLocalizationsEs extends AppLocalizations {
   String get notifTitle => 'Notificaciones';
 
   @override
+  String get notifMoreActions => 'Más opciones';
+
+  @override
+  String get notifClearAll => 'Borrar todo';
+
+  @override
+  String get notifClearAllTitle => '¿Borrar todas las notificaciones?';
+
+  @override
+  String get notifClearAllBody =>
+      'Se eliminarán todas las notificaciones, incluidas las no leídas. Esta acción no se puede deshacer.';
+
+  @override
+  String notifClearAllFailed(String error) {
+    return 'No se pudieron borrar las notificaciones: $error';
+  }
+
+  @override
   String get notifLoadErrorTitle => 'No se pudieron cargar las notificaciones';
 
   @override
