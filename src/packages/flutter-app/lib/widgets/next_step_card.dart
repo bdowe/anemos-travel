@@ -68,7 +68,16 @@ class NextStepCard extends StatelessWidget {
       case 'add_lodging':
         return l10n.nextStepLodgingAction;
       case 'add_transport':
-        return l10n.nextStepTransportAction;
+        // Walk-derived transport steps carry the matched booking todo's mode
+        // on the fix (specs/next-step-cta, itinerary-order walk), so the
+        // label matches the checklist row's openLabelOverride — the card and
+        // the row name the same handoff. Ground modes and fix-less fallback
+        // steps (an older server) keep the generic label.
+        return switch (s.fix?.mode) {
+          'flight' => l10n.tripFindFlights,
+          'ferry' => l10n.tripFindFerries,
+          _ => l10n.nextStepTransportAction,
+        };
       case 'schedule_items':
         return l10n.nextStepScheduleAction;
       case 'book_trip':

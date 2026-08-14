@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -172,14 +173,116 @@ func TestTripReview_NextStepPayload(t *testing.T) {
 		t.Fatalf("seed_prompt off: %v", step)
 	}
 	progress, ok := body["plan_progress"].(map[string]any)
-	if !ok || progress["done"] != float64(1) || progress["total"] != float64(7) {
-		t.Fatalf("plan_progress = %v, want 1/7", body["plan_progress"])
+	if !ok || progress["done"] != float64(1) || progress["total"] != float64(6) {
+		t.Fatalf("plan_progress = %v, want 1/6", body["plan_progress"])
 	}
 
 	// check_hours must not change the step (deterministic across variants).
 	hoursKind, _ := stepKind("?check_hours=true")
 	if hoursKind != kind {
 		t.Fatalf("check_hours variant diverged: %q vs %q", hoursKind, kind)
+	}
+}
+
+// TestTripReview_NextStepWalkIntegration drives phase 3 through the real
+// stack: the client syncs its derived checklist, and the card must name the
+// OUTBOUND FLIGHT before any stay — then advance to that city's stay the
+// moment the leg's checkbox is ticked, with no accommodation or segment row
+// ever created (specs/next-step-cta v2).
+func TestTripReview_NextStepWalkIntegration(t *testing.T) {
+	resetDB(t)
+	owner, ownerToken := createTestUser(t, "owner@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	id := trip.ID.String()
+
+	start := time.Now().UTC().AddDate(0, 0, 30)
+	end := start.AddDate(0, 0, 3)
+	day := func(d string) string { return d }
+	rec := doJSON(t, "PATCH", "/api/v1/trips/"+id, ownerToken, map[string]any{
+		"start_date": start.Format("2006-01-02"), "end_date": end.Format("2006-01-02"),
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch trip = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Two scheduled city days so the ladder clears phases 2 and 4.
+	q := store.New(dbPool)
+	cities := []struct {
+		name, city string
+		day        int32
+	}{{"Louvre", "Paris", 1}, {"Musée d'Orsay", "Paris", 2},
+		{"Vieux Lyon", "Lyon", 3}, {"Parc de la Tête d'Or", "Lyon", 4}}
+	for i, c := range cities {
+		city, d := c.city, c.day
+		if _, err := q.CreateItineraryItem(context.Background(), store.CreateItineraryItemParams{
+			TripID: trip.ID, Position: int32(i), Name: c.name,
+			Latitude: 48.86, Longitude: 2.34, City: &city, Day: &d,
+		}); err != nil {
+			t.Fatalf("create item %s: %v", c.name, err)
+		}
+	}
+
+	// The client's derived checklist, in _deriveTodos order.
+	sync := doJSON(t, "PUT", "/api/v1/trips/"+id+"/booking-todos", ownerToken, []map[string]any{
+		{"kind": "transport", "todo_key": "transport:ewr>>paris", "title": "EWR → Paris",
+			"provider": "google_flights", "position": 0, "origin": "EWR", "destination": "Paris",
+			"depart_date": day(start.Format("2006-01-02")), "passengers": 1},
+		{"kind": "stay", "todo_key": "stay:paris", "title": "Stay in Paris",
+			"provider": "airbnb", "position": 1, "destination": "Paris",
+			"depart_date": day(start.Format("2006-01-02")),
+			"return_date": day(start.AddDate(0, 0, 2).Format("2006-01-02")), "guests": 1},
+	})
+	if sync.Code != http.StatusOK {
+		t.Fatalf("sync booking-todos = %d: %s", sync.Code, sync.Body.String())
+	}
+	var todos []map[string]any
+	if err := json.Unmarshal(sync.Body.Bytes(), &todos); err != nil {
+		t.Fatalf("decode todos: %v (%s)", err, sync.Body.String())
+	}
+	if len(todos) != 2 {
+		t.Fatalf("synced %d todos, want 2: %s", len(todos), sync.Body.String())
+	}
+
+	step := func(t *testing.T) map[string]any {
+		t.Helper()
+		rec := doJSON(t, "GET", "/api/v1/trips/"+id+"/review", ownerToken, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET review = %d: %s", rec.Code, rec.Body.String())
+		}
+		body := decode(t, rec)
+		s, ok := body["next_step"].(map[string]any)
+		if !ok {
+			t.Fatalf("next_step missing: %v", body)
+		}
+		progress, ok := body["plan_progress"].(map[string]any)
+		if !ok || progress["done"] != float64(2) || progress["total"] != float64(6) {
+			t.Fatalf("plan_progress = %v, want 2/6", body["plan_progress"])
+		}
+		return s
+	}
+
+	// The flight comes first, even though every night is also unbooked.
+	first := step(t)
+	if kind, _ := first["kind"].(string); kind != "add_transport" {
+		t.Fatalf("kind = %q, want add_transport (the outbound flight): %v", kind, first)
+	}
+	if title, _ := first["title"].(string); title != "Book your flight to Paris" {
+		t.Fatalf("title = %q, want the mode-aware flight title", title)
+	}
+
+	// Tick the leg's checkbox — no segment row is created — and the card moves
+	// to that city's stay.
+	legID, _ := todos[0]["id"].(string)
+	if rec := doJSON(t, "PATCH", "/api/v1/trips/"+id+"/booking-todos/"+legID, ownerToken,
+		map[string]any{"booked": true}); rec.Code != http.StatusOK {
+		t.Fatalf("patch todo booked = %d: %s", rec.Code, rec.Body.String())
+	}
+	second := step(t)
+	if kind, _ := second["kind"].(string); kind != "add_lodging" {
+		t.Fatalf("kind = %q, want add_lodging after the leg is booked: %v", kind, second)
+	}
+	if title, _ := second["title"].(string); title != "Book your stay in Paris" {
+		t.Fatalf("title = %q, want the per-city stay title", title)
 	}
 }
 

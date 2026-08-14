@@ -2,16 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:travel_route_planner/models/airport.dart';
+import 'package:travel_route_planner/models/booking_todo.dart';
+import 'package:travel_route_planner/models/ferry_option.dart';
+import 'package:travel_route_planner/models/flight_search_request.dart';
+import 'package:travel_route_planner/models/flight_search_response.dart';
 import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/models/itinerary_item.dart';
 import 'package:travel_route_planner/models/trip_finding.dart';
+import 'package:travel_route_planner/providers/ferries_provider.dart';
+import 'package:travel_route_planner/providers/flights_provider.dart';
 import 'package:travel_route_planner/providers/plan_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/providers/trip_review_provider.dart';
 import 'package:travel_route_planner/services/api_client.dart';
+import 'package:travel_route_planner/services/ferry_api_service.dart';
+import 'package:travel_route_planner/services/flights_api_service.dart';
 import 'package:travel_route_planner/services/plan_service.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/services/trip_review_api_service.dart';
+import 'package:travel_route_planner/screens/flight_search_screen.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
 import 'support/l10n_test_app.dart';
@@ -44,6 +54,35 @@ class _FakeReviewApiService extends TripReviewApiService {
     calls++;
     return (calls > 1 ? resolved : null) ?? initial;
   }
+}
+
+/// Airport resolution and flight search both answer empty — the transport
+/// handoff test only needs FlightSearchScreen to mount, never real offers.
+class _FakeFlightsApiService extends FlightsApiService {
+  _FakeFlightsApiService() : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<FlightSearchResponse> searchFlights(
+          FlightSearchRequest request) async =>
+      const FlightSearchResponse(
+          offers: [], optimizeFor: 'balanced', count: 0, status: 'success');
+
+  @override
+  Future<List<Airport>> searchAirports(String query) async => [];
+
+  @override
+  Future<List<Airport>> nearestAirports(double lat, double lng) async => [];
+}
+
+/// Empty ferry results: the ferry handoff degrades to the search-failed
+/// snack, which is the observable "took the ferry path" signal.
+class _FakeFerryApiService extends FerryApiService {
+  _FakeFerryApiService() : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<List<FerryOption>> searchFerries(String origin, String destination,
+          {String? date, int? passengers}) async =>
+      [];
 }
 
 class _ScriptedPlanService extends PlanService {
@@ -82,7 +121,12 @@ ItineraryItem _item(int pos, String name, {int? day, String? city}) =>
       city: city,
     );
 
-Trip _trip({List<ItineraryItem>? items, String? access}) => Trip(
+Trip _trip({
+  List<ItineraryItem>? items,
+  String? access,
+  List<BookingTodo>? bookingTodos,
+}) =>
+    Trip(
       id: 't1',
       title: 'Greece',
       startDate: '2026-09-01',
@@ -95,7 +139,16 @@ Trip _trip({List<ItineraryItem>? items, String? access}) => Trip(
             _item(0, 'Acropolis', day: 1, city: 'Athens'),
             _item(1, 'Plaka walk', day: 2, city: 'Athens'),
           ],
+      bookingTodos: bookingTodos,
     );
+
+/// Two hubs so [_deriveTodos] produces the Paris→Lyon inter-city leg (and
+/// registers it in the screen's flight/ferry leg maps). Item names are real
+/// places, never city filler (#280).
+List<ItineraryItem> _twoCityItems() => [
+      _item(0, 'Louvre', day: 1, city: 'Paris'),
+      _item(1, 'Old Town', day: 3, city: 'Lyon'),
+    ];
 
 const _lodgingSeed =
     'I want to refine my saved trip "Greece" (2026-09-01 to 2026-09-05).\n\n'
@@ -119,14 +172,57 @@ TripReview _lodgingReview() => const TripReview(
         day: 1,
         seedPrompt: _lodgingSeed,
       ),
-      planProgress: PlanProgress(done: 2, total: 7),
+      planProgress: PlanProgress(done: 2, total: 6),
     );
 
 const _allSetReview = TripReview(
   findings: [],
   nextStep: NextStep(kind: 'all_set', title: "You're all set"),
-  planProgress: PlanProgress(done: 7, total: 7),
+  planProgress: PlanProgress(done: 6, total: 6),
 );
+
+// A walk-derived transport step (itinerary-order walk): the fix carries the
+// leg's cased endpoints + date + mode, so the screen can hand off to the
+// matching synced booking todo instead of chat.
+const _transportSeed =
+    'I want to refine my saved trip "Greece" (2026-09-01 to 2026-09-05).\n\n'
+    'I still need transport from Paris to Lyon around 2026-09-03. '
+    'Help me compare options (call search_flights)…';
+
+TripReview _transportReview({required String mode}) => TripReview(
+      findings: const [],
+      nextStep: NextStep(
+        kind: 'add_transport',
+        title: mode == 'ferry'
+            ? 'Book your ferry to Lyon'
+            : 'Book your flight to Lyon',
+        detail: 'Paris → Lyon on Sep 3.',
+        fix: FindingFix(
+          action: 'add_transport',
+          label: mode == 'ferry' ? 'Find ferries' : 'Find flights',
+          origin: 'Paris',
+          destination: 'Lyon',
+          date: '2026-09-03',
+          mode: mode,
+        ),
+        seedPrompt: _transportSeed,
+      ),
+      planProgress: const PlanProgress(done: 2, total: 6),
+    );
+
+/// The client-synced row the walk-derived step's fix points at (todo_key is
+/// the documented lowercase convention; the title is what the server splits
+/// back into the fix's cased endpoints).
+BookingTodo _parisLyonLeg({String? mode}) => BookingTodo(
+      id: 'bt1',
+      kind: 'transport',
+      todoKey: 'transport:paris>>lyon',
+      title: 'Paris → Lyon',
+      provider: mode == 'ferry' ? 'ferry' : 'google_flights',
+      departDate: '2026-09-03',
+      mode: mode,
+      position: 2,
+    );
 
 void _useViewport(WidgetTester tester, {double width = 1400}) {
   tester.view.physicalSize = Size(width, 2400);
@@ -145,6 +241,10 @@ Future<void> _pump(
       overrides: [
         tripsApiServiceProvider.overrideWithValue(_FakeTripsApiService(trip)),
         tripReviewApiServiceProvider.overrideWithValue(review),
+        // The transport handoff paths reach these two: Find Flights resolves
+        // airports on mount, the ferry path fetches the booking link on tap.
+        flightsApiServiceProvider.overrideWithValue(_FakeFlightsApiService()),
+        ferryApiServiceProvider.overrideWithValue(_FakeFerryApiService()),
         tripRefineProvider.overrideWith((ref, tripId) => PlanNotifier(
             _ScriptedPlanService(planEvents), ApiClient(),
             tripId: tripId)),
@@ -168,7 +268,7 @@ void main() {
     await _pump(tester, trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
 
     expect(find.byKey(const ValueKey('next-step-card')), findsOneWidget);
-    expect(find.text('NEXT STEP · 3 of 7'), findsOneWidget);
+    expect(find.text('NEXT STEP · 3 of 6'), findsOneWidget);
     expect(find.text('Book a place to stay'), findsOneWidget);
     expect(find.text('Find lodging'), findsOneWidget);
   });
@@ -200,7 +300,7 @@ void main() {
         seedPrompt: 'I want to plan my saved trip "Greece". It has no places '
             'yet. Help me build the itinerary from scratch…',
       ),
-      planProgress: PlanProgress(done: 1, total: 7),
+      planProgress: PlanProgress(done: 1, total: 6),
     );
     await _pump(tester,
         trip: _trip(items: const []),
@@ -229,7 +329,7 @@ void main() {
         fix: FindingFix(action: 'set_dates', label: 'Set dates'),
         seedPrompt: 'My saved trip "Greece" has no dates yet…',
       ),
-      planProgress: PlanProgress(done: 0, total: 7),
+      planProgress: PlanProgress(done: 0, total: 6),
     );
     await _pump(tester, trip: _trip(), review: _FakeReviewApiService(review));
 
@@ -251,7 +351,7 @@ void main() {
         detail: '3 bookings still to confirm.',
         count: 3,
       ),
-      planProgress: PlanProgress(done: 5, total: 7),
+      planProgress: PlanProgress(done: 4, total: 6),
     );
     await _pump(tester, trip: _trip(), review: _FakeReviewApiService(review));
 
@@ -331,5 +431,83 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Trip health'), findsWidgets);
+  });
+
+  // Walk-derived transport steps (itinerary-order walk, specs/next-step-cta):
+  // the fix's endpoints locate the synced booking todo and the card hands off
+  // exactly like the checklist row — Find Flights / Ferryhopper — with the
+  // seeded chat only as the no-matching-todo fallback. Mechanics: the trip
+  // fixture seeds _bookingTodos before the (failing, swallowed) network sync,
+  // and _deriveTodos runs synchronously as syncTodos's argument, so the
+  // screen's flight/ferry leg maps populate; items at lat/lng 0 skip the
+  // travel-time computation.
+  testWidgets('transport step with a synced flight leg opens Find Flights',
+      (tester) async {
+    _useViewport(tester);
+    await _pump(tester,
+        trip: _trip(items: _twoCityItems(), bookingTodos: [_parisLyonLeg()]),
+        review: _FakeReviewApiService(_transportReview(mode: 'flight')));
+
+    // The mode-aware action label, matching the checklist row's override
+    // (which renders the same text on its own row — scope to the card).
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('next-step-primary')),
+            matching: find.text('Find flights')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('next-step-primary')));
+    await tester.pumpAndSettle();
+
+    // The checklist row's in-app handoff, prefilled — and no chat seed.
+    expect(find.byType(FlightSearchScreen), findsOneWidget);
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(TripDetailScreen, skipOffstage: false)));
+    expect(container.read(tripRefineProvider('t1')).messages, isEmpty);
+  });
+
+  testWidgets('transport step with a ferry-mode leg runs the ferry handoff',
+      (tester) async {
+    _useViewport(tester);
+    await _pump(tester,
+        trip: _trip(
+            items: _twoCityItems(),
+            bookingTodos: [_parisLyonLeg(mode: 'ferry')]),
+        review: _FakeReviewApiService(_transportReview(mode: 'ferry')));
+
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('next-step-primary')),
+            matching: find.text('Find ferries')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('next-step-primary')));
+    await tester.pumpAndSettle();
+
+    // The ferry path fetched (empty fake) and degraded to its failure snack —
+    // proof the tap took the checklist row's ferry handoff, not Find Flights
+    // and not chat.
+    expect(find.text('Could not open ferry search'), findsOneWidget);
+    expect(find.byType(FlightSearchScreen), findsNothing);
+    expect(_refineState(tester).messages, isEmpty);
+  });
+
+  testWidgets('transport step without a matching todo falls back to chat',
+      (tester) async {
+    _useViewport(tester);
+    // No bookingTodos on the trip: the review's step outruns the client sync.
+    await _pump(tester,
+        trip: _trip(items: _twoCityItems()),
+        review: _FakeReviewApiService(_transportReview(mode: 'flight')));
+
+    await tester.tap(find.byKey(const ValueKey('next-step-primary')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FlightSearchScreen), findsNothing);
+    final messages = _refineState(tester).messages;
+    expect(messages, hasLength(1));
+    // Verbatim server seed (canonical English), shown as the localized title.
+    expect(messages.single.content, _transportSeed);
+    expect(messages.single.displayLabel, 'Book your flight to Lyon');
   });
 }

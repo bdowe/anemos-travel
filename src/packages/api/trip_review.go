@@ -406,20 +406,7 @@ func checkLodging(locale string, d exportData) []Finding {
 	var cur *nightRun
 	for n := 0; n < nights; n++ {
 		night := start.AddDate(0, 0, n)
-		covered := false
-		for _, a := range d.Accommodations {
-			// Auto drafts are itinerary-derived suggestions, not real lodging —
-			// counting them as coverage hides genuinely unbooked nights (same
-			// skip as checkBookings).
-			if a.Auto {
-				continue
-			}
-			if stayCoversNight(a.CheckIn, a.CheckOut, night) {
-				covered = true
-				break
-			}
-		}
-		if covered {
+		if nightCovered(d.Accommodations, night) {
 			cur = nil
 			continue
 		}
@@ -464,6 +451,24 @@ func checkLodging(locale string, d exportData) []Finding {
 		})
 	}
 	return out
+}
+
+// nightCovered reports whether any real (non-auto) accommodation covers the
+// given night. Auto drafts are itinerary-derived suggestions, not real
+// lodging — counting them as coverage hides genuinely unbooked nights (same
+// skip as checkBookings). Shared by checkLodging's night walk and the
+// next-step booking-slot walk (trip_next_step.go) so "covered" has one
+// definition.
+func nightCovered(accs []store.Accommodation, night time.Time) bool {
+	for _, a := range accs {
+		if a.Auto {
+			continue
+		}
+		if stayCoversNight(a.CheckIn, a.CheckOut, night) {
+			return true
+		}
+	}
+	return false
 }
 
 // stayCoversNight is the server twin of trip_days.dart's stayCoversDate:
@@ -546,28 +551,18 @@ func checkTransit(locale string, d exportData) []Finding {
 		}
 		origin, dest := from, to
 		greek := isGreekLocation(origin) || isGreekLocation(dest)
-		label, mode := tr(locale, "review.fix.addTransport"), "flight"
+		mode := "flight"
 		if greek {
 			// Island legs stay ferry regardless of the trip's travel mode —
 			// you can't drive between islands.
-			label, mode = tr(locale, "review.fix.addFerry"), "ferry"
+			mode = "ferry"
 		} else if tm := d.Trip.TravelMode; tm != nil && allowedSegmentModes[*tm] {
 			// 'mixed' fails the allowedSegmentModes check and keeps the
 			// flight default — intended.
 			mode = *tm
-			switch *tm {
-			case "car":
-				label = tr(locale, "review.fix.addDrive")
-			case "train":
-				label = tr(locale, "review.fix.addTrain")
-			case "bus":
-				label = tr(locale, "review.fix.addBus")
-			case "ferry":
-				label = tr(locale, "review.fix.addFerry")
-			}
 		}
 		fix := &FindingFix{
-			Action: "add_transport", Label: label,
+			Action: "add_transport", Label: transportFixLabel(locale, mode),
 			Origin: &origin, Destination: &dest, Mode: &mode,
 		}
 		// The leg's date, when derivable, is the destination hub's first day.
@@ -581,6 +576,27 @@ func checkTransit(locale string, d exportData) []Finding {
 		})
 	}
 	return out
+}
+
+// transportFixLabel maps a RESOLVED transport mode to its add-fix button
+// label. Callers resolve the mode first (Greek-leg ferry override, trip
+// travel-mode, per-leg override); anything unresolved — flight, "", or an
+// unrecognized value — falls to the generic "Add transport" label, which is
+// exactly what checkTransit's inline switch produced (it had no flight case
+// and 'mixed' never reached it). Shared with the next-step booking-slot walk
+// (trip_next_step.go) so mode→label lives in one place.
+func transportFixLabel(locale, mode string) string {
+	switch mode {
+	case "ferry":
+		return tr(locale, "review.fix.addFerry")
+	case "car":
+		return tr(locale, "review.fix.addDrive")
+	case "train":
+		return tr(locale, "review.fix.addTrain")
+	case "bus":
+		return tr(locale, "review.fix.addBus")
+	}
+	return tr(locale, "review.fix.addTransport")
 }
 
 // segmentConnects reports whether any segment plausibly links from→to (either

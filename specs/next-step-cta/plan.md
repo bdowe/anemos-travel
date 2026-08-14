@@ -7,7 +7,7 @@
 ## Technical Approach
 
 Server-side derivation piggybacking on the existing review endpoint: a new pure
-function `deriveNextStep` selects the first unmet phase of a fixed 7-phase
+function `deriveNextStep` selects the first unmet phase of a fixed 6-phase
 ladder, reusing `reviewTrip`'s findings plus signals health doesn't cover
 (zero items, unbooked booking to-dos, empty packing checklist — all already on
 `exportData`). Result rides the existing `ReviewResponse` envelope (designed to
@@ -26,7 +26,9 @@ Key decisions:
   ignored, so both client cache keys agree on the step.
 - **Mixed actions** (Brian, 2026-08-13): planning steps seed the trip chat;
   mechanical steps (dates, bookings lens, packing sheet) act directly.
-- **Prefix progress** "Step N of 7": `done` = ladder index; stable total.
+- **Prefix progress** "Step N of 6": `done` = ladder index; total is a wire
+  field, not a client constant, so the ladder can be renumbered without a
+  lockstep client release (it was: 7 → 6, see the decision record).
 
 ## Go API Changes
 
@@ -35,14 +37,26 @@ Key decisions:
   (English consts); unbooked aggregate (non-auto unbooked stays + segments +
   todos not claimed by them via `todo_key` prefixes with `fuzzyMatch` /
   `segmentConnects`); explicit `now` for testability; past-trip nil gate.
-- **`trip_review.go`** — pure refactor: extract `emptyDayRuns` /
-  `countUnscheduled` from `checkDensity` / `checkUnscheduled`.
+  Phase 3 is the **booking-slot walk**: `nextOpenBookingSlot` (position-order
+  scan of the derived `stay:`/`transport:` todos), `bookingSlotClaimed` /
+  `stayNightsCovered` (date-aware stay claim), `bookingSlotStep` →
+  `transportSlotStep` / `staySlotStep`, plus the convention parsers
+  `legEndpoints` / `staySlotCity` / `stayCitySet`, `transportSlotMode`
+  (per-leg override → provider → trip travel mode) and `slotDay` (anchor with
+  a trip-range guard).
+- **`trip_review.go`** — pure refactors: extract `emptyDayRuns` /
+  `countUnscheduled` from `checkDensity` / `checkUnscheduled`; extract
+  `nightCovered` from `checkLodging` and `transportFixLabel` from
+  `checkTransit` so the walk shares one definition of "this night has lodging"
+  and one mode→label map. `checkLodging` / `checkTransit` semantics unchanged —
+  Trip Health keeps full fidelity on gaps the walk considers settled.
 - **`review_handler.go`** — `ReviewResponse` gains `next_step` /
   `plan_progress`; handler composes `deriveNextStep` after `reviewTrip`.
 - **`plan_tools_extra.go`** — `formatReviewFindings(findings, step)` appends
   "Suggested next step: … [next_step: kind=…]"; `runReviewTripTool` computes
   the step. No registry change.
-- **`i18n.go`** — `review.next.*` en+es keys (titles/details per kind).
+- **`i18n.go`** — `review.next.*` en+es keys (titles/details per kind), incl.
+  the walk's `bookStay.title` and mode/home-aware `bookTransport.*` family.
 
 ## Flutter Changes
 
@@ -92,11 +106,64 @@ side + models/service/widget/l10n are conflict-free and proceed now.
 ## Testing
 
 - NEW `trip_next_step_test.go`: every ladder rung, first-match precedence, book
-  aggregate dedupe, packing pre-trip gate, all_set 7/7, past-trip nil, locale
-  es titles + English seeds, weather/hours invariance.
+  aggregate dedupe, packing pre-trip gate, all_set 6/6, past-trip nil, locale
+  es titles + English seeds, weather/hours invariance (asserted on BOTH phase-3
+  paths). Walk pins: flight-before-stay with the outbound leg first, cased
+  endpoints recovered from the todo title, checkbox-advances-with-no-rows,
+  date-aware partial-stay claim, draft segments never claim, return-home copy,
+  never-falls-through-to-findings, mode variants, slot-parse fallbacks.
 - `trip_review_integration_test.go`: JSON keys present, check_hours same kind,
-  viewer 404 unchanged.
+  viewer 404 unchanged; `TestTripReview_NextStepWalkIntegration` drives the
+  walk through the real stack (sync checklist → flight step → PATCH booked →
+  stay step).
 - Formatter test: next-step line + signature.
 - NEW `test/next_step_card_test.dart` (pure) + `test/trip_detail_next_step_test.dart`
   (screen: seeding, zero-items guard, direct actions, advancement, all-set,
-  viewer/offline, narrow, trip_updated → review refetch).
+  viewer/offline, narrow, trip_updated → review refetch, and the transport
+  handoff: matching flight leg → in-app search, ferry leg → ferry path, no
+  matching todo → seeded chat).
+
+## Decision Record
+
+### Booking-slot walk replaces phases 3 + 4 (Brian, 2026-08-14)
+
+Dogfooding "Big Summer Adventure 2026": the card read *"Book a place to stay"*
+for Prague's first night while the flight **to** Prague was still unbooked,
+because the old ladder ranked every lodging finding above every transit one.
+Worse, `checkTransit` only walks city→city hops, so the home-departure leg was
+invisible to the ladder entirely.
+
+Guidance now follows the trip: **flight to Prague → stay in Prague → flight to
+Kraków → …**. Phase 3 walks the booking todos the client already syncs in that
+exact order (`_deriveTodos`, position ASC) and surfaces the first open slot.
+The server **consumes** that ordering rather than re-deriving legs from items —
+docs/zen.md's one-derivation rule; a second leg-ordering implementation is
+precisely the "five ways to group a leg" failure the doc was written after.
+
+- **Open** = `!booked && !claimed`. Stay slots claim date-aware — every night
+  in `[depart, return)` needs a real (non-auto) stay, so partial coverage keeps
+  the slot open where `todoClaimed`'s fuzzy city match would have called one
+  covered night "done". Undated stays and all transport slots delegate to
+  `todoClaimed`, keeping ONE claim vocabulary. Transport claims count non-auto
+  segments only — deliberately stricter than `checkTransit`, which also lets an
+  auto draft suppress its finding: a suggestion is not a commitment.
+- **Fallback, never mixed.** Trips with zero derived slots keep the old
+  findings behavior verbatim. A *satisfied* walk never falls through to the
+  findings: a checked checkbox with no accommodation row is the traveler
+  telling us they booked elsewhere. Trip Health still reports the gap — that is
+  its job, and the two surfaces are allowed to differ here.
+- **Ladder 7 → 6.** `PlanProgress.Total` was already a wire field, so the UI
+  renumbers itself with no client release.
+- **Convention now has three readers.** Derived todo titles/keys
+  (`"<Origin> → <Destination>"` / `"Stay in <City>"`, `transport:a>>b` /
+  `stay:x`) are written by `_deriveTodos` and read by `_addDetailsFromTodo`,
+  `todoClaimed`, and now the walk. Endpoint casing survives only on the title
+  (origin/destination are not columns), so `legEndpoints` prefers the title and
+  falls back to the lowercase key — pinned by `TestNextStep_WalkFlightBeforeStay`.
+- **Accepted cost.** Todos re-sync when the trip screen loads, so a slot can be
+  stale between opens (a removed city, a shifted date). Bounded by `slotDay`'s
+  trip-range guard on the scroll anchor and by the sync's own stale-row prune.
+- **Client handoff** (Brian's call): transport steps act like the checklist
+  row — in-app flight search / Ferryhopper / ground link — because the row
+  already knows how; stay steps keep the seeded chat, where suggesting places
+  to sleep is genuinely better than a raw search page.

@@ -5,25 +5,29 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"travel-route-planner/store"
 )
 
 // trip_next_step.go — the "Next Step" projection (specs/next-step-cta): the
 // single recommended next planning action for a trip, derived as the FIRST
-// unmet phase of a fixed ladder (dates → itinerary → lodging → transport →
-// schedule → bookings → packing). Like trip_review.go it is DETERMINISTIC and
-// read-only: derived only from persisted data and the deterministic findings,
-// never from the live weather/hours enrichment — so the step is identical
-// whether or not the caller opted into check_hours, and both client cache
-// variants agree.
+// unmet phase of a fixed ladder (dates → itinerary → booking slots in
+// itinerary order → schedule → bookings → packing). Like trip_review.go it is
+// DETERMINISTIC and read-only: derived only from persisted data and the
+// deterministic findings, never from the live weather/hours enrichment — so
+// the step is identical whether or not the caller opted into check_hours, and
+// both client cache variants agree.
 //
 // deriveNextStep is composed AFTER reviewTrip at both call sites (the review
-// handler and the review_trip agent tool); it consumes lodging/transit
-// findings by category and reads the extra signals (zero items, unbooked
-// booking todos, empty packing checklist) straight off exportData. Budget,
-// weather and opening hours are deliberately NOT phases: a budget target is
-// optional, and the live enrichments would make the step flap between
-// fetches.
+// handler and the review_trip agent tool); phase 3 walks the client-synced
+// booking todos in position order (flights before stays, per destination —
+// see nextOpenBookingSlot), falling back to the lodging/transit findings only
+// for trips with no derived slots, and reads the extra signals (zero items,
+// unbooked booking todos, empty packing checklist) straight off exportData.
+// Budget, weather and opening hours are deliberately NOT phases: a budget
+// target is optional, and the live enrichments would make the step flap
+// between fetches.
 
 // NextStep is the first unmet phase of the planning ladder. Title/Detail are
 // localized display copy; SeedPrompt is CANONICAL ENGLISH (specs/i18n-spanish:
@@ -32,6 +36,9 @@ import (
 // them). Fix reuses the finding-fix contract so the client's existing
 // apply-fix plumbing handles the mechanical path without new action types.
 type NextStep struct {
+	// Kind names the phase; the vocabulary is unchanged from the 7-phase
+	// ladder (no client migration): add_lodging/add_transport are now emitted
+	// both by the phase-3 booking-slot walk and by its findings fallback.
 	Kind       string      `json:"kind"` // set_dates|plan_itinerary|add_lodging|add_transport|schedule_items|book_trip|add_packing|all_set
 	Title      string      `json:"title"`
 	Detail     string      `json:"detail,omitempty"`
@@ -42,15 +49,16 @@ type NextStep struct {
 }
 
 // PlanProgress is prefix progress through the ladder: Done phases are complete
-// from the top, so the current step is phase Done+1 and all_set reports 7/7.
-// Total is a field (not a client-side constant) so the ladder can grow without
-// a lockstep client release.
+// from the top, so the current step is phase Done+1 and all_set reports 6/6.
+// Total is a field (not a client-side constant) so the ladder can grow or
+// shrink (it did: 7 → 6 when lodging+transport merged into the booking-slot
+// walk) without a lockstep client release.
 type PlanProgress struct {
 	Done  int `json:"done"`
 	Total int `json:"total"`
 }
 
-const planLadderTotal = 7
+const planLadderTotal = 6
 
 // deriveNextStep walks the ladder and returns the first unmet phase, or the
 // all_set terminal step when every phase is complete. Both results are nil for
@@ -102,32 +110,53 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 		}, progress(1)
 	}
 
-	// Phases 3 & 4 — lodging and transport gaps, straight from the findings
-	// (first = earliest day thanks to reviewTrip's stable sort). The finding's
-	// Fix rides along verbatim so the health sheet's one-tap path stays
-	// available for the same gap.
-	if f := firstFindingIn(findings, "lodging"); f != nil {
-		return &NextStep{
-			Kind:       "add_lodging",
-			Title:      tr(locale, "review.next.addLodging.title"),
-			Detail:     f.Message,
-			Day:        f.Day,
-			Fix:        f.Fix,
-			SeedPrompt: seedAddLodging(data, f.Fix),
-		}, progress(2)
-	}
-	if f := firstFindingIn(findings, "transit"); f != nil {
-		return &NextStep{
-			Kind:       "add_transport",
-			Title:      tr(locale, "review.next.addTransport.title"),
-			Detail:     f.Message,
-			Day:        f.Day,
-			Fix:        f.Fix,
-			SeedPrompt: seedAddTransport(data, f.Fix),
-		}, progress(3)
+	// Phase 3 — booking slots in itinerary order (Brian, 2026-08-14; decision
+	// record in specs/next-step-cta/plan.md). The old ladder ran all lodging
+	// findings before all transit findings, so the card said "book a stay"
+	// while the outbound flight was still unbooked; guidance now follows the
+	// trip instead: walk the client-synced derived booking todos (position
+	// ASC = outbound leg, stay 1, leg 1→2, stay 2, …, return leg — the
+	// client's _deriveTodos order) and surface the first OPEN slot, flights
+	// before stays, per destination. Open = unbooked and not claimed by a
+	// matching server row (bookingSlotClaimed). Trips with no derived slots
+	// (import/MCP/agent-created, never opened in the app) fall back to the
+	// old findings behavior in this same progress slot. Never mixed: a
+	// satisfied walk does NOT fall through to the findings — a checked
+	// checkbox with no accommodation/segment row is complete by design (the
+	// checkbox is the traveler's booked-elsewhere assertion; Trip Health
+	// keeps full fidelity on the same gap).
+	if slot, walked := nextOpenBookingSlot(data); walked {
+		if slot != nil {
+			return bookingSlotStep(locale, data, *slot), progress(2)
+		}
+	} else {
+		// Findings fallback (first = earliest day thanks to reviewTrip's
+		// stable sort). The finding's Fix rides along verbatim so the health
+		// sheet's one-tap path stays available for the same gap. Both kinds
+		// share phase 3's progress slot.
+		if f := firstFindingIn(findings, "lodging"); f != nil {
+			return &NextStep{
+				Kind:       "add_lodging",
+				Title:      tr(locale, "review.next.addLodging.title"),
+				Detail:     f.Message,
+				Day:        f.Day,
+				Fix:        f.Fix,
+				SeedPrompt: seedAddLodging(data, f.Fix),
+			}, progress(2)
+		}
+		if f := firstFindingIn(findings, "transit"); f != nil {
+			return &NextStep{
+				Kind:       "add_transport",
+				Title:      tr(locale, "review.next.addTransport.title"),
+				Detail:     f.Message,
+				Day:        f.Day,
+				Fix:        f.Fix,
+				SeedPrompt: seedAddTransport(data, f.Fix),
+			}, progress(2)
+		}
 	}
 
-	// Phase 5 — schedule cleanup: leftover unscheduled places and empty days.
+	// Phase 4 — schedule cleanup: leftover unscheduled places and empty days.
 	// Read via the shared helpers, not by sniffing findings — empty-day
 	// findings share category "packing" with the over-packed warnings and
 	// carry no distinguishing field.
@@ -151,10 +180,10 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 		if len(emptyRuns) > 0 {
 			step.Day = ptrTo(emptyRuns[0].first)
 		}
-		return step, progress(4)
+		return step, progress(3)
 	}
 
-	// Phase 6 — book everything still open.
+	// Phase 5 — book everything still open.
 	if labels := unbookedLabels(data); len(labels) > 0 {
 		count := len(labels)
 		detail := tr(locale, "review.next.book.one")
@@ -167,10 +196,10 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 			Detail:     detail,
 			Count:      &count,
 			SeedPrompt: seedBookTrip(data, labels),
-		}, progress(5)
+		}, progress(4)
 	}
 
-	// Phase 7 — packing, only while the trip is still ahead: mid-trip the
+	// Phase 6 — packing, only while the trip is still ahead: mid-trip the
 	// checklist nag is noise, but booking tonight's hotel above never was.
 	if len(data.Checklist) == 0 && today.Before(data.Trip.StartDate.Time) {
 		return &NextStep{
@@ -178,7 +207,7 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 			Title:      tr(locale, "review.next.packing.title"),
 			Detail:     tr(locale, "review.next.packing.detail"),
 			SeedPrompt: seedAddPacking(data),
-		}, progress(6)
+		}, progress(5)
 	}
 
 	// Terminal — an explicit step, not an absence, so the client renders the
@@ -279,6 +308,291 @@ func todoClaimed(d exportData, t store.BookingTodo) bool {
 		return segmentConnects(confirmed, origin, dest)
 	}
 	return false
+}
+
+// --- phase 3: the booking-slot walk -------------------------------------------
+//
+// The client's _deriveTodos (trip_detail_screen.dart) is the ONE existing
+// implementation of "the trip's booking slots in itinerary order"; the walk
+// deliberately consumes its synced output instead of re-deriving legs from
+// items. Its conventions, established by the sync contract: derived rows are
+// auto=true with todo_key "stay:<label.lower>" / "transport:<o.lower>>><d.lower>",
+// titled "Stay in <Label>" / "<Origin> → <Destination>". Origin/destination
+// are never persisted as columns (booking_todo_handler.go,
+// PatchBookingTodoRequest doc), so the title is the only place the original
+// casing survives — the client itself re-parses titles the same way in
+// _addDetailsFromTodo, and legEndpoints below makes the server the third
+// reader of that convention (pinned by TestNextStep_WalkFlightBeforeStay's
+// cased-endpoint assertions).
+
+// nextOpenBookingSlot walks d.BookingTodos in slice order — position ASC from
+// ListBookingTodosByTrip, i.e. the client's itinerary order (outbound leg,
+// stay 1, leg 1→2, stay 2, …, return leg) — and returns the first OPEN
+// derived slot. Only derived slots participate, recognized by the todo_key
+// prefix ("stay:"/"transport:"); custom:* rows and any other keys are not
+// slots — they surface in the book_trip aggregate instead. Open means
+// !Booked && !bookingSlotClaimed. walked=false ⇔ the trip has zero derived
+// slots (import/MCP/agent-created trips never opened in the app), which sends
+// deriveNextStep to the findings fallback; (nil, true) means every slot is
+// closed and phase 3 is satisfied.
+func nextOpenBookingSlot(d exportData) (*store.BookingTodo, bool) {
+	walked := false
+	for i := range d.BookingTodos {
+		t := &d.BookingTodos[i]
+		if !strings.HasPrefix(t.TodoKey, "stay:") && !strings.HasPrefix(t.TodoKey, "transport:") {
+			continue
+		}
+		walked = true
+		if t.Booked || bookingSlotClaimed(d, *t) {
+			continue
+		}
+		return t, true
+	}
+	return nil, walked
+}
+
+// bookingSlotClaimed is the walk's claim test — a date-aware upgrade of
+// todoClaimed. A fully-dated stay slot is claimed only when EVERY night in
+// [depart, return) passes nightCovered: precise, so partial coverage keeps
+// the slot open where todoClaimed's fuzzy city match would have called one
+// covered night "done" (a zero-night from >= to range is vacuously claimed).
+// Undated/half-dated stays and ALL transport slots delegate to todoClaimed so
+// there is one claim vocabulary, not two. The transport arm therefore counts
+// only non-auto segments — drafts are suggestions, not commitments —
+// deliberately stricter than checkTransit, which suppresses its finding on
+// auto drafts too (pinned by TestNextStep_WalkTransportClaims).
+func bookingSlotClaimed(d exportData, t store.BookingTodo) bool {
+	if strings.HasPrefix(t.TodoKey, "stay:") && t.DepartDate.Valid && t.ReturnDate.Valid {
+		return stayNightsCovered(d.Accommodations, t.DepartDate.Time, t.ReturnDate.Time)
+	}
+	return todoClaimed(d, t)
+}
+
+// stayNightsCovered reports whether every night in [from, to) — checkout-
+// exclusive, matching stayCoversNight — has a real (non-auto) stay covering
+// it. Vacuously true when from >= to.
+func stayNightsCovered(accs []store.Accommodation, from, to time.Time) bool {
+	for night := from; night.Before(to); night = night.AddDate(0, 0, 1) {
+		if !nightCovered(accs, night) {
+			return false
+		}
+	}
+	return true
+}
+
+// bookingSlotStep renders the walk's winning slot as a NextStep, dispatching
+// on the todo_key PREFIX — the same field nextOpenBookingSlot filtered on, so
+// the filter and this branch structurally cannot disagree (Kind is a separate
+// client-supplied column that could in principle drift from the key).
+func bookingSlotStep(locale string, d exportData, t store.BookingTodo) *NextStep {
+	if strings.HasPrefix(t.TodoKey, "transport:") {
+		return transportSlotStep(locale, d, t)
+	}
+	return staySlotStep(locale, d, t)
+}
+
+// legEndpoints extracts a transport slot's origin/destination, preferring the
+// title ("<Origin> → <Destination>", the only survivor of the client's
+// casing — see the section comment above) and falling back to the todo_key
+// "transport:<o>>><d>" parse todoClaimed uses (lowercase). ok=false when both
+// fail (a hand-renamed title over an unparseable key); the step then keeps
+// the generic endpoint-less copy.
+func legEndpoints(t store.BookingTodo) (origin, dest string, ok bool) {
+	if o, d, found := strings.Cut(t.Title, " → "); found {
+		if o, d = strings.TrimSpace(o), strings.TrimSpace(d); o != "" && d != "" {
+			return o, d, true
+		}
+	}
+	if key := strings.TrimPrefix(t.TodoKey, "transport:"); key != t.TodoKey {
+		if o, d, found := strings.Cut(key, ">>"); found {
+			if o, d = strings.TrimSpace(o), strings.TrimSpace(d); o != "" && d != "" {
+				return o, d, true
+			}
+		}
+	}
+	return "", "", false
+}
+
+// staySlotCity extracts a stay slot's city: the "Stay in <Label>" title keeps
+// the client's casing; the "stay:<label>" key suffix (lowercase) is the
+// fallback for hand-renamed titles; "" when neither yields one (the step then
+// keeps the generic addLodging title).
+func staySlotCity(t store.BookingTodo) string {
+	if c := strings.TrimPrefix(t.Title, "Stay in "); c != t.Title {
+		if c = strings.TrimSpace(c); c != "" {
+			return c
+		}
+	}
+	if c := strings.TrimPrefix(t.TodoKey, "stay:"); c != t.TodoKey {
+		return strings.TrimSpace(c)
+	}
+	return ""
+}
+
+// stayCitySet is the lowercase set of the trip's stay-slot cities (the
+// "stay:" key suffixes). A transport destination outside the set is a home
+// leg — nowhere on the trip to stay there means the traveler is heading
+// home — which picks the "…Home" title variant. An EMPTY set never reads as
+// home: with no stays at all, every destination would be "outside the set"
+// and a one-way trip's only leg would absurdly say "book your flight home".
+func stayCitySet(todos []store.BookingTodo) map[string]bool {
+	set := map[string]bool{}
+	for _, t := range todos {
+		if c := strings.TrimPrefix(t.TodoKey, "stay:"); c != t.TodoKey && c != "" {
+			set[strings.ToLower(c)] = true
+		}
+	}
+	return set
+}
+
+// transportSlotMode resolves a transport slot's mode for copy and fix: the
+// per-leg override (todo.mode, validated against allowedLegModes) wins; else
+// the provider the sync stored implies it (google_flights → flight, ferry →
+// ferry, rome2rio → the trip's ground travel mode when it names a concrete
+// one — rome2rio alone can't distinguish car/train/bus); nil when nothing
+// concrete is known, and the step then uses the generic copy with a mode-less
+// fix.
+func transportSlotMode(trip store.Trip, t store.BookingTodo) *string {
+	if m := strings.TrimSpace(strPtrVal(t.Mode)); m != "" && allowedLegModes[m] {
+		return &m
+	}
+	switch strPtrVal(t.Provider) {
+	case "google_flights":
+		return ptrTo("flight")
+	case "ferry":
+		return ptrTo("ferry")
+	case "rome2rio":
+		if tm := trip.TravelMode; tm != nil {
+			switch *tm {
+			case "car", "train", "bus":
+				return ptrTo(*tm)
+			}
+		}
+	}
+	return nil
+}
+
+// slotDay converts a slot's depart date to the trip-day scroll anchor
+// (depart − trip start + 1; pgtype dates are UTC midnights so the math is
+// exact). nil when the slot is undated OR the result falls outside
+// [1, tripDayCount]: todos re-sync only when the trip screen loads, so a
+// stale slot left over from before a date shift must not scroll the client
+// to a nonexistent day.
+func slotDay(trip store.Trip, depart pgtype.Date) *int {
+	if !depart.Valid || !trip.StartDate.Valid {
+		return nil
+	}
+	day := nightsBetween(trip.StartDate.Time, depart.Time) + 1
+	if day < 1 || day > tripDayCount(trip) {
+		return nil
+	}
+	return &day
+}
+
+// transportSlotStep renders an open transport slot. Copy is mode-aware
+// (flight and ferry get their own verb; ground/unknown modes stay generic)
+// and home-aware (stayCitySet). The Fix mirrors what a transit finding's fix
+// carries — same action, mode-resolved label, cased endpoints, leg date — so
+// the client's existing apply-fix plumbing works unchanged, and the seed goes
+// through the same seedAddTransport template (which handles the endpoint-less
+// fix with its "between my cities" fallback).
+func transportSlotStep(locale string, d exportData, t store.BookingTodo) *NextStep {
+	origin, dest, ok := legEndpoints(t)
+	mode := transportSlotMode(d.Trip, t)
+	set := stayCitySet(d.BookingTodos)
+	home := ok && len(set) > 0 && !set[strings.ToLower(dest)]
+
+	modeKey := "generic"
+	switch strPtrVal(mode) {
+	case "flight":
+		modeKey = "flight"
+	case "ferry":
+		modeKey = "ferry"
+	}
+	var title string
+	switch {
+	case !ok:
+		title = tr(locale, "review.next.addTransport.title")
+	case home:
+		title = tr(locale, "review.next.bookTransport."+modeKey+"Home")
+	default:
+		title = tr(locale, "review.next.bookTransport."+modeKey, dest)
+	}
+
+	detail := ""
+	if t.DepartDate.Valid {
+		// The title-convention leg name plus the localized date; the todo
+		// title is exactly the "<Origin> → <Destination>" route label.
+		detail = tr(locale, "review.next.bookTransport.detail", t.Title,
+			localizedDate(locale, t.DepartDate.Time, dateStyleWeekdayMonthDay))
+	} else if t.Title != "" {
+		detail = t.Title
+	}
+
+	fix := &FindingFix{
+		Action: "add_transport",
+		Label:  transportFixLabel(locale, strPtrVal(mode)),
+		Mode:   mode,
+	}
+	if ok {
+		fix.Origin, fix.Destination = &origin, &dest
+	}
+	if t.DepartDate.Valid {
+		fix.Date = ptrTo(t.DepartDate.Time.Format(dateLayout))
+	}
+	return &NextStep{
+		Kind:       "add_transport",
+		Title:      title,
+		Detail:     detail,
+		Day:        slotDay(d.Trip, t.DepartDate),
+		Fix:        fix,
+		SeedPrompt: seedAddTransport(d, fix),
+	}
+}
+
+// staySlotStep renders an open stay slot. The detail reuses the exact
+// review.noLodging(Range) copy for the slot's own night range so the card and
+// the health sheet keep one voice, and the Fix mirrors a lodging finding's
+// fix (city + check-in/out prefills for the add-a-stay sheet), feeding the
+// same seedAddLodging template.
+func staySlotStep(locale string, d exportData, t store.BookingTodo) *NextStep {
+	city := staySlotCity(t)
+	title := tr(locale, "review.next.addLodging.title")
+	if city != "" {
+		title = tr(locale, "review.next.bookStay.title", city)
+	}
+	detail := ""
+	if t.DepartDate.Valid && t.ReturnDate.Valid {
+		nights := nightsBetween(t.DepartDate.Time, t.ReturnDate.Time)
+		switch {
+		case nights == 1:
+			detail = tr(locale, "review.noLodging",
+				localizedDate(locale, t.DepartDate.Time, dateStyleWeekdayMonthDay))
+		case nights > 1:
+			// Last NIGHT, not the checkout date — same convention as
+			// checkLodging's range message.
+			detail = tr(locale, "review.noLodgingRange",
+				localizedDate(locale, t.DepartDate.Time, dateStyleWeekdayMonthDay),
+				localizedDate(locale, t.ReturnDate.Time.AddDate(0, 0, -1), dateStyleWeekdayMonthDay),
+				nights)
+		}
+	}
+	fix := &FindingFix{Action: "add_lodging", Label: tr(locale, "review.fix.addStay")}
+	if city != "" {
+		fix.City = &city
+	}
+	if t.DepartDate.Valid && t.ReturnDate.Valid {
+		fix.CheckIn = ptrTo(t.DepartDate.Time.Format(dateLayout))
+		fix.CheckOut = ptrTo(t.ReturnDate.Time.Format(dateLayout))
+	}
+	return &NextStep{
+		Kind:       "add_lodging",
+		Title:      title,
+		Detail:     detail,
+		Day:        slotDay(d.Trip, t.DepartDate),
+		Fix:        fix,
+		SeedPrompt: seedAddLodging(d, fix),
+	}
 }
 
 // --- seed prompts -------------------------------------------------------------

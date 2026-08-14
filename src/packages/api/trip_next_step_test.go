@@ -53,6 +53,45 @@ func nextStepFixture(t *testing.T) exportData {
 	}
 }
 
+// walkTodos is the fixture trip's derived booking checklist EXACTLY as the
+// client's _deriveTodos would sync it: home→first city, then per city a stay
+// followed by the leg out, then the leg home — in position order, which is
+// the order the phase-3 walk consumes. Every row is auto (client-derived) and
+// carries the title/key conventions the walk parses.
+func walkTodos(t *testing.T) []store.BookingTodo {
+	t.Helper()
+	flights := strp("google_flights")
+	return []store.BookingTodo{
+		{ID: uuid.New(), Kind: "transport", TodoKey: "transport:ewr>>paris",
+			Title: "EWR → Paris", Provider: flights, Auto: true, Position: 0,
+			DepartDate: dateVal(t, "2026-09-01")},
+		{ID: uuid.New(), Kind: "stay", TodoKey: "stay:paris",
+			Title: "Stay in Paris", Provider: strp("airbnb"), Auto: true, Position: 1,
+			DepartDate: dateVal(t, "2026-09-01"), ReturnDate: dateVal(t, "2026-09-03")},
+		{ID: uuid.New(), Kind: "transport", TodoKey: "transport:paris>>lyon",
+			Title: "Paris → Lyon", Provider: flights, Auto: true, Position: 2,
+			DepartDate: dateVal(t, "2026-09-03")},
+		{ID: uuid.New(), Kind: "stay", TodoKey: "stay:lyon",
+			Title: "Stay in Lyon", Provider: strp("airbnb"), Auto: true, Position: 3,
+			DepartDate: dateVal(t, "2026-09-03"), ReturnDate: dateVal(t, "2026-09-04")},
+		{ID: uuid.New(), Kind: "transport", TodoKey: "transport:lyon>>ewr",
+			Title: "Lyon → EWR", Provider: flights, Auto: true, Position: 4,
+			DepartDate: dateVal(t, "2026-09-04")},
+	}
+}
+
+// bookSlots marks the named todo keys booked — the checkbox the traveler taps.
+func bookSlots(todos []store.BookingTodo, keys ...string) []store.BookingTodo {
+	for i := range todos {
+		for _, k := range keys {
+			if todos[i].TodoKey == k {
+				todos[i].Booked = true
+			}
+		}
+	}
+	return todos
+}
+
 // derive runs the real review pipeline (no live deps) then the ladder.
 func derive(locale string, now time.Time, d exportData) (*NextStep, *PlanProgress) {
 	findings := reviewTrip(context.Background(), locale, d, reviewOptions{}, reviewDeps{})
@@ -86,6 +125,17 @@ func TestNextStep_Undated(t *testing.T) {
 	}
 }
 
+// Dates gate the walk too: a trip with synced slots but no dates still stops
+// at phase 1 (every later phase, the slot copy included, is date-bound).
+func TestNextStep_UndatedBeatsWalk(t *testing.T) {
+	d := nextStepFixture(t)
+	d.Trip.StartDate = pgtype.Date{}
+	d.Trip.EndDate = pgtype.Date{}
+	d.BookingTodos = walkTodos(t)
+	step, progress := derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "set_dates", 0)
+}
+
 func TestNextStep_NoItems(t *testing.T) {
 	d := nextStepFixture(t)
 	d.Items = nil
@@ -114,15 +164,21 @@ func TestNextStep_NoneScheduled(t *testing.T) {
 	}
 }
 
-func TestNextStep_LodgingWinsOverTransitAndBookings(t *testing.T) {
+// --- phase 3 fallback (no synced slots) ---------------------------------------
+
+// A trip with NO derived booking slots — imported, MCP- or agent-created, never
+// opened in the app — keeps the pre-walk behavior verbatim: the earliest-day
+// lodging finding first, its fix and message passed straight through.
+func TestNextStep_FallbackLodgingFirst(t *testing.T) {
 	d := nextStepFixture(t)
-	d.Accommodations = nil                // lodging gap (both cities)
-	d.Segments = nil                      // transit gap too
-	d.BookingTodos = []store.BookingTodo{ // and an open todo
-		{ID: uuid.New(), Kind: "stay", TodoKey: "stay:paris", Title: "Stay in Paris"},
-	}
+	d.Accommodations = nil // lodging gap (both cities)
+	d.Segments = nil       // transit gap too
+	d.BookingTodos = nil   // …and nothing synced, so the walk stands down
 	step, progress := derive("en", nextStepNow, d)
 	mustStep(t, step, progress, "add_lodging", 2)
+	if step.Title != "Book a place to stay" {
+		t.Fatalf("fallback keeps the generic title, got %q", step.Title)
+	}
 	// Fix passthrough: the first (earliest-day) lodging finding's prefills.
 	if step.Fix == nil || step.Fix.Action != "add_lodging" ||
 		step.Fix.City == nil || *step.Fix.City != "Paris" ||
@@ -142,11 +198,13 @@ func TestNextStep_LodgingWinsOverTransitAndBookings(t *testing.T) {
 	}
 }
 
+// Same fallback, transit half: with lodging covered the transit finding takes
+// phase 3's slot (it used to be phase 4 of 7).
 func TestNextStep_TransitAfterLodgingCovered(t *testing.T) {
 	d := nextStepFixture(t)
 	d.Segments = nil
 	step, progress := derive("en", nextStepNow, d)
-	mustStep(t, step, progress, "add_transport", 3)
+	mustStep(t, step, progress, "add_transport", 2)
 	if step.Fix == nil || step.Fix.Origin == nil || *step.Fix.Origin != "Paris" ||
 		step.Fix.Destination == nil || *step.Fix.Destination != "Lyon" {
 		t.Fatalf("fix passthrough = %+v", step.Fix)
@@ -157,12 +215,360 @@ func TestNextStep_TransitAfterLodgingCovered(t *testing.T) {
 	}
 }
 
+// Custom rows are not slots: a checklist of nothing but custom todos still
+// counts as "never synced" and uses the findings fallback.
+func TestNextStep_FallbackWhenOnlyCustomTodos(t *testing.T) {
+	d := nextStepFixture(t)
+	d.Accommodations = nil
+	d.Segments = nil
+	d.BookingTodos = []store.BookingTodo{
+		{ID: uuid.New(), Kind: "other", TodoKey: "custom:abc", Title: "Rent a car"},
+	}
+	step, progress := derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "add_lodging", 2)
+	if step.Title != "Book a place to stay" {
+		t.Fatalf("custom-only checklist must use the fallback title, got %q", step.Title)
+	}
+}
+
+// --- phase 3 walk --------------------------------------------------------------
+
+// The headline of specs/next-step-cta v2: with the whole checklist open, the
+// step is the OUTBOUND FLIGHT — not the first stay, which the old ladder chose
+// because lodging findings outranked transit ones.
+func TestNextStep_WalkFlightBeforeStay(t *testing.T) {
+	d := nextStepFixture(t)
+	d.BookingTodos = walkTodos(t)
+	step, progress := derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "add_transport", 2)
+	if step.Title != "Book your flight to Paris" {
+		t.Fatalf("title = %q, want the mode-aware flight title", step.Title)
+	}
+	if !strings.Contains(step.Detail, "EWR → Paris") || !strings.Contains(step.Detail, "Sep 1") {
+		t.Fatalf("detail = %q, want the route label and the departure date", step.Detail)
+	}
+	// Endpoint casing survives ONLY on the todo title ("EWR → Paris"); the key
+	// is lowercase. Pins the convention the client writes and re-parses.
+	if step.Fix == nil || step.Fix.Origin == nil || *step.Fix.Origin != "EWR" ||
+		step.Fix.Destination == nil || *step.Fix.Destination != "Paris" ||
+		step.Fix.Mode == nil || *step.Fix.Mode != "flight" ||
+		step.Fix.Date == nil || *step.Fix.Date != "2026-09-01" {
+		t.Fatalf("fix = %+v", step.Fix)
+	}
+	if step.Day == nil || *step.Day != 1 {
+		t.Fatalf("day anchor = %v, want 1", step.Day)
+	}
+	if !strings.Contains(step.SeedPrompt, "from EWR to Paris") ||
+		!strings.Contains(step.SeedPrompt, "add_transport_segment") {
+		t.Fatalf("transport seed off:\n%s", step.SeedPrompt)
+	}
+}
+
+// The checkbox alone advances the walk: no accommodation or segment row is
+// created when the traveler books elsewhere and just ticks the row.
+func TestNextStep_WalkCheckboxAdvances(t *testing.T) {
+	d := nextStepFixture(t)
+	d.Accommodations = nil // nothing backing any stay
+	d.BookingTodos = bookSlots(walkTodos(t), "transport:ewr>>paris")
+	step, progress := derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "add_lodging", 2)
+	if step.Title != "Book your stay in Paris" {
+		t.Fatalf("title = %q, want the per-city stay title", step.Title)
+	}
+	if !strings.Contains(step.Detail, "No lodging booked for the nights of") {
+		t.Fatalf("detail = %q, want the shared lodging copy", step.Detail)
+	}
+	if step.Fix == nil || step.Fix.City == nil || *step.Fix.City != "Paris" ||
+		step.Fix.CheckIn == nil || *step.Fix.CheckIn != "2026-09-01" ||
+		step.Fix.CheckOut == nil || *step.Fix.CheckOut != "2026-09-03" {
+		t.Fatalf("fix = %+v", step.Fix)
+	}
+	if step.Day == nil || *step.Day != 1 {
+		t.Fatalf("day anchor = %v, want 1", step.Day)
+	}
+}
+
+// A stay slot is claimed only when EVERY night it covers has a real stay —
+// the date-aware upgrade over todoClaimed's fuzzy city match, which would have
+// called a one-night hotel "Paris: done".
+func TestNextStep_WalkDateAwareStayClaim(t *testing.T) {
+	d := nextStepFixture(t)
+	d.BookingTodos = bookSlots(walkTodos(t), "transport:ewr>>paris", "transport:lyon>>ewr")
+
+	// Paris hotel covers 09-01 only; the slot spans 09-01 and 09-02.
+	d.Accommodations[0].CheckOut = dateVal(t, "2026-09-02")
+	step, progress := derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "add_lodging", 2)
+	if step.Title != "Book your stay in Paris" {
+		t.Fatalf("partial coverage must keep the slot open, got %q", step.Title)
+	}
+
+	// Extend it over both nights and the whole checklist is satisfied.
+	d.Accommodations[0].CheckOut = dateVal(t, "2026-09-03")
+	step, progress = derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "all_set", planLadderTotal)
+}
+
+// Transport slots are claimed by CONFIRMED segments only: an auto draft is a
+// suggestion, not a commitment (deliberately stricter than checkTransit, which
+// suppresses its finding on drafts too).
+func TestNextStep_WalkTransportClaims(t *testing.T) {
+	base := func(t *testing.T) exportData {
+		d := nextStepFixture(t)
+		d.BookingTodos = bookSlots(walkTodos(t), "transport:ewr>>paris", "transport:lyon>>ewr")
+		return d
+	}
+
+	d := base(t)
+	d.Segments[0].Auto = true // draft only
+	step, progress := derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "add_transport", 2)
+	if step.Title != "Book your flight to Lyon" {
+		t.Fatalf("a draft segment must not claim the leg, got %q", step.Title)
+	}
+
+	d = base(t) // confirmed segment (Auto false) claims it
+	step, progress = derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "all_set", planLadderTotal)
+}
+
+// The return leg is last in the walk and has no stay to name — it gets the
+// "home" copy variant.
+func TestNextStep_WalkReturnHomeLast(t *testing.T) {
+	d := nextStepFixture(t)
+	d.BookingTodos = bookSlots(walkTodos(t), "transport:ewr>>paris")
+	step, progress := derive("en", nextStepNow, d)
+	mustStep(t, step, progress, "add_transport", 2)
+	if step.Title != "Book your flight home" {
+		t.Fatalf("title = %q, want the home variant", step.Title)
+	}
+	if step.Fix == nil || step.Fix.Origin == nil || *step.Fix.Origin != "Lyon" ||
+		step.Fix.Destination == nil || *step.Fix.Destination != "EWR" {
+		t.Fatalf("fix = %+v", step.Fix)
+	}
+	if step.Day == nil || *step.Day != 4 {
+		t.Fatalf("day anchor = %v, want 4", step.Day)
+	}
+}
+
+// A satisfied walk NEVER falls through to the findings: every slot checked off
+// with zero accommodation rows still means "booked elsewhere", so the ladder
+// moves on (the health sheet keeps flagging the same gap — that's its job).
+func TestNextStep_WalkNeverFallsThroughToFindings(t *testing.T) {
+	d := nextStepFixture(t)
+	d.Accommodations = nil // checkLodging WILL emit findings for every night
+	d.BookingTodos = bookSlots(walkTodos(t),
+		"transport:ewr>>paris", "stay:paris", "transport:paris>>lyon",
+		"stay:lyon", "transport:lyon>>ewr")
+	// …plus one open custom row, which is not a slot: it belongs to book_trip.
+	d.BookingTodos = append(d.BookingTodos, store.BookingTodo{
+		ID: uuid.New(), Kind: "other", TodoKey: "custom:abc", Title: "Rent a car"})
+
+	findings := reviewTrip(context.Background(), "en", d, reviewOptions{}, reviewDeps{})
+	if firstFindingIn(findings, "lodging") == nil {
+		t.Fatal("fixture precondition: expected lodging findings to exist")
+	}
+	step, progress := deriveNextStep("en", nextStepNow, d, findings)
+	mustStep(t, step, progress, "book_trip", 4)
+	if step.Count == nil || *step.Count != 1 {
+		t.Fatalf("count = %v, want 1 (the custom row)", step.Count)
+	}
+	if !strings.Contains(step.SeedPrompt, "Rent a car") {
+		t.Fatalf("book seed should carry the custom row:\n%s", step.SeedPrompt)
+	}
+}
+
+// Copy and fix follow the slot's mode: the per-leg override wins, else the
+// provider the sync stored implies it.
+func TestNextStep_WalkModeVariants(t *testing.T) {
+	// One open leg into a city that has a (booked) stay slot, so the title is
+	// the "to <city>" variant rather than the home one.
+	trip := func(t *testing.T, city string, provider, mode *string, travelMode *string) exportData {
+		d := nextStepFixture(t)
+		d.Trip.TravelMode = travelMode
+		d.Segments = nil // nothing confirmed, so the leg below stays open
+
+		d.BookingTodos = []store.BookingTodo{
+			{ID: uuid.New(), Kind: "stay", TodoKey: "stay:" + strings.ToLower(city),
+				Title: "Stay in " + city, Auto: true, Booked: true, Position: 0},
+			{ID: uuid.New(), Kind: "transport", TodoKey: "transport:paris>>" + strings.ToLower(city),
+				Title: "Paris → " + city, Provider: provider, Mode: mode, Auto: true, Position: 1},
+		}
+		return d
+	}
+
+	cases := []struct {
+		name           string
+		city           string
+		provider, mode *string
+		travelMode     *string
+		wantTitle      string
+		wantMode       string // "" = fix carries no mode
+		wantLabel      string
+	}{
+		{name: "ferry provider", city: "Naxos", provider: strp("ferry"),
+			wantTitle: "Book your ferry to Naxos", wantMode: "ferry", wantLabel: "Add ferry"},
+		{name: "ground provider with trip travel mode", city: "Lyon", provider: strp("rome2rio"),
+			travelMode: strp("train"),
+			wantTitle:  "Book transport to Lyon", wantMode: "train", wantLabel: "Add train"},
+		{name: "ground provider without travel mode", city: "Lyon", provider: strp("rome2rio"),
+			wantTitle: "Book transport to Lyon", wantMode: "", wantLabel: "Add transport"},
+		{name: "per-leg override beats provider", city: "Lyon", provider: strp("google_flights"),
+			mode:      strp("train"),
+			wantTitle: "Book transport to Lyon", wantMode: "train", wantLabel: "Add train"},
+		{name: "unknown provider stays generic", city: "Lyon",
+			wantTitle: "Book transport to Lyon", wantMode: "", wantLabel: "Add transport"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := trip(t, tc.city, tc.provider, tc.mode, tc.travelMode)
+			step, progress := derive("en", nextStepNow, d)
+			mustStep(t, step, progress, "add_transport", 2)
+			if step.Title != tc.wantTitle {
+				t.Fatalf("title = %q, want %q", step.Title, tc.wantTitle)
+			}
+			if tc.wantMode == "" {
+				if step.Fix.Mode != nil {
+					t.Fatalf("mode = %q, want none", *step.Fix.Mode)
+				}
+			} else if step.Fix.Mode == nil || *step.Fix.Mode != tc.wantMode {
+				t.Fatalf("mode = %v, want %q", step.Fix.Mode, tc.wantMode)
+			}
+			if step.Fix.Label != tc.wantLabel {
+				t.Fatalf("label = %q, want %q", step.Fix.Label, tc.wantLabel)
+			}
+		})
+	}
+}
+
+// Degradations that must stay graceful: a slot whose title lost its shape, a
+// slot with no dates, one stranded outside the trip's days, and a zero-night
+// stop that needs no lodging at all.
+func TestNextStep_WalkSlotFallbacks(t *testing.T) {
+	oneLeg := func(t *testing.T, todo store.BookingTodo) exportData {
+		d := nextStepFixture(t)
+		d.BookingTodos = []store.BookingTodo{todo}
+		return d
+	}
+
+	t.Run("title without the arrow falls back to the key", func(t *testing.T) {
+		d := oneLeg(t, store.BookingTodo{ID: uuid.New(), Kind: "transport",
+			TodoKey: "transport:ewr>>paris", Title: "Flight", Provider: strp("google_flights"),
+			Auto: true, DepartDate: dateVal(t, "2026-09-01")})
+		step, _ := derive("en", nextStepNow, d)
+		// Key endpoints are lowercase — the casing lived only on the title.
+		if step.Fix == nil || step.Fix.Origin == nil || *step.Fix.Origin != "ewr" ||
+			step.Fix.Destination == nil || *step.Fix.Destination != "paris" {
+			t.Fatalf("fix = %+v, want the key-parsed endpoints", step.Fix)
+		}
+		if step.Detail != "Flight · departs Tue, Sep 1" {
+			t.Fatalf("detail = %q", step.Detail)
+		}
+	})
+
+	t.Run("unparseable slot keeps the generic copy", func(t *testing.T) {
+		d := oneLeg(t, store.BookingTodo{ID: uuid.New(), Kind: "transport",
+			TodoKey: "transport:", Title: "", Auto: true})
+		step, progress := derive("en", nextStepNow, d)
+		mustStep(t, step, progress, "add_transport", 2)
+		if step.Title != "Add transport between cities" {
+			t.Fatalf("title = %q, want the generic fallback", step.Title)
+		}
+		if step.Fix.Origin != nil || step.Fix.Destination != nil {
+			t.Fatalf("fix should carry no endpoints, got %+v", step.Fix)
+		}
+		if step.Detail != "" {
+			t.Fatalf("detail = %q, want empty", step.Detail)
+		}
+		if !strings.Contains(step.SeedPrompt, "between my cities") {
+			t.Fatalf("seed should use the endpoint-less template:\n%s", step.SeedPrompt)
+		}
+	})
+
+	t.Run("undated slot has no anchor and no date line", func(t *testing.T) {
+		d := oneLeg(t, store.BookingTodo{ID: uuid.New(), Kind: "transport",
+			TodoKey: "transport:ewr>>paris", Title: "EWR → Paris",
+			Provider: strp("google_flights"), Auto: true})
+		step, _ := derive("en", nextStepNow, d)
+		if step.Day != nil {
+			t.Fatalf("day = %v, want nil", step.Day)
+		}
+		if step.Detail != "EWR → Paris" {
+			t.Fatalf("detail = %q, want the bare route label", step.Detail)
+		}
+		if step.Fix.Date != nil {
+			t.Fatalf("fix date = %v, want nil", step.Fix.Date)
+		}
+	})
+
+	t.Run("stale slot outside the trip days has no anchor", func(t *testing.T) {
+		d := oneLeg(t, store.BookingTodo{ID: uuid.New(), Kind: "transport",
+			TodoKey: "transport:ewr>>paris", Title: "EWR → Paris",
+			Provider: strp("google_flights"), Auto: true,
+			DepartDate: dateVal(t, "2026-08-20")}) // before the trip start
+		step, _ := derive("en", nextStepNow, d)
+		if step.Day != nil {
+			t.Fatalf("day = %v, want nil for a pre-trip date", step.Day)
+		}
+		if step.Fix.Date == nil || *step.Fix.Date != "2026-08-20" {
+			t.Fatalf("fix date should still carry the slot's own date, got %v", step.Fix.Date)
+		}
+	})
+
+	t.Run("zero-night stay needs no lodging", func(t *testing.T) {
+		d := nextStepFixture(t)
+		d.Accommodations = nil
+		d.BookingTodos = []store.BookingTodo{
+			{ID: uuid.New(), Kind: "stay", TodoKey: "stay:paris", Title: "Stay in Paris",
+				Auto: true, Position: 0,
+				DepartDate: dateVal(t, "2026-09-01"), ReturnDate: dateVal(t, "2026-09-01")},
+		}
+		step, progress := derive("en", nextStepNow, d)
+		// A zero-night stop needs no lodging, so the slot is vacuously claimed
+		// and the walk never asks the traveler to book it. The row itself is
+		// still an open checkbox, so the phase-5 aggregate keeps listing it —
+		// that count is motivational by design (specs/next-step-cta) and its
+		// claim rules are deliberately untouched by the walk.
+		mustStep(t, step, progress, "book_trip", 4)
+	})
+
+	t.Run("single-night stay uses the singular copy", func(t *testing.T) {
+		d := nextStepFixture(t)
+		d.Accommodations = nil
+		d.BookingTodos = []store.BookingTodo{
+			{ID: uuid.New(), Kind: "stay", TodoKey: "stay:lyon", Title: "Stay in Lyon",
+				Auto: true, Position: 0,
+				DepartDate: dateVal(t, "2026-09-03"), ReturnDate: dateVal(t, "2026-09-04")},
+		}
+		step, _ := derive("en", nextStepNow, d)
+		if !strings.Contains(step.Detail, "No lodging booked for the night of") {
+			t.Fatalf("detail = %q, want the single-night copy", step.Detail)
+		}
+	})
+}
+
+// Display copy localizes; the chat seed stays canonical English (it is agent
+// input, not display copy).
+func TestNextStep_WalkSpanishTitle(t *testing.T) {
+	d := nextStepFixture(t)
+	d.BookingTodos = walkTodos(t)
+	step, _ := derive("es", nextStepNow, d)
+	if step == nil || step.Title != "Reserva tu vuelo a Paris" {
+		t.Fatalf("es title = %+v", step)
+	}
+	if !strings.Contains(step.SeedPrompt, "I still need transport") {
+		t.Fatalf("seed must stay canonical English:\n%s", step.SeedPrompt)
+	}
+}
+
+// --- later phases --------------------------------------------------------------
+
 func TestNextStep_ScheduleCleanup_Unscheduled(t *testing.T) {
 	d := nextStepFixture(t)
 	d.Items = append(d.Items, store.ItineraryItem{
 		ID: uuid.New(), Name: "Bouchon dinner", City: strp("Lyon"), Position: 5}) // day nil
 	step, progress := derive("en", nextStepNow, d)
-	mustStep(t, step, progress, "schedule_items", 4)
+	mustStep(t, step, progress, "schedule_items", 3)
 	if step.Count == nil || *step.Count != 1 {
 		t.Fatalf("count = %v, want 1", step.Count)
 	}
@@ -176,7 +582,7 @@ func TestNextStep_ScheduleCleanup_EmptyDayAnchor(t *testing.T) {
 	// Empty day 2: move the Orsay to day 3's city day — day 2 has nothing.
 	d.Items[1].Day = i32p(3)
 	step, progress := derive("en", nextStepNow, d)
-	mustStep(t, step, progress, "schedule_items", 4)
+	mustStep(t, step, progress, "schedule_items", 3)
 	if step.Day == nil || *step.Day != 2 {
 		t.Fatalf("day anchor = %v, want 2 (first empty day)", step.Day)
 	}
@@ -194,18 +600,21 @@ func TestNextStep_BookAggregateDedupe(t *testing.T) {
 	d.BookingTodos = []store.BookingTodo{
 		// Claimed by the Paris stay above (same city) — must NOT double count.
 		{ID: uuid.New(), Kind: "stay", TodoKey: "stay:paris", Title: "Stay in Paris"},
-		// No confirmed segment covers Lyon→Nice — counts.
-		{ID: uuid.New(), Kind: "transport", TodoKey: "transport:lyon>>nice", Title: "Lyon → Nice"},
-		// Already booked — never counts.
+		// Booked, so the walk is satisfied and phase 5 can be reached; a booked
+		// row never counts here either.
+		{ID: uuid.New(), Kind: "transport", TodoKey: "transport:lyon>>nice",
+			Title: "Lyon → Nice", Booked: true},
 		{ID: uuid.New(), Kind: "stay", TodoKey: "stay:lyon", Title: "Stay in Lyon", Booked: true},
+		// Custom rows are not slots — the aggregate is where they surface.
+		{ID: uuid.New(), Kind: "other", TodoKey: "custom:abc", Title: "Rent a car"},
 	}
 	step, progress := derive("en", nextStepNow, d)
-	mustStep(t, step, progress, "book_trip", 5)
+	mustStep(t, step, progress, "book_trip", 4)
 	if step.Count == nil || *step.Count != 2 {
-		t.Fatalf("count = %v, want 2 (stay row + unclaimed transport todo)", step.Count)
+		t.Fatalf("count = %v, want 2 (stay row + custom todo)", step.Count)
 	}
 	if !strings.Contains(step.SeedPrompt, "Hotel Le Marais, Paris") ||
-		!strings.Contains(step.SeedPrompt, "Lyon → Nice") ||
+		!strings.Contains(step.SeedPrompt, "Rent a car") ||
 		strings.Contains(step.SeedPrompt, "Stay in Paris") {
 		t.Fatalf("book seed lines off:\n%s", step.SeedPrompt)
 	}
@@ -218,7 +627,7 @@ func TestNextStep_PackingGates(t *testing.T) {
 	d := nextStepFixture(t)
 	d.Checklist = nil
 	step, progress := derive("en", nextStepNow, d)
-	mustStep(t, step, progress, "add_packing", 6)
+	mustStep(t, step, progress, "add_packing", 5)
 	if !strings.Contains(step.SeedPrompt, "add_packing_item") ||
 		!strings.Contains(step.SeedPrompt, "Paris, Lyon") {
 		t.Fatalf("packing seed off:\n%s", step.SeedPrompt)
@@ -260,23 +669,45 @@ func TestNextStep_SeedStaysCanonicalEnglish(t *testing.T) {
 
 // The step must ignore the live-enrichment findings entirely: the same data
 // with injected weather/hours findings yields the same step, which is what
-// keeps the check_hours=true and =false cache variants in agreement.
+// keeps the check_hours=true and =false cache variants in agreement. Asserted
+// on both phase-3 paths — the walk reads exportData only, so its invariance is
+// structural, and the fallback must not be swayed by a noisier findings list.
 func TestNextStep_IgnoresWeatherAndHoursFindings(t *testing.T) {
-	d := nextStepFixture(t)
-	d.Accommodations[0].Booked = false // → book_trip
-	findings := reviewTrip(context.Background(), "en", d, reviewOptions{}, reviewDeps{})
 	day1 := 1
-	noisy := append([]Finding{
+	noise := []Finding{
 		{Severity: "info", Category: "weather", Message: "Rain likely on Day 1.", Day: &day1},
 		{Severity: "warn", Category: "hours", Message: "Louvre may be closed.", Day: &day1},
-	}, findings...)
-
-	base, baseProg := deriveNextStep("en", nextStepNow, d, findings)
-	withNoise, noiseProg := deriveNextStep("en", nextStepNow, d, noisy)
-	if base == nil || withNoise == nil || base.Kind != withNoise.Kind || base.Kind != "book_trip" {
-		t.Fatalf("kinds diverge: %+v vs %+v", base, withNoise)
 	}
-	if baseProg.Done != noiseProg.Done {
-		t.Fatalf("progress diverges: %d vs %d", baseProg.Done, noiseProg.Done)
+	cases := []struct {
+		name string
+		data func(t *testing.T) exportData
+		want string
+	}{
+		{name: "fallback path", want: "book_trip", data: func(t *testing.T) exportData {
+			d := nextStepFixture(t)
+			d.Accommodations[0].Booked = false
+			return d
+		}},
+		{name: "walk path", want: "add_transport", data: func(t *testing.T) exportData {
+			d := nextStepFixture(t)
+			d.BookingTodos = walkTodos(t)
+			return d
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := tc.data(t)
+			findings := reviewTrip(context.Background(), "en", d, reviewOptions{}, reviewDeps{})
+			noisy := append(append([]Finding{}, noise...), findings...)
+
+			base, baseProg := deriveNextStep("en", nextStepNow, d, findings)
+			withNoise, noiseProg := deriveNextStep("en", nextStepNow, d, noisy)
+			if base == nil || withNoise == nil || base.Kind != withNoise.Kind || base.Kind != tc.want {
+				t.Fatalf("kinds diverge: %+v vs %+v", base, withNoise)
+			}
+			if baseProg.Done != noiseProg.Done {
+				t.Fatalf("progress diverges: %d vs %d", baseProg.Done, noiseProg.Done)
+			}
+		})
 	}
 }

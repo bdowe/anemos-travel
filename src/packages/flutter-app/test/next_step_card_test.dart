@@ -29,12 +29,12 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_app(NextStepCard(
       step: _lodgingStep,
-      progress: const PlanProgress(done: 2, total: 7),
+      progress: const PlanProgress(done: 2, total: 6),
       onPrimary: () {},
       onViewAll: () {},
     )));
 
-    expect(find.text('NEXT STEP · 3 of 7'), findsOneWidget);
+    expect(find.text('NEXT STEP · 3 of 6'), findsOneWidget);
     expect(find.text('Book a place to stay'), findsOneWidget);
     expect(find.textContaining('No lodging booked'), findsOneWidget);
     expect(find.text('Find lodging'), findsOneWidget); // add_lodging action
@@ -127,9 +127,89 @@ void main() {
   testWidgets('progress clamps at the final phase', (tester) async {
     await tester.pumpWidget(_app(NextStepCard(
       step: _lodgingStep,
-      progress: const PlanProgress(done: 7, total: 7),
+      progress: const PlanProgress(done: 6, total: 6),
       onPrimary: () {},
     )));
-    expect(find.text('NEXT STEP · 7 of 7'), findsOneWidget);
+    expect(find.text('NEXT STEP · 6 of 6'), findsOneWidget);
+  });
+
+  // The transport action label follows the matched booking todo's mode on the
+  // fix (itinerary-order walk, specs/next-step-cta) — mirroring the checklist
+  // row's openLabelOverride. Ground modes and fix-less steps from an older
+  // server keep the generic label.
+  testWidgets('add_transport with a flight fix labels Find flights',
+      (tester) async {
+    await tester.pumpWidget(_app(NextStepCard(
+      step: const NextStep(
+        kind: 'add_transport',
+        title: 'Book your flight to Lyon',
+        fix: FindingFix(
+          action: 'add_transport',
+          label: 'Find flights',
+          origin: 'Paris',
+          destination: 'Lyon',
+          mode: 'flight',
+        ),
+      ),
+      onPrimary: () {},
+    )));
+
+    expect(find.text('Find flights'), findsOneWidget);
+    expect(find.byIcon(Icons.directions_transit_outlined), findsOneWidget);
+  });
+
+  testWidgets('add_transport with a ferry fix labels Find ferries',
+      (tester) async {
+    await tester.pumpWidget(_app(NextStepCard(
+      step: const NextStep(
+        kind: 'add_transport',
+        title: 'Book your ferry to Naxos',
+        fix: FindingFix(
+          action: 'add_transport',
+          label: 'Find ferries',
+          origin: 'Paros',
+          destination: 'Naxos',
+          mode: 'ferry',
+        ),
+      ),
+      onPrimary: () {},
+    )));
+
+    expect(find.text('Find ferries'), findsOneWidget);
+    expect(find.byIcon(Icons.directions_transit_outlined), findsOneWidget);
+  });
+
+  testWidgets('add_transport with no mode keeps the generic label',
+      (tester) async {
+    await tester.pumpWidget(_app(NextStepCard(
+      step: const NextStep(
+        kind: 'add_transport',
+        title: 'Book your travel to Lyon',
+        fix: FindingFix(
+          action: 'add_transport',
+          label: 'Find options',
+          origin: 'Paris',
+          destination: 'Lyon',
+        ),
+      ),
+      onPrimary: () {},
+    )));
+
+    expect(find.text('Find options'), findsOneWidget);
+    expect(find.byIcon(Icons.directions_transit_outlined), findsOneWidget);
+  });
+
+  testWidgets('fix-less add_transport (old server) keeps the generic label',
+      (tester) async {
+    await tester.pumpWidget(_app(NextStepCard(
+      step: const NextStep(
+        kind: 'add_transport',
+        title: 'Book your travel to Lyon',
+      ),
+      onPrimary: () {},
+    )));
+
+    expect(find.text('Find options'), findsOneWidget);
+    expect(find.byIcon(Icons.directions_transit_outlined), findsOneWidget);
   });
 }
