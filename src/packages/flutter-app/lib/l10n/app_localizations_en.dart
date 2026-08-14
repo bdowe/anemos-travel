@@ -173,6 +173,66 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsInterestArchitecture => 'architecture';
 
   @override
+  String get prefsInterestLiveMusic => 'live music';
+
+  @override
+  String get prefsInterestBars => 'bars';
+
+  @override
+  String get prefsInterestTheater => 'theater';
+
+  @override
+  String get prefsInterestFestivals => 'festivals';
+
+  @override
+  String get prefsInterestLocalMarkets => 'local markets';
+
+  @override
+  String get prefsInterestStreetFood => 'street food';
+
+  @override
+  String get prefsInterestCoffee => 'coffee';
+
+  @override
+  String get prefsInterestWine => 'wine';
+
+  @override
+  String get prefsInterestCraftBeer => 'craft beer';
+
+  @override
+  String get prefsInterestFineDining => 'fine dining';
+
+  @override
+  String get prefsInterestHiking => 'hiking';
+
+  @override
+  String get prefsInterestWildlife => 'wildlife';
+
+  @override
+  String get prefsInterestWaterSports => 'water sports';
+
+  @override
+  String get prefsInterestSkiing => 'skiing';
+
+  @override
+  String get prefsInterestRoadTrips => 'road trips';
+
+  @override
+  String get prefsInterestPhotography => 'photography';
+
+  @override
+  String get prefsInterestStreetArt => 'street art';
+
+  @override
+  String get prefsInterestWellness => 'wellness';
+
+  @override
+  String get prefsInterestSpas => 'spas';
+
+  @override
+  String get prefsInterestSportsEvents => 'sports events';
+
+  @override
   String get ssoContinueWithGoogle => 'Continue with Google';
 
   @override

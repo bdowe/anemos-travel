@@ -7,6 +7,7 @@ import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
 import '../widgets/choice_chip_row.dart';
 import '../widgets/gradient_app_bar.dart';
+import '../widgets/interest_picker.dart';
 import '../l10n/l10n.dart';
 import '../providers/preferences_provider.dart';
 import '../theme/spacing.dart';
@@ -17,18 +18,6 @@ import '../utils/snack.dart';
 // (specs/i18n-spanish).
 const _budgets = ['budget', 'mid', 'luxury'];
 const _paces = ['relaxed', 'balanced', 'packed'];
-const _suggestedInterests = [
-  'museums',
-  'food',
-  'nightlife',
-  'nature',
-  'history',
-  'art',
-  'shopping',
-  'outdoors',
-  'beaches',
-  'architecture',
-];
 
 String _budgetLabel(AppLocalizations l10n, String value) => switch (value) {
       'budget' => l10n.prefsBudgetLow,
@@ -44,22 +33,6 @@ String _paceLabel(AppLocalizations l10n, String value) => switch (value) {
       _ => value,
     };
 
-/// Suggested interests get translated labels; anything the traveler typed
-/// themselves is shown exactly as they wrote it.
-String _interestLabel(AppLocalizations l10n, String value) => switch (value) {
-      'museums' => l10n.prefsInterestMuseums,
-      'food' => l10n.prefsInterestFood,
-      'nightlife' => l10n.prefsInterestNightlife,
-      'nature' => l10n.prefsInterestNature,
-      'history' => l10n.prefsInterestHistory,
-      'art' => l10n.prefsInterestArt,
-      'shopping' => l10n.prefsInterestShopping,
-      'outdoors' => l10n.prefsInterestOutdoors,
-      'beaches' => l10n.prefsInterestBeaches,
-      'architecture' => l10n.prefsInterestArchitecture,
-      _ => value,
-    };
-
 class PreferencesScreen extends ConsumerStatefulWidget {
   const PreferencesScreen({super.key});
 
@@ -72,7 +45,6 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   String? _pace;
   final Set<String> _interests = {};
   Airport? _homeAirport;
-  final _interestController = TextEditingController();
   final _notesController = TextEditingController();
   bool _initialized = false;
 
@@ -110,17 +82,8 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
 
   @override
   void dispose() {
-    _interestController.dispose();
     _notesController.dispose();
     super.dispose();
-  }
-
-  void _addInterest() {
-    final t = _interestController.text.trim();
-    if (t.isNotEmpty) {
-      setState(() => _interests.add(t));
-      _interestController.clear();
-    }
   }
 
   Future<void> _save() async {
@@ -142,9 +105,6 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final state = ref.watch(preferencesProvider);
-
-    // Chips = suggested set plus any custom interests already selected.
-    final chipLabels = {..._suggestedInterests, ..._interests}.toList();
 
     final Widget body;
     if (!_initialized && state.error != null) {
@@ -195,43 +155,13 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
                 const SizedBox(height: AppSpacing.xl),
                 SectionHeader(title: l10n.prefsInterests),
                 const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.xs,
-                  children: chipLabels.map((label) {
-                    final selected = _interests.contains(label);
-                    return FilterChip(
-                      label: Text(_interestLabel(l10n, label)),
-                      selected: selected,
-                      onSelected: (sel) => setState(() {
-                        if (sel) {
-                          _interests.add(label);
-                        } else {
-                          _interests.remove(label);
-                        }
-                      }),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _interestController,
-                        decoration: InputDecoration(
-                          hintText: l10n.prefsAddInterest,
-                          border: const OutlineInputBorder(),
-                        ),
-                        onSubmitted: (_) => _addInterest(),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      tooltip: l10n.prefsAddInterest,
-                      onPressed: _addInterest,
-                    ),
-                  ],
+                InterestPicker(
+                  selected: _interests,
+                  onChanged: (next) => setState(
+                    () => _interests
+                      ..clear()
+                      ..addAll(next),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 SectionHeader(title: l10n.prefsHomeAirport),

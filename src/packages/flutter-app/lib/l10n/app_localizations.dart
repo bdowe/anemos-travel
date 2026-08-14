@@ -410,6 +410,126 @@ abstract class AppLocalizations {
   /// **'architecture'**
   String get prefsInterestArchitecture;
 
+  /// No description provided for @prefsInterestLiveMusic.
+  ///
+  /// In en, this message translates to:
+  /// **'live music'**
+  String get prefsInterestLiveMusic;
+
+  /// No description provided for @prefsInterestBars.
+  ///
+  /// In en, this message translates to:
+  /// **'bars'**
+  String get prefsInterestBars;
+
+  /// No description provided for @prefsInterestTheater.
+  ///
+  /// In en, this message translates to:
+  /// **'theater'**
+  String get prefsInterestTheater;
+
+  /// No description provided for @prefsInterestFestivals.
+  ///
+  /// In en, this message translates to:
+  /// **'festivals'**
+  String get prefsInterestFestivals;
+
+  /// No description provided for @prefsInterestLocalMarkets.
+  ///
+  /// In en, this message translates to:
+  /// **'local markets'**
+  String get prefsInterestLocalMarkets;
+
+  /// No description provided for @prefsInterestStreetFood.
+  ///
+  /// In en, this message translates to:
+  /// **'street food'**
+  String get prefsInterestStreetFood;
+
+  /// No description provided for @prefsInterestCoffee.
+  ///
+  /// In en, this message translates to:
+  /// **'coffee'**
+  String get prefsInterestCoffee;
+
+  /// No description provided for @prefsInterestWine.
+  ///
+  /// In en, this message translates to:
+  /// **'wine'**
+  String get prefsInterestWine;
+
+  /// No description provided for @prefsInterestCraftBeer.
+  ///
+  /// In en, this message translates to:
+  /// **'craft beer'**
+  String get prefsInterestCraftBeer;
+
+  /// No description provided for @prefsInterestFineDining.
+  ///
+  /// In en, this message translates to:
+  /// **'fine dining'**
+  String get prefsInterestFineDining;
+
+  /// No description provided for @prefsInterestHiking.
+  ///
+  /// In en, this message translates to:
+  /// **'hiking'**
+  String get prefsInterestHiking;
+
+  /// No description provided for @prefsInterestWildlife.
+  ///
+  /// In en, this message translates to:
+  /// **'wildlife'**
+  String get prefsInterestWildlife;
+
+  /// No description provided for @prefsInterestWaterSports.
+  ///
+  /// In en, this message translates to:
+  /// **'water sports'**
+  String get prefsInterestWaterSports;
+
+  /// No description provided for @prefsInterestSkiing.
+  ///
+  /// In en, this message translates to:
+  /// **'skiing'**
+  String get prefsInterestSkiing;
+
+  /// No description provided for @prefsInterestRoadTrips.
+  ///
+  /// In en, this message translates to:
+  /// **'road trips'**
+  String get prefsInterestRoadTrips;
+
+  /// No description provided for @prefsInterestPhotography.
+  ///
+  /// In en, this message translates to:
+  /// **'photography'**
+  String get prefsInterestPhotography;
+
+  /// No description provided for @prefsInterestStreetArt.
+  ///
+  /// In en, this message translates to:
+  /// **'street art'**
+  String get prefsInterestStreetArt;
+
+  /// No description provided for @prefsInterestWellness.
+  ///
+  /// In en, this message translates to:
+  /// **'wellness'**
+  String get prefsInterestWellness;
+
+  /// No description provided for @prefsInterestSpas.
+  ///
+  /// In en, this message translates to:
+  /// **'spas'**
+  String get prefsInterestSpas;
+
+  /// No description provided for @prefsInterestSportsEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'sports events'**
+  String get prefsInterestSportsEvents;
+
   /// No description provided for @ssoContinueWithGoogle.
   ///
   /// In en, this message translates to:
