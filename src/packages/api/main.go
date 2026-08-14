@@ -853,8 +853,11 @@ func buildRouter() *mux.Router {
 	// Generalized notifications feed (Wave 16): the Flutter notification
 	// center + badge read these. Writers: the re-engagement checkers (trip
 	// reminders, weekly nudge), collab/share activity (notifications_writer.go),
-	// and the ops self-check monitor (admin-only rows).
+	// and the ops self-check monitor (admin-only rows). DELETE is clear-all
+	// (specs/clear-notifications) — user-scoped, idempotent, dialog-confirmed
+	// client-side, so the general limiter suffices like its siblings.
 	api.Handle("/notifications", authMiddleware(http.HandlerFunc(listNotificationsHandler))).Methods("GET")
+	api.Handle("/notifications", authMiddleware(http.HandlerFunc(clearNotificationsHandler))).Methods("DELETE")
 	api.Handle("/notifications/read", authMiddleware(http.HandlerFunc(markNotificationsReadHandler))).Methods("POST")
 	api.Handle("/notifications/unread-count", authMiddleware(http.HandlerFunc(unreadNotificationsCountHandler))).Methods("GET")
 	api.Handle("/preferences", authMiddleware(http.HandlerFunc(getPreferencesHandler))).Methods("GET")
