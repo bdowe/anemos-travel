@@ -10,6 +10,7 @@ import '../widgets/gradient_app_bar.dart';
 import '../widgets/chat_panel.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/near_me_chip.dart';
+import '../widgets/random_suggestions.dart';
 import '../providers/auth_provider.dart';
 import '../providers/plan_provider.dart';
 import '../widgets/page_container.dart';
@@ -122,20 +123,20 @@ class _EmptyState extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    return EmptyState(
-      icon: Icons.chat_bubble_outline,
-      title: l10n.agentScreenEmptyTitle,
-      message: l10n.agentScreenEmptyMessage,
-      actions: [
-        NearMeChip(
-          onSend: (text, {displayLabel}) => ref
-              .read(planProvider.notifier)
-              .sendMessage(text, displayLabel: displayLabel),
-        ),
-        _SuggestionChip(l10n.agentScreenSuggestionParis),
-        _SuggestionChip(l10n.agentScreenSuggestionRome),
-        _SuggestionChip(l10n.agentScreenSuggestionTokyo),
-      ],
+    return RandomSuggestions(
+      builder: (context, prompts) => EmptyState(
+        icon: Icons.chat_bubble_outline,
+        title: l10n.agentScreenEmptyTitle,
+        message: l10n.agentScreenEmptyMessage,
+        actions: [
+          NearMeChip(
+            onSend: (text, {displayLabel}) => ref
+                .read(planProvider.notifier)
+                .sendMessage(text, displayLabel: displayLabel),
+          ),
+          for (final prompt in prompts) _SuggestionChip(prompt),
+        ],
+      ),
     );
   }
 }

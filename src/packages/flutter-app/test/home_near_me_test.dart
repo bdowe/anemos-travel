@@ -11,6 +11,7 @@ import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/live_trip_provider.dart';
 import 'package:travel_route_planner/providers/plan_provider.dart';
 import 'package:travel_route_planner/providers/resumable_chats_provider.dart';
+import 'package:travel_route_planner/providers/suggestions_provider.dart';
 import 'package:travel_route_planner/screens/home_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/plan_service.dart';
@@ -102,6 +103,9 @@ void main() {
           liveTripProvider.overrideWithValue(liveTrip),
           resumableChatsProvider.overrideWith((ref) async => const []),
           planProvider.overrideWith((ref) => plan),
+          // Pin the random picks to the legacy trio so the literal chip
+          // assertions below stay deterministic.
+          suggestionPickerProvider.overrideWithValue(() => const [0, 1, 2]),
         ],
         child: Builder(builder: (context) {
           container = ProviderScope.containerOf(context);

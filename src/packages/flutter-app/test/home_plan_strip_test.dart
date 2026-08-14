@@ -9,6 +9,7 @@ import 'package:travel_route_planner/navigation/app_nav.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/live_trip_provider.dart';
 import 'package:travel_route_planner/providers/resumable_chats_provider.dart';
+import 'package:travel_route_planner/providers/suggestions_provider.dart';
 import 'package:travel_route_planner/screens/home_screen.dart';
 
 import 'support/l10n_test_app.dart';
@@ -76,6 +77,9 @@ Future<void> _pumpHome(WidgetTester tester, {Trip? liveTrip}) async {
         authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
         liveTripProvider.overrideWithValue(liveTrip),
         resumableChatsProvider.overrideWith((ref) async => const []),
+        // Pin the random picks to the legacy trio so the literal chip
+        // assertions below stay deterministic.
+        suggestionPickerProvider.overrideWithValue(() => const [0, 1, 2]),
       ],
       child: MaterialApp(
           localizationsDelegates: testLocalizationsDelegates,

@@ -3284,23 +3284,77 @@ abstract class AppLocalizations {
   /// **'Let\'s go'**
   String get homeHeroCta;
 
-  /// No description provided for @homeSuggestionParis.
+  /// No description provided for @suggestionParis.
   ///
   /// In en, this message translates to:
   /// **'2 days in Paris'**
-  String get homeSuggestionParis;
+  String get suggestionParis;
 
-  /// No description provided for @homeSuggestionRome.
+  /// No description provided for @suggestionRome.
   ///
   /// In en, this message translates to:
   /// **'Museums in Rome'**
-  String get homeSuggestionRome;
+  String get suggestionRome;
 
-  /// No description provided for @homeSuggestionTokyo.
+  /// No description provided for @suggestionTokyo.
   ///
   /// In en, this message translates to:
   /// **'Weekend in Tokyo'**
-  String get homeSuggestionTokyo;
+  String get suggestionTokyo;
+
+  /// No description provided for @suggestionGreece.
+  ///
+  /// In en, this message translates to:
+  /// **'Island hopping in Greece'**
+  String get suggestionGreece;
+
+  /// No description provided for @suggestionLisbon.
+  ///
+  /// In en, this message translates to:
+  /// **'3 days in Lisbon'**
+  String get suggestionLisbon;
+
+  /// No description provided for @suggestionBarcelona.
+  ///
+  /// In en, this message translates to:
+  /// **'Tapas in Barcelona'**
+  String get suggestionBarcelona;
+
+  /// No description provided for @suggestionBangkok.
+  ///
+  /// In en, this message translates to:
+  /// **'Street food in Bangkok'**
+  String get suggestionBangkok;
+
+  /// No description provided for @suggestionAmalfi.
+  ///
+  /// In en, this message translates to:
+  /// **'Amalfi Coast road trip'**
+  String get suggestionAmalfi;
+
+  /// No description provided for @suggestionNewYork.
+  ///
+  /// In en, this message translates to:
+  /// **'A week in New York'**
+  String get suggestionNewYork;
+
+  /// No description provided for @suggestionBali.
+  ///
+  /// In en, this message translates to:
+  /// **'Beaches in Bali'**
+  String get suggestionBali;
+
+  /// No description provided for @suggestionPatagonia.
+  ///
+  /// In en, this message translates to:
+  /// **'Hiking in Patagonia'**
+  String get suggestionPatagonia;
+
+  /// No description provided for @suggestionKenya.
+  ///
+  /// In en, this message translates to:
+  /// **'Safari in Kenya'**
+  String get suggestionKenya;
 
   /// No description provided for @homeLocalGuidesTitle.
   ///
@@ -4465,24 +4519,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'I\'m Ferdinand — I\'ll search for places and build you a day-by-day itinerary.'**
   String get agentScreenEmptyMessage;
-
-  /// No description provided for @agentScreenSuggestionParis.
-  ///
-  /// In en, this message translates to:
-  /// **'2 days in Paris'**
-  String get agentScreenSuggestionParis;
-
-  /// No description provided for @agentScreenSuggestionRome.
-  ///
-  /// In en, this message translates to:
-  /// **'Museums in Rome'**
-  String get agentScreenSuggestionRome;
-
-  /// No description provided for @agentScreenSuggestionTokyo.
-  ///
-  /// In en, this message translates to:
-  /// **'Weekend in Tokyo'**
-  String get agentScreenSuggestionTokyo;
 
   /// No description provided for @agentScreenItineraryReady.
   ///
