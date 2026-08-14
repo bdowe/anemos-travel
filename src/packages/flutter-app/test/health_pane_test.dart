@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:travel_route_planner/models/ops_health.dart';
 import 'package:travel_route_planner/models/ops_metrics.dart';
+import 'package:travel_route_planner/models/ops_uptime.dart';
 import 'package:travel_route_planner/providers/ops_admin_provider.dart';
 import 'package:travel_route_planner/widgets/health_pane.dart';
 
@@ -51,7 +52,13 @@ const _health = OpsHealth(
 );
 
 Widget _wrap(List<Override> overrides) => ProviderScope(
-      overrides: overrides,
+      overrides: [
+        // Every test gets a resolved (empty) uptime history unless it
+        // overrides it itself — without this the strip section would hit the
+        // blocked test network and render an error into unrelated tests.
+        opsUptimeProvider.overrideWith((ref) async => const OpsUptime()),
+        ...overrides,
+      ],
       child: MaterialApp(
       localizationsDelegates: testLocalizationsDelegates,home: Scaffold(body: HealthPane())),
     );
@@ -85,8 +92,9 @@ void main() {
       ]),
     );
 
-    // KPI tiles.
-    expect(find.text('Uptime'), findsOneWidget);
+    // KPI tiles. ("Process uptime", not "Uptime" — that word now belongs to
+    // the 90-day availability section.)
+    expect(find.text('Process uptime'), findsOneWidget);
     expect(find.text('3d 4h'), findsOneWidget);
     expect(find.text('Requests'), findsOneWidget);
     expect(find.text('Error rate'), findsOneWidget);

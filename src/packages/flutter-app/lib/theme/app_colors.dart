@@ -56,6 +56,21 @@ abstract final class AppColors {
   static Color get neutralSolid => Colors.white;
   static Color get onNeutralSolid => brandDark;
 
+  // Status-strip marks (the Health pane's 90-day uptime history,
+  // specs/uptime-history). Solid and brightness-aware: the container pairs
+  // above are 15-20% alpha — right for a pill on a card, invisible as a 3px
+  // bar — and their shade800/900 foregrounds go muddy on a dark surface.
+  // These are MARKS, picked per brightness: mid shades on paper, lighter
+  // shades on dark where saturated darks sink into the background. "No data"
+  // is deliberately absent: it takes colorScheme.outlineVariant, the
+  // recessive role, so absence can never read as a fourth severity.
+  static Color upMark(Brightness b) =>
+      b == Brightness.dark ? Colors.green.shade400 : Colors.green.shade600;
+  static Color degradedMark(Brightness b) =>
+      b == Brightness.dark ? Colors.amber.shade400 : Colors.amber.shade700;
+  static Color downMark(Brightness b) =>
+      b == Brightness.dark ? Colors.red.shade400 : Colors.red.shade600;
+
   /// Accent color for an itinerary place by its category. `scheme` supplies the
   /// theme-derived fallbacks so this stays in sync with the seed.
   static Color forCategory(String? category, ColorScheme scheme) {
