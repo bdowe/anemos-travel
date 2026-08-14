@@ -71,6 +71,14 @@ class FlightSearchScreen extends ConsumerStatefulWidget {
 class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
   Airport? _origin;
   Airport? _destination;
+
+  /// Whether the traveler has touched each endpoint. `_origin == null` is NOT a
+  /// stand-in for "untouched": typing in an [AirportField] voids the held
+  /// selection, so a slow seed (`_seedInitial` awaits the profile load and up to
+  /// three lookups) would otherwise land on a field the user is typing in and
+  /// overwrite it.
+  bool _originTouched = false;
+  bool _destinationTouched = false;
   DateTime? _departDate;
 
   /// Optional round-trip return date; null = one-way (the default).
@@ -155,10 +163,13 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
     final resolved = await Future.wait([originFuture, destFuture]);
     final origin = resolved[0];
     final dest = resolved[1];
-    if (origin != null && _origin == null && mounted) {
+    if (origin != null && _origin == null && !_originTouched && mounted) {
       setState(() => _origin = origin);
     }
-    if (dest != null && _destination == null && mounted) {
+    if (dest != null &&
+        _destination == null &&
+        !_destinationTouched &&
+        mounted) {
       setState(() => _destination = dest);
     }
 
@@ -428,14 +439,20 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
           label: l10n.flightSearchFrom,
           icon: Icons.flight_takeoff,
           selected: _origin,
-          onSelected: (a) => setState(() => _origin = a),
+          onSelected: (a) => setState(() {
+            _origin = a;
+            _originTouched = true;
+          }),
         ),
         const SizedBox(height: AppSpacing.md),
         AirportField(
           label: l10n.flightSearchTo,
           icon: Icons.flight_land,
           selected: _destination,
-          onSelected: (a) => setState(() => _destination = a),
+          onSelected: (a) => setState(() {
+            _destination = a;
+            _destinationTouched = true;
+          }),
         ),
         const SizedBox(height: AppSpacing.md),
         Row(
