@@ -29,11 +29,21 @@ class MetaChip extends StatelessWidget {
         children: [
           Icon(icon, size: 13, color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(width: AppSpacing.xs),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
+          // Flexible + ellipsis, the StatusPill treatment: these chips sit in
+          // card Wraps whose runs are only as wide as the card, and a chip
+          // wider than its run (a month-crossing date range at 360px) has
+          // nowhere to wrap to — it must truncate rather than stripe the card
+          // with a RenderFlex overflow. Chips that fit are unaffected: the Row
+          // still hugs its content.
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
