@@ -35,7 +35,8 @@ percentage.
 `src/packages/api/`:
 
 - **Migration** `migrations/00059_health_samples.sql` — 00059 because
-  `00058_expense_booking_link.sql` is reserved by the in-flight `budget-v2` lane. Table
+  `00058_expense_booking_link.sql` was reserved by the `budget-v2` lane (that lane never
+  reached main and 00058 is now permanently burned — `docs/parallel-dev.md` §4a). Table
   `health_samples`: `observed_at` PK, `covers_from`, `kind` (`tick`|`gap`), `release`,
   `gap_cause`, and the three nullable booleans, with CHECK constraints binding the columns to
   the kind so a malformed row cannot exist.

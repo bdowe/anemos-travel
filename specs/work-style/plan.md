@@ -15,9 +15,9 @@ plan-chat integration is an explicit new branch in `personalizedSystemPrompt`
 (field enumeration there is deliberate; nothing flows automatically), with a
 behavioral note per value modeled on the existing home-airport note.
 
-**Migration number: `00060`.** 00058 is reserved by `specs/ios-app-store/`
-(plan.md:67); 00059 shipped with uptime-history; no open PR claims anything
-higher.
+**Migration number: `00060`.** 00059 shipped with uptime-history; no open PR
+claims anything higher. (00058 was skipped as reserved; it is now permanently
+burned — see `docs/parallel-dev.md` §4a.)
 
 **Prompt-cache:** adding a property to `savePrefsTool` changes the tools-block
 bytes → one-time cache invalidation (acceptable, same as every prior field).

@@ -177,6 +177,51 @@ jobs:
             exit 1
           fi
 
+      # A migration numbered at or BELOW main's highest passes every other
+      # check here and then takes production down. "Apply migrations" below
+      # starts from an empty database, where any ordering is trivially valid,
+      # so it cannot see this; the duplicate guard above cannot either, since
+      # filling a gap collides with nothing. But db.go runs goose.Up without
+      # WithAllowMissing, and goose refuses to apply a version below the
+      # database's current max ("found N missing migrations before current
+      # version M") — which main.go escalates to log.Fatalf, so the API exits
+      # before binding its port and crash-loops with the old container already
+      # replaced. Paid for by the 00058 gap (2026-08-14): that number can
+      # never be used again, because production is past it.
+      - name: Guard against out-of-order migration numbers
+        run: |
+          git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+          # Pathspec is relative to this job's working-directory, not the repo
+          # root; anchoring it wrong makes main_max empty and the guard passes
+          # everything silently.
+          main_files=$(git ls-tree --name-only -r origin/main -- migrations/ \
+            | sed 's#.*/##' | grep -E '^[0-9]{5}_' | sort)
+          main_max=$(printf '%s\n' "$main_files" | grep -oE '^[0-9]{5}' | sort | tail -1)
+          if [ -z "$main_max" ]; then
+            echo "::error::could not read main's migrations — the guard cannot verify ordering, so failing closed."
+            exit 1
+          fi
+          added=$(comm -13 <(printf '%s\n' "$main_files") <(ls migrations/ | grep -E '^[0-9]{5}_' | sort))
+          if [ -z "$added" ]; then
+            echo "no migrations added against main (highest on main: $main_max)"
+            exit 0
+          fi
+          rc=0
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            n=${f%%_*}
+            # 10# forces base 10: 00058 is not a valid octal literal.
+            if [ "$((10#$n))" -le "$((10#$main_max))" ]; then
+              echo "::error::migration $f is numbered $n, at or below main's highest ($main_max). Production has already applied past it, so goose would refuse it at boot and the deploy would crash-loop. Renumber it above $main_max."
+              rc=1
+            fi
+          done <<< "$added"
+          if [ "$rc" -eq 0 ]; then
+            echo "added migration(s) sort above main's highest ($main_max):"
+            printf '%s\n' "$added" | sed 's/^/  /'
+          fi
+          exit $rc
+
       - name: Apply migrations
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/travel?sslmode=disable

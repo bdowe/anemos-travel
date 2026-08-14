@@ -77,11 +77,41 @@ template.
 | `lib/screens/trip_detail_screen.dart` | 31% of PRs | **≤ 1 lane per wave.** This 5,900-line god-screen is the throughput governor: beyond 3–4 lanes you usually can't find work that avoids it. | Should never conflict (single writer). |
 | `api/main.go` (buildRouter) | 30% | No constraint — any lane may add routes. | Trivial adjacent-line conflicts; take both, keep the route grouping. |
 | `app_en.arb` + `app_es.arb` | 45% of recent PRs | Each lane declares a unique key prefix (e.g. `tripBudget*`) in its manifest. | Take both key sets on the `.arb`s; **never** hand-edit `app_localizations*.dart` — regen LAST. |
-| `api/migrations/` | 15% | Numbers **reserved at wave planning** (`ls src/packages/api/migrations | tail -1` → next free). ≤ 1 migration per lane. CI guards duplicates, but reservation avoids the renumber round-trip. | Renumber per reservation; never merge two files onto one number. |
+| `api/migrations/` | 15% | Numbers **reserved at wave planning** (`ls src/packages/api/migrations \| tail -1` → next free). ≤ 1 migration per lane. A new number must be **strictly greater than main's highest** — never fill a gap (see §4a). CI guards duplicates and out-of-order numbers. | Renumber per reservation; never merge two files onto one number. |
 | `api/plan_tool_registry.go` | low freq, **high severity** | **≤ 1 tool-adding lane in flight.** Registry order = the Anthropic prompt-cache prefix; append-at-tail only. A reorder-merge silently destroys prompt caching — no test fails. Tool *implementations* in separate `plan_tools_*.go` files are parallel-safe. | Keep main's order byte-stable; re-append the new entry at the tail. |
 | `store/` (sqlc) | 19% | Never a planning constraint. | Regen, don't merge (§4). |
 | `lib/models/*.g.dart`, `lib/l10n/app_localizations*.dart` | — | Same. | Regen, don't merge (§4). |
 | `.env.sample`, `CLAUDE.md` | 15% / 9% | Append-only; no constraint. | Take both. |
+
+## 4a. Migration numbers only ever go up — 00058 is burned
+
+A migration number below the highest number **already deployed** can never be
+merged, no matter how long the gap has sat empty. `db.go` calls `goose.Up`
+without `WithAllowMissing`, so goose refuses any unapplied version below the
+database's current max (`found N missing migrations before current version M`),
+and `main.go` turns that into `log.Fatalf` — the API exits before binding its
+port and crash-loops with the previous container already replaced. It is a full
+outage, and the deploy only goes red ~5 minutes later.
+
+Nothing upstream catches it: the "Migrations apply from zero" CI job starts
+from an empty database, where any ordering is trivially valid, and the
+duplicate guard sees no collision because a gap-fill collides with nothing.
+That is why the **out-of-order guard** now runs in the same CI job — it is the
+only check that can see this class.
+
+**00058 is permanently burned.** Production applied 00057 → 00059 → 00060, so
+58 is forever below the floor. It is not a free slot; it is a hole. Do not
+"tidy up" the sequence by filling it, and do not enable `WithAllowMissing` to
+make it merge — that would trade one loud, zero-damage crash for silent
+order-dependent schema state across the whole repo.
+
+How the hole appeared, so it isn't repeated: PR #350 was stacked on PR #349's
+branch and merged **into that branch 47 minutes after the branch itself had
+already merged to main**. GitHub reports #350 as MERGED, but its commits —
+including `00058_expense_booking_link.sql` — only ever reached
+`origin/budget-v2`. **When a stacked PR's base merges first, retarget the child
+to `main` before merging it**, and check `git merge-base --is-ancestor
+<merge-commit> origin/main` rather than trusting the MERGED badge.
 
 ## 4. Regen-not-merge doctrine
 
