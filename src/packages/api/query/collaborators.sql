@@ -46,11 +46,14 @@ LEFT JOIN trip_collaborators c ON c.owner_id = t.user_id AND c.chat_id = t.chat_
 WHERE t.id = $1 AND (t.user_id = $2 OR c.id IS NOT NULL);
 
 -- name: ListLatestCollaboratedTripsForUser :many
--- "Shared with you": one row per collaborated lineage (latest version), same
--- shape as ListLatestTripsByOwner plus the owner's display name. Carries the
--- same item/booking count laterals (no shared EXISTS — a shared-with-me row
--- is by definition shared); the HANDLER nils booking fields for viewers
--- (the getTripHandler boundary), keeping this query role-agnostic.
+-- "Shared with you": one row per collaborated lineage (latest version), the
+-- core of ListLatestTripsByOwner's shape plus the owner's display name.
+-- Carries the same item/booking count laterals (no shared EXISTS — a
+-- shared-with-me row is by definition shared); the HANDLER nils booking
+-- fields for viewers (the getTripHandler boundary), keeping this query
+-- role-agnostic. The owner list's insight fields (stays/packing/budget/
+-- pins/next-transport/summary, specs/trips-page-insights) are DELIBERATELY
+-- absent here — the owner's private planning state stays off shared rows.
 SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
        latest.title, latest.start_date, latest.end_date,
        latest.chat_id, latest.role, latest.version_count,

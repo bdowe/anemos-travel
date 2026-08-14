@@ -9,7 +9,10 @@
 
 import 'date_formats.dart';
 
-String _fmt(DateTime d) => mmmd().format(d);
+/// "Mon d" from an already-parsed date — [shortDateLabel]'s shape for callers
+/// that hold a DateTime, so a caller that derived a date never has to re-parse
+/// the ISO string to display it.
+String shortDateOf(DateTime d) => mmmd().format(d);
 
 /// "Mon d – Mon d" from ISO start/end (same day collapses to one); null when
 /// either date is missing or unparseable.
@@ -23,7 +26,7 @@ String? tripDateRange(String? startIso, String? endIso) {
 /// "Mon d" from a single ISO date; null when missing or unparseable.
 String? shortDateLabel(String? iso) {
   final d = DateTime.tryParse(iso ?? '');
-  return d == null ? null : _fmt(d);
+  return d == null ? null : shortDateOf(d);
 }
 
 /// A stored title is "long" when it's really the AI summary (multi-line or

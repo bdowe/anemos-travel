@@ -8,6 +8,7 @@ import '../navigation/app_routes.dart';
 import '../theme/spacing.dart';
 import '../utils/trip_days.dart';
 import '../utils/trip_format.dart';
+import '../utils/trip_list_insights.dart';
 import '../utils/trip_list_order.dart';
 import '../widgets/account_menu.dart';
 import '../widgets/collapsible_section.dart';
@@ -20,6 +21,7 @@ import '../widgets/offline_banner.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
 import '../widgets/status_pill.dart';
+import '../widgets/travel_footprint_card.dart';
 import '../widgets/up_next_trip_card.dart';
 import '../models/chat_session.dart';
 import '../models/trip.dart';
@@ -142,7 +144,12 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
         for (final t in groups.upcoming)
           if (t.id != hero?.id) t
       ];
-      final stats = upcomingStats(groups.upcoming, now);
+      // "Your travels" is all-time over OWNED trips (shared-with-me is
+      // someone else's travel, and its payload carries no pins anyway).
+      // Gated at 2+: a lifetime aggregate of one trip only restates the hero.
+      final stats = lifetimeStats(state.trips);
+      final pins = footprintPins(state.trips);
+      final showFootprint = state.trips.length >= 2;
       body = RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(sharedWithMeProvider);
@@ -203,27 +210,6 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                         ),
                       ),
                     ),
-                  // Aggregate line, only when there are enough NOT-started
-                  // trips for an aggregate to say anything a single card
-                  // doesn't (the stats exclude in-progress trips, so the
-                  // gate must read the same filtered count); zero segments
-                  // (undated trips, city-less legacy rows) drop out.
-                  if (stats.trips >= 2)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.xs, 0, 0, AppSpacing.sm),
-                      child: Text(
-                        [
-                          l10n.tripsListStatsUpcoming(stats.trips),
-                          if (stats.travelDays > 0)
-                            l10n.tripDurationDays(stats.travelDays),
-                          if (stats.cities > 0)
-                            l10n.tripCitiesCount(stats.cities),
-                        ].join(' · '),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
-                      ),
-                    ),
                   if (hero != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -234,12 +220,26 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                     ),
                   for (final t in upcomingCards)
                     _TripCard(trip: t, isAdmin: isAdmin),
+                  // "Your travels": the retrospective band, placed where the
+                  // page turns from plans to history — after the upcoming
+                  // cards, bridging into Past trips. Page gravity stays
+                  // action-first above it.
+                  if (showFootprint)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      child: TravelFootprintCard(pins: pins, stats: stats),
+                    ),
                   if (groups.past.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.sm),
                       child: CollapsibleSection(
                         title: l10n.tripsListPastTrips,
                         icon: Icons.history,
+                        // Teases the latest finished trip rather than
+                        // aggregating: the lifetime aggregate now lives one
+                        // card up, and "where you just were" is what earns
+                        // the expand tap.
+                        summary: _pastSummary(groups.past.first, l10n),
                         pill: StatusPill.custom(
                           label: l10n
                               .tripsListPastTripsCount(groups.past.length),
@@ -254,7 +254,8 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             for (final t in groups.past)
-                              _TripCard(trip: t, isAdmin: isAdmin),
+                              _TripCard(
+                                  trip: t, isAdmin: isAdmin, isPast: true),
                           ],
                         ),
                       ),
@@ -312,6 +313,24 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
   }
 }
 
+/// One-line tease for the collapsed "Past trips" row: the most recent past
+/// trip's destinations and length ("Lisbon & Porto · 12 days"), composed from
+/// the same helpers the cards use. Segments drop out individually — a
+/// city-less legacy trip falls back to its headline, an undated one to
+/// destinations alone.
+String _pastSummary(Trip trip, AppLocalizations l10n) {
+  final cities = citiesLabel(
+    trip.cities,
+    two: (a, b) => l10n.citiesTwo(a, b),
+    more: (a, b, n) => l10n.citiesMore(a, b, n),
+  );
+  final days = dayCount(trip.startDate, trip.endDate, const <int?>[]);
+  return [
+    cities ?? tripHeadline(trip.title, cities),
+    if (days > 0) l10n.tripDurationDays(days),
+  ].join(' · ');
+}
+
 Future<void> _openTrip(
     BuildContext context, WidgetRef ref, String tripId) async {
   await Navigator.of(context).push(
@@ -333,7 +352,15 @@ class _TripCard extends ConsumerWidget {
   final Trip trip;
   final bool isAdmin;
 
-  const _TripCard({required this.trip, required this.isAdmin});
+  /// Past rows drop the packing pill: packing is moot once the trip is over,
+  /// and the past group is the densest place to economize.
+  final bool isPast;
+
+  const _TripCard({
+    required this.trip,
+    required this.isAdmin,
+    this.isPast = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -357,6 +384,10 @@ class _TripCard extends ConsumerWidget {
     // "1 city" chip is noise when the cities line/headline already names it).
     final days = dayCount(trip.startDate, trip.endDate, const <int?>[]);
     final cityCount = trip.cities?.length ?? 0;
+    // The AI's own blurb, suppressed when it IS the title (a long AI title
+    // falls back to the cities headline, which would print it twice).
+    final summary = (trip.summary ?? '').trim();
+    final showSummary = summary.isNotEmpty && summary != trip.title;
 
     final title = Text(
       headline,
@@ -388,6 +419,13 @@ class _TripCard extends ConsumerWidget {
                 MetaChip(
                     icon: Icons.location_city_outlined,
                     label: l10n.tripCitiesCount(cityCount)),
+              // Stays are CONTEXT (the payload carries confirmed stays, not a
+              // booked-progress denominator the booking pill doesn't already
+              // own), so a MetaChip — not another pill.
+              if ((trip.stayTotal ?? 0) > 0)
+                MetaChip(
+                    icon: Icons.hotel_outlined,
+                    label: l10n.tripsListStaysCount(trip.stayTotal!)),
               // Booking progress: a STATE pill (StatusPill, label-carrying
               // per its colorblind doctrine), tonal-green once everything is
               // booked. Null fields (full views, old servers, stale offline
@@ -400,6 +438,19 @@ class _TripCard extends ConsumerWidget {
                       ? Theme.of(context).colorScheme.secondaryContainer
                       : Theme.of(context).colorScheme.surfaceContainerHighest,
                   foreground: trip.bookingBooked == trip.bookingTotal
+                      ? Theme.of(context).colorScheme.onSecondaryContainer
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              // Packing progress, same STATE-pill treatment as booking (tonal
+              // green once everything is in the bag).
+              if (!isPast && (trip.packingTotal ?? 0) > 0)
+                StatusPill.custom(
+                  label: l10n.tripsListPackedCount(
+                      trip.packingDone ?? 0, trip.packingTotal!),
+                  background: trip.packingDone == trip.packingTotal
+                      ? Theme.of(context).colorScheme.secondaryContainer
+                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foreground: trip.packingDone == trip.packingTotal
                       ? Theme.of(context).colorScheme.onSecondaryContainer
                       : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -437,6 +488,17 @@ class _TripCard extends ConsumerWidget {
               padding: const EdgeInsets.only(top: AppSpacing.xs),
               child: Text(
                 cities,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ),
+          if (showSummary)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(
+                summary,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(

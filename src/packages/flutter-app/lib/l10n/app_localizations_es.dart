@@ -1715,14 +1715,68 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripsListNewTrip => 'Nuevo viaje';
 
   @override
-  String tripsListStatsUpcoming(int count) {
+  String get tripsListYourTravels => 'Tus viajes';
+
+  @override
+  String get tripsListTravelMap => 'Tu mapa de viajes';
+
+  @override
+  String tripsListStatTrips(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count viajes próximos',
-      one: '1 viaje próximo',
+      other: 'Viajes',
+      one: 'Viaje',
     );
     return '$_temp0';
+  }
+
+  @override
+  String tripsListStatTravelDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Días de viaje',
+      one: 'Día de viaje',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String tripsListStatCities(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Ciudades',
+      one: 'Ciudad',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String tripsListStaysCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alojamientos',
+      one: '1 alojamiento',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String tripsListPackedCount(int checked, int total) {
+    return '$checked/$total en la maleta';
+  }
+
+  @override
+  String tripsListBudgetSpentOfTarget(String spent, String target) {
+    return '$spent de $target';
+  }
+
+  @override
+  String tripsListBookTransportNudge(String date) {
+    return 'Reserva el transporte: el primer tramo sale el $date';
   }
 
   @override

@@ -16,10 +16,12 @@ import 'package:travel_route_planner/widgets/up_next_trip_card.dart';
 import 'support/l10n_test_app.dart';
 
 /// Server-enriched list rows (item_count / booking_total / booking_booked /
-/// shared): cards render booking-progress and Shared pills plus a places
-/// count, and hide ALL of them when the fields are null (old server, stale
-/// offline snapshot) — no local derivation, the server row is the one
-/// derivation for list display.
+/// shared, plus the insight fields of specs/trips-page-insights): cards render
+/// booking-progress and Shared pills, a places count, a stays chip, a packing
+/// pill and the trip's summary — and hide ALL of them when the fields are null
+/// (old server, stale offline snapshot) — no local derivation, the server row
+/// is the one derivation for list display. Money is hero-only: the plain rows
+/// stay lean.
 class _FixedTripsApiService extends TripsApiService {
   /// Each listTrips() call serves the freshest queued response (the last one
   /// once exhausted), so a test can change what a refresh returns.
@@ -68,18 +70,32 @@ Future<void> _pumpList(WidgetTester tester, List<Trip> trips,
 Trip _enriched(String id, String title,
         {String? start,
         String? end,
+        String? summary,
         int? itemCount,
         int? bookingTotal,
         int? bookingBooked,
+        int? stayTotal,
+        int? packingTotal,
+        int? packingDone,
+        double? budgetTarget,
+        double? budgetSpent,
+        String? budgetCurrency,
         bool? shared}) =>
     Trip(
       id: id,
       title: title,
+      summary: summary,
       startDate: start,
       endDate: end,
       itemCount: itemCount,
       bookingTotal: bookingTotal,
       bookingBooked: bookingBooked,
+      stayTotal: stayTotal,
+      packingTotal: packingTotal,
+      packingDone: packingDone,
+      budgetTarget: budgetTarget,
+      budgetSpent: budgetSpent,
+      budgetCurrency: budgetCurrency,
       shared: shared,
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
@@ -121,6 +137,10 @@ void main() {
     expect(find.textContaining('booked'), findsNothing);
     expect(find.text('Shared'), findsNothing);
     expect(find.textContaining('place'), findsNothing);
+    // Same rule for the insight fields: absent means unknown, so the chip
+    // never appears — the card must not invent a "0 stays" or "0/0 packed".
+    expect(find.textContaining('stay'), findsNothing);
+    expect(find.textContaining('packed'), findsNothing);
   });
 
   testWidgets('zero booked still renders — 0/2 is state, not absence',
@@ -172,5 +192,82 @@ void main() {
 
     expect(find.text('3/4 booked'), findsOneWidget);
     expect(find.text('1/4 booked'), findsNothing);
+  });
+
+  testWidgets('a plain card carries the stays chip, packing pill and summary',
+      (WidgetTester tester) async {
+    await _pumpList(tester, [
+      _enriched('hero', 'Weekend Hop', start: _rel(5), end: _rel(6)),
+      _enriched('t2', 'Big Summer Adventure',
+          start: _rel(40),
+          end: _rel(45),
+          summary: 'Nine days of tapas, trams and late dinners.',
+          stayTotal: 2,
+          packingTotal: 20,
+          packingDone: 12),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 stays'), findsOneWidget);
+    expect(find.text('12/20 packed'), findsOneWidget);
+    expect(
+        find.text('Nine days of tapas, trams and late dinners.'), findsOneWidget);
+  });
+
+  testWidgets('packing rides upcoming rows only — a past row drops the pill',
+      (WidgetTester tester) async {
+    await _pumpList(tester, [
+      _enriched('hero', 'Weekend Hop', start: _rel(5), end: _rel(6)),
+      _enriched('t2', 'Big Summer Adventure',
+          start: _rel(40), end: _rel(45), packingTotal: 20, packingDone: 12),
+      _enriched('old', 'Last Autumn Trip',
+          start: _rel(-40), end: _rel(-35), packingTotal: 9, packingDone: 3),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('12/20 packed'), findsOneWidget);
+
+    // Packing is moot once the trip is over: expanding the past group must
+    // not bring a packing pill with it.
+    await tester.ensureVisible(find.text('Past trips'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Past trips'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Last Autumn Trip'), findsOneWidget);
+    expect(find.text('3/9 packed'), findsNothing);
+  });
+
+  testWidgets('the summary hides when blank and when it repeats the title',
+      (WidgetTester tester) async {
+    await _pumpList(tester, [
+      _enriched('hero', 'Weekend Hop', start: _rel(5), end: _rel(6)),
+      _enriched('t2', 'Blank Blurb Trip',
+          start: _rel(40), end: _rel(45), summary: '   '),
+      _enriched('t3', 'Echo Trip',
+          start: _rel(60), end: _rel(65), summary: 'Echo Trip'),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('   '), findsNothing);
+    // The echoed blurb renders once — as the title, never printed twice.
+    expect(find.text('Echo Trip'), findsOneWidget);
+  });
+
+  testWidgets('budget never reaches a plain card — money is hero-only',
+      (WidgetTester tester) async {
+    await _pumpList(tester, [
+      _enriched('hero', 'Weekend Hop', start: _rel(5), end: _rel(6)),
+      _enriched('t2', 'Big Summer Adventure',
+          start: _rel(40),
+          end: _rel(45),
+          budgetTarget: 800,
+          budgetSpent: 540,
+          budgetCurrency: 'EUR'),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('€540 of €800'), findsNothing);
+    expect(find.textContaining('€'), findsNothing);
   });
 }

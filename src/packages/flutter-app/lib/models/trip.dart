@@ -3,6 +3,7 @@ import 'itinerary_item.dart';
 import 'accommodation.dart';
 import 'trip_segment.dart';
 import 'booking_todo.dart';
+import 'city_pin.dart';
 import 'trip_leg_dto.dart';
 
 part 'trip.g.dart';
@@ -66,6 +67,41 @@ class Trip {
   @JsonKey(name: 'booking_booked')
   final int? bookingBooked;
 
+  /// List-row insight enrichment (specs/trips-page-insights), same null
+  /// contract as [itemCount]: null = full view / old server / stale offline
+  /// snapshot / shared row — cards hide the chips rather than derive locally.
+  /// Present values carry explicit zeros ("0/2 stays" is real data).
+  @JsonKey(name: 'stay_total')
+  final int? stayTotal;
+  @JsonKey(name: 'stay_booked')
+  final int? stayBooked;
+  @JsonKey(name: 'packing_total')
+  final int? packingTotal;
+  @JsonKey(name: 'packing_done')
+  final int? packingDone;
+
+  /// Budget insight: [budgetTarget] null = no target set; [budgetSpent]
+  /// null = not a list row, 0 = nothing spent. Single-currency by design
+  /// (the buildBudgetResponse rule).
+  @JsonKey(name: 'budget_target')
+  final double? budgetTarget;
+  @JsonKey(name: 'budget_spent')
+  final double? budgetSpent;
+  @JsonKey(name: 'budget_currency')
+  final String? budgetCurrency;
+
+  /// Earliest unbooked FUTURE transport departure (YYYY-MM-DD) — the booking
+  /// urgency nudge's fact. Null when none (or any of the null cases above);
+  /// the client re-guards the display window against device-local today.
+  @JsonKey(name: 'next_transport_depart')
+  final String? nextTransportDepart;
+
+  /// Located hub cities in first-appearance order — a subset of [cities]
+  /// (hubs with only sentinel (0,0) items are omitted). Feeds the travel
+  /// footprint map straight from the list payload.
+  @JsonKey(name: 'city_pins')
+  final List<CityPin>? cityPins;
+
   /// Server-computed city legs (specs/server-leg-dates) — present on full
   /// trip views; absent on list responses, offline caches, and old
   /// snapshots, where clients fall back to the local derivation.
@@ -94,6 +130,15 @@ class Trip {
     this.itemCount,
     this.bookingTotal,
     this.bookingBooked,
+    this.stayTotal,
+    this.stayBooked,
+    this.packingTotal,
+    this.packingDone,
+    this.budgetTarget,
+    this.budgetSpent,
+    this.budgetCurrency,
+    this.nextTransportDepart,
+    this.cityPins,
     this.legs,
   });
 
