@@ -75,7 +75,7 @@ func TestNormalizeActiveProfileChoices(t *testing.T) {
 					t.Fatalf("normalizeChoice(%q) = %v, %v; want accepted", v, got, err)
 				}
 			}
-			// The pre-00062 quiz sent companions as "family with kids"; the
+			// The pre-00063 quiz sent companions as "family with kids"; the
 			// column is snake_case, so the old spelling must NOT sneak through.
 			if _, err := normalizeChoice(strPtr(c.invalid), c.allowed, c.field); err == nil {
 				t.Fatalf("normalizeChoice(%q) should be rejected", c.invalid)

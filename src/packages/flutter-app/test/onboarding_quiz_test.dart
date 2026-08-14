@@ -147,7 +147,7 @@ void main() {
     });
 
     // Companions used to be written here as "- Travels with: X". Migration
-    // 00062 gave it a column, so notes must no longer carry it — otherwise the
+    // 00063 gave it a column, so notes must no longer carry it — otherwise the
     // same fact has two homes and the two can disagree (specs/active-profile).
     test('companions never appears in the notes', () {
       expect(

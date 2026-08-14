@@ -36,9 +36,17 @@ Zen (`docs/zen.md`), applied deliberately in four places:
    not have two places to say the same thing. The bank grows only with tastes
    it genuinely lacks (`cycling`, `climbing`, `national parks`).
 
-**Migration number: `00062`.** 00061 (`expense_booking_link`) is the highest in
-tree and no open PR claims higher. 00058 remains permanently burned
-(`docs/parallel-dev.md` §4a).
+**Migration number: `00063`.** Originally authored as 00062, renumbered after
+**#408 (`create-trip-origin`) merged `00062_trip_origin.sql` to main** while
+this lane was open — verified against `origin/main` rather than taken on
+report, since a MERGED badge is not the same as being on main. 00062 is now the
+highest in tree and no open PR claims higher (checked across every open PR's
+changed files). 00058 remains permanently burned (`docs/parallel-dev.md` §4a).
+
+Lesson for the next lane: a migration number reserved at plan time is a claim,
+not a lock. Re-verify it against `origin/main` immediately before merge — a
+green "Migrations apply from zero" run only proves the number was free against
+the main that existed when CI ran.
 
 **Prompt-cache:** three properties added to `savePrefsTool` change the
 tools-block bytes → one-time cache invalidation, exactly as `work_style` did.
@@ -66,7 +74,7 @@ tools-block bytes → one-time cache invalidation, exactly as `work_style` did.
 
 `src/packages/api/`, in order:
 
-1. `migrations/00062_active_profile.sql` — Up adds the three `text` columns with
+1. `migrations/00063_active_profile.sql` — Up adds the three `text` columns with
    value comments, then backfills `companions` from the `- Travels with: X`
    bullet in `profile_notes` and strips **only** the bullets it successfully
    matched. An unmatched/reworded line keeps its bullet and leaves `companions`

@@ -129,7 +129,7 @@ void main() {
       expect(api.saveCalls, 1);
       expect(api.savedFitnessRoutine, 'running');
       expect(api.savedOutdoorIntensity, 'challenging');
-      // Snake_case, matching the column — the pre-00062 quiz spelled this
+      // Snake_case, matching the column — the pre-00063 quiz spelled this
       // "family with kids" and the server now rejects that.
       expect(api.savedCompanions, 'family_with_kids');
     });

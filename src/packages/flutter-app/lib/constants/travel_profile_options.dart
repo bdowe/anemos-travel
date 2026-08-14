@@ -20,7 +20,7 @@ const fitnessRoutineOptions = ['gym', 'running', 'both', 'none'];
 const outdoorIntensityOptions = ['easy', 'moderate', 'challenging'];
 
 /// Who the traveler usually travels with. Collected by the quiz since it
-/// shipped, but only stored as a real field from migration 00062 on.
+/// shipped, but only stored as a real field from migration 00063 on.
 const companionOptions = [
   'solo',
   'partner',

@@ -53,7 +53,7 @@ String _workStyleLabel(AppLocalizations l10n, String value) => switch (value) {
 /// two sources merge cleanly. Returns '' when there is nothing to note.
 ///
 /// Companions used to be written here as a `- Travels with: X` bullet because
-/// it had nowhere else to go; migration 00062 gave it a column, and the fact
+/// it had nowhere else to go; migration 00063 gave it a column, and the fact
 /// now lives there only (docs/zen.md — one home per fact).
 String buildOnboardingProfileNotes({required String tripsInMind}) {
   final lines = <String>[];
@@ -125,7 +125,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
     _pace = prefs.pace;
     _workStyle = prefs.workStyle;
     // Companions is seeded from here for the first time: before migration
-    // 00062 it had no field to come back from, so a retake always showed it
+    // 00063 it had no field to come back from, so a retake always showed it
     // blank. Every new preference field MUST be added here or an untouched
     // retake shows an empty chip row over a stored value.
     _companions = prefs.companions;

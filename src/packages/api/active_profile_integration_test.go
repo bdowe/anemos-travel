@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// specs/active-profile — the three fields added by migration 00062, driven
+// specs/active-profile — the three fields added by migration 00063, driven
 // through the real router so the whole chain (JSON tags -> normalizeChoice ->
 // sqlc upsert -> response mapping) is exercised, not just the validators.
 
@@ -76,7 +76,7 @@ func TestPreferencesActiveProfileRejectsBadValues(t *testing.T) {
 	bad := []map[string]any{
 		{"fitness_routine": "lifting"},
 		{"outdoor_intensity": "extreme"},
-		{"companions": "family with kids"}, // the pre-00062 spaced spelling
+		{"companions": "family with kids"}, // the pre-00063 spaced spelling
 	}
 	for _, body := range bad {
 		body["interests"] = []string{}

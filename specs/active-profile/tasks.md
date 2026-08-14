@@ -1,11 +1,11 @@
 # Tasks: Active Travel Profile (fitness, outdoor intensity, companions)
 
-> Dependency-ordered; single lane (`active-profile`), migration **00062**
+> Dependency-ordered; single lane (`active-profile`), migration **00063**
 > reserved. `[P]` marks tasks that can run in parallel within the lane.
 
 ## API (Go)
 
-- [x] Migration `00062_active_profile.sql` — Up: three `ADD COLUMN`s with value
+- [x] Migration `00063_active_profile.sql` — Up: three `ADD COLUMN`s with value
       comments, companions backfill from the `- Travels with:` bullet, strip of
       matched bullets only; Down: drop the three columns (notes edit noted as
       irreversible)

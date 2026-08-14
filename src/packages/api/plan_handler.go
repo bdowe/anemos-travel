@@ -789,7 +789,7 @@ func summarizeEvents(city string, events []Event) string {
 // authenticated session's system prompt, whether or not notes exist yet.
 //
 // This list is for facts with NO column of their own. Travel companions used to
-// be on it and no longer is: migration 00062 gave it one, and naming it here too
+// be on it and no longer is: migration 00063 gave it one, and naming it here too
 // would tell the agent to write the same fact in two places — the exact
 // duplication that migration cleaned up (docs/zen.md, one obvious way).
 const profileNotesInstruction = "\n\nWhen you learn something durable about this traveler — dietary needs, accommodation style, accessibility needs, likes or dislikes — call save_preferences with profile_notes set to the COMPLETE updated profile: your current notes merged with the new fact, de-duplicated, as short bullet lines (max ~15). Never send only the new fact. Don't store one-off trip details or sensitive information (health, religion, politics) unless the traveler explicitly asks you to remember it."
@@ -892,7 +892,7 @@ func personalizedSystemPrompt(base string, p *store.TravelerPreference) string {
 		}
 	}
 	// Companions used to live as a "- Travels with: X" bullet inside the profile
-	// notes; migration 00062 gave it a column so the distiller can't reword it
+	// notes; migration 00063 gave it a column so the distiller can't reword it
 	// away. profileNotesInstruction no longer names it — one home only.
 	var companionsNote string
 	if p.Companions != nil && *p.Companions != "" {
