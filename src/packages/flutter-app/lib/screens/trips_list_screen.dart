@@ -144,11 +144,14 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
         for (final t in groups.upcoming)
           if (t.id != hero?.id) t
       ];
-      // "Your travels" is all-time over OWNED trips (shared-with-me is
-      // someone else's travel, and its payload carries no pins anyway).
-      // Gated at 2+: a lifetime aggregate of one trip only restates the hero.
-      final stats = lifetimeStats(state.trips);
-      final pins = footprintPins(state.trips);
+      // "Your travels" is over OWNED trips (shared-with-me is someone else's
+      // travel, and its payload carries no pins anyway), split into what's
+      // been travelled and what's still planned — the band sits where the page
+      // turns from plans to history, so a number that silently mixed the two
+      // was reading as travel already taken. Gated at 2+: an aggregate of one
+      // trip only restates the hero.
+      final stats = travelStats(state.trips, now);
+      final pins = footprintPins(state.trips, now);
       final showFootprint = state.trips.length >= 2;
       body = RefreshIndicator(
         onRefresh: () async {
@@ -239,7 +242,11 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                           AppSpacing.xs, AppSpacing.xl, 0, AppSpacing.sm),
                       child: SectionHeader(title: l10n.tripsListYourTravels),
                     ),
-                    TravelFootprintCard(pins: pins, stats: stats),
+                    TravelFootprintCard(
+                      pins: pins,
+                      traveled: stats.traveled,
+                      planned: stats.planned,
+                    ),
                   ],
                   if (groups.past.isNotEmpty)
                     Padding(

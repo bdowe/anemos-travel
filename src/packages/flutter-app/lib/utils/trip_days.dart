@@ -60,6 +60,23 @@ bool tripIsPast(String? startDate, String? endDate, DateTime today) {
       .isBefore(DateTime(today.year, today.month, today.day));
 }
 
+/// Whether the trip has begun as of [today]'s device-local calendar date: its
+/// first day — [startDate], falling back to [endDate] for start-less trips —
+/// is today or earlier. Undated trips have not started.
+///
+/// The mirror of [tripIsPast] (which measures the LAST day the same way), and
+/// deliberately so: every past trip has started, and a trip that has started
+/// but is not past is the one in progress. The first-day fallback also matches
+/// trip_list_order.dart's `_firstDay` sort key, so the "Your travels" split
+/// and the list's own ordering can't disagree about the same card.
+bool tripHasStarted(String? startDate, String? endDate, DateTime today) {
+  final first =
+      DateTime.tryParse(startDate ?? '') ?? DateTime.tryParse(endDate ?? '');
+  if (first == null) return false;
+  return !DateTime(first.year, first.month, first.day)
+      .isAfter(DateTime(today.year, today.month, today.day));
+}
+
 /// How many days a trip spans for day chips / pickers: the later of the
 /// highest tagged day in [itemDays] and the [startDate]–[endDate] span (so an
 /// empty dated trip still offers its real days, and an item tagged beyond the
@@ -76,6 +93,27 @@ int dayCount(String? startDate, String? endDate, Iterable<int?> itemDays) {
     if (span > max) max = span;
   }
   return max;
+}
+
+/// The travel days of a trip already LIVED THROUGH as of [today]: the
+/// inclusive span from [startDate] through the earlier of [today] and
+/// [endDate]. 0 for a trip that hasn't started yet, and — like [dayCount] —
+/// 0 whenever either date is missing, so a half-dated trip contributes no days
+/// on either side of a traveled/planned split. Equals [dayCount] once the trip
+/// is over, so a finished trip counts in full.
+///
+/// UTC-normalized before subtracting (the [daysUntilTrip] rule) so a DST
+/// transition inside the span can't drop a calendar day.
+int traveledDayCount(String? startDate, String? endDate, DateTime today) {
+  final start = DateTime.tryParse(startDate ?? '');
+  final end = DateTime.tryParse(endDate ?? '');
+  if (start == null || end == null) return 0;
+  final from = DateTime.utc(start.year, start.month, start.day);
+  final until = DateTime.utc(end.year, end.month, end.day);
+  final now = DateTime.utc(today.year, today.month, today.day);
+  final last = now.isBefore(until) ? now : until;
+  final days = last.difference(from).inDays + 1;
+  return days < 0 ? 0 : days;
 }
 
 /// Whether a stay covers ANY night in `[start, end)` — the leg-focus stay

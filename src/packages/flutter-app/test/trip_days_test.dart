@@ -87,6 +87,65 @@ void main() {
     });
   });
 
+  group('tripHasStarted', () {
+    final today = DateTime(2026, 8, 13, 22, 30); // time of day is ignored
+
+    test('a trip starting today has started; tomorrow has not', () {
+      expect(tripHasStarted('2026-08-13', '2026-08-20', today), isTrue);
+      expect(tripHasStarted('2026-08-14', '2026-08-20', today), isFalse);
+    });
+
+    test('every past trip has started (the tripIsPast mirror)', () {
+      expect(tripHasStarted('2026-07-01', '2026-07-05', today), isTrue);
+      expect(tripIsPast('2026-07-01', '2026-07-05', today), isTrue);
+    });
+
+    test('an in-progress trip has started but is not past', () {
+      expect(tripHasStarted('2026-08-10', '2026-08-20', today), isTrue);
+      expect(tripIsPast('2026-08-10', '2026-08-20', today), isFalse);
+    });
+
+    test('falls back to the end date when there is no start', () {
+      expect(tripHasStarted(null, '2026-07-05', today), isTrue);
+      expect(tripHasStarted(null, '2026-09-05', today), isFalse);
+    });
+
+    test('undated and garbage trips have not started', () {
+      expect(tripHasStarted(null, null, today), isFalse);
+      expect(tripHasStarted('not-a-date', null, today), isFalse);
+    });
+  });
+
+  group('traveledDayCount', () {
+    final today = DateTime(2026, 8, 13, 22, 30); // time of day is ignored
+
+    test('a finished trip counts in full, matching dayCount', () {
+      expect(traveledDayCount('2026-06-10', '2026-06-14', today), 5);
+      expect(dayCount('2026-06-10', '2026-06-14', const <int?>[]), 5);
+    });
+
+    test('an in-progress trip counts only the days lived through', () {
+      // Day 1 was Aug 10; today is Aug 13 ⇒ 4 days behind us, 7 to go.
+      expect(traveledDayCount('2026-08-10', '2026-08-20', today), 4);
+    });
+
+    test('a trip starting today counts its first day', () {
+      expect(traveledDayCount('2026-08-13', '2026-08-20', today), 1);
+    });
+
+    test('a future trip counts nothing', () {
+      expect(traveledDayCount('2026-08-14', '2026-08-20', today), 0);
+      expect(traveledDayCount('2027-01-01', '2027-01-10', today), 0);
+    });
+
+    test('half-dated and undated trips count nothing (the dayCount rule)', () {
+      expect(traveledDayCount('2026-06-10', null, today), 0);
+      expect(traveledDayCount(null, '2026-06-14', today), 0);
+      expect(traveledDayCount(null, null, today), 0);
+      expect(traveledDayCount('junk', 'junk', today), 0);
+    });
+  });
+
   group('stayCoversDate', () {
     const checkIn = '2026-06-10';
     const checkOut = '2026-06-13';

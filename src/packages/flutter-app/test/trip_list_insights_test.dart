@@ -4,9 +4,9 @@ import 'package:travel_route_planner/models/city_pin.dart';
 import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/utils/trip_list_insights.dart';
 
-/// List-payload insight derivations (utils/trip_list_insights.dart): lifetime
-/// stats, footprint pins, and the booking-nudge window — plus the Trip model's
-/// tolerance for payloads with and without the new insight keys.
+/// List-payload insight derivations (utils/trip_list_insights.dart): the
+/// traveled/planned split, footprint pins, and the booking-nudge window — plus
+/// the Trip model's tolerance for payloads with and without the insight keys.
 
 Trip _trip(
   String id, {
@@ -33,45 +33,102 @@ Trip _trip(
 final _today = DateTime(2026, 8, 6);
 
 void main() {
-  group('lifetimeStats', () {
-    test('counts all trips and sums dated spans; undated contribute zero days',
-        () {
-      final s = lifetimeStats([
-        _trip('dated', start: '2026-08-20', end: '2026-08-24'), // 5 days
-        _trip('draft'),
-      ]);
-      expect(s.trips, 2);
-      expect(s.travelDays, 5);
-      expect(s.cities, 0);
-    });
-
-    test('is all-time: past and upcoming trips both count', () {
-      final s = lifetimeStats([
+  group('travelStats', () {
+    test('a finished trip is traveled in full; a future one is planned', () {
+      final s = travelStats([
         _trip('past',
             start: '2026-01-01', end: '2026-01-05', // 5 days, long over
             cities: const ['Lisbon']),
         _trip('future',
             start: '2026-09-01', end: '2026-09-03', // 3 days
             cities: const ['Madrid']),
-      ]);
-      expect(s.trips, 2);
-      expect(s.travelDays, 8);
-      expect(s.cities, 2);
+      ], _today);
+      expect(s.traveled, (trips: 1, travelDays: 5, cities: 1));
+      expect(s.planned, (trips: 1, travelDays: 3, cities: 1));
     });
 
-    test('dedupes cities case- and whitespace-insensitively across trips', () {
-      final s = lifetimeStats([
-        _trip('a', cities: const ['Lisbon', 'Porto']),
-        _trip('b', cities: const [' lisbon ', 'PORTO', 'Madrid']),
-      ]);
-      expect(s.cities, 3);
+    test('an in-progress trip counts only the days lived through so far', () {
+      // Day 1 was Aug 4; today is Aug 6 ⇒ 3 of the 10 days are behind us. The
+      // remaining 7 belong to neither side: each side stays consistent with
+      // the trips shown beside it.
+      final s = travelStats([
+        _trip('live', start: '2026-08-04', end: '2026-08-13', cities: const [
+          'Athens',
+          'Naxos',
+        ]),
+      ], _today);
+      expect(s.traveled, (trips: 1, travelDays: 3, cities: 2));
+      expect(s.planned, (trips: 0, travelDays: 0, cities: 0));
     });
 
-    test('an empty list yields all zeros', () {
-      final s = lifetimeStats(const []);
-      expect(s.trips, 0);
-      expect(s.travelDays, 0);
-      expect(s.cities, 0);
+    test('a trip starting today has started (1 day travelled)', () {
+      final s = travelStats(
+          [_trip('t', start: '2026-08-06', end: '2026-08-08')], _today);
+      expect(s.traveled.trips, 1);
+      expect(s.traveled.travelDays, 1);
+      expect(s.planned.trips, 0);
+    });
+
+    test('a trip starting tomorrow is still planned, at its full span', () {
+      final s = travelStats(
+          [_trip('t', start: '2026-08-07', end: '2026-08-09')], _today);
+      expect(s.traveled.trips, 0);
+      expect(s.planned, (trips: 1, travelDays: 3, cities: 0));
+    });
+
+    test('undated drafts are planned and contribute no days', () {
+      final s = travelStats([
+        _trip('draft', cities: const ['Tokyo']),
+        _trip('dated', start: '2026-08-20', end: '2026-08-24'), // 5 days
+      ], _today);
+      expect(s.traveled, (trips: 0, travelDays: 0, cities: 0));
+      expect(s.planned, (trips: 2, travelDays: 5, cities: 1));
+    });
+
+    test('a half-dated trip buckets by its one date but adds no days', () {
+      // start-only in the past: the list files it under Past trips, so the
+      // band must agree it has been travelled — dayCount needs both dates,
+      // so it lands there with 0 days rather than sitting among the plans.
+      final s = travelStats([_trip('t', start: '2026-05-01')], _today);
+      expect(s.traveled, (trips: 1, travelDays: 0, cities: 0));
+      expect(s.planned.trips, 0);
+    });
+
+    test('dedupes cities case- and whitespace-insensitively within a side', () {
+      final s = travelStats([
+        _trip('a', start: '2026-09-01', end: '2026-09-03', cities: const [
+          'Lisbon',
+          'Porto',
+        ]),
+        _trip('b', start: '2026-10-01', end: '2026-10-03', cities: const [
+          ' lisbon ',
+          'PORTO',
+          'Madrid',
+        ]),
+      ], _today);
+      expect(s.planned.cities, 3);
+    });
+
+    test('a city on both sides counts once, as traveled', () {
+      final s = travelStats([
+        // Newest-created first, exactly like the server's order: the planned
+        // trip is seen BEFORE the past one that actually visited Lisbon.
+        _trip('return', start: '2026-09-01', end: '2026-09-03', cities: const [
+          'Lisbon',
+          'Madrid',
+        ]),
+        _trip('first', start: '2026-01-01', end: '2026-01-05', cities: const [
+          'Lisbon',
+        ]),
+      ], _today);
+      expect(s.traveled.cities, 1); // Lisbon
+      expect(s.planned.cities, 1); // Madrid only
+    });
+
+    test('an empty list yields two zeroed sides', () {
+      final s = travelStats(const [], _today);
+      expect(s.traveled, (trips: 0, travelDays: 0, cities: 0));
+      expect(s.planned, (trips: 0, travelDays: 0, cities: 0));
     });
   });
 
@@ -130,7 +187,7 @@ void main() {
         _trip('b', pins: const [
           CityPin(city: 'Madrid', lat: 40.4, lng: -3.7),
         ]),
-      ]);
+      ], _today);
       expect(pins.map((p) => p.city), ['Lisbon', 'Porto', 'Madrid']);
     });
 
@@ -141,7 +198,7 @@ void main() {
           CityPin(city: ' LISBON ', lat: 0.1, lng: 0.2), // revisit — ignored
           CityPin(city: 'Athens', lat: 37.9, lng: 23.7),
         ]),
-      ]);
+      ], _today);
       expect(pins, hasLength(2));
       expect(pins[0].city, 'Lisbon');
       expect(pins[0].lat, 38.7);
@@ -153,8 +210,54 @@ void main() {
       final pins = footprintPins([
         _trip('bare'),
         _trip('a', pins: const [CityPin(city: 'Lisbon', lat: 38.7, lng: -9.1)]),
-      ]);
+      ], _today);
       expect(pins.map((p) => p.city), ['Lisbon']);
+    });
+
+    test('visited tracks whether the trip has started', () {
+      final pins = footprintPins([
+        _trip('past',
+            start: '2026-01-01',
+            end: '2026-01-05',
+            cities: const ['Lisbon'],
+            pins: const [CityPin(city: 'Lisbon', lat: 38.7, lng: -9.1)]),
+        _trip('future',
+            start: '2026-09-01',
+            end: '2026-09-03',
+            cities: const ['Madrid'],
+            pins: const [CityPin(city: 'Madrid', lat: 40.4, lng: -3.7)]),
+      ], _today);
+      expect(pins.map((p) => p.visited), [true, false]);
+    });
+
+    test('a visited city stays visited when a PLANNED trip wins its coordinate',
+        () {
+      // Server order is newest-created-first, so the upcoming return trip
+      // supplies the winning pin for a city the traveler has already been to.
+      // Reading `visited` off that row would hollow out an earned dot.
+      final pins = footprintPins([
+        _trip('return',
+            start: '2026-09-01',
+            end: '2026-09-03',
+            cities: const ['Lisbon'],
+            pins: const [CityPin(city: ' lisbon ', lat: 38.7, lng: -9.1)]),
+        _trip('first',
+            start: '2026-01-01',
+            end: '2026-01-05',
+            cities: const ['Lisbon'],
+            pins: const [CityPin(city: 'Lisbon', lat: 38.71, lng: -9.14)]),
+      ], _today);
+      expect(pins, hasLength(1));
+      expect(pins.single.visited, isTrue);
+    });
+
+    test('an undated draft pins as planned', () {
+      final pins = footprintPins([
+        _trip('draft',
+            cities: const ['Tokyo'],
+            pins: const [CityPin(city: 'Tokyo', lat: 35.7, lng: 139.7)]),
+      ], _today);
+      expect(pins.single.visited, isFalse);
     });
   });
 
