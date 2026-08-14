@@ -7,9 +7,10 @@ import 'package:travel_route_planner/widgets/status_pill.dart';
 import 'support/l10n_test_app.dart';
 
 /// Wave-2 foundations (polish/wave2-foundations): the shared map chip widget
-/// must resolve its labels through AppLocalizations — it previously shipped
-/// hardcoded English onto all three map surfaces. (MapLegChips' city labels
-/// are data; only its "All" chip localizes.) StatusPill's draft/planned
+/// must resolve its copy through AppLocalizations — it previously shipped
+/// hardcoded English onto all three map surfaces. MapLegChips' city labels are
+/// data, so its only translated string is the reset's tooltip; that carrier
+/// used to be the "All" chip, retired with the chip. StatusPill's draft/planned
 /// variant is retired (specs/retire-trip-status); the surviving custom pill
 /// renders its explicit label verbatim.
 void main() {
@@ -43,18 +44,26 @@ void main() {
   });
 
   group('MapLegChips localization', () {
-    testWidgets('renders the English All chip under en', (tester) async {
+    // The fixture is focused on Praga, so the reset — the strip's one piece
+    // of localized copy — is on screen.
+    String resetTooltip(WidgetTester tester) => tester
+        .widget<Tooltip>(find.descendant(
+          of: find.byType(MapLegChips),
+          matching: find.byType(Tooltip),
+        ))
+        .message!;
+
+    testWidgets('resolves the reset tooltip under en', (tester) async {
       await tester.pumpWidget(chips());
-      expect(find.text('All'), findsOneWidget);
+      expect(resetTooltip(tester), 'Show all places');
       expect(find.text('Praga'), findsOneWidget);
       expect(find.text('Roma'), findsOneWidget);
     });
 
-    testWidgets('renders the Spanish All chip under es; city labels pass '
+    testWidgets('resolves the reset tooltip under es; city labels pass '
         'through verbatim', (tester) async {
       await tester.pumpWidget(chips(locale: const Locale('es')));
-      expect(find.text('Todos'), findsOneWidget);
-      expect(find.text('All'), findsNothing);
+      expect(resetTooltip(tester), 'Mostrar todos los lugares');
       expect(find.text('Praga'), findsOneWidget);
       expect(find.text('Roma'), findsOneWidget);
     });

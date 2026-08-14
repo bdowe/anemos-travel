@@ -13,6 +13,7 @@ import 'package:travel_route_planner/screens/shared_trip_screen.dart';
 import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
+import 'support/chip_finders.dart';
 import 'support/l10n_test_app.dart';
 
 class _FakeTripsApiService extends TripsApiService {
@@ -111,13 +112,14 @@ void main() {
   TripMap map(WidgetTester tester) =>
       tester.widget<TripMap>(find.byType(TripMap));
 
-  testWidgets('shared view gets the leg chip row, defaulting to All',
+  testWidgets('shared view gets the leg chip row, defaulting to the overview',
       (WidgetTester tester) async {
     await pumpScreen(tester);
 
     final chips = find.byType(MapLegChips);
     expect(chips, findsOneWidget);
-    for (final label in ['All', 'Paris', 'Rome']) {
+    expect(mapResetButton, findsNothing);
+    for (final label in ['Paris', 'Rome']) {
       expect(
         find.descendant(of: chips, matching: find.text(label)),
         findsOneWidget,
@@ -149,7 +151,7 @@ void main() {
     expect(map(tester).accommodations.map((a) => a.name), ['Rome Inn']);
     expect(map(tester).fitSignature, 'Rome');
 
-    await tapChip(tester, 'All');
+    await tapMapReset(tester);
 
     expect(map(tester).items, hasLength(3));
     expect(map(tester).accommodations, hasLength(2));

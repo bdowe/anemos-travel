@@ -288,10 +288,13 @@ Widget appMapAttribution() {
 /// Dark and translucent so it reads as a frosted chip over satellite imagery.
 ///
 /// The painted circle stays [_visualSize]; a transparent halo pads the hit
-/// box to [_hitTarget] (the 44px mobile touch minimum — every placement of
+/// box to [hitTarget] (the 44px mobile touch minimum — every placement of
 /// these controls is touch-first).
 class MapControlButton extends StatelessWidget {
-  static const double _hitTarget = 44;
+  /// Public so callers laying one of these out beside other overlay chrome
+  /// can reserve the same height without re-declaring 44 (MapLegChips holds
+  /// the row's height with it while its reset button is collapsed).
+  static const double hitTarget = 44;
   static const double _visualSize = 36;
 
   final IconData icon;
@@ -308,8 +311,8 @@ class MapControlButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final button = SizedBox(
-      width: _hitTarget,
-      height: _hitTarget,
+      width: hitTarget,
+      height: hitTarget,
       child: Material(
         color: Colors.transparent,
         child: InkWell(

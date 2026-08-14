@@ -851,7 +851,6 @@
   "tripItinerary": "Itinerary",
   "tripToday": "Today",
   "tripAddPlace": "Add place",
-  "tripFilterAll": "All",
   "tripFilterUnbooked": "Not booked yet",
   "tripFilterAllBooked": "Everything's booked",
   "tripFilterAllBookedMessage": "Nothing left to book on this trip — you're all set.",
@@ -1578,6 +1577,10 @@
   "mapZoomIn": "Zoom in",
   "mapZoomOut": "Zoom out",
   "mapResetMap": "Reset map",
+  "mapShowAllPlaces": "Show all places",
+  "@mapShowAllPlaces": {
+    "description": "Tooltip on the map's globe button, which clears a destination focus and returns to the whole-trip overview. Deliberately not named mapReset*: mapResetMap sits next to it and means something else — refit the camera over whatever is already shown."
+  },
   "mapHomeAirport": "Home airport ({code})",
   "@mapHomeAirport": {
     "placeholders": {

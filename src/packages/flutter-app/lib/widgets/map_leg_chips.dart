@@ -3,20 +3,33 @@ import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
+import 'app_map.dart';
 
-/// Destination chips overlaid on a trip map: `All · Prague · Kraków · …`
+/// Destination chips overlaid on a trip map: `Prague · Kraków · …`
 /// (specs/map-city-focus, successor to the day chips of specs/today-mode).
 /// One chip per full-itinerary leg, in visit order; [selected] is the leg's
-/// run KEY (`'Prague'`, `'Prague#2'`), null meaning All. Tapping a chip
-/// reports the new value through [onSelected] (tapping the already-selected
-/// chip re-reports it — harmless for a filter). [legs] labels are
+/// run KEY (`'Prague'`, `'Prague#2'`), null meaning the whole-trip overview.
+/// Tapping a chip reports the new value through [onSelected] (tapping the
+/// already-selected chip re-reports it — deliberate: on trip detail that tap
+/// also re-expands the city's group and rests its header, so a re-tap is
+/// "take me back there", not a dead gesture). [legs] labels are
 /// display-ready — the caller localizes the 'Other places' run; a revisited
 /// city renders two same-label chips whose distinct keys select
 /// independently.
 ///
+/// There is no chip for the overview. A city is *a choice among many*; the
+/// overview is *the absence of a choice*, and rendering both as chips made
+/// the strip lie twice: "All" read as a destination, and — because its value
+/// is null, the resting state — it wore the selected ring permanently, so the
+/// strongest treatment on the map belonged to "no filter applied". The way
+/// back is instead a round globe button that exists only while a leg is
+/// focused, in the map's own [MapControlButton] costume so it can never be
+/// mistaken for a destination. The ring now means one thing: you are focused
+/// on this city.
+///
 /// Renders nothing with fewer than 2 legs: below that the map's
-/// destination-overview mode never engages, so "All" and "the one leg"
-/// would draw the identical map — a two-chip strip that does nothing.
+/// destination-overview mode never engages, so focusing the one leg would
+/// draw the identical map — a one-chip strip that does nothing.
 ///
 /// The chips sit over satellite imagery, so they use the same translucent
 /// dark scrim treatment ([AppColors.mapScrim]) as the map's segment labels
@@ -29,7 +42,9 @@ class MapLegChips extends StatefulWidget {
   /// overlaid at `top: 8`, including breathing room: 8 offset + the 48px
   /// chip hit box (padded tap target) + 8 clearance. Callers pass this as
   /// TripMap's `topOverlayInset` so camera fitting keeps markers out from
-  /// under the chips.
+  /// under the chips. The reset button is shorter than the chips (44px, the
+  /// shared [MapControlButton] hit target), so it never grows this band —
+  /// pinned by a test.
   static const double mapTopInset = 64;
 
   /// One entry per full-itinerary leg, visit order, labels display-ready.
@@ -92,6 +107,10 @@ class _MapLegChipsState extends State<MapLegChips> {
   /// through this strip's own [ScrollPosition] — never `Scrollable.ensureVisible`,
   /// which walks every ancestor scrollable and would also yank the page
   /// scroll hosting the inline map card on trip detail.
+  ///
+  /// Reads the viewport as it stands this frame, which is only sound because
+  /// the reset slot's width is reserved rather than animated — see the note on
+  /// that slot in [build].
   void _revealSelected({bool animate = false}) {
     if (!mounted || !_controller.hasClients) return;
     final target = _selectedKey.currentContext?.findRenderObject();
@@ -106,7 +125,7 @@ class _MapLegChipsState extends State<MapLegChips> {
 
   Widget _chip({
     required String label,
-    required String? value,
+    required String value,
     bool muted = false,
   }) {
     final isSelected = widget.selected == value;
@@ -151,30 +170,65 @@ class _MapLegChipsState extends State<MapLegChips> {
   @override
   Widget build(BuildContext context) {
     if (widget.legs.length < 2) return const SizedBox.shrink();
-    // Same key the trip-detail filter menu uses for All, so the chip row and
-    // the list agree in every language (specs/i18n-spanish).
     final l10n = context.l10n;
-    return SingleChildScrollView(
-      controller: _controller,
-      scrollDirection: Axis.horizontal,
-      // Draggable even when the chips fit, and end padding so the first/last
-      // chip never sits flush against the map edge.
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-      child: Row(
-        children: [
-          _chip(label: l10n.tripFilterAll, value: null),
-          for (final leg in widget.legs) ...[
-            const SizedBox(width: 6),
-            _chip(
-              label: leg.label,
-              value: leg.key,
-              muted: widget.mappedLegKeys != null &&
-                  !widget.mappedLegKeys!.contains(leg.key),
+    return Row(
+      children: [
+        // The way out of a focus, painted only while there is one. Two rules
+        // hold this slot's shape:
+        //
+        // Pinned OUTSIDE the scroll view — on a ten-city trip the strip
+        // scrolls, and an exit that can scroll off-screen is not an exit.
+        //
+        // Its space is RESERVED, not collapsed. A slot that grew on focus
+        // would shove the whole strip 44px sideways on every chip tap, and
+        // would silently break [_revealSelected]: that runs post-frame against
+        // the current viewport, so a viewport still mid-resize lands the
+        // preselected chip outside the strip (caught by the reveal test — the
+        // chip missed by exactly this button's width). Holding the width costs
+        // one button of empty map at rest and buys a strip that never moves.
+        SizedBox(
+          width: MapControlButton.hitTarget,
+          height: MapControlButton.hitTarget,
+          child: widget.selected == null
+              ? null
+              : MapControlButton(
+                  // A globe, NOT a ✕: the full-screen map already carries a
+                  // close ✕ in its app bar directly above this slot, and two
+                  // white ✕s stacked 40px apart read as one control repeated.
+                  // Nor a zoom glyph — the bottom-right column's "Reset map"
+                  // is Icons.zoom_in_map and means something else (refit the
+                  // camera over whatever is already shown). This one depicts
+                  // what you get back: the whole trip.
+                  icon: Icons.public,
+                  tooltip: l10n.mapShowAllPlaces,
+                  onTap: () => widget.onSelected(null),
+                ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _controller,
+            scrollDirection: Axis.horizontal,
+            // Draggable even when the chips fit, and end padding so the
+            // first/last chip never sits flush against the map edge (or the
+            // reset button).
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+            child: Row(
+              children: [
+                for (var i = 0; i < widget.legs.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 6),
+                  _chip(
+                    label: widget.legs[i].label,
+                    value: widget.legs[i].key,
+                    muted: widget.mappedLegKeys != null &&
+                        !widget.mappedLegKeys!.contains(widget.legs[i].key),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }

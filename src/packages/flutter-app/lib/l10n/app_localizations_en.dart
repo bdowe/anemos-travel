@@ -1392,9 +1392,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripAddPlace => 'Add place';
 
   @override
-  String get tripFilterAll => 'All';
-
-  @override
   String get tripFilterUnbooked => 'Not booked yet';
 
   @override
@@ -2384,6 +2381,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mapResetMap => 'Reset map';
+
+  @override
+  String get mapShowAllPlaces => 'Show all places';
 
   @override
   String mapHomeAirport(String code) {

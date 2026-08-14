@@ -12,6 +12,7 @@ import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
+import 'support/chip_finders.dart';
 import 'support/l10n_test_app.dart';
 
 class _FakeTripsApiService extends TripsApiService {
@@ -105,13 +106,13 @@ void main() {
   TripMap map(WidgetTester tester) =>
       tester.widget<TripMap>(find.byType(TripMap));
 
-  testWidgets('renders All + one chip per city leg over the map',
+  testWidgets('renders one chip per city leg over the map — and nothing else',
       (WidgetTester tester) async {
     await pumpScreen(tester);
 
     final chips = find.byType(MapLegChips);
     expect(chips, findsOneWidget);
-    for (final label in ['All', 'Paris', 'Rome', 'Berlin']) {
+    for (final label in ['Paris', 'Rome', 'Berlin']) {
       expect(
         find.descendant(of: chips, matching: find.text(label)),
         findsOneWidget,
@@ -120,15 +121,20 @@ void main() {
     // Day chips are gone from the map strip.
     expect(find.descendant(of: chips, matching: find.text('Day 1')),
         findsNothing);
+    // And so is the "All" chip: the overview is not a destination. While it
+    // had a chip it also wore the selected ring by default, spending the
+    // strip's strongest treatment on "no filter applied".
+    expect(find.descendant(of: chips, matching: find.text('All')), findsNothing);
 
-    // All is the default: the map sees the whole trip.
+    // The overview is the resting state, and carries no way "back".
     expect(map(tester).items, hasLength(4));
     expect(map(tester).accommodations, hasLength(1));
     expect(map(tester).fitSignature, isNull);
+    expect(mapResetButton, findsNothing);
   });
 
   testWidgets('a city chip filters the map to that leg and its stays; '
-      'All restores', (WidgetTester tester) async {
+      'the reset restores', (WidgetTester tester) async {
     await pumpScreen(tester);
 
     await tapChip(tester, 'Paris');
@@ -144,11 +150,14 @@ void main() {
     expect(map(tester).accommodations, isEmpty);
     expect(map(tester).fitSignature, 'Rome');
 
-    await tapChip(tester, 'All');
+    // The exit exists only because a leg is focused.
+    expect(mapResetButton, findsOneWidget);
+    await tapMapReset(tester);
 
     expect(map(tester).fitSignature, isNull);
     expect(map(tester).items, hasLength(4));
     expect(map(tester).accommodations, hasLength(1));
+    expect(mapResetButton, findsNothing);
   });
 
   testWidgets('a leg with nothing mappable shows the on-map empty state '
@@ -174,7 +183,7 @@ void main() {
     // The chip row survives the empty selection and can navigate back out.
     expect(find.byType(MapLegChips), findsOneWidget);
 
-    await tapChip(tester, 'All');
+    await tapMapReset(tester);
     expect(find.text('No places pinned in Berlin'), findsNothing);
     expect(map(tester).items, hasLength(4));
   });
@@ -217,7 +226,6 @@ void main() {
     expect(chipFor('Berlin').labelStyle?.color, Colors.white60);
     expect(chipFor('Paris').labelStyle?.color, Colors.white);
     expect(chipFor('Rome').labelStyle?.color, Colors.white);
-    expect(chipFor('All').labelStyle?.color, Colors.white);
 
     // Selecting the muted chip restores the full treatment (the ring says
     // "you are here"; the map's empty state says empty).

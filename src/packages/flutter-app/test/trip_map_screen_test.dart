@@ -12,6 +12,7 @@ import 'package:travel_route_planner/screens/trip_map_screen.dart';
 import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
+import 'support/chip_finders.dart';
 import 'support/l10n_test_app.dart';
 
 ItineraryItem _item(int pos, String name, double lat, double lng) =>
@@ -162,12 +163,12 @@ void main() {
         );
 
     testWidgets(
-      'home pin shows on All and the endpoint legs, hides mid-trip',
+      'home pin shows on the overview and the endpoint legs, hides mid-trip',
       (tester) async {
         await tester.pumpWidget(appWithHome());
         await tester.pumpAndSettle();
 
-        // "All": both legs → home pin present.
+        // Unfocused overview: both legs → home pin present.
         expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
 
         // Mid-trip leg: neither home leg belongs to it → no orphan pin.
@@ -250,7 +251,7 @@ void main() {
       await _tapChip(tester, 'Paris');
       expect(find.byType(MarkerClusterLayerWidget), findsOneWidget);
 
-      await _tapChip(tester, 'All');
+      await tapMapReset(tester);
       expect(find.byType(MarkerClusterLayerWidget), findsNothing);
       expect(inMap('1'), findsOneWidget);
       expect(inMap('2'), findsOneWidget);

@@ -5,6 +5,61 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-14 — the map strip's "All" chip (emphasis pointed the wrong way)
+
+- **[app] Friction → fixed (All chip retired, contextual reset):** Brian on the
+  map strip — "All should be styled/emphasized differently. Maybe even remove it
+  and have it just be the reset button? Reset only appears when there is
+  something to reset." The underlying defect was sharper than styling. `All`'s
+  value is `null`, and `null` is the resting state, so `isSelected` was true for
+  `All` whenever you were **not** filtering: the strongest treatment on the map
+  — white ring, w700, darkest fill — sat permanently on *"no filter applied"*,
+  while the destinations, the only actionable things in the strip, stayed
+  recessive. On top of that `All` was drawn in the exact visual language of a
+  city, so it read as a place called "All". **A city is a choice among many; the
+  overview is the absence of a choice — they must not share a costume.** The
+  chip is gone; at rest nothing is ringed and the ring finally means one thing.
+  The way back is a round `MapControlButton` that exists only while a leg is
+  focused, in the map's own frosted-circle vocabulary so it can never be
+  mistaken for a destination. One widget, three surfaces (inline card,
+  full-screen, shared), zero call-site edits. `tripFilterAll` had exactly one
+  consumer left and went with it — the comment claiming the trip-detail filter
+  menu shared the key was stale since #359.
+- **[app] Deliberately NOT a second way out.** Re-tapping the focused chip still
+  re-fires the combined gesture (re-expand that city's group, rest its header
+  under the pinned chrome on desktop), which is useful on its own. One exit, one
+  meaning.
+- **[dev] The animation was the bug, and a test caught it.** First cut animated
+  the reset slot open with `AnimatedSize` (the sso_buttons pattern). The
+  strip-reveal test went red: `_revealSelected` runs post-frame and measures the
+  viewport **as it stands**, so with the viewport still mid-resize the
+  preselected chip landed 44px — exactly one button — outside the strip. The
+  fix was not to coordinate the animations but to delete the animation:
+  **reserve the slot's width always.** That also killed a defect nobody had
+  filed yet — an appearing slot shoves the whole strip sideways on every chip
+  tap. Cost is one button of empty map at rest; bought a strip that never moves.
+- **[app] The glyph collision only existed in the browser.** Shipped as
+  `Icons.close`, and every test was green — but the full-screen map carries a
+  `CloseButton` ✕ in its app bar **directly above** this slot, so focusing a leg
+  produced two white ✕s stacked 40px apart, one closing the map and one clearing
+  the focus. Worse than the thing being fixed, and invisible to a widget test
+  that never renders the two together. Now `Icons.public` — a globe depicts what
+  you get back. Not a zoom glyph either: the bottom-right column's "Reset map"
+  is `Icons.zoom_in_map` and means something else (refit the camera over
+  whatever is already shown). Pinned by a test that asserts the icon is none of
+  those three. **Lesson: a control's meaning is set by its neighbours, and its
+  neighbours only exist on screen.**
+- **[dev] Regenerating l10n from a lane worktree can silently un-format it.**
+  The lane's Docker flutter container rewrites
+  `.dart_tool/package_config.json` with in-container paths, so host `dart
+  format` can't resolve `flutter_lints` and `flutter gen-l10n`'s format step
+  crashes **after** writing the files — leaving a ~600-line reformatting diff on
+  a hub file. Fix: `flutter pub get` on the host first, then regenerate. Check
+  the generated diff is scoped before committing, every time.
+- **[app] Still open — two chips can carry the identical label.** A trip that
+  revisits a city renders `Fira … Fira` (`trip_legs.dart`; run keys differ,
+  labels don't). Real ambiguity in the same strip, out of scope here.
+
 ## 2026-08-14 — events on the trip page (overwhelming, and asking the wrong dates)
 
 - **[app] Friction → fixed (specs/events-rail):** a 3-night Berlin leg whose

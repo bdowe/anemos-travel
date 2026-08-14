@@ -12,6 +12,7 @@ import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 
+import 'support/chip_finders.dart';
 import 'support/l10n_test_app.dart';
 
 class _FakeTripsApiService extends TripsApiService {
@@ -109,8 +110,8 @@ void main() {
     expect(inMap('1'), findsOneWidget);
     expect(inMap('2'), findsOneWidget);
 
-    // All restores the overview.
-    await tapChip(tester, 'All');
+    // The reset restores the overview.
+    await tapMapReset(tester);
     expect(find.byType(MarkerClusterLayerWidget), findsNothing);
     expect(inMap('1'), findsOneWidget);
     expect(inMap('2'), findsOneWidget);
