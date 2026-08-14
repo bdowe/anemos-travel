@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:travel_route_planner/constants/app_info.dart';
 import 'package:travel_route_planner/main.dart';
 import 'package:travel_route_planner/navigation/app_nav.dart';
 import 'package:travel_route_planner/navigation/url_sync.dart';
@@ -125,6 +126,23 @@ void main() {
         of: find.byType(NavigationRail), matching: find.byType(BrandLogo)));
     await tester.pumpAndSettle();
     expect(container.read(navIndexProvider), AppTab.home.index);
+  });
+
+  testWidgets('the rail mark sits on the app-bar wordmark centre line',
+      (tester) async {
+    // The rose lives in the rail and the wordmark in the content area's app
+    // bar — different subtrees, same window y = 0, and nothing structural
+    // holds them on one line. Pin the two against EACH OTHER, not against a
+    // literal, so this still catches a regression if the toolbar height moves.
+    await pumpApp(tester);
+
+    final mark = tester.getCenter(find.descendant(
+        of: find.byType(NavigationRail), matching: find.byType(BrandLogo)));
+    final wordmark = tester.getCenter(find.descendant(
+        of: find.byType(AppBar), matching: find.text(AppInfo.name)));
+
+    expect(mark.dy, wordmark.dy);
+    expect(mark.dy, kToolbarHeight / 2);
   });
 
   testWidgets('re-tapping the active Trips tab pops it to root',

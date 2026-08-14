@@ -130,18 +130,41 @@ const List<Widget> _tabRoots = [
   TripsListScreen(),
 ];
 
+/// Flutter's [NavigationRail] hard-codes an 8px spacer above (and below) its
+/// `leading` slot. That is the rail's geometry, not ours, so any alignment
+/// maths against the content area has to subtract it.
+const double _kRailLeadingGap = 8;
+
+/// The mark's box, solved so its centre lands on the app-bar centre line: the
+/// rail and the content Scaffold both start at window y = 0, so
+///   _kRailLeadingGap + _kRailMarkBox / 2 == kToolbarHeight / 2
+/// is the whole alignment contract. Keep it a derivation — a literal here goes
+/// stale the moment GradientAppBar's height moves.
+const double _kRailMarkBox = kToolbarHeight - _kRailLeadingGap * 2; // 40
+const double _kRailMarkSize = 36;
+
 /// The Anemos brand mark for the top of the rail — the persistent
 /// Site ID (Krug). Bare mark: the teal/gold rose reads on the rail surface in
 /// both themes, so no badge plate; the InkWell supplies the hover/focus
 /// highlight and web pointer cursor. Tapping it goes Home, per the universal
 /// logo-links-home convention.
+///
+/// The rose sits on the same line as the "Anemos" wordmark in the app bar
+/// across the divider — at rail widths that wordmark is the app-bar title's
+/// only content, so the two read as one lockup or as nothing. That is why the
+/// tap box is [_kRailMarkBox] (40) rather than the usual [kMinTouchTarget]:
+/// the rail's own 8px spacer puts a symmetric 48px box's centre at y = 32, so
+/// 48 cannot reach the y = 28 centre line. Growing it back breaks the
+/// alignment silently. The rail only exists at [kRailBreakpoint] and above —
+/// pointer-first — and Home is a rail destination immediately below, so the
+/// smaller target costs nothing reachable.
 class _RailBrand extends ConsumerWidget {
   const _RailBrand();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.sm),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Semantics(
         button: true,
         child: Material(
@@ -149,9 +172,10 @@ class _RailBrand extends ConsumerWidget {
           child: InkWell(
             onTap: () => goHome(ref),
             borderRadius: AppRadius.mdAll,
-            child: const Padding(
-              padding: EdgeInsets.all(AppSpacing.sm),
-              child: BrandLogo.mark(size: 36),
+            child: const SizedBox(
+              width: _kRailMarkBox,
+              height: _kRailMarkBox,
+              child: Center(child: BrandLogo.mark(size: _kRailMarkSize)),
             ),
           ),
         ),
