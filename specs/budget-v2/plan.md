@@ -3,9 +3,9 @@
 > **HOW.** See `spec.md` for what/why. Repo conventions: `../../CLAUDE.md`,
 > `../../docs/zen.md`. Delivered as **two stacked PRs from one lane**
 > (`budget-v2`): PR A = tab promotion + read/refresh fixes, PR B =
-> autopopulate. Migration **00058** was reserved for PR B — **that number is
-> now burned and PR B is unmerged**; see the PR B section below before
-> reviving it.
+> autopopulate. PR B originally reserved migration **00058**; that number was
+> burned (see `../../docs/parallel-dev.md` §4a) and PR B shipped as
+> **00061** instead.
 
 ## Technical Approach
 
@@ -57,20 +57,19 @@ already claims.
 
 ## PR B — Autopopulate
 
-> **STATUS 2026-08-14: written but NOT on main.** PR #350 was merged into the
-> `budget-v2` branch 47 minutes after that branch had already merged to main,
-> so GitHub shows it MERGED while its commits live only on
-> `origin/budget-v2` / `origin/budget-v2-autopopulate` (and the local
-> `.claude/worktrees/budget-v2`). **Do not delete those refs — they are the
-> only copies.** To revive: rebase onto main (81+ commits of drift; 9 shared
-> files incl. `trip_detail_screen.dart`, plus l10n/`store/` which are
-> regen-not-merge) and **renumber the migration to the next free number above
-> main's highest** — 00058 can never be merged, because production has already
-> applied past it (see `docs/parallel-dev.md` §4a). The SQL body is additive
-> and needs no redesign.
+> **HISTORY: this work was stranded for a day and then revived.** PR #350 was
+> merged into the `budget-v2` branch 47 minutes after that branch had already
+> merged to main, so GitHub showed it MERGED while its commits reached only
+> `origin/budget-v2` / `origin/budget-v2-autopopulate`. Recovered 2026-08-14
+> by rebasing those two commits over 85 commits of drift and renumbering the
+> migration 00058 → **00061** (00058 is permanently burned —
+> `../../docs/parallel-dev.md` §4a). One semantic conflict was resolved in
+> `budget_section.dart`: main had replaced the category `DropdownButton` with
+> a `PopupMenuButton` while this branch extracted the category list/icons into
+> shared `budget_categories.dart` constants — the merge keeps main's widget
+> and sources it from the shared constants.
 
-**Migration 00058** (`00058_expense_booking_link.sql` — number burned, renumber
-on revival): `trip_expenses` +
+**Migration 00061** (`00061_expense_booking_link.sql`): `trip_expenses` +
 nullable `source_kind text` + `source_id uuid` (no FK — snapshot pattern),
 CHECK both-or-neither, partial unique index
 `(trip_id, source_kind, source_id) WHERE source_kind IS NOT NULL`.

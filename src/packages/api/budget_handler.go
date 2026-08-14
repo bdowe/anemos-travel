@@ -2,12 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"travel-route-planner/store"
 )
@@ -45,6 +48,19 @@ var allowedExpenseCategories = map[string]bool{
 // in sync with allowedExpenseCategories.
 const expenseCategoryList = "flights, lodging, food, activities, transport, shopping, general"
 
+// allowedExpenseSourceKinds bounds the booking-row kinds an expense may link
+// to (budget autopopulate, migration 00061). The link is a snapshot, not an
+// FK — see the migration comment for the full `auto` contract: auto=true
+// means system-managed mirror of the source row's booked state (unbook
+// deletes it); any user edit of category/label/amount flips auto=false
+// (manual takeover — unbook then leaves the row). `auto` is never
+// client-writable: the server sets it true iff a source link is present.
+var allowedExpenseSourceKinds = map[string]bool{
+	"booking_todo":  true,
+	"accommodation": true,
+	"segment":       true,
+}
+
 // BudgetResponse carries the single per-trip budget. `spent` is the sum of every
 // expense amount and `remaining` is target-spent (nil when no target is set) —
 // both derived server-side for convenience; the client still gets the raw
@@ -63,17 +79,28 @@ type ExpenseResponse struct {
 	Amount   float64 `json:"amount"`
 	Position int     `json:"position"`
 	Auto     bool    `json:"auto"`
+	// The booking-row link this expense was autopopulated from (nil for
+	// manual entries). The client needs both to dedupe the booked-flip
+	// prompt and to find the row to remove on unbook.
+	SourceKind *string `json:"source_kind"`
+	SourceID   *string `json:"source_id"`
 }
 
 func toExpenseResponse(e store.TripExpense) ExpenseResponse {
-	return ExpenseResponse{
-		ID:       e.ID.String(),
-		Category: e.Category,
-		Label:    e.Label,
-		Amount:   e.Amount,
-		Position: int(e.Position),
-		Auto:     e.Auto,
+	resp := ExpenseResponse{
+		ID:         e.ID.String(),
+		Category:   e.Category,
+		Label:      e.Label,
+		Amount:     e.Amount,
+		Position:   int(e.Position),
+		Auto:       e.Auto,
+		SourceKind: e.SourceKind,
 	}
+	if e.SourceID.Valid {
+		id := uuid.UUID(e.SourceID.Bytes).String()
+		resp.SourceID = &id
+	}
+	return resp
 }
 
 // normalizeExpenseCategory trims and lower-cases the category, defaulting to
@@ -190,6 +217,11 @@ type AddExpenseRequest struct {
 	Category string  `json:"category"`
 	Label    string  `json:"label"`
 	Amount   float64 `json:"amount"`
+	// Optional booking-row link (both or neither): makes the POST an
+	// upsert-by-source and marks the row auto (see the migration 00061
+	// contract). Plain manual adds omit them, byte-identical to before.
+	SourceKind *string `json:"source_kind"`
+	SourceID   *string `json:"source_id"`
 }
 
 func addExpenseHandler(w http.ResponseWriter, r *http.Request) {
@@ -220,8 +252,56 @@ func addExpenseHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "category must be one of: "+expenseCategoryList)
 		return
 	}
+	if (req.SourceKind == nil) != (req.SourceID == nil) {
+		writeJSONError(w, http.StatusBadRequest, "source_kind and source_id must be passed together")
+		return
+	}
+	var sourceID pgtype.UUID
+	if req.SourceKind != nil {
+		if !allowedExpenseSourceKinds[*req.SourceKind] {
+			writeJSONError(w, http.StatusBadRequest, "source_kind must be one of: booking_todo, accommodation, segment")
+			return
+		}
+		parsed, err := uuid.Parse(*req.SourceID)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "source_id must be a UUID")
+			return
+		}
+		sourceID = pgtype.UUID{Bytes: parsed, Valid: true}
+	}
 
 	q := store.New(dbPool)
+
+	// Linked adds are an upsert-by-source: at most one expense per booking
+	// row (partial unique index). Found & still auto -> refresh it (a
+	// re-book with a new price); found & user-owned -> return it untouched
+	// (never clobber a manual takeover). Both are 200s — idempotent
+	// re-submits, no client error handling for the retry race.
+	if req.SourceKind != nil {
+		if existing, err := q.GetExpenseBySource(r.Context(), store.GetExpenseBySourceParams{
+			TripID: trip.ID, SourceKind: req.SourceKind, SourceID: sourceID,
+		}); err == nil {
+			if !existing.Auto {
+				writeJSON(w, http.StatusOK, toExpenseResponse(existing))
+				return
+			}
+			autoTrue := true
+			updated, err := q.UpdateExpense(r.Context(), store.UpdateExpenseParams{
+				ID: existing.ID, TripID: trip.ID,
+				Category: &category, Label: &label, Amount: &req.Amount, Auto: &autoTrue,
+			})
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, "could not save expense")
+				return
+			}
+			_ = q.TouchTrip(r.Context(), touchedBy(trip.ID, r))
+			writeJSON(w, http.StatusOK, toExpenseResponse(updated))
+			return
+		}
+	}
+
+	// The per-trip cap guards creates only — the upsert path above can't
+	// grow the list.
 	if existing, err := q.ListExpensesByTrip(r.Context(), trip.ID); err == nil &&
 		len(existing) >= maxExpensesPerTrip() {
 		writeJSONError(w, http.StatusUnprocessableEntity,
@@ -229,17 +309,41 @@ func addExpenseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	expense, err := q.CreateExpense(r.Context(), store.CreateExpenseParams{
-		TripID:   trip.ID,
-		Category: category,
-		Label:    label,
-		Amount:   req.Amount,
-		Position: 9999,
+		TripID:     trip.ID,
+		Category:   category,
+		Label:      label,
+		Amount:     req.Amount,
+		Position:   9999,
+		Auto:       req.SourceKind != nil, // server rule: auto iff linked
+		SourceKind: req.SourceKind,
+		SourceID:   sourceID,
 	})
 	if err != nil {
+		// Concurrent linked POSTs can race past the lookup; the partial
+		// unique index turns the loser into a 23505 — re-read and take the
+		// found path so the caller still gets the one linked row.
+		var pgErr *pgconn.PgError
+		if req.SourceKind != nil && errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			if existing, lookupErr := q.GetExpenseBySource(r.Context(), store.GetExpenseBySourceParams{
+				TripID: trip.ID, SourceKind: req.SourceKind, SourceID: sourceID,
+			}); lookupErr == nil {
+				writeJSON(w, http.StatusOK, toExpenseResponse(existing))
+				return
+			}
+		}
 		writeJSONError(w, http.StatusInternalServerError, "could not save expense")
 		return
 	}
 	_ = q.TouchTrip(r.Context(), touchedBy(trip.ID, r))
+	if user, ok := userFromContext(r.Context()); ok {
+		meta := map[string]any{"category": category, "auto": expense.Auto}
+		if req.SourceKind != nil {
+			meta["source_kind"] = *req.SourceKind
+		}
+		safeGo("recordEvent", func() {
+			recordEvent(user.ID, "expense_added", &trip.ID, meta)
+		})
+	}
 	writeJSON(w, http.StatusCreated, toExpenseResponse(expense))
 }
 
@@ -303,6 +407,15 @@ func patchExpenseHandler(w http.ResponseWriter, r *http.Request) {
 	if req.Position != nil {
 		p := int32(*req.Position)
 		params.Position = &p
+	}
+	// Server rule (never a request field): editing the CONTENT of an
+	// auto-created expense is a manual takeover — the row stops mirroring
+	// its booking's booked state (unbook then leaves it; see the 00061
+	// contract). Reordering isn't ownership, so a position-only PATCH
+	// leaves auto alone.
+	if req.Category != nil || req.Label != nil || req.Amount != nil {
+		autoFalse := false
+		params.Auto = &autoFalse
 	}
 
 	q := store.New(dbPool)

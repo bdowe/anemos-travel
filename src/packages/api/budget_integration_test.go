@@ -259,3 +259,104 @@ func TestBudgetCascadeOnTripDelete(t *testing.T) {
 		t.Fatalf("budget/expense rows survived trip delete: budget=%d expenses=%d", nb, ne)
 	}
 }
+
+// TestExpenseSourceLinkUpsert covers the autopopulate contract (migration
+// 00061): linked POST = upsert-by-source, auto set server-side, content PATCH
+// = manual takeover that the upsert never clobbers.
+func TestExpenseSourceLinkUpsert(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "owner@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	tripID := trip.ID.String()
+	sourceID := uuid.NewString()
+
+	// Linked create: 201, auto=true, link echoed.
+	rec := doJSON(t, "POST", "/api/v1/trips/"+tripID+"/budget/expenses", token,
+		map[string]any{"label": "ATH → JTR", "category": "flights", "amount": 240, "source_kind": "segment", "source_id": sourceID})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("linked create = %d: %s", rec.Code, rec.Body.String())
+	}
+	created := decode(t, rec)
+	if created["auto"] != true || created["source_kind"] != "segment" || created["source_id"] != sourceID {
+		t.Fatalf("linked create shape wrong: %v", created)
+	}
+	expenseID := created["id"].(string)
+
+	// Re-POST same link, new amount: 200 (upsert, still auto), same row.
+	rec = doJSON(t, "POST", "/api/v1/trips/"+tripID+"/budget/expenses", token,
+		map[string]any{"label": "ATH → JTR", "category": "flights", "amount": 260, "source_kind": "segment", "source_id": sourceID})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("linked re-post = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	upserted := decode(t, rec)
+	if upserted["id"] != expenseID || upserted["amount"].(float64) != 260 || upserted["auto"] != true {
+		t.Fatalf("upsert wrong: %v", upserted)
+	}
+
+	// Content PATCH flips auto=false (manual takeover).
+	rec = doJSON(t, "PATCH", "/api/v1/trips/"+tripID+"/budget/expenses/"+expenseID, token, map[string]any{"amount": 300})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch = %d: %s", rec.Code, rec.Body.String())
+	}
+	if patched := decode(t, rec); patched["auto"] != false {
+		t.Fatalf("content patch should flip auto=false: %v", patched)
+	}
+
+	// Re-POST after takeover: 200, row returned UNTOUCHED (amount stays 300).
+	rec = doJSON(t, "POST", "/api/v1/trips/"+tripID+"/budget/expenses", token,
+		map[string]any{"label": "ATH → JTR", "category": "flights", "amount": 999, "source_kind": "segment", "source_id": sourceID})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("post-takeover re-post = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if kept := decode(t, rec); kept["amount"].(float64) != 300 || kept["auto"] != false {
+		t.Fatalf("takeover was clobbered: %v", kept)
+	}
+
+	// Position-only PATCH does NOT change auto (reordering isn't ownership) —
+	// exercised on a fresh auto row.
+	rec = doJSON(t, "POST", "/api/v1/trips/"+tripID+"/budget/expenses", token,
+		map[string]any{"label": "Hotel", "category": "lodging", "amount": 80, "source_kind": "accommodation", "source_id": uuid.NewString()})
+	autoRow := decode(t, rec)
+	rec = doJSON(t, "PATCH", "/api/v1/trips/"+tripID+"/budget/expenses/"+autoRow["id"].(string), token, map[string]any{"position": 1})
+	if moved := decode(t, rec); moved["auto"] != true {
+		t.Fatalf("position-only patch flipped auto: %v", moved)
+	}
+
+	// Plain manual POST unaffected: 201, auto=false, nil link.
+	rec = doJSON(t, "POST", "/api/v1/trips/"+tripID+"/budget/expenses", token,
+		map[string]any{"label": "Lunch", "amount": 20})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("manual create = %d: %s", rec.Code, rec.Body.String())
+	}
+	if manual := decode(t, rec); manual["auto"] != false || manual["source_kind"] != nil || manual["source_id"] != nil {
+		t.Fatalf("manual create shape wrong: %v", manual)
+	}
+
+	// DELETE still works on a linked row.
+	if rec := doJSON(t, "DELETE", "/api/v1/trips/"+tripID+"/budget/expenses/"+expenseID, token, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete linked = %d, want 204", rec.Code)
+	}
+}
+
+func TestExpenseSourceValidation(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "owner@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	tripID := trip.ID.String()
+
+	cases := []struct {
+		name string
+		body map[string]any
+	}{
+		{"kind without id", map[string]any{"label": "x", "amount": 1, "source_kind": "segment"}},
+		{"id without kind", map[string]any{"label": "x", "amount": 1, "source_id": uuid.NewString()}},
+		{"unknown kind", map[string]any{"label": "x", "amount": 1, "source_kind": "itinerary_item", "source_id": uuid.NewString()}},
+		{"non-uuid id", map[string]any{"label": "x", "amount": 1, "source_kind": "segment", "source_id": "not-a-uuid"}},
+	}
+	for _, tc := range cases {
+		rec := doJSON(t, "POST", "/api/v1/trips/"+tripID+"/budget/expenses", token, tc.body)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s = %d, want 400: %s", tc.name, rec.Code, rec.Body.String())
+		}
+	}
+}

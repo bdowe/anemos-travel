@@ -9,22 +9,28 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createExpense = `-- name: CreateExpense :one
-INSERT INTO trip_expenses (trip_id, category, label, amount, position)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at
+INSERT INTO trip_expenses (trip_id, category, label, amount, position, auto, source_kind, source_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id
 `
 
 type CreateExpenseParams struct {
-	TripID   uuid.UUID `json:"trip_id"`
-	Category string    `json:"category"`
-	Label    string    `json:"label"`
-	Amount   float64   `json:"amount"`
-	Position int32     `json:"position"`
+	TripID     uuid.UUID   `json:"trip_id"`
+	Category   string      `json:"category"`
+	Label      string      `json:"label"`
+	Amount     float64     `json:"amount"`
+	Position   int32       `json:"position"`
+	Auto       bool        `json:"auto"`
+	SourceKind *string     `json:"source_kind"`
+	SourceID   pgtype.UUID `json:"source_id"`
 }
 
+// auto/source_kind/source_id: the booking-autopopulate link (00061). The
+// handler sets auto=true iff a source link is present — never the client.
 func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (TripExpense, error) {
 	row := q.db.QueryRow(ctx, createExpense,
 		arg.TripID,
@@ -32,6 +38,9 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (T
 		arg.Label,
 		arg.Amount,
 		arg.Position,
+		arg.Auto,
+		arg.SourceKind,
+		arg.SourceID,
 	)
 	var i TripExpense
 	err := row.Scan(
@@ -44,6 +53,8 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (T
 		&i.Auto,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SourceKind,
+		&i.SourceID,
 	)
 	return i, err
 }
@@ -83,8 +94,40 @@ func (q *Queries) GetBudgetByTrip(ctx context.Context, tripID uuid.UUID) (TripBu
 	return i, err
 }
 
+const getExpenseBySource = `-- name: GetExpenseBySource :one
+SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id FROM trip_expenses
+WHERE trip_id = $1 AND source_kind = $2 AND source_id = $3
+`
+
+type GetExpenseBySourceParams struct {
+	TripID     uuid.UUID   `json:"trip_id"`
+	SourceKind *string     `json:"source_kind"`
+	SourceID   pgtype.UUID `json:"source_id"`
+}
+
+// The upsert-by-source lookup: at most one row per booking link (partial
+// unique index idx_trip_expenses_source).
+func (q *Queries) GetExpenseBySource(ctx context.Context, arg GetExpenseBySourceParams) (TripExpense, error) {
+	row := q.db.QueryRow(ctx, getExpenseBySource, arg.TripID, arg.SourceKind, arg.SourceID)
+	var i TripExpense
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Category,
+		&i.Label,
+		&i.Amount,
+		&i.Position,
+		&i.Auto,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SourceKind,
+		&i.SourceID,
+	)
+	return i, err
+}
+
 const listExpensesByTrip = `-- name: ListExpensesByTrip :many
-SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at FROM trip_expenses
+SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id FROM trip_expenses
 WHERE trip_id = $1
 ORDER BY position ASC, created_at ASC
 `
@@ -108,6 +151,8 @@ func (q *Queries) ListExpensesByTrip(ctx context.Context, tripID uuid.UUID) ([]T
 			&i.Auto,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SourceKind,
+			&i.SourceID,
 		); err != nil {
 			return nil, err
 		}
@@ -124,9 +169,10 @@ UPDATE trip_expenses
 SET category = COALESCE($1, category),
     label    = COALESCE($2, label),
     amount   = COALESCE($3, amount),
-    position = COALESCE($4, position)
-WHERE id = $5 AND trip_id = $6
-RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at
+    position = COALESCE($4, position),
+    auto     = COALESCE($5, auto)
+WHERE id = $6 AND trip_id = $7
+RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id
 `
 
 type UpdateExpenseParams struct {
@@ -134,19 +180,22 @@ type UpdateExpenseParams struct {
 	Label    *string   `json:"label"`
 	Amount   *float64  `json:"amount"`
 	Position *int32    `json:"position"`
+	Auto     *bool     `json:"auto"`
 	ID       uuid.UUID `json:"id"`
 	TripID   uuid.UUID `json:"trip_id"`
 }
 
 // Partial update (COALESCE sqlc.narg idiom, see query/trip_checklist_items.sql
 // UpdateChecklistItem). COALESCE means a field can be overwritten but not
-// cleared to NULL (all these columns are NOT NULL anyway).
+// cleared to NULL (auto IS NOT NULL, so narg('auto') skips it when nil —
+// the handler passes false on a user content edit: manual takeover).
 func (q *Queries) UpdateExpense(ctx context.Context, arg UpdateExpenseParams) (TripExpense, error) {
 	row := q.db.QueryRow(ctx, updateExpense,
 		arg.Category,
 		arg.Label,
 		arg.Amount,
 		arg.Position,
+		arg.Auto,
 		arg.ID,
 		arg.TripID,
 	)
@@ -161,6 +210,8 @@ func (q *Queries) UpdateExpense(ctx context.Context, arg UpdateExpenseParams) (T
 		&i.Auto,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SourceKind,
+		&i.SourceID,
 	)
 	return i, err
 }
