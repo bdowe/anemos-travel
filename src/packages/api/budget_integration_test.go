@@ -261,7 +261,7 @@ func TestBudgetCascadeOnTripDelete(t *testing.T) {
 }
 
 // TestExpenseSourceLinkUpsert covers the autopopulate contract (migration
-// 00058): linked POST = upsert-by-source, auto set server-side, content PATCH
+// 00061): linked POST = upsert-by-source, auto set server-side, content PATCH
 // = manual takeover that the upsert never clobbers.
 func TestExpenseSourceLinkUpsert(t *testing.T) {
 	resetDB(t)

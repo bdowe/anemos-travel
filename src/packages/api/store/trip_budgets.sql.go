@@ -29,7 +29,7 @@ type CreateExpenseParams struct {
 	SourceID   pgtype.UUID `json:"source_id"`
 }
 
-// auto/source_kind/source_id: the booking-autopopulate link (00058). The
+// auto/source_kind/source_id: the booking-autopopulate link (00061). The
 // handler sets auto=true iff a source link is present — never the client.
 func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (TripExpense, error) {
 	row := q.db.QueryRow(ctx, createExpense,

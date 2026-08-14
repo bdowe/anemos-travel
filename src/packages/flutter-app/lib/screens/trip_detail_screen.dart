@@ -1287,7 +1287,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Unbook cleanup: delete the auto (system-managed) expense linked to any
   /// of [ids]. Best-effort — never rolls back a successful unbook; a
   /// taken-over (auto=false) expense is the traveler's and stays
-  /// (migration 00058's contract).
+  /// (migration 00061's contract).
   Future<void> _removeLinkedAutoExpense(List<String> ids) async {
     try {
       final expenses = await ref.read(expensesProvider(widget.tripId).future);

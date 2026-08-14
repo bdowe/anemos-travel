@@ -17,7 +17,7 @@ WHERE trip_id = $1
 ORDER BY position ASC, created_at ASC;
 
 -- name: CreateExpense :one
--- auto/source_kind/source_id: the booking-autopopulate link (00058). The
+-- auto/source_kind/source_id: the booking-autopopulate link (00061). The
 -- handler sets auto=true iff a source link is present — never the client.
 INSERT INTO trip_expenses (trip_id, category, label, amount, position, auto, source_kind, source_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

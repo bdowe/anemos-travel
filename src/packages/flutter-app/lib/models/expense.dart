@@ -12,7 +12,7 @@ part 'expense.g.dart';
 /// manual entries), and [auto] means the row is a system-managed mirror of
 /// that booking's booked state — unbooking removes it. Any user edit of
 /// category/label/amount flips auto false server-side (manual takeover), and
-/// unbooking then leaves the row (migration 00058's contract).
+/// unbooking then leaves the row (migration 00061's contract).
 @JsonSerializable()
 class Expense {
   final String id;

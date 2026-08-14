@@ -49,7 +49,7 @@ var allowedExpenseCategories = map[string]bool{
 const expenseCategoryList = "flights, lodging, food, activities, transport, shopping, general"
 
 // allowedExpenseSourceKinds bounds the booking-row kinds an expense may link
-// to (budget autopopulate, migration 00058). The link is a snapshot, not an
+// to (budget autopopulate, migration 00061). The link is a snapshot, not an
 // FK — see the migration comment for the full `auto` contract: auto=true
 // means system-managed mirror of the source row's booked state (unbook
 // deletes it); any user edit of category/label/amount flips auto=false
@@ -218,7 +218,7 @@ type AddExpenseRequest struct {
 	Label    string  `json:"label"`
 	Amount   float64 `json:"amount"`
 	// Optional booking-row link (both or neither): makes the POST an
-	// upsert-by-source and marks the row auto (see the migration 00058
+	// upsert-by-source and marks the row auto (see the migration 00061
 	// contract). Plain manual adds omit them, byte-identical to before.
 	SourceKind *string `json:"source_kind"`
 	SourceID   *string `json:"source_id"`
@@ -410,7 +410,7 @@ func patchExpenseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Server rule (never a request field): editing the CONTENT of an
 	// auto-created expense is a manual takeover — the row stops mirroring
-	// its booking's booked state (unbook then leaves it; see the 00058
+	// its booking's booked state (unbook then leaves it; see the 00061
 	// contract). Reordering isn't ownership, so a position-only PATCH
 	// leaves auto alone.
 	if req.Category != nil || req.Label != nil || req.Amount != nil {
