@@ -111,13 +111,14 @@ void main() {
   const homePoint = (lat: 40.6895, lng: -74.1745);
 
   // Three legs so the gate has a first, a middle, and a last.
-  final trip = Trip(
+  Trip makeTrip({String? travelMode}) => Trip(
     id: 't1',
     title: 'Grand tour',
     createdAt: '2026-06-01',
     updatedAt: '2026-06-01',
     startDate: '2026-09-01',
     endDate: '2026-09-03',
+    travelMode: travelMode,
     items: [
       _item(0, 'Louvre', 'Paris', 48.8606, 2.3376, 1),
       _item(1, 'Colosseum', 'Rome', 41.8902, 12.4922, 2),
@@ -135,11 +136,18 @@ void main() {
     ],
   );
 
-  Future<void> pumpScreen(WidgetTester tester, {bool withHome = true}) async {
+  final trip = makeTrip();
+
+  Future<void> pumpScreen(
+    WidgetTester tester, {
+    bool withHome = true,
+    Trip? tripOverride,
+  }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          tripsApiServiceProvider.overrideWithValue(_FakeTripsApiService(trip)),
+          tripsApiServiceProvider
+              .overrideWithValue(_FakeTripsApiService(tripOverride ?? trip)),
           if (withHome) ...[
             // Populates _homeAirport via the screen's prefs load...
             preferencesApiServiceProvider.overrideWithValue(_FakePrefsApi()),
@@ -203,6 +211,29 @@ void main() {
     expect(home!.outboundTo, isNull);
     expect(home.returnFrom, isNotNull);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a stated ground trip draws no home-airport leg',
+      (WidgetTester tester) async {
+    // A saved home *airport* says where this traveler flies from, so on a
+    // driving trip it is not the origin — drawing a leg from it invents a
+    // journey the trip never described (a Claude-authored road trip to
+    // Montreal rendered as a flight from Newark, 2026-08-14).
+    await pumpScreen(tester, tripOverride: makeTrip(travelMode: 'car'));
+
+    expect(map(tester).home, isNull);
+    expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a mixed-mode trip keeps its home leg',
+      (WidgetTester tester) async {
+    // 'mixed' means the trip has no single mode, so a flight leg is still
+    // plausible — only a stated ground mode suppresses the overlay.
+    await pumpScreen(tester, tripOverride: makeTrip(travelMode: 'mixed'));
+
+    expect(map(tester).home, isNotNull);
+    expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
   });
 
   testWidgets('no saved home airport never touches the provider',

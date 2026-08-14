@@ -8,6 +8,7 @@ import '../models/accommodation.dart';
 import '../models/itinerary_item.dart';
 import '../providers/flights_provider.dart';
 import '../utils/snack.dart';
+import '../utils/travel_mode.dart';
 import '../widgets/app_map.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/map_leg_chips.dart';
@@ -25,11 +26,17 @@ import '../widgets/trip_map.dart';
 TripMapHome? homeOverlayFor(
   WidgetRef ref, {
   required String? homeAirport,
+  required String? travelMode,
   required int? focusedLegIndex, // null = All
   required int legCount,
   required LatLng? firstCityPoint,
   required LatLng? lastCityPoint,
 }) {
+  // A saved home *airport* only says where this traveler flies from. On a
+  // stated ground trip it is not the origin — someone driving to Montreal from
+  // upstate New York does not set out from Newark — so drawing a leg from it
+  // would invent a journey the trip never described. Say nothing instead.
+  if (groundTravelMode(travelMode) != null) return null;
   final code = homeAirport;
   if (code == null || code.isEmpty) return null;
   final point = ref.watch(homeAirportPointProvider(code)).valueOrNull;
@@ -90,6 +97,10 @@ class TripMapScreen extends ConsumerStatefulWidget {
   /// city coordinates it draws the journey's home legs (owner surfaces only —
   /// shared views pass nothing). Null = no home overlay.
   final String? homeAirport;
+
+  /// The trip's `travel_mode`. A stated ground mode suppresses the home-airport
+  /// overlay entirely (see [homeOverlayFor]).
+  final String? travelMode;
   final LatLng? firstCityPoint;
   final LatLng? lastCityPoint;
 
@@ -111,6 +122,7 @@ class TripMapScreen extends ConsumerStatefulWidget {
     this.initialLegKey,
     this.onAddPlace,
     this.homeAirport,
+    this.travelMode,
     this.firstCityPoint,
     this.lastCityPoint,
     this.destinations,
@@ -127,6 +139,7 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
   TripMapHome? _homeOverlay() => homeOverlayFor(
         ref,
         homeAirport: widget.homeAirport,
+        travelMode: widget.travelMode,
         focusedLegIndex: _legKey == null
             ? null
             : widget.legChips.indexWhere((c) => c.key == _legKey),

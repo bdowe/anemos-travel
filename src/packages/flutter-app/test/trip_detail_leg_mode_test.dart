@@ -218,6 +218,25 @@ void main() {
     expect(find.textContaining('Rome2Rio'), findsOneWidget);
   });
 
+  testWidgets("a ground trip's leg menu checks the trip's own mode",
+      (WidgetTester tester) async {
+    _useTallViewport(tester);
+    // No per-leg override: the leg is derived as ground, and 'rome2rio' alone
+    // can't say which ground mode. Before the trip was consulted this menu
+    // opened with nothing checked on a trip that plainly stated it drives.
+    await _pump(tester, _twoCityTrip(travelMode: 'car'));
+
+    await tester.tap(_rowModeMenu());
+    await tester.pumpAndSettle();
+
+    final checked = find.ancestor(
+      of: find.byIcon(Icons.check),
+      matching: find.widgetWithText(Row, 'car'),
+    );
+    expect(checked, findsOneWidget);
+    expect(find.byIcon(Icons.check), findsOneWidget);
+  });
+
   testWidgets('a ferry override on a non-Greek leg gets Find ferries',
       (WidgetTester tester) async {
     _useTallViewport(tester);
