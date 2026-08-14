@@ -53,6 +53,7 @@ class _FakePrefsApi implements PreferencesApiService {
     required List<String> interests,
     String? homeAirport,
     String? profileNotes,
+    String? workStyle,
   }) async =>
       prefs;
 }

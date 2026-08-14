@@ -11,6 +11,8 @@ class TravelerPreferences {
   final String? homeAirport;
   @JsonKey(name: 'profile_notes')
   final String? profileNotes;
+  @JsonKey(name: 'work_style')
+  final String? workStyle;
 
   const TravelerPreferences({
     this.budget,
@@ -18,6 +20,7 @@ class TravelerPreferences {
     this.interests = const [],
     this.homeAirport,
     this.profileNotes,
+    this.workStyle,
   });
 
   factory TravelerPreferences.fromJson(Map<String, dynamic> json) =>

@@ -58,6 +58,7 @@ class _FakePrefsService implements PreferencesApiService {
   Object? failWith;
   TravelerPreferences result = const TravelerPreferences();
   int getCalls = 0;
+  String? savedWorkStyle;
 
   @override
   ApiClient get apiClient => throw UnimplementedError();
@@ -78,8 +79,11 @@ class _FakePrefsService implements PreferencesApiService {
     required List<String> interests,
     String? homeAirport,
     String? profileNotes,
-  }) async =>
-      result;
+    String? workStyle,
+  }) async {
+    savedWorkStyle = workStyle;
+    return result;
+  }
 }
 
 Future<void> _pumpRetake(WidgetTester tester, _FakePrefsService service) async {
@@ -225,6 +229,55 @@ void main() {
     });
   });
 
+  group('work style step', () {
+    testWidgets('selecting a chip and finishing saves work_style',
+        (tester) async {
+      final service = _FakePrefsService();
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          preferencesApiServiceProvider.overrideWithValue(service),
+          authProvider.overrideWith(
+              (ref) => _FakeAuthNotifier(_user(needsOnboarding: true))),
+        ],
+        child: localizedTestApp(home: const OnboardingQuizScreen()),
+      ));
+      await tester.pump();
+
+      // The work question is step 2 of 6.
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(find.text('Do you work while you travel?'), findsOneWidget);
+      expect(find.text('Step 2 of 6'), findsOneWidget);
+
+      await tester.tap(find.text('yes — I work as I travel'));
+      await tester.pump();
+
+      // Walk to the last step and finish.
+      for (var i = 0; i < 4; i++) {
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text('Finish'));
+      await tester.pump();
+
+      expect(service.savedWorkStyle, 'digital_nomad');
+    });
+
+    testWidgets('retake seeds the saved work style', (tester) async {
+      final service = _FakePrefsService()
+        ..result = const TravelerPreferences(workStyle: 'digital_nomad');
+      await _pumpRetake(tester, service);
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      final chip = tester.widget<ChoiceChip>(
+          find.widgetWithText(ChoiceChip, 'yes — I work as I travel'));
+      expect(chip.selected, isTrue);
+    });
+  });
+
   group('system back gesture', () {
     testWidgets('steps back to the previous question instead of leaving',
         (tester) async {
@@ -236,8 +289,8 @@ void main() {
       // Advance to step 2.
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
-      expect(find.text('What do you love doing on a trip?'), findsOneWidget);
-      expect(find.text('Step 2 of 5'), findsOneWidget);
+      expect(find.text('Do you work while you travel?'), findsOneWidget);
+      expect(find.text('Step 2 of 6'), findsOneWidget);
 
       // System back: intercepted by PopScope -> back to step 1, quiz intact.
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
@@ -247,7 +300,7 @@ void main() {
 
       expect(find.byType(OnboardingQuizScreen), findsOneWidget);
       expect(find.text("What's your travel style?"), findsOneWidget);
-      expect(find.text('Step 1 of 5'), findsOneWidget);
+      expect(find.text('Step 1 of 6'), findsOneWidget);
     });
   });
 

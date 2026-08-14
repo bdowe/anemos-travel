@@ -20,6 +20,7 @@ import '../utils/snack.dart';
 // translated — only their display labels are (specs/i18n-spanish).
 const _budgets = ['budget', 'mid', 'luxury'];
 const _paces = ['relaxed', 'balanced', 'packed'];
+const _workStyleOptions = ['digital_nomad', 'workation', 'leisure_only'];
 const _companionOptions = [
   'solo',
   'partner',
@@ -42,6 +43,14 @@ String _paceLabel(AppLocalizations l10n, String value) => switch (value) {
       'packed' => l10n.prefsPacePacked,
       _ => value,
     };
+
+String _workStyleLabel(AppLocalizations l10n, String value) => switch (value) {
+      'digital_nomad' => l10n.prefsWorkStyleNomad,
+      'workation' => l10n.prefsWorkStyleWorkation,
+      'leisure_only' => l10n.prefsWorkStyleLeisure,
+      _ => value,
+    };
+
 
 String _companionLabel(AppLocalizations l10n, String value) => switch (value) {
       'solo' => l10n.quizCompanionSolo,
@@ -88,7 +97,7 @@ class OnboardingQuizScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
-  static const _stepCount = 5;
+  static const _stepCount = 6;
 
   final _pageController = PageController();
   int _step = 0;
@@ -97,6 +106,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
 
   String? _budget;
   String? _pace;
+  String? _workStyle;
   final Set<String> _interests = {};
   String? _companions;
 
@@ -124,6 +134,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
     _seededFromPrefs = true;
     _budget = prefs.budget;
     _pace = prefs.pace;
+    _workStyle = prefs.workStyle;
     _interests.addAll(prefs.interests);
     final home = prefs.homeAirport;
     if (home != null && home.isNotEmpty) {
@@ -173,6 +184,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
     final ok = await ref.read(preferencesProvider.notifier).save(
           budget: _budget,
           pace: _pace,
+          workStyle: _workStyle,
           interests: _interests.toList(),
           homeAirport: _homeAirport?.iataCode,
           // null keeps notes untouched (they're empty for a brand-new user).
@@ -296,6 +308,18 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                     selected: _pace,
                     onSelected: (v) => setState(() => _pace = v),
                     labelBuilder: (v) => _paceLabel(l10n, v),
+                  ),
+                ],
+              ),
+              _buildStep(
+                title: l10n.quizWorkStyleTitle,
+                subtitle: l10n.quizWorkStyleSubtitle,
+                children: [
+                  ChoiceChipRow(
+                    options: _workStyleOptions,
+                    selected: _workStyle,
+                    onSelected: (v) => setState(() => _workStyle = v),
+                    labelBuilder: (v) => _workStyleLabel(l10n, v),
                   ),
                 ],
               ),

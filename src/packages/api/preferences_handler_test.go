@@ -37,3 +37,18 @@ func TestNormalizeNotes(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeWorkStyle(t *testing.T) {
+	for _, v := range []string{"digital_nomad", "workation", "leisure_only"} {
+		got, err := normalizeChoice(strPtr(v), allowedWorkStyles, "work_style")
+		if err != nil || got == nil || *got != v {
+			t.Fatalf("normalizeChoice(%q) = %v, %v; want accepted", v, got, err)
+		}
+	}
+	if _, err := normalizeChoice(strPtr("nomad"), allowedWorkStyles, "work_style"); err == nil {
+		t.Fatal("normalizeChoice(\"nomad\") should be rejected")
+	}
+	if got, err := normalizeChoice(nil, allowedWorkStyles, "work_style"); got != nil || err != nil {
+		t.Fatalf("normalizeChoice(nil) = %v, %v; want nil, nil (keep existing)", got, err)
+	}
+}

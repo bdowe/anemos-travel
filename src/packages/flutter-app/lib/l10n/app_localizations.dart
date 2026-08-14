@@ -332,6 +332,30 @@ abstract class AppLocalizations {
   /// **'luxury'**
   String get prefsBudgetLuxury;
 
+  /// No description provided for @prefsWorkStyle.
+  ///
+  /// In en, this message translates to:
+  /// **'Work & travel'**
+  String get prefsWorkStyle;
+
+  /// No description provided for @prefsWorkStyleNomad.
+  ///
+  /// In en, this message translates to:
+  /// **'yes — I work as I travel'**
+  String get prefsWorkStyleNomad;
+
+  /// No description provided for @prefsWorkStyleWorkation.
+  ///
+  /// In en, this message translates to:
+  /// **'sometimes'**
+  String get prefsWorkStyleWorkation;
+
+  /// No description provided for @prefsWorkStyleLeisure.
+  ///
+  /// In en, this message translates to:
+  /// **'no — trips are time off'**
+  String get prefsWorkStyleLeisure;
+
   /// Trip pace option shown on a chip; the stored API value stays 'relaxed'.
   ///
   /// In en, this message translates to:
@@ -1129,6 +1153,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Helps the planner match stays and activities to you.'**
   String get quizStyleSubtitle;
+
+  /// No description provided for @quizWorkStyleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Do you work while you travel?'**
+  String get quizWorkStyleTitle;
+
+  /// No description provided for @quizWorkStyleSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'So the planner can balance wifi-ready stays and work time with exploring.'**
+  String get quizWorkStyleSubtitle;
 
   /// No description provided for @quizInterestsTitle.
   ///

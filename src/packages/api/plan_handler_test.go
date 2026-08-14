@@ -57,6 +57,42 @@ func TestPersonalizedSystemPromptIgnoresWhitespaceNotes(t *testing.T) {
 	}
 }
 
+func TestPersonalizedSystemPromptWorkStyleNomad(t *testing.T) {
+	p := &store.TravelerPreference{WorkStyle: strPtr("digital_nomad")}
+	got := personalizedSystemPrompt("base", p)
+	if !strings.Contains(got, "work style: digital nomad (works remotely while traveling)") {
+		t.Fatalf("prompt missing nomad parts line: %q", got)
+	}
+	if !strings.Contains(got, "reliable wifi") || !strings.Contains(got, "digital-nomad visas") {
+		t.Fatalf("prompt missing nomad guidance note: %q", got)
+	}
+}
+
+func TestPersonalizedSystemPromptWorkStyleWorkation(t *testing.T) {
+	p := &store.TravelerPreference{WorkStyle: strPtr("workation")}
+	got := personalizedSystemPrompt("base", p)
+	if !strings.Contains(got, "work style: sometimes works on trips") {
+		t.Fatalf("prompt missing workation parts line: %q", got)
+	}
+	if !strings.Contains(got, "unscheduled blocks for work") {
+		t.Fatalf("prompt missing workation note: %q", got)
+	}
+	if strings.Contains(got, "digital-nomad visas") {
+		t.Fatalf("workation must not get the full nomad note: %q", got)
+	}
+}
+
+func TestPersonalizedSystemPromptWorkStyleLeisure(t *testing.T) {
+	p := &store.TravelerPreference{WorkStyle: strPtr("leisure_only")}
+	got := personalizedSystemPrompt("base", p)
+	if !strings.Contains(got, "work style: leisure only — trips are time off") {
+		t.Fatalf("prompt missing leisure parts line: %q", got)
+	}
+	if strings.Contains(got, "reliable wifi") {
+		t.Fatalf("leisure_only must not get a work note: %q", got)
+	}
+}
+
 // runPlanHandler posts a PlanRequest to planHandler directly (the recorder
 // implements http.Flusher, which the SSE handler requires) and returns the
 // raw event-stream body.

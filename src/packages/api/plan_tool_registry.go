@@ -264,7 +264,7 @@ var createItineraryTool = anthropic.ToolParam{
 
 var savePrefsTool = anthropic.ToolParam{
 	Name:        "save_preferences",
-	Description: anthropic.String("Save what you learn about the traveler so future trips are personalized. Call this when the user reveals a budget level, trip pace, interests, which airport they fly from, or any other durable fact about how they travel. Only include fields you actually learned."),
+	Description: anthropic.String("Save what you learn about the traveler so future trips are personalized. Call this when the user reveals a budget level, trip pace, interests, which airport they fly from, whether they work while traveling, or any other durable fact about how they travel. Only include fields you actually learned."),
 	InputSchema: anthropic.ToolInputSchemaParam{
 		Properties: map[string]any{
 			"budget": map[string]any{
@@ -289,6 +289,11 @@ var savePrefsTool = anthropic.ToolParam{
 			"profile_notes": map[string]any{
 				"type":        "string",
 				"description": "The COMPLETE updated traveler profile as short bullet lines — your current notes (shown in the system prompt) merged with the new fact, de-duplicated, max ~15 lines. Never send only the new fact; always send the full rewritten profile.",
+			},
+			"work_style": map[string]any{
+				"type":        "string",
+				"enum":        []string{"digital_nomad", "workation", "leisure_only"},
+				"description": "Whether the traveler works remotely while traveling — digital_nomad (works remotely as they travel), workation (sometimes works on trips), leisure_only (trips are strictly time off). Save it when they mention working on the road, needing wifi to work, or that trips are pure vacation.",
 			},
 		},
 	},
@@ -739,11 +744,13 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 		Interests    []string `json:"interests"`
 		HomeAirport  *string  `json:"home_airport"`
 		ProfileNotes *string  `json:"profile_notes"`
+		WorkStyle    *string  `json:"work_style"`
 	}
 	json.Unmarshal(input, &in)
 
 	budget, _ := normalizeChoice(in.Budget, allowedBudgets, "budget")
 	pace, _ := normalizeChoice(in.Pace, allowedPaces, "pace")
+	workStyle, _ := normalizeChoice(in.WorkStyle, allowedWorkStyles, "work_style")
 	homeAirport, _ := normalizeAirportCode(in.HomeAirport)
 	var interestsArg interface{}
 	if in.Interests != nil {
@@ -755,7 +762,7 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 		notes = nil
 	}
 	_, err := store.New(dbPool).UpsertPreferences(s.ctx, store.UpsertPreferencesParams{
-		UserID: s.uid, Budget: budget, Pace: pace, Interests: interestsArg, HomeAirport: homeAirport, ProfileNotes: notes,
+		UserID: s.uid, Budget: budget, Pace: pace, Interests: interestsArg, HomeAirport: homeAirport, ProfileNotes: notes, WorkStyle: workStyle,
 	})
 	if err != nil {
 		return fmt.Sprintf("Could not save preferences: %v", err), true
@@ -775,6 +782,9 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 	}
 	if notes != nil {
 		changed = append(changed, "profile_notes")
+	}
+	if workStyle != nil {
+		changed = append(changed, "work_style")
 	}
 	if len(changed) > 0 {
 		sendSSE(s.w, "profile_updated", map[string]any{

@@ -820,10 +820,23 @@ func personalizedSystemPrompt(base string, p *store.TravelerPreference) string {
 			"'); only use a different origin if the trip clearly starts elsewhere or they say so." +
 			" Skip this flying default when the trip's travel mode is car, train, or bus — then the home airport only tells you roughly where home is."
 	}
+	var workNote string
+	if p.WorkStyle != nil && *p.WorkStyle != "" {
+		switch *p.WorkStyle {
+		case "digital_nomad":
+			parts = append(parts, "work style: digital nomad (works remotely while traveling)")
+			workNote = " This traveler works remotely on the road: favor stays with reliable wifi and a real workspace (desk, coworking nearby, weekly or monthly rates), suggest longer stays in fewer places, and shape days so work blocks and sightseeing don't collide. Mention laptop-friendly cafes or coworking spaces where relevant, and flag digital-nomad visas for longer international stays."
+		case "workation":
+			parts = append(parts, "work style: sometimes works on trips")
+			workNote = " When a trip involves working days, prefer stays with reliable wifi and a usable desk, and leave some unscheduled blocks for work."
+		case "leisure_only":
+			parts = append(parts, "work style: leisure only — trips are time off")
+		}
+	}
 	out := base
 	if len(parts) > 0 {
 		out += "\n\nTraveler preferences — " + strings.Join(parts, "; ") +
-			". Tailor your suggestions accordingly." + homeNote
+			". Tailor your suggestions accordingly." + homeNote + workNote
 	}
 	if p.ProfileNotes != nil && strings.TrimSpace(*p.ProfileNotes) != "" {
 		out += "\n\nTraveler profile notes (maintained by you):\n" + strings.TrimSpace(*p.ProfileNotes)

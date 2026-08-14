@@ -36,6 +36,7 @@ class _OkPrefsApi implements PreferencesApiService {
     required List<String> interests,
     String? homeAirport,
     String? profileNotes,
+    String? workStyle,
   }) async =>
       const TravelerPreferences();
 }
