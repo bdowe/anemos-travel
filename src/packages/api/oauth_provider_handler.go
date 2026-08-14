@@ -173,7 +173,7 @@ func oauthErrorPage(w http.ResponseWriter, locale, body string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusBadRequest)
 	fmt.Fprintf(w, "<html lang=%q><body><h2>%s</h2><p>%s</p></body></html>",
-		locale, "Golden Tempo Travel", body)
+		locale, "Anemos", body)
 }
 
 // oauthRedirectError sends the RFC 6749 §4.1.2.1 error redirect for failures

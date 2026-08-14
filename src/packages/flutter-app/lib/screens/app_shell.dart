@@ -130,7 +130,7 @@ const List<Widget> _tabRoots = [
   TripsListScreen(),
 ];
 
-/// The Golden Tempo Travel brand mark for the top of the rail — the persistent
+/// The Anemos brand mark for the top of the rail — the persistent
 /// Site ID (Krug). The horseshoe mark on a light badge so it fits the narrow
 /// rail and the black/gold artwork reads on the surface. Tapping it goes Home,
 /// per the universal logo-links-home convention.

@@ -183,8 +183,8 @@ func newMCPHandler() http.Handler {
 
 func newMCPServerFor(caller mcpCaller) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{
-		Name:    "golden-tempo-travel",
-		Title:   "Golden Tempo Travel",
+		Name:    "anemos",
+		Title:   "Anemos",
 		Version: os.Getenv("SENTRY_RELEASE"),
 	}, nil)
 	registerMCPTools(s, caller)

@@ -2,7 +2,7 @@
     <!-- Voice dictation in the chat composer (specs/voice-dictation). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
-        android:label="Golden Tempo Travel"
+        android:label="Anemos"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

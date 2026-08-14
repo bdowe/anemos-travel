@@ -1,5 +1,5 @@
 name: travel_route_planner
-description: "Golden Tempo Travel - Plan trips, optimize routes, and build itineraries with AI."
+description: "Anemos - Plan trips, optimize routes, and build itineraries with AI."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev

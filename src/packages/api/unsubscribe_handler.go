@@ -62,7 +62,7 @@ func unsubscribeCategoryLabel(category string) string {
 var unsubscribePage = template.Must(template.New("unsub").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Unsubscribed — Golden Tempo Travel</title>
+<title>Unsubscribed — Anemos</title>
 <style>
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7f9;color:#1a1a1a;margin:0;padding:2rem;display:flex;justify-content:center}
   .card{background:#fff;max-width:32rem;width:100%;border-radius:16px;padding:2rem 2.25rem;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-top:3rem}
@@ -73,7 +73,7 @@ var unsubscribePage = template.Must(template.New("unsub").Parse(`<!doctype html>
 </style></head>
 <body><div class="card">
   <h1>You've been unsubscribed ✓</h1>
-  <p>You'll no longer receive <strong>{{.Label}}</strong> from Golden Tempo Travel.</p>
+  <p>You'll no longer receive <strong>{{.Label}}</strong> from Anemos.</p>
   <p>Changed your mind, or want to fine-tune which emails you get? Manage your
      preferences any time in <a href="{{.AppURL}}">your account settings</a>.</p>
 </div></body></html>`))

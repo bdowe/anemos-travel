@@ -89,7 +89,7 @@ void main() {
     expect(find.textContaining("hasn't been verified"), findsOneWidget);
     expect(find.text('Create trips in your account and see your trip list'),
         findsOneWidget);
-    expect(find.text("Search Golden Tempo's local recommendations"),
+    expect(find.text("Search Anemos's local recommendations"),
         findsOneWidget);
     // The approve action must not exist until there's a session to bind to.
     expect(find.text('Sign in'), findsOneWidget);

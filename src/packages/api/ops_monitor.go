@@ -388,8 +388,8 @@ func opsAlertPayload(state healthState) []byte {
 func buildOpsAlertEmail(degraded bool, reasons []string, appURL string) (subject, body string) {
 	var b strings.Builder
 	if degraded {
-		subject = "[ops] Golden Tempo API degraded"
-		b.WriteString("The Golden Tempo API self-check detected a degradation.\n\n")
+		subject = "[ops] Anemos API degraded"
+		b.WriteString("The Anemos API self-check detected a degradation.\n\n")
 		b.WriteString("Reasons:\n")
 		if len(reasons) == 0 {
 			b.WriteString("  - (unspecified)\n")
@@ -398,8 +398,8 @@ func buildOpsAlertEmail(degraded bool, reasons []string, appURL string) (subject
 			fmt.Fprintf(&b, "  - %s\n", r)
 		}
 	} else {
-		subject = "[ops] Golden Tempo API recovered"
-		b.WriteString("The Golden Tempo API self-check reports all clear — health has recovered.\n")
+		subject = "[ops] Anemos API recovered"
+		b.WriteString("The Anemos API self-check reports all clear — health has recovered.\n")
 	}
 	fmt.Fprintf(&b, "\nOps dashboard: %s\n", appURL)
 	return subject, b.String()

@@ -231,7 +231,7 @@ var printViewTmpl = template.Must(template.New("print-view").Parse(`<!DOCTYPE ht
 <html lang="{{.Lang}}">
 <head>
   <meta charset="utf-8">
-  <title>{{.Title}} — Golden Tempo Travel</title>
+  <title>{{.Title}} — Anemos</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -299,7 +299,7 @@ var printViewTmpl = template.Must(template.New("print-view").Parse(`<!DOCTYPE ht
 <body>
   <header>
     <div class="wrap">
-      <p class="brand"><img src="/app/icons/Icon-512.png" alt="">Golden Tempo Travel</p>
+      <p class="brand"><img src="/app/icons/Icon-512.png" alt="">Anemos</p>
       <h1>{{.Title}}</h1>
       {{if .Dates}}<p class="meta">{{.Dates}}</p>{{end}}
     </div>

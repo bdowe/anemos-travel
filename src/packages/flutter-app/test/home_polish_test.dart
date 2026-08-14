@@ -15,8 +15,8 @@ import 'package:travel_route_planner/widgets/brand_logo.dart';
 import 'support/l10n_test_app.dart';
 
 /// Home polish regressions (UI polish wave 2, PR 9):
-/// - the app bar drops the wordmark for the brand mark alone on narrow
-///   phones instead of ellipsizing the brand ("Golden Tempo Tra…");
+/// - the app bar drops the wordmark for the brand mark alone when the
+///   title slot can't fit it, instead of ellipsizing the brand;
 /// - the compact plan strip's tagline wraps to two lines instead of
 ///   truncating ("Plan less. Trav…").
 class _FakeAuthNotifier extends StateNotifier<AuthState>
@@ -105,13 +105,22 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets(
-      'narrow app bar shows the brand mark only — no ellipsized '
-      'wordmark', (WidgetTester tester) async {
+      'narrow app bar fits the short wordmark next to the badge — '
+      'no ellipsis', (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(360, 690));
+
+    expect(find.text(AppInfo.name), findsOneWidget);
+    expect(find.byType(BrandLogo), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'tiny app bar drops the wordmark for the brand mark alone — '
+      'no ellipsized wordmark', (WidgetTester tester) async {
+    await _pumpHome(tester, surface: const Size(230, 690));
 
     expect(find.text(AppInfo.name), findsNothing);
     expect(find.byType(BrandLogo), findsOneWidget);
-    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

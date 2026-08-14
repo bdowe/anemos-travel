@@ -14,8 +14,8 @@ import (
 	"travel-route-planner/store"
 )
 
-// mcp_tools.go: what ChatGPT/claude.ai can actually do with a linked Golden
-// Tempo account (specs/mcp-connector). Deliberately small — the connector's
+// mcp_tools.go: what ChatGPT/claude.ai can actually do with a linked
+// Anemos account (specs/mcp-connector). Deliberately small — the connector's
 // job is to write trips the user planned in their AI chat, and to put the
 // local-recommendations moat inside that chat.
 //
@@ -80,8 +80,8 @@ type listTripsOutput struct {
 func registerMCPTools(s *mcp.Server, caller mcpCaller) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "create_trip",
-		Description: "Save an itinerary to the traveler's Golden Tempo account. " +
-			"Supply the places by name and city — Golden Tempo resolves map coordinates itself. " +
+		Description: "Save an itinerary to the traveler's Anemos account. " +
+			"Supply the places by name and city — Anemos resolves map coordinates itself. " +
 			"Use this once the traveler has agreed on a plan; the reply includes a link to the saved trip.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createTripInput) (*mcp.CallToolResult, createTripOutput, error) {
 		return mcpCreateTrip(ctx, caller, in)
@@ -89,7 +89,7 @@ func registerMCPTools(s *mcp.Server, caller mcpCaller) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "search_local_recommendations",
-		Description: "Search Golden Tempo's recommendations from real locals for a city — places you can't find by " +
+		Description: "Search Anemos's recommendations from real locals for a city — places you can't find by " +
 			"searching the web, with the local's own tip and a quote. Call this FIRST when recommending places in a " +
 			"city, and credit the local by name when you use one.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchRecsInput) (*mcp.CallToolResult, any, error) {
@@ -98,7 +98,7 @@ func registerMCPTools(s *mcp.Server, caller mcpCaller) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_trips",
-		Description: "List the traveler's saved Golden Tempo trips, so you can refer to or link an existing trip.",
+		Description: "List the traveler's saved Anemos trips, so you can refer to or link an existing trip.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ listTripsInput) (*mcp.CallToolResult, listTripsOutput, error) {
 		return mcpListTrips(ctx, caller)
 	})
@@ -153,7 +153,7 @@ func mcpCreateTrip(ctx context.Context, caller mcpCaller, in createTripInput) (*
 	}
 	if len(resolved) == 0 {
 		if stats.LookupFailures > 0 {
-			return toolError("Golden Tempo couldn't reach its map provider just now — ask the traveler to try again in a few minutes."), zero, nil
+			return toolError("Anemos couldn't reach its map provider just now — ask the traveler to try again in a few minutes."), zero, nil
 		}
 		return toolError("None of those places could be located on a map. Check the place names and cities and try again."), zero, nil
 	}
@@ -161,7 +161,7 @@ func mcpCreateTrip(ctx context.Context, caller mcpCaller, in createTripInput) (*
 	resolved = reorderItineraryByDistance(resolved)
 	chatToken, err := generateSessionToken()
 	if err != nil {
-		return toolError("Golden Tempo couldn't save the trip just now."), zero, nil
+		return toolError("Anemos couldn't save the trip just now."), zero, nil
 	}
 	tripID, newLineage, err := persistTrip(ctx, caller.userID, "chat-"+chatToken,
 		in.Title, in.Summary, in.StartDate, in.EndDate, in.TravelMode, resolved)
@@ -171,7 +171,7 @@ func mcpCreateTrip(ctx context.Context, caller mcpCaller, in createTripInput) (*
 			return toolError(err.Error()), zero, nil
 		}
 		ctxLog(ctx).Error("mcp create_trip: persist failed", "error", err)
-		return toolError("Golden Tempo couldn't save the trip just now."), zero, nil
+		return toolError("Anemos couldn't save the trip just now."), zero, nil
 	}
 
 	out := createTripOutput{
@@ -196,7 +196,7 @@ func mcpCreateTrip(ctx context.Context, caller mcpCaller, in createTripInput) (*
 		}
 	}
 
-	msg := fmt.Sprintf("Saved %q with %d places to the traveler's Golden Tempo account: %s",
+	msg := fmt.Sprintf("Saved %q with %d places to the traveler's Anemos account: %s",
 		in.Title, len(resolved), out.URL)
 	if len(dropped) > 0 {
 		msg += fmt.Sprintf("\n\nCouldn't locate on a map (not saved): %s. Tell the traveler so they can add them by hand.",
@@ -216,7 +216,7 @@ func mcpSearchLocalRecs(ctx context.Context, caller mcpCaller, in searchRecsInpu
 	recs, err := localRecsService.SearchByCity(ctx, city, strings.TrimSpace(in.Category))
 	if err != nil {
 		ctxLog(ctx).Error("mcp search_local_recommendations failed", "error", err, "city", city)
-		return toolError("Golden Tempo couldn't search recommendations just now."), nil, nil
+		return toolError("Anemos couldn't search recommendations just now."), nil, nil
 	}
 	if len(recs) == 0 {
 		return toolText(fmt.Sprintf("No local recommendations for %s yet.", city)), nil, nil
@@ -226,7 +226,7 @@ func mcpSearchLocalRecs(ctx context.Context, caller mcpCaller, in searchRecsInpu
 	}
 	b, err := json.Marshal(recs)
 	if err != nil {
-		return toolError("Golden Tempo couldn't format the recommendations."), nil, nil
+		return toolError("Anemos couldn't format the recommendations."), nil, nil
 	}
 	return toolText(string(b)), nil, nil
 }
@@ -240,7 +240,7 @@ func mcpListTrips(ctx context.Context, caller mcpCaller) (*mcp.CallToolResult, l
 	rows, err := store.New(dbPool).ListLatestTripsByOwner(ctx, caller.userID)
 	if err != nil {
 		ctxLog(ctx).Error("mcp list_trips failed", "error", err)
-		return toolError("Golden Tempo couldn't list trips just now."), out, nil
+		return toolError("Anemos couldn't list trips just now."), out, nil
 	}
 	for _, t := range rows {
 		s := mcpTripSummary{
