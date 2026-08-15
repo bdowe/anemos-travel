@@ -51,22 +51,25 @@ type AuthIdentity struct {
 }
 
 type BookingTodo struct {
-	ID         uuid.UUID   `json:"id"`
-	TripID     uuid.UUID   `json:"trip_id"`
-	Kind       string      `json:"kind"`
-	TodoKey    string      `json:"todo_key"`
-	Title      string      `json:"title"`
-	Subtitle   *string     `json:"subtitle"`
-	Provider   *string     `json:"provider"`
-	SearchUrl  *string     `json:"search_url"`
-	DepartDate pgtype.Date `json:"depart_date"`
-	ReturnDate pgtype.Date `json:"return_date"`
-	Booked     bool        `json:"booked"`
-	Auto       bool        `json:"auto"`
-	Position   int32       `json:"position"`
-	CreatedAt  time.Time   `json:"created_at"`
-	UpdatedAt  time.Time   `json:"updated_at"`
-	Mode       *string     `json:"mode"`
+	ID               uuid.UUID   `json:"id"`
+	TripID           uuid.UUID   `json:"trip_id"`
+	Kind             string      `json:"kind"`
+	TodoKey          string      `json:"todo_key"`
+	Title            string      `json:"title"`
+	Subtitle         *string     `json:"subtitle"`
+	Provider         *string     `json:"provider"`
+	SearchUrl        *string     `json:"search_url"`
+	DepartDate       pgtype.Date `json:"depart_date"`
+	ReturnDate       pgtype.Date `json:"return_date"`
+	Booked           bool        `json:"booked"`
+	Auto             bool        `json:"auto"`
+	Position         int32       `json:"position"`
+	CreatedAt        time.Time   `json:"created_at"`
+	UpdatedAt        time.Time   `json:"updated_at"`
+	Mode             *string     `json:"mode"`
+	Role             *string     `json:"role"`
+	OriginLabel      *string     `json:"origin_label"`
+	DestinationLabel *string     `json:"destination_label"`
 }
 
 type EmailToken struct {
@@ -270,18 +273,20 @@ type TravelerPreference struct {
 }
 
 type Trip struct {
-	ID         uuid.UUID   `json:"id"`
-	UserID     uuid.UUID   `json:"user_id"`
-	CreatedAt  time.Time   `json:"created_at"`
-	UpdatedAt  time.Time   `json:"updated_at"`
-	Title      string      `json:"title"`
-	StartDate  pgtype.Date `json:"start_date"`
-	EndDate    pgtype.Date `json:"end_date"`
-	ChatID     *string     `json:"chat_id"`
-	Summary    *string     `json:"summary"`
-	UpdatedBy  pgtype.UUID `json:"updated_by"`
-	TravelMode *string     `json:"travel_mode"`
-	Origin     *string     `json:"origin"`
+	ID            uuid.UUID   `json:"id"`
+	UserID        uuid.UUID   `json:"user_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	Title         string      `json:"title"`
+	StartDate     pgtype.Date `json:"start_date"`
+	EndDate       pgtype.Date `json:"end_date"`
+	ChatID        *string     `json:"chat_id"`
+	Summary       *string     `json:"summary"`
+	UpdatedBy     pgtype.UUID `json:"updated_by"`
+	TravelMode    *string     `json:"travel_mode"`
+	Origin        *string     `json:"origin"`
+	OriginAirport *string     `json:"origin_airport"`
+	ReturnAirport *string     `json:"return_airport"`
 }
 
 type TripBudget struct {

@@ -15,7 +15,7 @@ import (
 const createBookingTodo = `-- name: CreateBookingTodo :one
 INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
-RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode
+RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label
 `
 
 type CreateBookingTodoParams struct {
@@ -62,6 +62,9 @@ func (q *Queries) CreateBookingTodo(ctx context.Context, arg CreateBookingTodoPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Mode,
+		&i.Role,
+		&i.OriginLabel,
+		&i.DestinationLabel,
 	)
 	return i, err
 }
@@ -110,6 +113,9 @@ type DeleteStaleAutoBookingTodosParams struct {
 	Keys   []string  `json:"keys"`
 }
 
+// The rest of the prune: stale rows nobody has touched. Runs AFTER
+// DemoteStaleAutoBookingTodos, whose survivors are auto = false by then and so
+// fall outside this statement.
 func (q *Queries) DeleteStaleAutoBookingTodos(ctx context.Context, arg DeleteStaleAutoBookingTodosParams) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteStaleAutoBookingTodos, arg.TripID, arg.Keys)
 	if err != nil {
@@ -118,8 +124,43 @@ func (q *Queries) DeleteStaleAutoBookingTodos(ctx context.Context, arg DeleteSta
 	return result.RowsAffected(), nil
 }
 
+const demoteStaleAutoBookingTodos = `-- name: DemoteStaleAutoBookingTodos :execrows
+UPDATE booking_todos b
+SET auto = false
+WHERE b.trip_id = $1 AND b.auto = true AND b.todo_key <> ALL($2::text[])
+  AND (b.booked OR b.mode IS NOT NULL OR EXISTS (
+        SELECT 1 FROM trip_expenses e
+        WHERE e.trip_id = b.trip_id
+          AND e.source_kind = 'booking_todo' AND e.source_id = b.id))
+`
+
+type DemoteStaleAutoBookingTodosParams struct {
+	TripID uuid.UUID `json:"trip_id"`
+	Keys   []string  `json:"keys"`
+}
+
+// Half of the prune, and it MUST run before DeleteStaleAutoBookingTodos.
+//
+// A stale auto row that carries traveler state is not garbage — it is a booked
+// flight, a per-leg mode override, or the source of a budget expense. Deleting
+// it destroys all three silently (the expense survives with a dangling
+// source_id, still summed into `spent`, and unbooking can never find it again
+// — 00061 has no FK by design). So state-carrying rows are DEMOTED to manual
+// instead: auto = false takes them out of the derived set for good, they stop
+// being re-derived, and they render in the existing residual "Other bookings"
+// list where the traveler and the agent can edit or remove them. Demote rather
+// than merely skip: DeleteBookingTodoNonAuto refuses auto rows, so a skipped
+// survivor would be an undeletable zombie.
+func (q *Queries) DemoteStaleAutoBookingTodos(ctx context.Context, arg DemoteStaleAutoBookingTodosParams) (int64, error) {
+	result, err := q.db.Exec(ctx, demoteStaleAutoBookingTodos, arg.TripID, arg.Keys)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listBookingTodosByTrip = `-- name: ListBookingTodosByTrip :many
-SELECT id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode FROM booking_todos WHERE trip_id = $1 ORDER BY position ASC, created_at ASC
+SELECT id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label FROM booking_todos WHERE trip_id = $1 ORDER BY position ASC, created_at ASC
 `
 
 func (q *Queries) ListBookingTodosByTrip(ctx context.Context, tripID uuid.UUID) ([]BookingTodo, error) {
@@ -148,6 +189,9 @@ func (q *Queries) ListBookingTodosByTrip(ctx context.Context, tripID uuid.UUID) 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Mode,
+			&i.Role,
+			&i.OriginLabel,
+			&i.DestinationLabel,
 		); err != nil {
 			return nil, err
 		}
@@ -160,7 +204,7 @@ func (q *Queries) ListBookingTodosByTrip(ctx context.Context, tripID uuid.UUID) 
 }
 
 const setBookingTodoBooked = `-- name: SetBookingTodoBooked :one
-UPDATE booking_todos SET booked = $3 WHERE id = $1 AND trip_id = $2 RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode
+UPDATE booking_todos SET booked = $3 WHERE id = $1 AND trip_id = $2 RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label
 `
 
 type SetBookingTodoBookedParams struct {
@@ -189,6 +233,9 @@ func (q *Queries) SetBookingTodoBooked(ctx context.Context, arg SetBookingTodoBo
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Mode,
+		&i.Role,
+		&i.OriginLabel,
+		&i.DestinationLabel,
 	)
 	return i, err
 }
@@ -197,7 +244,7 @@ const setBookingTodoMode = `-- name: SetBookingTodoMode :one
 UPDATE booking_todos
 SET mode = $3, provider = $4, search_url = $5
 WHERE id = $1 AND trip_id = $2 AND kind = 'transport'
-RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode
+RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label
 `
 
 type SetBookingTodoModeParams struct {
@@ -238,6 +285,9 @@ func (q *Queries) SetBookingTodoMode(ctx context.Context, arg SetBookingTodoMode
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Mode,
+		&i.Role,
+		&i.OriginLabel,
+		&i.DestinationLabel,
 	)
 	return i, err
 }
@@ -299,7 +349,7 @@ SET kind        = COALESCE($1, kind),
     provider    = COALESCE($7, provider),
     booked      = COALESCE($8, booked)
 WHERE id = $9 AND trip_id = $10 AND auto = false
-RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode
+RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label
 `
 
 type UpdateBookingTodoParams struct {
@@ -350,13 +400,16 @@ func (q *Queries) UpdateBookingTodo(ctx context.Context, arg UpdateBookingTodoPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Mode,
+		&i.Role,
+		&i.OriginLabel,
+		&i.DestinationLabel,
 	)
 	return i, err
 }
 
 const upsertBookingTodo = `-- name: UpsertBookingTodo :one
-INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto, role, origin_label, destination_label)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $12, $13)
 ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     kind = EXCLUDED.kind,
     title = EXCLUDED.title,
@@ -365,27 +418,38 @@ ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     search_url = EXCLUDED.search_url,
     depart_date = EXCLUDED.depart_date,
     return_date = EXCLUDED.return_date,
-    position = EXCLUDED.position
-RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode
+    position = EXCLUDED.position,
+    role = EXCLUDED.role,
+    origin_label = EXCLUDED.origin_label,
+    destination_label = EXCLUDED.destination_label
+RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label
 `
 
 type UpsertBookingTodoParams struct {
-	TripID     uuid.UUID   `json:"trip_id"`
-	Kind       string      `json:"kind"`
-	TodoKey    string      `json:"todo_key"`
-	Title      string      `json:"title"`
-	Subtitle   *string     `json:"subtitle"`
-	Provider   *string     `json:"provider"`
-	SearchUrl  *string     `json:"search_url"`
-	DepartDate pgtype.Date `json:"depart_date"`
-	ReturnDate pgtype.Date `json:"return_date"`
-	Position   int32       `json:"position"`
+	TripID           uuid.UUID   `json:"trip_id"`
+	Kind             string      `json:"kind"`
+	TodoKey          string      `json:"todo_key"`
+	Title            string      `json:"title"`
+	Subtitle         *string     `json:"subtitle"`
+	Provider         *string     `json:"provider"`
+	SearchUrl        *string     `json:"search_url"`
+	DepartDate       pgtype.Date `json:"depart_date"`
+	ReturnDate       pgtype.Date `json:"return_date"`
+	Position         int32       `json:"position"`
+	Role             *string     `json:"role"`
+	OriginLabel      *string     `json:"origin_label"`
+	DestinationLabel *string     `json:"destination_label"`
 }
 
 // KEPT deliberately though no handler calls it directly: it is the semantic
 // reference for UpsertBookingTodosBatch's column list / ON CONFLICT set, and
 // its generated Params struct is the row type the batch path builds
 // (booking_todo_handler.go). Delete only together with a handler refactor.
+//
+// role/origin_label/destination_label (00064) are CONTENT, like title: they
+// ride the DO UPDATE set so a re-sync refreshes them. What must never join it
+// is booked/auto/mode — that exclusion is the whole preservation contract, and
+// it is what lets a changed departure airport rewrite a home leg in place.
 func (q *Queries) UpsertBookingTodo(ctx context.Context, arg UpsertBookingTodoParams) (BookingTodo, error) {
 	row := q.db.QueryRow(ctx, upsertBookingTodo,
 		arg.TripID,
@@ -398,6 +462,9 @@ func (q *Queries) UpsertBookingTodo(ctx context.Context, arg UpsertBookingTodoPa
 		arg.DepartDate,
 		arg.ReturnDate,
 		arg.Position,
+		arg.Role,
+		arg.OriginLabel,
+		arg.DestinationLabel,
 	)
 	var i BookingTodo
 	err := row.Scan(
@@ -417,17 +484,24 @@ func (q *Queries) UpsertBookingTodo(ctx context.Context, arg UpsertBookingTodoPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Mode,
+		&i.Role,
+		&i.OriginLabel,
+		&i.DestinationLabel,
 	)
 	return i, err
 }
 
 const upsertBookingTodosBatch = `-- name: UpsertBookingTodosBatch :exec
-INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto)
+INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto, role, origin_label, destination_label)
 SELECT $1::uuid, u.kind, u.todo_key, u.title,
        CASE WHEN u.subtitle_null THEN NULL ELSE u.subtitle END,
        CASE WHEN u.provider_null THEN NULL ELSE u.provider END,
        CASE WHEN u.search_url_null THEN NULL ELSE u.search_url END,
-       u.depart_date, u.return_date, u.position, true
+       u.depart_date, u.return_date, u.position, true,
+       u.role,
+       -- A label has no meaningful empty value, so NULLIF carries the "this
+       -- row has no origin" case (every stay row) without a third null mask.
+       NULLIF(u.origin_label, ''), NULLIF(u.destination_label, '')
 FROM (
     SELECT unnest($2::text[])            AS kind,
            unnest($3::text[])        AS todo_key,
@@ -440,7 +514,10 @@ FROM (
            unnest($10::bool[]) AS search_url_null,
            unnest($11::date[])     AS depart_date,
            unnest($12::date[])     AS return_date,
-           unnest($13::int[])         AS position
+           unnest($13::int[])         AS position,
+           unnest($14::text[])            AS role,
+           unnest($15::text[])    AS origin_label,
+           unnest($16::text[]) AS destination_label
 ) AS u
 ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     kind = EXCLUDED.kind,
@@ -450,23 +527,29 @@ ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     search_url = EXCLUDED.search_url,
     depart_date = EXCLUDED.depart_date,
     return_date = EXCLUDED.return_date,
-    position = EXCLUDED.position
+    position = EXCLUDED.position,
+    role = EXCLUDED.role,
+    origin_label = EXCLUDED.origin_label,
+    destination_label = EXCLUDED.destination_label
 `
 
 type UpsertBookingTodosBatchParams struct {
-	TripID         uuid.UUID     `json:"trip_id"`
-	Kinds          []string      `json:"kinds"`
-	TodoKeys       []string      `json:"todo_keys"`
-	Titles         []string      `json:"titles"`
-	Subtitles      []string      `json:"subtitles"`
-	SubtitleNulls  []bool        `json:"subtitle_nulls"`
-	Providers      []string      `json:"providers"`
-	ProviderNulls  []bool        `json:"provider_nulls"`
-	SearchUrls     []string      `json:"search_urls"`
-	SearchUrlNulls []bool        `json:"search_url_nulls"`
-	DepartDates    []pgtype.Date `json:"depart_dates"`
-	ReturnDates    []pgtype.Date `json:"return_dates"`
-	Positions      []int32       `json:"positions"`
+	TripID            uuid.UUID     `json:"trip_id"`
+	Kinds             []string      `json:"kinds"`
+	TodoKeys          []string      `json:"todo_keys"`
+	Titles            []string      `json:"titles"`
+	Subtitles         []string      `json:"subtitles"`
+	SubtitleNulls     []bool        `json:"subtitle_nulls"`
+	Providers         []string      `json:"providers"`
+	ProviderNulls     []bool        `json:"provider_nulls"`
+	SearchUrls        []string      `json:"search_urls"`
+	SearchUrlNulls    []bool        `json:"search_url_nulls"`
+	DepartDates       []pgtype.Date `json:"depart_dates"`
+	ReturnDates       []pgtype.Date `json:"return_dates"`
+	Positions         []int32       `json:"positions"`
+	Roles             []string      `json:"roles"`
+	OriginLabels      []string      `json:"origin_labels"`
+	DestinationLabels []string      `json:"destination_labels"`
 }
 
 // Batch twin of UpsertBookingTodo: one round trip for the whole derived set.
@@ -496,6 +579,9 @@ func (q *Queries) UpsertBookingTodosBatch(ctx context.Context, arg UpsertBooking
 		arg.DepartDates,
 		arg.ReturnDates,
 		arg.Positions,
+		arg.Roles,
+		arg.OriginLabels,
+		arg.DestinationLabels,
 	)
 	return err
 }
