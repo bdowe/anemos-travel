@@ -90,6 +90,17 @@ func TestSystemPromptEnglishUnchanged(t *testing.T) {
 		if !strings.Contains(prompt, "never present a party or round-trip total as a per-person one-way fare") {
 			t.Errorf("Accept-Language %q: prompt lost the price-labeling flight instruction", header)
 		}
+		// A tool the model is never told to reach for is a tool that doesn't
+		// exist. set_trip_origin was added because the agent had no way to
+		// change where a trip departs from and improvised a duplicate
+		// checklist item instead; deleting this instruction while the tool
+		// stays registered would restore that behaviour silently.
+		if !strings.Contains(prompt, "call set_trip_origin") {
+			t.Errorf("Accept-Language %q: prompt lost the trip-origin instruction", header)
+		}
+		if !strings.Contains(prompt, "never add a second checklist item for a leg the trip already has") {
+			t.Errorf("Accept-Language %q: prompt lost the no-duplicate-leg rule", header)
+		}
 		// These requests are anonymous and not trip-bound, so the prompt is
 		// exactly basePrompt — it must still end on basePrompt's final
 		// sentence, proving nothing was appended.
