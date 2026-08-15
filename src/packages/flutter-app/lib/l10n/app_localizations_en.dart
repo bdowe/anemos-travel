@@ -793,6 +793,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookingsSegmentToLabel => 'To *';
 
   @override
+  String get bookingsSegmentEndpointsFromTrip => 'Set by the trip.';
+
+  @override
   String get bookingsDepartureDate => 'Departure date';
 
   @override
@@ -1330,6 +1333,67 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tripMoreActions => 'More options';
+
+  @override
+  String get tripAirportsTitle => 'Trip airports';
+
+  @override
+  String get tripAirportsHelp =>
+      'Which airports this trip flies out of and comes home into. Your saved home airport doesn\'t change.';
+
+  @override
+  String get tripAirportsDepartsFrom => 'Departs from';
+
+  @override
+  String get tripAirportsReturnsInto => 'Returns into';
+
+  @override
+  String get tripAirportsSameBothWays => 'Comes home into the same airport';
+
+  @override
+  String get tripAirportsUseHomeAirport => 'Use my home airport';
+
+  @override
+  String get tripAirportsPickOne => 'Pick an airport from the list.';
+
+  @override
+  String get tripAirportsBothNeeded =>
+      'Pick an airport for both ends, or clear them.';
+
+  @override
+  String tripAirportsCurrentFallback(String label) {
+    return 'Right now these legs use $label.';
+  }
+
+  @override
+  String get tripAirportsMenuLabel => 'Trip airports…';
+
+  @override
+  String get tripAirportsChangeDeparture => 'Change departure airport…';
+
+  @override
+  String get tripAirportsChangeReturn => 'Change return airport…';
+
+  @override
+  String get tripAirportsChangeLink => 'Change airport';
+
+  @override
+  String tripAirportsSaved(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Saved. $count legs renamed.',
+      one: 'Saved. 1 leg renamed.',
+      zero:
+          'Saved. No departure or return leg yet — they\'ll use these airports when they appear.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String tripAirportsFailed(String error) {
+    return 'Couldn\'t save the trip\'s airports: $error';
+  }
 
   @override
   String get tripLocalIntel => 'Local intel';

@@ -354,6 +354,10 @@
   "bookingsPriceNoteLabel": "Price note (e.g. €120/night)",
   "bookingsSegmentFromLabel": "From *",
   "bookingsSegmentToLabel": "To *",
+  "bookingsSegmentEndpointsFromTrip": "Set by the trip.",
+  "@bookingsSegmentEndpointsFromTrip": {
+    "description": "Under the read-only From/To of a leg the itinerary derives: its endpoints come from the trip's airports or its cities, not from this form."
+  },
   "bookingsDepartureDate": "Departure date",
   "bookingsSegmentProviderLabel": "Provider / carrier",
   "bookingsSegmentUrlLabel": "Booking URL",
@@ -784,6 +788,44 @@
   "tripDeleteTrip": "Delete trip",
   "tripRemoveFromMyTrips": "Remove from my trips",
   "tripMoreActions": "More options",
+  "tripAirportsTitle": "Trip airports",
+  "tripAirportsHelp": "Which airports this trip flies out of and comes home into. Your saved home airport doesn't change.",
+  "tripAirportsDepartsFrom": "Departs from",
+  "tripAirportsReturnsInto": "Returns into",
+  "tripAirportsSameBothWays": "Comes home into the same airport",
+  "tripAirportsUseHomeAirport": "Use my home airport",
+  "tripAirportsPickOne": "Pick an airport from the list.",
+  "tripAirportsBothNeeded": "Pick an airport for both ends, or clear them.",
+  "tripAirportsCurrentFallback": "Right now these legs use {label}.",
+  "@tripAirportsCurrentFallback": {
+    "description": "Shown when the trip states no airport of its own, naming what its departure and return legs fall back to.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "tripAirportsMenuLabel": "Trip airports…",
+  "tripAirportsChangeDeparture": "Change departure airport…",
+  "tripAirportsChangeReturn": "Change return airport…",
+  "tripAirportsChangeLink": "Change airport",
+  "tripAirportsSaved": "{count, plural, =0{Saved. No departure or return leg yet — they'll use these airports when they appear.} =1{Saved. 1 leg renamed.} other{Saved. {count} legs renamed.}}",
+  "@tripAirportsSaved": {
+    "description": "Confirmation after changing a trip's airports. The zero case is honest rather than an error: a trip with no cities has no derived legs to rename.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripAirportsFailed": "Couldn't save the trip's airports: {error}",
+  "@tripAirportsFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "tripLocalIntel": "Local intel",
   "tripLocalGuideTitle": "Local guide: {title}",
   "@tripLocalGuideTitle": {

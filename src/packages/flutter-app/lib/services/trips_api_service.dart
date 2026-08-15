@@ -96,6 +96,45 @@ class TripsApiService {
     throw Exception('Failed to update trip (${res.statusCode})');
   }
 
+  /// Sets (or clears) which airports THIS trip departs from and returns into
+  /// (specs/trip-endpoint-airports). Deliberately its own endpoint rather than a
+  /// PATCH field: the two airports are written together or not at all, and the
+  /// server relabels the derived departure/return legs in the same transaction.
+  ///
+  /// Pass both codes, or both null to fall back to the stated origin and then
+  /// the saved home airport. Sending one without the other is a 400 by design —
+  /// "change the outbound" must never silently rewrite the leg home.
+  ///
+  /// Throws [TripEndpointsException] carrying the server's message; its 422s
+  /// ("we couldn't find an airport for…", "this trip travels by car") are
+  /// written for end users and shown verbatim.
+  Future<TripEndpointsResult> updateTripEndpoints(
+    String tripId, {
+    required String? originAirport,
+    required String? returnAirport,
+  }) async {
+    final res = await apiClient.httpClient.put(
+      Uri.parse('${apiClient.baseUrl}/trips/$tripId/endpoints'),
+      headers: apiClient.jsonHeaders(json: true),
+      body: jsonEncode({
+        'origin_airport': originAirport,
+        'return_airport': returnAirport,
+      }),
+    );
+    if (res.statusCode == 200) {
+      return TripEndpointsResult.fromJson(
+          jsonDecode(res.body) as Map<String, dynamic>);
+    }
+    String message = '';
+    try {
+      final body = jsonDecode(res.body);
+      if (body is Map && body['message'] is String) {
+        message = body['message'] as String;
+      }
+    } catch (_) {}
+    throw TripEndpointsException(statusCode: res.statusCode, message: message);
+  }
+
   /// Manually adds one itinerary item; the server slots it at the end of its
   /// chosen day. Returns the full updated trip (items reloaded, in order).
   Future<Trip> addItineraryItem(String tripId, Map<String, dynamic> body) async {
@@ -426,6 +465,64 @@ class TripsApiService {
     } catch (_) {}
     throw CreateTripException(statusCode: res.statusCode, message: message);
   }
+}
+
+/// One derived leg the server renamed because the trip's airports moved, and
+/// whether it is still booked — after "did it rename?", the traveler's next
+/// question is "did I lose the tick?".
+class RelabelledLeg {
+  final String before;
+  final String after;
+  final bool booked;
+
+  const RelabelledLeg(
+      {required this.before, required this.after, required this.booked});
+
+  factory RelabelledLeg.fromJson(Map<String, dynamic> json) => RelabelledLeg(
+        before: json['before'] as String? ?? '',
+        after: json['after'] as String? ?? '',
+        booked: json['booked'] as bool? ?? false,
+      );
+}
+
+/// What the trip stores after an endpoints write, plus exactly which rows moved.
+/// The post-state, not an echo of the request: an empty [legsRenamed] is the
+/// honest "there was no derived leg to rename yet" case, not a failure.
+class TripEndpointsResult {
+  final String? origin;
+  final String? originAirport;
+  final String? returnAirport;
+  final List<RelabelledLeg> legsRenamed;
+
+  const TripEndpointsResult({
+    this.origin,
+    this.originAirport,
+    this.returnAirport,
+    this.legsRenamed = const [],
+  });
+
+  factory TripEndpointsResult.fromJson(Map<String, dynamic> json) =>
+      TripEndpointsResult(
+        origin: json['origin'] as String?,
+        originAirport: json['origin_airport'] as String?,
+        returnAirport: json['return_airport'] as String?,
+        legsRenamed: ((json['legs_renamed'] as List<dynamic>?) ?? const [])
+            .map((e) => RelabelledLeg.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// Trip-airports write failure. The 422s ("we couldn't find an airport for
+/// 'XQZ'", "this trip travels by car…") are written for end users and shown
+/// verbatim; [message] is empty when the response carried none.
+class TripEndpointsException implements Exception {
+  final int statusCode;
+  final String message;
+
+  const TripEndpointsException({required this.statusCode, this.message = ''});
+
+  @override
+  String toString() => 'TripEndpointsException($statusCode): $message';
 }
 
 /// Import failure with the server's localized message when one was provided.

@@ -83,8 +83,7 @@ saved home airport stays exactly as it was.
 
 ## UI Behavior
 
-- **Surface:** the trip chat only. There is no new control on the trip page this
-  wave; the page reflects the result.
+- **Surface:** the trip chat (wave 1) and the trip page (wave 2, below).
 - **Happy path:** the traveler says where the trip departs from (and, if it
   differs, where it returns into). The checklist's departure and return rows
   re-title themselves, the map's pins move, and the assistant reports both
@@ -93,13 +92,69 @@ saved home airport stays exactly as it was.
   plainly that no leg was renamed; an unresolvable airport changes nothing and
   says so.
 
+## Wave 2 — the page control
+
+### Context
+
+Wave 1 shipped the write and left the page control out on purpose. The gap came
+back as friction within the day: on the trip page, the ⋮ of a derived
+`EWR → Amsterdam` row offered exactly one thing — *"Add details…"* — which opens
+the transport form with `From: EWR` prefilled and editable. Typing `ALB` over it
+looks like editing the leg and actually posts a new **segment**, so the page
+ended up showing `EWR → Amsterdam` with `ALB → Amsterdam` nested underneath it:
+two claims about one flight, and the airport never moved.
+
+That one path was doing two jobs. A derived leg's endpoints belong to the trip
+(its airports) or to the itinerary (its cities); the details form's job is the
+booking — carrier, date, link, price.
+
+### User Stories
+
+- As a **traveler on the trip page**, I want to change which airport this trip
+  leaves from without going through the chat, so a correction takes one tap
+  where I noticed it.
+- As a **traveler**, I want the form that offers me a field to actually own that
+  field, so I never save something the page then contradicts.
+
+### UI Behavior
+
+- **Surface:** "Change departure airport…" / "Change return airport…" in the ⋮
+  of the two journey-endpoint rows, and "Trip airports…" in the trip's app-bar
+  ⋮ so the control is still reachable on a trip with no cities yet.
+- **The sheet** edits both ends at once — departure, "comes home into the same
+  airport" (on by default), return — because the two are stored together or not
+  at all. "Use my home airport" clears them back to the fallback.
+- **States:** a typed-but-unpicked airport is refused inline rather than saved
+  as "no airport"; a trip that states no airport of its own names what its legs
+  currently fall back to, without seeding it into the field.
+- **The details form** shows a derived leg's endpoints read-only, with a
+  "Change airport" link on the two home legs.
+
+### Acceptance Criteria
+
+- [ ] Changing the departure airport from the trip page re-titles the existing
+      departure leg — no new row — and it keeps its booked state, per-leg
+      travel mode, position and linked expense.
+- [ ] Departure and return can differ, and changing one leaves the other alone.
+- [ ] Clearing returns the legs to the stated origin, then the saved home
+      airport; the saved home airport itself is never written.
+- [ ] An airport is refused on a stated ground trip, and a code that resolves
+      to no real airport is refused — both say so on the page, and neither
+      writes anything.
+- [ ] "Add details…" on a derived leg can no longer produce a row that
+      contradicts the leg above it.
+- [ ] A segment fills a leg's slot only when it connects **both** of that leg's
+      endpoints — the rule Trip Health already applied.
+- [ ] The page and the chat produce the same result for the same change.
+
 ## Out of Scope
 
-- Any trip-page control for editing the endpoints (chat only, this wave).
 - Changing the endpoints through the public trip PATCH surface.
 - Teaching the connector's trip-create tool about airports (it still takes only
   the free-text origin).
 - Re-pricing or re-searching flights when an endpoint changes.
+- Editing the free-text origin ("Lake George, NY") from the page — it stays a
+  chat-only field, and a ground trip is where it matters.
 
 ## Open Questions
 

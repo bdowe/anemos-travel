@@ -177,6 +177,17 @@ class BookingTodoRow extends StatelessWidget {
   /// hides the menu (viewers, offline, custom todos).
   final VoidCallback? onAddDetails;
 
+  /// "Change departure/return airport…": opens the trip's airports, the one
+  /// place a home leg's endpoint actually lives (specs/trip-endpoint-airports).
+  /// Null on every row that is not one of the trip's two journey endpoints —
+  /// an inter-city leg is titled from the itinerary's cities, which this
+  /// doesn't move.
+  ///
+  /// Its absence was the friction: the only affordance here was "Add details…",
+  /// which posts a segment, so a traveler correcting EWR to ALB got a second
+  /// row contradicting the first.
+  final VoidCallback? onChangeAirport;
+
   /// Narrow layouts: short open-label (brand alone / "Search") so the title
   /// keeps the width. The caller pairs this with short label overrides.
   final bool compact;
@@ -200,6 +211,7 @@ class BookingTodoRow extends StatelessWidget {
     this.onOpen,
     this.openLabelOverride,
     this.onAddDetails,
+    this.onChangeAirport,
     this.compact = false,
     this.onModeChanged,
     this.tripTravelMode,
@@ -286,16 +298,30 @@ class BookingTodoRow extends StatelessWidget {
                   context.l10n, todo, openLabelOverride,
                   compact: false)),
             ),
-          if (onAddDetails != null)
+          if (onAddDetails != null || onChangeAirport != null)
             PopupMenuButton<String>(
               icon: Icon(Icons.more_vert, size: 18, color: muted),
               tooltip: context.l10n.bookingRowOptions,
-              onSelected: (_) => onAddDetails!(),
+              onSelected: (v) => switch (v) {
+                'airport' => onChangeAirport?.call(),
+                _ => onAddDetails?.call(),
+              },
               itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: 'details',
-                  child: Text(context.l10n.bookingRowAddDetails),
-                ),
+                // First: on a home leg it is the more consequential of the two,
+                // and it is what a traveler reaching for "Add details…" to
+                // retype an airport was actually looking for.
+                if (onChangeAirport != null)
+                  PopupMenuItem(
+                    value: 'airport',
+                    child: Text(todo.role == 'home_return'
+                        ? context.l10n.tripAirportsChangeReturn
+                        : context.l10n.tripAirportsChangeDeparture),
+                  ),
+                if (onAddDetails != null)
+                  PopupMenuItem(
+                    value: 'details',
+                    child: Text(context.l10n.bookingRowAddDetails),
+                  ),
               ],
             ),
           // Last so the fixed-width checkboxes stay flush right and aligned

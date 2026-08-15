@@ -139,3 +139,98 @@ already cost:
 SELECT count(*) FROM trip_expenses e WHERE e.source_kind='booking_todo'
   AND NOT EXISTS (SELECT 1 FROM booking_todos b WHERE b.id = e.source_id);
 ```
+
+---
+
+# Plan: Wave 2 — the page control
+
+One PR, no migration. The write already exists and is already safe; this wave
+gives it a second front door and closes the one that looked like it.
+
+## Technical Approach
+
+**One write, two callers.** `runSetTripOriginTool` interleaved session concerns
+with the write, so the write moves out into `applyTripEndpoints` — the ground
+refusal against the saved travel mode, `SetTripEndpoints`, the owner-home
+lookup, `tripEndpointLabels`, `relabelHomeLegs`, `TouchTrip` — and the tool and
+the new handler each keep only what is theirs. Copying it instead would have
+recreated the failure mode 00064 exists to end: two paths that can disagree
+about what changing an airport means. `TestPageAndChatWriteTheSameEndpoints`
+pins it.
+
+**A dedicated endpoint, not a PATCH field.** `PUT /trips/{id}/endpoints`. The
+spec rules PATCH out and `TestPatchTripCannotSetOrigin` pins it, but the better
+reason is the body: this endpoint states the whole post-state, and **a one-sided
+body is a 400**. That puts `CHECK trips_endpoint_airport_pair` on the wire
+rather than leaving it as a rule the client has to remember — without it,
+`columns()` quietly copies one end onto the other, so "change the outbound"
+would silently rewrite the leg home. The response is the post-state, not an
+echo: both stored airports plus every row that moved and whether it is still
+booked (an empty list is the honest "no derived leg yet" case).
+
+**`role` on the booking-todo wire.** The client has to know which two rows are
+the journey's ends. The server already computes that as identity, so it is
+emitted rather than re-inferred — and the case that settles it is the one the
+server handles alone: a canonicalization collision demotes a home leg to
+`inter_city`, where no relabel will ever reach it, and any client-side guess
+would offer a control that does nothing.
+
+**The details form stops owning endpoints it doesn't own.** `AddSegmentSheet`
+gains `endpointsLocked`; `_addDetailsFromTodo` passes `todo.auto`. Free-form
+segments from "+ Add booking → Transport" stay fully editable — that path really
+does define its own endpoints.
+
+**The page's claim rule joins the server's.** `_computeGroupedBookings` matched
+an arrival on the segment's destination alone (and a departure on its origin
+alone), so `ALB → Amsterdam` nested under `EWR → Amsterdam` and read as covered
+while `todoClaimed` — which has always required both ends — went on counting the
+flight as a gap. `segmentConnectsLeg` / `fuzzyMatch` / `legEndpoints` are now a
+Dart twin of the Go rule, with the SAME fixture table on both sides
+(`test/segment_connects_test.dart` ↔ `TestSegmentConnectsBothEnds`). A segment
+that doesn't cover the leg falls to "Other bookings", which is true rather than
+tidy.
+
+### Rejected alternatives
+
+- **Let the details form's From/To write the trip's airport.** Puts a second
+  writer on the endpoints, and makes a form field mean two different things
+  depending on which row opened it.
+- **Infer the two home legs client-side** (first arrival, last departure). It is
+  the derivation's own construction order, so it is nearly always right — but
+  "nearly" is the problem, and the server already has the answer as a column.
+- **Seed the sheet from the fallback** (the stated origin / saved home airport).
+  Opening the sheet and pressing Save would then promote a fallback into a fixed
+  per-trip choice nobody asked for.
+- **Loosen the server's claim rule to match the page's** instead of the reverse.
+  The page's rule was the wrong one: it is what let a contradiction render as a
+  confirmation.
+
+## Changes
+
+`src/packages/api/`: `plan_trip_origin.go` (extract `applyTripEndpoints`,
+`groundTripAirportError`, ctx-based `resolveEndpointAirport`/`relabelHomeLegs`),
+`trip_endpoints_handler.go` (new), `main.go` (one route),
+`booking_todo_handler.go` (`role` on the response).
+
+`src/packages/flutter-app/`: `models/booking_todo.dart` (`role` + `isHomeLeg`),
+`services/trips_api_service.dart` (`updateTripEndpoints` + result/exception
+types), `widgets/trip_airports_sheet.dart` (new), `widgets/booking_todo_card.dart`
+(second menu item), `widgets/booking_sheets.dart` (`endpointsLocked`),
+`screens/trip_detail_screen.dart` (`_openTripAirports`, row + app-bar entries,
+the locked details sheet), `screens/trip_detail_derivation.dart` (the claim
+rule + the Go twin), l10n.
+
+## Testing
+
+Go: the paired-body 400, the ground refusal, an unresolvable code (including a
+bad *return* airport leaving the departure unwritten), rename-in-place with
+booked + mode + expense intact, asymmetric independence across two consecutive
+writes, clearing back to the fallback, a non-member 404, the page↔chat parity
+contract, and `role` on the wire.
+
+Dart: the menu appears on the two home legs only; the sheet's unresolved-edit
+refusal, its same-airport mirroring and its fallback line; the locked details
+form and its "Change airport" hand-off; the both-ends claim rule at the
+derivation level and in the twin fixture table.
+
+Each headline test was verified to FAIL with its fix removed.

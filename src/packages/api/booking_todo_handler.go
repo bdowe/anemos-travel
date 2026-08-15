@@ -52,9 +52,16 @@ type BookingTodoResponse struct {
 	DepartDate *string `json:"depart_date,omitempty"`
 	ReturnDate *string `json:"return_date,omitempty"`
 	Mode       *string `json:"mode,omitempty"`
-	Booked     bool    `json:"booked"`
-	Auto       bool    `json:"auto"`
-	Position   int     `json:"position"`
+	// Which leg of the journey this row is: home_outbound | home_return |
+	// inter_city | stay (booking_todo_identity.go). The server computes it as
+	// identity; emitting it stops the client re-inferring "which row is the
+	// flight home" — an inference that would be wrong in exactly the case the
+	// server already handles, where a key collision demotes a home leg to
+	// inter_city and no relabel will ever reach it.
+	Role     *string `json:"role,omitempty"`
+	Booked   bool    `json:"booked"`
+	Auto     bool    `json:"auto"`
+	Position int     `json:"position"`
 }
 
 func toBookingTodoResponse(t store.BookingTodo) BookingTodoResponse {
@@ -71,6 +78,7 @@ func toBookingTodoResponse(t store.BookingTodo) BookingTodoResponse {
 		DepartDate: dateToPtr(t.DepartDate),
 		ReturnDate: dateToPtr(t.ReturnDate),
 		Mode:       t.Mode,
+		Role:       strPtrOrNil(strPtrVal(t.Role)),
 		Booked:     t.Booked,
 		Auto:       t.Auto,
 		Position:   int(t.Position),
