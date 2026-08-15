@@ -111,6 +111,58 @@ void main() {
     expect(reports.sublist(reportsAfterTrips), isNot(contains('/preferences')));
   });
 
+  testWidgets('the Home button leaves nothing behind to animate away',
+      (tester) async {
+    // The artifact this pins: selectTab used to POP the destination tab's
+    // stack, and the shell freezes hidden tabs' tickers (app_shell.dart), so
+    // that pop parked fully painted and then played its whole exit transition
+    // the moment the IndexedStack revealed the tab — you tapped Home and
+    // watched a page you had left there slide away. The case above cannot see
+    // it because pumpAndSettle pumps straight past it, so assert on the very
+    // next frame instead. skipOffstage: false because the contract is that
+    // the route is GONE, not merely hidden.
+    final container = await pumpApp(tester);
+
+    container
+        .read(tabNavKeysProvider)[AppTab.home.index]
+        .currentState!
+        .push(locatedRoute(
+            const Scaffold(body: Text('stacked on home')), '/preferences'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(railDestination('Trips'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(railDestination('Home'));
+    await tester.pump();
+    expect(find.text('stacked on home', skipOffstage: false), findsNothing,
+        reason: 'the stale page must already be gone, not mid-transition');
+  });
+
+  testWidgets('re-tapping the active tab still animates its pop',
+      (tester) async {
+    // The other half of selectTab's split: a re-tap happens on a tab you can
+    // see and IS the gesture, so it keeps the ordinary animated pop. Same
+    // single-frame probe as above, with the opposite expectation.
+    final container = await pumpApp(tester);
+
+    container
+        .read(tabNavKeysProvider)[AppTab.home.index]
+        .currentState!
+        .push(locatedRoute(
+            const Scaffold(body: Text('stacked on home')), '/preferences'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(railDestination('Home'));
+    await tester.pump();
+    expect(find.text('stacked on home', skipOffstage: false), findsOneWidget,
+        reason: 'a re-tap pops with a transition, so the page is still there');
+
+    await tester.pumpAndSettle();
+    expect(find.text('stacked on home', skipOffstage: false), findsNothing);
+    expect(reports.last, '/');
+  });
+
   testWidgets('the rail brand mark taps through to the Home root',
       (tester) async {
     // Logo-links-home through the real rail: the brand mark at the top of the

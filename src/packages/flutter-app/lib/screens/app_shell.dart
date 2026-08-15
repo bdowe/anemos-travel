@@ -63,6 +63,14 @@ class AppShell extends ConsumerWidget {
             // GlobalKeys mounted — deliberately NOT unmounting or swapping
             // placeholders, and NOT keyed off ModalRoute.isCurrent (a hidden
             // tab's top route still reports current).
+            //
+            // The catch, and it bites: a nested Navigator is the vsync for its
+            // own route transitions and sits INSIDE this TickerMode, so a
+            // push or pop started on a hidden tab does not advance — it parks
+            // fully painted and then plays its whole transition the moment
+            // this IndexedStack reveals the tab. Anything that changes a
+            // hidden tab's stack must therefore remove routes, never pop
+            // them: see resetToRoot and instantRoute (app_nav.dart).
             TickerMode(
               enabled: i == index,
               child: _TabNavigator(

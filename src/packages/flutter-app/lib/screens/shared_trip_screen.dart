@@ -180,11 +180,13 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
       // than betting on one frame and silently dropping the push. Deferred a
       // frame so the push can't land on a navigator the reset just discarded.
       // If every attempt misses, the user still lands on the Trips tab where
-      // the joined trip now shows.
+      // the joined trip now shows. instantRoute because this is a deep link
+      // landing, not a gesture: after the whole-app reset the trip should be
+      // on screen, not slide in over a freshly-remounted trips list.
       WidgetsBinding.instance.addPostFrameCallback((_) => pushOnTabWhenReady(
           navKeys,
           AppTab.trips,
-          () => locatedRoute(
+          () => instantRoute(
               TripDetailScreen(tripId: tripId), tripDetailLocation(tripId))));
     } catch (e) {
       if (mounted) {

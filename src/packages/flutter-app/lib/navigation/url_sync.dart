@@ -205,15 +205,19 @@ class UrlSyncController {
     final utility = target.utility;
     final chatId = target.chatId;
     final navKeys = _ref.read(tabNavKeysProvider);
+    // instantRoute, not locatedRoute: restoring a page from the URL is not a
+    // gesture. The page the address bar named should be there when the user
+    // looks, rather than the tab root showing first and the restored page
+    // sliding in over it once pushOnTabWhenReady lands.
     if (tripId != null) {
       pushOnTabWhenReady(
           navKeys,
           target.tab,
-          () => locatedRoute(
+          () => instantRoute(
               TripDetailScreen(tripId: tripId), tripDetailLocation(tripId)));
     } else if (utility != null) {
       pushOnTabWhenReady(navKeys, target.tab,
-          () => locatedRoute(_utilityScreen(utility), utilityLocation(utility)));
+          () => instantRoute(_utilityScreen(utility), utilityLocation(utility)));
     } else if (chatId != null) {
       // Fire-and-forget: success rehydrates planProvider (the Plan tab —
       // already selected above — renders it, and the chatId listener restores
