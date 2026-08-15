@@ -8,11 +8,13 @@ SELECT * FROM booking_todos WHERE trip_id = $1 ORDER BY position ASC, created_at
 -- (booking_todo_handler.go). Delete only together with a handler refactor.
 --
 -- role/origin_label/destination_label (00064) are CONTENT, like title: they
--- ride the DO UPDATE set so a re-sync refreshes them. What must never join it
--- is booked/auto/mode — that exclusion is the whole preservation contract, and
+-- ride the DO UPDATE set so a re-sync refreshes them. So does derived_mode
+-- (00068) — what the server worked out for the leg, refreshed alongside the
+-- provider and search_url it decides. What must never join the set is
+-- booked/auto/mode — that exclusion is the whole preservation contract, and
 -- it is what lets a changed departure airport rewrite a home leg in place.
-INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto, role, origin_label, destination_label)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $12, $13)
+INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto, role, origin_label, destination_label, derived_mode)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $12, $13, $14)
 ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     kind = EXCLUDED.kind,
     title = EXCLUDED.title,
@@ -24,7 +26,8 @@ ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     position = EXCLUDED.position,
     role = EXCLUDED.role,
     origin_label = EXCLUDED.origin_label,
-    destination_label = EXCLUDED.destination_label
+    destination_label = EXCLUDED.destination_label,
+    derived_mode = EXCLUDED.derived_mode
 RETURNING *;
 
 -- name: UpsertBookingTodosBatch :exec
@@ -32,7 +35,9 @@ RETURNING *;
 -- Same column list and the same ON CONFLICT update set — booked, auto, and
 -- mode are deliberately absent from DO UPDATE, so a re-sync preserves the
 -- booked flag and the per-leg mode override (and never flips a row's auto
--- marker). Nullable date columns ride as
+-- marker). derived_mode is NOT one of them: it is the server's own answer for
+-- the leg and is refreshed on every sync, exactly like provider and search_url,
+-- which the same derivation decides. Nullable date columns ride as
 -- date[] with NULL elements; the nullable text columns ride as text[] plus a
 -- parallel bool[] null mask, because sqlc maps text[] to []string, which
 -- cannot carry NULL elements. The caller must dedupe todo_keys (last
@@ -40,7 +45,7 @@ RETURNING *;
 -- CONFLICT cannot update the same row twice. (Parallel single-array unnest
 -- calls in one SELECT list expand in lockstep for equal-length arrays;
 -- sqlc's catalog lacks the multi-array unnest form.)
-INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto, role, origin_label, destination_label)
+INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto, role, origin_label, destination_label, derived_mode)
 SELECT sqlc.arg(trip_id)::uuid, u.kind, u.todo_key, u.title,
        CASE WHEN u.subtitle_null THEN NULL ELSE u.subtitle END,
        CASE WHEN u.provider_null THEN NULL ELSE u.provider END,
@@ -49,7 +54,9 @@ SELECT sqlc.arg(trip_id)::uuid, u.kind, u.todo_key, u.title,
        u.role,
        -- A label has no meaningful empty value, so NULLIF carries the "this
        -- row has no origin" case (every stay row) without a third null mask.
-       NULLIF(u.origin_label, ''), NULLIF(u.destination_label, '')
+       -- Same for derived_mode: a stay leg has none.
+       NULLIF(u.origin_label, ''), NULLIF(u.destination_label, ''),
+       NULLIF(u.derived_mode, '')
 FROM (
     SELECT unnest(sqlc.arg(kinds)::text[])            AS kind,
            unnest(sqlc.arg(todo_keys)::text[])        AS todo_key,
@@ -65,7 +72,8 @@ FROM (
            unnest(sqlc.arg(positions)::int[])         AS position,
            unnest(sqlc.arg(roles)::text[])            AS role,
            unnest(sqlc.arg(origin_labels)::text[])    AS origin_label,
-           unnest(sqlc.arg(destination_labels)::text[]) AS destination_label
+           unnest(sqlc.arg(destination_labels)::text[]) AS destination_label,
+           unnest(sqlc.arg(derived_modes)::text[])    AS derived_mode
 ) AS u
 ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     kind = EXCLUDED.kind,
@@ -78,7 +86,8 @@ ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     position = EXCLUDED.position,
     role = EXCLUDED.role,
     origin_label = EXCLUDED.origin_label,
-    destination_label = EXCLUDED.destination_label;
+    destination_label = EXCLUDED.destination_label,
+    derived_mode = EXCLUDED.derived_mode;
 
 -- name: AdoptLegacyHomeBookingTodo :execrows
 -- Renames a home leg still stored under its endpoint-labelled key onto the

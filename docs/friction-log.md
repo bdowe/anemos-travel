@@ -5,6 +5,65 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-15 — a flight link for a 1h35 train
+
+- **[app] Friction:** planning Italy, the obvious way from Rome to Florence is
+  the train, and the trip page's `Rome → Florence` row said **"Find flights"**
+  and opened Google Flights. The chat pushed flights to match.
+- **[app] Every rung defaulted to flight, and only the traveler could switch
+  it.** The prompt fires `set_travel_mode` only when they *state or imply* a
+  mode; unset means `trips.travel_mode` is NULL; the itinerary schema has no
+  place to put transport at all; so `_deriveTodos` fell to
+  `greek ? 'ferry' : (ground ?? 'flight')`, posted `google_flights`, and the
+  server's `pickProviderLink` fallback is `links[0]` — Google Flights again.
+  Five independent rungs, one answer.
+- **[app] Nobody consulted geography, though the coordinates were right
+  there.** Grep across both packages: the only geographic input to any mode
+  decision anywhere was a hardcoded Greek name set. Every itinerary item has
+  had NOT NULL lat/lng since 00003, and `computeTripLegs` already hands each
+  leg a representative coordinate — used, until now, only to find a nearby
+  airport.
+- **[app] The trip-wide switch was the wrong shape for the question.** "We're
+  driving" is a fact about a trip; "how do we get from Rome to Florence" is a
+  fact about a leg. `'mixed'` — the value that literally means "the legs
+  differ" — resolved to the flight default everywhere, which is the one case
+  where per-leg judgement was the whole point.
+- **[app] Fix: one resolver, and geography is a real rung of it.**
+  `resolveLegMode` (specs/leg-transport-mode, 00068) is now the single answer,
+  called by the sync, Trip Health, the model-facing echo and the new tool. It
+  answers only when sure — no coordinates, an unknown region, too far, a sea
+  crossing all return "no opinion", which lands on exactly the old behaviour.
+  So the rule can only move a leg from wrong to right, and any miss is one tap
+  from correct.
+- **[app] A mode has to be storable to be honest.** A leg's mode was implicit
+  in its `provider` string, where `rome2rio` means car OR train OR bus and only
+  the trip-wide mode broke the tie — so `promotedSegmentMode` fell back to
+  "flight" and Trip Health's fix button said "Add flight" under a row about to
+  render as a train. `derived_mode` is now explicit next to `mode`, with the
+  difference stated in the schema: `mode` is a **choice somebody made** and is
+  preserved forever; `derived_mode` is **what the server worked out** and is
+  refreshed like the link it decides.
+- **[app] The row said train and still opened the flight search.** A booking
+  row's tap target comes from the `_flightLegs` registry the derivation fills,
+  not from the row — so relabelling it was not enough; the client has to
+  re-derive against the sync response. Found by asking what the row's button
+  actually reads, not by watching it render. The test for it fails the moment
+  that one line is removed.
+- **[app] The planner could not have fixed this, because it could never see
+  it.** Nothing in any tool result told the model how the app was rendering a
+  leg, so its "take the train" and the page's "Find flights" coexisted
+  indefinitely. Every itinerary write now echoes each leg's mode back, and
+  `set_leg_transport_mode` is the one-leg reply — the same
+  make-the-wrong-guess-falsifiable move the leg-dates arc paid for.
+- **[dev] Mutation-checked, five ways.** Island guard, distance threshold,
+  geography rung, override handling and the client's registry refresh were each
+  reverted in place and confirmed to turn the suite red — the fixture table is
+  a claim about the world (real city coordinates), so it had to be shown to
+  bite.
+- **[dev] A pre-existing failure, baselined not chased.**
+  `auth_autofill_submit_test.dart`'s burst-fill case fails on the untouched
+  checkout too, and passes on a re-run — flaky, not this branch's.
+
 ## 2026-08-15 — the budget row that empties itself while you fetch the price
 
 - **[app] Friction:** logging a flight as an expense means going and getting

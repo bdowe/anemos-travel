@@ -294,6 +294,63 @@ func legsRenderSummary(trip store.Trip, items []store.ItineraryItem, stays []sto
 	return b.String()
 }
 
+// legTransportSummary lists how the traveler crosses between consecutive city
+// legs — one "- Rome → Florence: train" line — resolved by the ONE ladder
+// (resolveLegMode, leg_transport_mode.go), so what the model reads is what the
+// page's checklist row shows.
+//
+// It rides the same three model-facing surfaces as legsRenderSummary for the
+// same reason that one exists: a planner who never sees the app's answer
+// cannot correct it. The Italy trip that started this had no way to tell
+// anyone its Rome → Florence row had become a flight search, so the model
+// narrated flights to match. A leg the model disagrees with is now visible in
+// the tool result, and set_leg_transport_mode is the reply.
+//
+// `overrides` maps a derived transport key to the mode somebody chose (the
+// row menu, or this tool); pass nil when the caller has no checklist in hand —
+// a fresh trip has no rows yet. Empty when the trip has fewer than two named
+// cities, i.e. nothing to cross.
+//
+// Unlike legsRenderSummary this does NOT require a calendar span: a leg with
+// no dates still has to be crossed, and naming the crossing promises nothing
+// about when. Hubless runs ("Other places") are skipped — a leg with no city
+// is not somewhere the traveler travels to.
+func legTransportSummary(trip store.Trip, items []store.ItineraryItem, stays []store.Accommodation, overrides map[string]string) string {
+	var cities []RenderLeg
+	for _, leg := range computeTripLegs(trip, items, stays) {
+		if leg.Hub != nil && strings.TrimSpace(*leg.Hub) != "" {
+			cities = append(cities, leg)
+		}
+	}
+	if len(cities) < 2 {
+		return ""
+	}
+	coords := legCoordIndex(cities)
+	var b strings.Builder
+	for i := 1; i < len(cities); i++ {
+		from, to := cities[i-1].Label, cities[i].Label
+		var override *string
+		if m, ok := overrides[transportTodoKey(from, to)]; ok {
+			override = &m
+		}
+		fmt.Fprintf(&b, "- %s → %s: %s\n", from, to,
+			resolveLegMode(trip, legEndpointFrom(from, coords), legEndpointFrom(to, coords), override))
+	}
+	return b.String()
+}
+
+// legModeOverrides indexes a trip's checklist by derived-transport key for the
+// modes somebody actually chose — the top rung resolveLegMode takes.
+func legModeOverrides(todos []store.BookingTodo) map[string]string {
+	out := map[string]string{}
+	for _, t := range todos {
+		if m := strings.TrimSpace(strPtrVal(t.Mode)); allowedLegModes[m] {
+			out[t.TodoKey] = m
+		}
+	}
+	return out
+}
+
 func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 	var in struct {
 		City      string `json:"city"`

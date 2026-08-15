@@ -27,18 +27,36 @@ class _FakeTripsApiService extends TripsApiService {
   Future<Trip> getTrip(String id) async => trip;
 }
 
+/// The provider a resolved mode implies — the fake's copy of the server's
+/// transportModeLink (booking_todo_handler.go).
+String? _providerForMode(String mode) => switch (mode) {
+      'ferry' => 'ferry',
+      'flight' => 'google_flights',
+      'car' || 'train' || 'bus' => 'rome2rio',
+      _ => null,
+    };
+
 /// Mimics the server's booking-todo contract: syncTodos upserts the derived
-/// payload verbatim but `mode` (like `booked`) only ever comes from the
-/// fake's own preserved map — a sync can never write it.
+/// payload, but `mode` (like `booked`) only ever comes from the fake's own
+/// preserved map — a sync can never write it — and the row's provider comes
+/// from the SERVER's resolution, not from the posted guess.
 class _FakeBookingTodosApiService extends BookingTodosApiService {
   /// Server-preserved per-row override, keyed by todo_key.
   final Map<String, String> modes;
+
+  /// What the SERVER derives for a leg (leg_transport_mode.go), keyed by
+  /// todo_key. Like the real sync handler, it — not the posted provider —
+  /// decides the stored provider: what the client posts is only its
+  /// pre-sync bootstrap guess.
+  final Map<String, String> derivedModes;
   List<Map<String, dynamic>>? lastDerived;
   final List<({String todoId, String mode, String origin, String destination})>
       setModeCalls = [];
 
-  _FakeBookingTodosApiService({Map<String, String>? modes})
+  _FakeBookingTodosApiService(
+      {Map<String, String>? modes, Map<String, String>? derivedModes})
       : modes = modes ?? {},
+        derivedModes = derivedModes ?? {},
         super(ApiClient(baseUrl: 'http://test'));
 
   @override
@@ -47,17 +65,25 @@ class _FakeBookingTodosApiService extends BookingTodosApiService {
     lastDerived = derived;
     return [
       for (final d in derived)
-        BookingTodo(
-          id: d['todo_key'] as String,
-          kind: d['kind'] as String,
-          todoKey: d['todo_key'] as String,
-          title: d['title'] as String,
-          subtitle: d['subtitle'] as String?,
-          provider: d['provider'] as String?,
-          departDate: d['depart_date'] as String?,
-          mode: modes[d['todo_key']],
-          position: d['position'] as int? ?? 0,
-        ),
+        () {
+          final key = d['todo_key'] as String;
+          final derivedMode = derivedModes[key];
+          final effective = modes[key] ?? derivedMode;
+          return BookingTodo(
+            id: key,
+            kind: d['kind'] as String,
+            todoKey: key,
+            title: d['title'] as String,
+            subtitle: d['subtitle'] as String?,
+            provider: effective == null
+                ? d['provider'] as String?
+                : (_providerForMode(effective) ?? d['provider'] as String?),
+            departDate: d['depart_date'] as String?,
+            mode: modes[key],
+            derivedMode: derivedMode,
+            position: d['position'] as int? ?? 0,
+          );
+        }(),
     ];
   }
 
@@ -105,8 +131,13 @@ ItineraryItem _item(int pos, String name, String address, String city,
 
 /// [legMode] seeds the override on the trip payload's own todo row — the
 /// production shape: GET /trips serializes booking_todos.mode, so the boot
-/// derivation sees it before the first sync.
-Trip _twoCityTrip({String? access, String? travelMode, String? legMode}) =>
+/// derivation sees it before the first sync. [legDerivedMode] does the same
+/// for the server's own derivation (booking_todos.derived_mode, 00068).
+Trip _twoCityTrip(
+        {String? access,
+        String? travelMode,
+        String? legMode,
+        String? legDerivedMode}) =>
     Trip(
       id: 't1',
       title: 'Europe',
@@ -121,12 +152,21 @@ Trip _twoCityTrip({String? access, String? travelMode, String? legMode}) =>
         _item(1, 'Colosseum', 'Rome, Italy', 'Rome', day: 3),
       ],
       bookingTodos: [
-        _todoLeg('transport:paris>>rome', 'Paris → Rome', mode: legMode),
+        _todoLeg('transport:paris>>rome', 'Paris → Rome',
+            mode: legMode, derivedMode: legDerivedMode),
       ],
     );
 
-BookingTodo _todoLeg(String key, String title, {String? mode}) => BookingTodo(
-    id: key, kind: 'transport', todoKey: key, title: title, mode: mode);
+BookingTodo _todoLeg(String key, String title,
+        {String? mode, String? derivedMode}) =>
+    BookingTodo(
+        id: key,
+        kind: 'transport',
+        todoKey: key,
+        title: title,
+        mode: mode,
+        derivedMode: derivedMode,
+        provider: derivedMode == null ? null : _providerForMode(derivedMode));
 
 // Wide enough that the body clears kRailBreakpoint (full open-labels, not the
 // compact short ones), tall enough that the lazily-built bookings rows exist.
@@ -137,8 +177,9 @@ void _useTallViewport(WidgetTester tester) {
 }
 
 Future<_FakeBookingTodosApiService> _pump(WidgetTester tester, Trip trip,
-    {Map<String, String>? modes}) async {
-  final todosApi = _FakeBookingTodosApiService(modes: modes);
+    {Map<String, String>? modes, Map<String, String>? derivedModes}) async {
+  final todosApi =
+      _FakeBookingTodosApiService(modes: modes, derivedModes: derivedModes);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -247,6 +288,68 @@ void main() {
         .singleWhere((d) => d['todo_key'] == 'transport:paris>>rome');
     expect(leg['provider'], 'ferry');
     expect(find.textContaining('Find ferries'), findsOneWidget);
+  });
+
+  // 00068: geography reaches the row through booking_todos.derived_mode. The
+  // Italy case that started this — Rome → Florence offering a flight search
+  // for a 1h35 train — is these three tests.
+
+  testWidgets("the server's derived mode makes the leg ground on load",
+      (WidgetTester tester) async {
+    _useTallViewport(tester);
+    // Nobody chose anything: derived_mode alone (the server's geography rung)
+    // must move the leg off the flight default.
+    final todosApi = await _pump(tester, _twoCityTrip(legDerivedMode: 'train'),
+        derivedModes: {'transport:paris>>rome': 'train'});
+
+    final leg = todosApi.lastDerived!
+        .singleWhere((d) => d['todo_key'] == 'transport:paris>>rome');
+    expect(leg['provider'], 'rome2rio');
+    expect(find.textContaining('Find flights'), findsNothing);
+    expect(find.textContaining('Rome2Rio'), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(BookingTodoRow),
+            matching: find.byIcon(Icons.train)),
+        findsOneWidget);
+  });
+
+  testWidgets("a chosen mode still beats the server's derivation",
+      (WidgetTester tester) async {
+    _useTallViewport(tester);
+    // The traveler said flight on a leg geography called a train. The
+    // override is the top rung, so the row stays a flight.
+    final todosApi = await _pump(
+        tester, _twoCityTrip(legMode: 'flight', legDerivedMode: 'train'),
+        modes: {'transport:paris>>rome': 'flight'},
+        derivedModes: {'transport:paris>>rome': 'train'});
+
+    final leg = todosApi.lastDerived!
+        .singleWhere((d) => d['todo_key'] == 'transport:paris>>rome');
+    expect(leg['provider'], 'google_flights');
+    expect(find.textContaining('Find flights'), findsOneWidget);
+    expect(find.textContaining('Rome2Rio'), findsNothing);
+  });
+
+  testWidgets("the sync response's derivation reaches the row it is on",
+      (WidgetTester tester) async {
+    _useTallViewport(tester);
+    // A trip whose page has never synced carries no derived_mode, so the
+    // bootstrap default posts a flight — and the server answers "train". The
+    // row must follow WITHOUT a reload: its tap target comes from the
+    // _flightLegs registry the derivation fills, so a row that only relabelled
+    // would still open the in-app flight search.
+    final todosApi = await _pump(tester, _twoCityTrip(),
+        derivedModes: {'transport:paris>>rome': 'train'});
+
+    // What it posted was the bootstrap guess...
+    expect(
+        todosApi.lastDerived!.singleWhere(
+            (d) => d['todo_key'] == 'transport:paris>>rome')['provider'],
+        'google_flights');
+    // ...and what it shows is the server's answer.
+    expect(find.textContaining('Find flights'), findsNothing);
+    expect(find.textContaining('Rome2Rio'), findsOneWidget);
   });
 
   testWidgets('read-only viewers get the plain icon, no mode menu',

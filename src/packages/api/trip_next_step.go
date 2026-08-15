@@ -695,14 +695,18 @@ func stayCitySet(todos []store.BookingTodo) map[string]bool {
 }
 
 // transportSlotMode resolves a transport slot's mode for copy and fix: the
-// per-leg override (todo.mode, validated against allowedLegModes) wins; else
-// the provider the sync stored implies it (google_flights → flight, ferry →
-// ferry, rome2rio → the trip's ground travel mode when it names a concrete
-// one — rome2rio alone can't distinguish car/train/bus); nil when nothing
-// concrete is known, and the step then uses the generic copy with a mode-less
-// fix.
+// per-leg override (todo.mode, validated against allowedLegModes) wins, then
+// the mode the sync derived for the leg (derived_mode, 00068 — the ONE
+// resolution, leg_transport_mode.go).
+//
+// The provider fallback below survives only for rows written before 00068:
+// a provider string cannot tell car from train from bus, which is exactly why
+// derived_mode exists. It retires once every row has been re-synced.
 func transportSlotMode(trip store.Trip, t store.BookingTodo) *string {
 	if m := strings.TrimSpace(strPtrVal(t.Mode)); m != "" && allowedLegModes[m] {
+		return &m
+	}
+	if m := strings.TrimSpace(strPtrVal(t.DerivedMode)); m != "" && allowedLegModes[m] {
 		return &m
 	}
 	switch strPtrVal(t.Provider) {

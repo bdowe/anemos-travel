@@ -841,7 +841,16 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 					dates += " to " + r
 				}
 			}
-			fmt.Fprintf(&b, "- %q [todo_id: %s] (%s, %s, %s%s)\n", td.Title, td.ID, td.Kind, status, origin, dates)
+			// How this leg travels, and therefore which booking link the row
+			// opens. Without it the model cannot see that a leg it would call
+			// a train is offering a flight search — and cannot fix it.
+			mode := ""
+			if td.Kind == "transport" {
+				if m := transportSlotMode(trip, td); m != nil {
+					mode = ", by " + *m
+				}
+			}
+			fmt.Fprintf(&b, "- %q [todo_id: %s] (%s, %s, %s%s%s)\n", td.Title, td.ID, td.Kind, status, origin, mode, dates)
 		}
 	}
 	return b.String(), false

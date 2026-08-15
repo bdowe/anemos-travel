@@ -896,7 +896,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .syncTodos(trip.id, _deriveTodos(trip));
       if (mounted) {
         final changed = !_sameTodoState(_bookingTodos, todos);
-        setState(() => _bookingTodos = todos);
+        setState(() {
+          _bookingTodos = todos;
+          // Re-derive against the server's answer. A row's TAP TARGET comes
+          // from the _flightLegs/_ferryLegs registries _deriveTodos populates,
+          // not from the row — so a leg the bootstrap default registered as a
+          // flight would keep opening the in-app flight search while its row
+          // now reads "train" and links to Rome2Rio. The returned payload is
+          // discarded here; the registries are the point.
+          _deriveTodos(trip);
+        });
         // The server's Next Step "book everything" aggregate reads booking
         // todos, which lag until this sync lands — re-read the review when
         // the sync actually changed them (specs/next-step-cta).
@@ -1028,12 +1037,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final hasArrival = arrival != null && arrival.isNotEmpty && ranges.isNotEmpty;
     final ground = _groundModeOf(trip);
 
-    // Per-leg overrides: a transport row whose server-preserved [BookingTodo.mode]
-    // is set wins over every derived default (incl. the Greek-ferry rule) for
-    // its leg key. The override lives on the row, so it dies with the leg.
+    // What each leg's mode already resolved to, keyed by leg. A transport
+    // row's [BookingTodo.effectiveMode] is the override somebody chose, else
+    // the mode the SERVER derived for the leg (leg_transport_mode.go, 00068) —
+    // geography included, which is what makes Rome → Florence a train. Both
+    // outrank the local default below.
     final modeByKey = <String, String>{
       for (final t in _bookingTodos)
-        if (t.kind == 'transport' && t.mode != null) t.todoKey: t.mode!,
+        if (t.kind == 'transport' && t.effectiveMode != null)
+          t.todoKey: t.effectiveMode!,
     };
     String effectiveMode(String origin, String destination, String def) {
       final key =
@@ -1164,10 +1176,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       }
     }
 
-    // Default per leg: two Greek ports/islands (incl. Athens/Piraeus) is a
-    // ferry; a stated ground travel mode makes every other leg ground;
-    // otherwise the long-haul default is a flight. A per-leg override beats
-    // all of it.
+    // The BOOTSTRAP default per leg, used only until the server answers: two
+    // Greek ports/islands (incl. Athens/Piraeus) is a ferry; a stated ground
+    // travel mode makes every other leg ground; otherwise a flight. The real
+    // resolution — the same ladder plus geography — is server-side in
+    // leg_transport_mode.go and arrives as [BookingTodo.derivedMode], which
+    // effectiveMode prefers; this branch only decides what a brand-new trip
+    // posts on its very first sync, and it retires with the rest of this
+    // derivation at the specs/server-booking-todos flip.
     void addLeg(String origin, String destination, _LegDates when,
         {_Coord? originCoord, _Coord? destCoord}) {
       final greek = _isGreekIsland(origin) && _isGreekIsland(destination);
