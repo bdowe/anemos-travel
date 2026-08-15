@@ -5,6 +5,68 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-14 — screen transitions replaying (two correct commits, colliding)
+
+- **[app] Breakage → fixed (#421, stack resets land instantly):** Brian —
+  "Sometimes screen transitions are a bit buggy. Old screen scrolls in for a
+  half second then scrolls out." Both numbers were literal. We set no
+  `pageTransitionsTheme`, so on macOS — what Flutter web reports for Chrome on
+  a Mac — a push is `CupertinoPageTransitionsBuilder`: a horizontal slide
+  ("scrolls") of exactly **500 ms** ("half a second"). Cause was two commits
+  that are each right on their own. `2e537c1` froze hidden tabs' tickers for
+  scroll perf; #331 made nav buttons land on the page they name by having
+  `selectTab` `popUntil` the **destination** tab before flipping to it. A
+  nested `Navigator` is the vsync for its own route transitions and sits
+  *inside* that `TickerMode` — so the pop never advanced. The exiting page
+  parked fully painted and played its whole 500 ms exit the instant the
+  `IndexedStack` revealed the tab. Not a race: deterministic, every time.
+  "Sometimes" only meant "when that tab had something on its stack".
+  **A stack reset, or a jump that also switches tabs, is bookkeeping — not a
+  gesture.** Those now land instantly (`removeRoute`, which is immediate, so
+  there is nothing left to freeze); only in-page pushes/pops and a deliberate
+  re-tap of the active tab animate. The `TickerMode` comment now carries the
+  trap, because that is what the next reader hits first.
+- **[dev] `pumpAndSettle` pumps straight past the artifact.** Every existing
+  test covering this path was green throughout, because settling runs the
+  bogus transition to completion and then asserts on the end state — which was
+  always correct. The bug lived entirely in the frames in between. Probe a
+  **single `tester.pump()`** when the complaint is about motion. Same shape as
+  the "the animation was the bug" entry below: twice now, the defect has been
+  something only a mid-flight assertion could see.
+- **[dev] A green test that cannot fail is worse than no test.** The follow-up
+  double-tap guard came with the obvious test — double-tap a trip card, assert
+  one detail screen. It passed. Then it passed with the fix **removed**, which
+  is the only reason we know it was worthless: Flutter's own
+  `Navigator._cancelActivePointers` absorbs the second pointer when a route
+  changes between frames, so the framework was doing the work and the test was
+  taking the credit. (`tester.tap` even warns the hit missed — worth reading
+  those warnings instead of scrolling past them.) Deleted it and rewrote around
+  what the framework explicitly does *not* cover — its own source comment reads
+  "This mechanism is far from perfect" (flutter#4770) — a push **after an
+  await**, which is a real path here: `connect_app._signIn` saves the pending
+  request, awaits, then pushes, and a second call would wipe the token the
+  first one just saved. **Habit worth keeping: revert the fix and re-run before
+  believing a new test.** Every assertion in #421 was checked that way, and
+  each failed with the symptom it claims.
+- **[dev] Second trap in the same test: an opaque route hides the duplicate.**
+  `Overlay` does not build entries below an opaque one, so two stacked copies
+  of a screen look exactly like one — `findsOneWidget` passes either way. Pop
+  once and assert the destination is **gone**.
+- **[dev] To claim "no animation played", first prove the camera can see one.**
+  Browser-verifying the fix meant screenshotting right after a tap and finding
+  a clean screen — which proves nothing if the harness is simply slower than
+  the transition. Control: shoot an ordinary push and an ordinary back-pop in
+  the same session and catch both mid-slide. Only then does the clean frame
+  mean anything.
+- **[dev] The integrator was working from a stale head SHA, and it would have
+  eaten half the PR.** It held a snapshot from before the second commit: saw
+  the worktree "dirty", and had the PR head as commit 1 of 2. Rebasing from
+  that SHA drops the entire second commit and its tests, and leaves a green PR
+  to show for it. Caught by answering with a freshly-read
+  `gh pr view --json headRefOid` rather than agreeing from memory. **Between
+  sessions, a SHA anyone is quoting from recall is a guess — re-read it.**
+  Second time this rule has paid out (see the branch-cleanup entry).
+
 ## 2026-08-14 — the map strip's "All" chip (emphasis pointed the wrong way)
 
 - **[app] Friction → fixed (All chip retired, contextual reset):** Brian on the
