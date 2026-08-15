@@ -126,6 +126,22 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(LiveTripCard));
+    // One frame, no settling: the reset and the push are both instant, so on
+    // the frame the Trips tab appears there is exactly ONE detail on it. Both
+    // steps run while that tab is still hidden, where the shell freezes
+    // tickers (app_shell.dart) — animated, they would park and then replay
+    // together, the trip you had open sliding out from under the one you
+    // asked for.
+    await tester.pump();
+    expect(find.byType(TripDetailScreen, skipOffstage: false), findsOneWidget,
+        reason: 'the previously-open trip must be gone, not sliding out');
+    expect(
+        tester
+            .widget<TripDetailScreen>(
+                find.byType(TripDetailScreen, skipOffstage: false))
+            .tripId,
+        't3');
+
     await tester.pumpAndSettle();
     expect(reports.last, '/trips/t3');
 

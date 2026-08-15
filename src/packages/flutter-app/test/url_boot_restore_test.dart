@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -93,6 +94,19 @@ void main() {
     expect(read(tester, navIndexProvider), AppTab.trips.index);
     expect(find.byType(ImportTripScreen), findsOneWidget);
     expect(reports.last, '/import');
+  });
+
+  testWidgets('a restored page lands, it does not slide in', (tester) async {
+    // A URL restore is not a gesture, so url_sync.dart uses instantRoute: the
+    // page the address bar named is simply there, instead of the tab root
+    // showing first and the page sliding in over it once pushOnTabWhenReady
+    // lands. Only the ENTRY is instant — backing out of the restored page
+    // must still animate like any other pop.
+    await pumpApp(tester, initialUrl: '/trips/t1', user: fakeUser());
+
+    final route = ModalRoute.of(tester.element(find.byType(TripDetailScreen)))!;
+    expect(route.transitionDuration, Duration.zero);
+    expect(route.reverseTransitionDuration, isNot(Duration.zero));
   });
 
   testWidgets('an unknown path behaves like the plain catch-all',

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/l10n.dart';
+import '../navigation/app_nav.dart';
 import '../providers/api_client_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/connect_app_service.dart';
@@ -99,6 +100,11 @@ class _ConnectAppScreenState extends ConsumerState<ConnectAppScreen> {
   /// Hands off to sign-in, remembering the request first so the browser can
   /// come back here even when SSO replaces the whole page.
   Future<void> _signIn() async {
+    // Early return, not pushOnce: this method both saves the pending request
+    // and clears it after the push returns, so a blocked second call must not
+    // fall through — it would wipe the token the first call just saved. The
+    // auto-trigger in build() and the visible button can both land here.
+    if (!isTopRoute(context)) return;
     // Before any await, while this context is still current.
     warmSsoAvailability(context);
     _promptedSignIn = true;

@@ -394,6 +394,9 @@ String _pastSummary(Trip trip, AppLocalizations l10n) {
 
 Future<void> _openTrip(
     BuildContext context, WidgetRef ref, String tripId) async {
+  // Guarded here rather than with pushOnce so the resync below is skipped
+  // too: a second tap that opened nothing must not refetch the list.
+  if (!isTopRoute(context)) return;
   await Navigator.of(context).push(
     locatedRoute(TripDetailScreen(tripId: tripId), tripDetailLocation(tripId)),
   );

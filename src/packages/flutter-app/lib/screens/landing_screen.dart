@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
+import '../navigation/app_nav.dart';
 import '../providers/analytics_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
@@ -58,7 +59,8 @@ class _LandingScreenState extends State<LandingScreen> {
     // Start the SSO availability fetches now so the route transition covers
     // the round trip and the auth form doesn't get shoved down on arrival.
     warmSsoAvailability(context);
-    Navigator.of(context).push(
+    pushOnce(
+      context,
       MaterialPageRoute(
         builder: (_) => AuthScreen(initialIsLogin: isLogin),
       ),

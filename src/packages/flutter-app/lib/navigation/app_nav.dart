@@ -35,9 +35,72 @@ Route<T> locatedRoute<T>(Widget page, String location) => MaterialPageRoute<T>(
       builder: (_) => page,
     );
 
+/// [locatedRoute]'s sibling for navigation the user never performed as a
+/// gesture — restoring a page from the URL, or a jump that also switches tabs
+/// (where the tab switch *is* the transition). The page is simply there.
+///
+/// A separate name rather than a flag on [locatedRoute] so which kind of
+/// navigation a call site performs is visible at the call site.
+Route<T> instantRoute<T>(Widget page, String location) => _InstantPageRoute<T>(
+      settings: RouteSettings(name: location),
+      builder: (_) => page,
+    );
+
+/// A page that arrives with no transition. Overrides ONLY [transitionDuration]
+/// — [reverseTransitionDuration] stays the platform's, so backing out of the
+/// page animates like any other pop. (MaterialRouteTransitionMixin re-applies
+/// each onto the controller in didPush/didPop, so overriding the getter holds.)
+class _InstantPageRoute<T> extends MaterialPageRoute<T> {
+  _InstantPageRoute({required super.builder, super.settings});
+
+  @override
+  Duration get transitionDuration => Duration.zero;
+}
+
+/// [nav]'s topmost route, **without popping anything**: [NavigatorState]
+/// exposes no stack getter, but [NavigatorState.popUntil] hands its predicate
+/// the top route and returns having popped nothing when the predicate answers
+/// true. This is a peek — the `true` is load-bearing, not a placeholder.
+Route<dynamic>? _topRouteOf(NavigatorState nav) {
+  Route<dynamic>? top;
+  nav.popUntil((route) {
+    top = route;
+    return true;
+  });
+  return top;
+}
+
+/// Clear [nav] back to its root with NO transition.
+///
+/// A stack reset is bookkeeping, not a gesture: the user asked for the
+/// destination, never to watch the page they left behind slide away. It also
+/// cannot be *popped* from here — the shell freezes hidden tabs' tickers
+/// (app_shell.dart), so a pop started on a tab that is about to be revealed
+/// parks fully painted and then plays its whole exit transition in the user's
+/// face. [NavigatorState.removeRoute] takes each route out immediately
+/// instead, and still reports didRemove — the same bookkeeping TabUrlObserver
+/// already does for didPop (url_sync.dart), so this is URL-transparent.
+void resetToRoot(NavigatorState? nav) {
+  if (nav == null) return;
+  // Bounded only so that no future SDK change can turn this into a hung
+  // frame; removeRoute always shortens the stack, so the guard never trips.
+  for (var i = 0; i < 50; i++) {
+    final top = _topRouteOf(nav);
+    if (top == null || top.isFirst) return;
+    nav.removeRoute(top);
+  }
+}
+
 /// Push [page] onto the currently-selected tab's navigator, so the content area
 /// animates while the persistent rail/bar stays put. Pass [location] when the
 /// page is restorable from a URL (see [locatedRoute]).
+///
+/// No double-tap guard here: [isTopRoute] answers about the CALLER's route,
+/// which this helper cannot see — and its main caller, the rail account menu,
+/// renders outside the tab navigators entirely, so the answer would be about
+/// the wrong navigator. Callers that live on the tab's top route (the
+/// notification card) guard themselves; menu items need no guard because
+/// selecting one dismisses the menu.
 void pushOnActiveTab(WidgetRef ref, Widget page, {String? location}) {
   final keys = ref.read(tabNavKeysProvider);
   final state = keys[ref.read(navIndexProvider)].currentState;
@@ -45,6 +108,45 @@ void pushOnActiveTab(WidgetRef ref, Widget page, {String? location}) {
       ? MaterialPageRoute(builder: (_) => page)
       : locatedRoute(page, location));
 }
+
+/// Whether [context]'s route is still the one on top of its navigator — i.e.
+/// nothing has been pushed since the tap now being handled.
+///
+/// **This is the double-tap guard.** Nothing in this app debounces taps, and
+/// [NavigatorState.push] flushes its history synchronously, so a second tap
+/// already sees the button's own route stop being current. Two pushes leave a
+/// duplicate screen stacked under an opaque one — invisible until "back"
+/// returns you to the page you were already looking at.
+///
+/// Flutter half-covers this itself and says so: `_cancelActivePointers`
+/// (navigator.dart) flips the navigator's AbsorbPointer on when a route
+/// changes between frames, under a comment reading "This mechanism is far from
+/// perfect" (flutter#4770). It only holds for the rest of that inter-frame
+/// gap — it does nothing for a handler that pushes **after an await**, which
+/// is the reachable case here (see `_signIn` in connect_app_screen.dart, where
+/// the second call would also wipe the pending token the first one saved), nor
+/// for a push issued from inside a frame.
+///
+/// Answers about [context]'s OWN navigator, so it cannot see a push onto a
+/// different one (a `rootNavigator: true` push from inside a tab — see
+/// `_openFullMap` in trip_detail_screen.dart, which guards on the root
+/// navigator directly). Fails open when there is no route at all: a missing
+/// guard must never be able to block navigation outright.
+bool isTopRoute(BuildContext context) =>
+    ModalRoute.of(context)?.isCurrent ?? true;
+
+/// Push [route] onto [context]'s navigator unless a push already landed
+/// ([isTopRoute]) — in which case nothing happens and the future completes
+/// with null.
+///
+/// Handlers that do more than push — cleanup after the await, a refetch, a
+/// saved token to clear — must test [isTopRoute] and return early themselves
+/// instead, so that trailing work is skipped too rather than running against
+/// the navigation the first tap started.
+Future<T?> pushOnce<T extends Object?>(BuildContext context, Route<T> route) =>
+    isTopRoute(context)
+        ? Navigator.of(context).push(route)
+        : Future<T?>.value();
 
 /// Tabs whose pushed stack survives switching away and back via a nav
 /// button: selecting the tab returns you to where you left it (e.g. the trip
@@ -61,14 +163,20 @@ const Set<AppTab> _stackKeepingTabs = {AppTab.trips};
 /// their pushes survive.
 void selectTab(WidgetRef ref, int index) {
   final isActive = ref.read(navIndexProvider) == index;
-  if (isActive || !_stackKeepingTabs.contains(AppTab.values[index])) {
-    // Pop before switching: TabUrlObserver didPop bookkeeping (url_sync.dart)
-    // drains while the old tab is still current, so the only URL report is
-    // the destination tab's root.
-    ref
-        .read(tabNavKeysProvider)[index]
-        .currentState
-        ?.popUntil((r) => r.isFirst);
+  final nav = ref.read(tabNavKeysProvider)[index].currentState;
+  if (isActive) {
+    // Re-tapping the tab you are already on IS the gesture, and it happens on
+    // a tab you can see — so this one pops, and animates, like any other back.
+    nav?.popUntil((r) => r.isFirst);
+  } else if (!_stackKeepingTabs.contains(AppTab.values[index])) {
+    // Remove rather than pop, and before switching. Remove because the
+    // destination tab is still hidden: a pop would freeze mid-flight and then
+    // replay in full the moment the IndexedStack reveals it ([resetToRoot]).
+    // Before, because TabUrlObserver's bookkeeping (url_sync.dart) then drains
+    // while the old tab is still current, so the only URL report is the
+    // destination tab's root — the stale page's location never reaches the
+    // address bar.
+    resetToRoot(nav);
   }
   if (!isActive) {
     ref.read(navIndexProvider.notifier).state = index;
@@ -97,15 +205,20 @@ void pushOnTabWhenReady(List<GlobalKey<NavigatorState>> navKeys, AppTab tab,
 }
 
 /// Open [tripId]'s detail on the Trips tab: the Trips nav item highlights and
-/// back lands on the trips list. Pops the Trips stack to root inside the
-/// (possibly retried) push action — not eagerly — so a previously-open detail
-/// doesn't sit underneath, and the reset happens next to the push that lands.
+/// back lands on the trips list. Resets the Trips stack inside the (possibly
+/// retried) push action — not eagerly — so a previously-open detail doesn't
+/// sit underneath, and the reset happens next to the push that lands.
+///
+/// Both steps are instant. The tab switch is already the transition, and both
+/// run while the Trips tab is still hidden, so an animated reset+push would
+/// freeze and then replay together — the trip you had open sliding out from
+/// under the one you just asked for.
 void openTripOnTripsTab(WidgetRef ref, String tripId) {
   ref.read(navIndexProvider.notifier).state = AppTab.trips.index;
   final navKeys = ref.read(tabNavKeysProvider);
   pushOnTabWhenReady(navKeys, AppTab.trips, () {
-    navKeys[AppTab.trips.index].currentState?.popUntil((r) => r.isFirst);
-    return locatedRoute(
+    resetToRoot(navKeys[AppTab.trips.index].currentState);
+    return instantRoute(
         TripDetailScreen(tripId: tripId), tripDetailLocation(tripId));
   });
 }
@@ -115,13 +228,13 @@ void openTripOnTripsTab(WidgetRef ref, String tripId) {
 /// list, and the URL reports /import (whose refresh restores onto Trips).
 /// The import screen's success replace-navigates to the new trip's detail,
 /// which must land on the stack-keeping Trips tab, not whichever tab hosted
-/// the entry point.
+/// the entry point. Instant for the same reason as [openTripOnTripsTab].
 void openImportOnTripsTab(WidgetRef ref) {
   ref.read(navIndexProvider.notifier).state = AppTab.trips.index;
   final navKeys = ref.read(tabNavKeysProvider);
   pushOnTabWhenReady(navKeys, AppTab.trips, () {
-    navKeys[AppTab.trips.index].currentState?.popUntil((r) => r.isFirst);
-    return locatedRoute(
+    resetToRoot(navKeys[AppTab.trips.index].currentState);
+    return instantRoute(
         const ImportTripScreen(), utilityLocation(BootUtility.importTrip));
   });
 }
