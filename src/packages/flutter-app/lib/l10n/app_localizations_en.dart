@@ -501,7 +501,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ssoBackToSignIn => 'Back to sign in';
 
   @override
-  String get settingsTitle => 'Account settings';
+  String get settingsTitle => 'Settings';
 
   @override
   String get settingsProfileSection => 'Profile';
@@ -2466,7 +2466,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accountMenuRetakeQuiz => 'Retake travel quiz';
 
   @override
-  String get accountMenuAccountSettings => 'Account settings';
+  String get accountMenuAccountSettings => 'Settings';
 
   @override
   String get accountMenuLocalIntelAdmin => 'Local intel admin';

@@ -507,7 +507,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get ssoBackToSignIn => 'Volver a iniciar sesión';
 
   @override
-  String get settingsTitle => 'Ajustes de la cuenta';
+  String get settingsTitle => 'Ajustes';
 
   @override
   String get settingsProfileSection => 'Perfil';
@@ -2482,7 +2482,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get accountMenuRetakeQuiz => 'Repetir el cuestionario de viaje';
 
   @override
-  String get accountMenuAccountSettings => 'Ajustes de la cuenta';
+  String get accountMenuAccountSettings => 'Ajustes';
 
   @override
   String get accountMenuLocalIntelAdmin => 'Administración de info local';

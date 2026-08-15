@@ -1043,7 +1043,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Account settings'**
+  /// **'Settings'**
   String get settingsTitle;
 
   /// No description provided for @settingsProfileSection.
@@ -4229,7 +4229,7 @@ abstract class AppLocalizations {
   /// No description provided for @accountMenuAccountSettings.
   ///
   /// In en, this message translates to:
-  /// **'Account settings'**
+  /// **'Settings'**
   String get accountMenuAccountSettings;
 
   /// No description provided for @accountMenuLocalIntelAdmin.
