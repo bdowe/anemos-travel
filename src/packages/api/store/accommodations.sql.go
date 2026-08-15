@@ -209,6 +209,87 @@ func (q *Queries) ListConfirmedAccommodationsByTrip(ctx context.Context, tripID 
 	return items, nil
 }
 
+const promoteAccommodationFromOption = `-- name: PromoteAccommodationFromOption :one
+INSERT INTO accommodations (trip_id, name, provider, url, check_in, check_out,
+                            price_note, auto, auto_key, booked, dismissed, position)
+VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, true, false, 9999)
+ON CONFLICT (trip_id, auto_key) WHERE auto_key IS NOT NULL DO UPDATE SET
+    name       = EXCLUDED.name,
+    provider   = EXCLUDED.provider,
+    url        = EXCLUDED.url,
+    check_in   = EXCLUDED.check_in,
+    check_out  = EXCLUDED.check_out,
+    price_note = EXCLUDED.price_note,
+    auto       = false,
+    dismissed  = false,
+    booked     = true
+RETURNING id, trip_id, name, provider, url, address, latitude, longitude, check_in, check_out, price_note, created_at, updated_at, auto, auto_key, dismissed, position, booked
+`
+
+type PromoteAccommodationFromOptionParams struct {
+	TripID    uuid.UUID   `json:"trip_id"`
+	Name      string      `json:"name"`
+	Provider  *string     `json:"provider"`
+	Url       *string     `json:"url"`
+	CheckIn   pgtype.Date `json:"check_in"`
+	CheckOut  pgtype.Date `json:"check_out"`
+	PriceNote *string     `json:"price_note"`
+	AutoKey   *string     `json:"auto_key"`
+}
+
+// Materializes a chosen booking option (00065) as the leg's real stay.
+//
+// Upsert on (trip_id, auto_key), NOT a plain insert: "Add details…" may already
+// have created a confirmed row for this leg, and switching winners must rewrite
+// that one row. A second insert would leave the claim-once slot matcher
+// (trip_detail_derivation.dart) holding one and shunting the other into "Other
+// bookings" — visible, confusing, and the exact clutter the shortlist exists to
+// remove. So this deliberately has NO `WHERE accommodations.auto` guard, unlike
+// UpsertDraftAccommodation: choosing overwrites a suggested draft, a dismissed
+// tombstone, and the previous winner alike. One leg, one stay record.
+//
+// auto_key is stamped with the todo's STORAGE key and it is load-bearing: the
+// matcher tests `autoKey == 'stay:<label>'` FIRST and only then falls back to a
+// name/address contains against the city label, which "Loft near Old Town"
+// fails. Without the stamp every promoted stay would miss its own leg.
+//
+// address/latitude/longitude stay out of the SET so a hand-typed location
+// survives a winner swap; auto=false keeps the row out of sync ownership.
+func (q *Queries) PromoteAccommodationFromOption(ctx context.Context, arg PromoteAccommodationFromOptionParams) (Accommodation, error) {
+	row := q.db.QueryRow(ctx, promoteAccommodationFromOption,
+		arg.TripID,
+		arg.Name,
+		arg.Provider,
+		arg.Url,
+		arg.CheckIn,
+		arg.CheckOut,
+		arg.PriceNote,
+		arg.AutoKey,
+	)
+	var i Accommodation
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Name,
+		&i.Provider,
+		&i.Url,
+		&i.Address,
+		&i.Latitude,
+		&i.Longitude,
+		&i.CheckIn,
+		&i.CheckOut,
+		&i.PriceNote,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Auto,
+		&i.AutoKey,
+		&i.Dismissed,
+		&i.Position,
+		&i.Booked,
+	)
+	return i, err
+}
+
 const setAccommodationPosition = `-- name: SetAccommodationPosition :exec
 UPDATE accommodations SET position = $3 WHERE id = $1 AND trip_id = $2
 `

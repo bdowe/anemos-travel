@@ -70,6 +70,9 @@ type TripResponse struct {
 	Accommodations []AccommodationResponse `json:"accommodations,omitempty"`
 	Segments       []SegmentResponse       `json:"segments,omitempty"`
 	BookingTodos   []BookingTodoResponse   `json:"booking_todos,omitempty"`
+	// The per-leg shortlist (00065). Editor-visible only, same boundary as
+	// BookingTodos; full trip views only, like the arrays above.
+	BookingOptions []BookingOptionResponse `json:"booking_options,omitempty"`
 	// Access is "owner" or "editor" (collaborator). Absent on responses
 	// that predate collaboration; clients treat missing as owner.
 	Access    string  `json:"access,omitempty"`
@@ -786,6 +789,7 @@ func getTripHandler(w http.ResponseWriter, r *http.Request) {
 		accommodations []store.Accommodation
 		segments       []store.TripSegment
 		bookingTodos   []store.BookingTodo
+		bookingOptions []store.BookingOption
 		ownerName      *string
 		updatedByName  *string
 		shared         bool
@@ -825,13 +829,25 @@ func getTripHandler(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	// Booking todos encode the owner's booking state and prices — viewer
-	// follows don't get them, matching the public share view's boundary.
+	// follows don't get them, matching the public share view's boundary. The
+	// saved-option shortlist (00065) sits behind the same boundary and is if
+	// anything more private: it is the owner's research, including what they
+	// considered and rejected. Editors/co-planners do get it — comparing
+	// candidates together is the point.
 	if row.Access != "viewer" {
 		g.Go(func() error {
 			var err error
 			bookingTodos, err = q.ListBookingTodosByTrip(ctx, trip.ID)
 			if err != nil {
 				return errors.New("could not load booking todos")
+			}
+			return nil
+		})
+		g.Go(func() error {
+			var err error
+			bookingOptions, err = q.ListBookingOptionsByTrip(ctx, trip.ID)
+			if err != nil {
+				return errors.New("could not load saved options")
 			}
 			return nil
 		})
@@ -889,6 +905,13 @@ func getTripHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := toTripResponse(trip, items, accommodations, segments, bookingTodos)
+	// Set here rather than inside toTripResponse: this is the one surface that
+	// loads the shortlist (every other caller passes nils for the booking
+	// arrays), so widening the shared mapper's signature would add a parameter
+	// nine call sites have to pass nil for.
+	for _, o := range bookingOptions {
+		resp.BookingOptions = append(resp.BookingOptions, toBookingOptionResponse(o))
+	}
 	resp.Legs = tripLegsResponse(trip, items, accommodations)
 	resp.Access = row.Access
 	if row.Access != "owner" {

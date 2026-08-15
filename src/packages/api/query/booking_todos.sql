@@ -139,10 +139,17 @@ RETURNING *;
 -- list where the traveler and the agent can edit or remove them. Demote rather
 -- than merely skip: DeleteBookingTodoNonAuto refuses auto rows, so a skipped
 -- survivor would be an undeletable zombie.
+--
+-- A saved shortlist (00065) is the fourth kind of traveler state, and the most
+-- expensive to lose: booking_options CASCADEs off this row, so a delete here
+-- silently destroys hand-collected research. Dropping a city from the itinerary
+-- must not throw away the three Airbnbs someone compared for it.
 UPDATE booking_todos b
 SET auto = false
 WHERE b.trip_id = $1 AND b.auto = true AND b.todo_key <> ALL(@keys::text[])
-  AND (b.booked OR b.mode IS NOT NULL OR EXISTS (
+  AND (b.booked OR b.mode IS NOT NULL
+       OR EXISTS (SELECT 1 FROM booking_options o WHERE o.booking_todo_id = b.id)
+       OR EXISTS (
         SELECT 1 FROM trip_expenses e
         WHERE e.trip_id = b.trip_id
           AND e.source_kind = 'booking_todo' AND e.source_id = b.id));
@@ -214,3 +221,9 @@ SET depart_date = depart_date + sqlc.arg(days)::int,
     return_date = return_date + sqlc.arg(days)::int
 WHERE trip_id = sqlc.arg(trip_id)
   AND (depart_date IS NOT NULL OR return_date IS NOT NULL);
+
+-- name: GetBookingTodo :one
+-- Single leg, scoped to its trip so a foreign id can never be read or attached
+-- to. Added for the booking-options paths (00065), which must confirm the leg
+-- a candidate is being hung off actually belongs to this trip.
+SELECT * FROM booking_todos WHERE id = $1 AND trip_id = $2;

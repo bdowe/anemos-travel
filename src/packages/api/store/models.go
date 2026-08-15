@@ -50,6 +50,30 @@ type AuthIdentity struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+type BookingOption struct {
+	ID                      uuid.UUID   `json:"id"`
+	TripID                  uuid.UUID   `json:"trip_id"`
+	BookingTodoID           uuid.UUID   `json:"booking_todo_id"`
+	Title                   string      `json:"title"`
+	Subtitle                *string     `json:"subtitle"`
+	Url                     *string     `json:"url"`
+	Provider                *string     `json:"provider"`
+	Notes                   *string     `json:"notes"`
+	ImageUrl                *string     `json:"image_url"`
+	Price                   *float64    `json:"price"`
+	Currency                *string     `json:"currency"`
+	StartDate               pgtype.Date `json:"start_date"`
+	EndDate                 pgtype.Date `json:"end_date"`
+	Origin                  *string     `json:"origin"`
+	Destination             *string     `json:"destination"`
+	Mode                    *string     `json:"mode"`
+	PromotedAccommodationID pgtype.UUID `json:"promoted_accommodation_id"`
+	PromotedSegmentID       pgtype.UUID `json:"promoted_segment_id"`
+	Position                int32       `json:"position"`
+	CreatedAt               time.Time   `json:"created_at"`
+	UpdatedAt               time.Time   `json:"updated_at"`
+}
+
 type BookingTodo struct {
 	ID               uuid.UUID   `json:"id"`
 	TripID           uuid.UUID   `json:"trip_id"`

@@ -63,3 +63,28 @@ SET depart_date = depart_date + sqlc.arg(days)::int,
     arrive_date = arrive_date + sqlc.arg(days)::int
 WHERE trip_id = sqlc.arg(trip_id)
   AND (depart_date IS NOT NULL OR arrive_date IS NOT NULL);
+
+-- name: PromoteSegmentFromOption :one
+-- Materializes a chosen booking option (00065) as the leg's real transport.
+-- Same contract as PromoteAccommodationFromOption — see its comment for why
+-- this upserts on (trip_id, auto_key) with no auto guard, and why stamping
+-- auto_key is what puts the row in its leg's slot instead of "Other bookings"
+-- (the matcher tests `autoKey.endsWith('>><label>')` before any fuzzy match).
+INSERT INTO trip_segments (trip_id, mode, origin, destination, depart_date,
+                           arrive_date, provider, url, price_note, notes,
+                           auto, auto_key, booked, dismissed, position)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, true, false, 9999)
+ON CONFLICT (trip_id, auto_key) WHERE auto_key IS NOT NULL DO UPDATE SET
+    mode        = EXCLUDED.mode,
+    origin      = EXCLUDED.origin,
+    destination = EXCLUDED.destination,
+    depart_date = EXCLUDED.depart_date,
+    arrive_date = EXCLUDED.arrive_date,
+    provider    = EXCLUDED.provider,
+    url         = EXCLUDED.url,
+    price_note  = EXCLUDED.price_note,
+    notes       = EXCLUDED.notes,
+    auto        = false,
+    dismissed   = false,
+    booked      = true
+RETURNING *;

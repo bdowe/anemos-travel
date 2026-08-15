@@ -165,7 +165,9 @@ const demoteStaleAutoBookingTodos = `-- name: DemoteStaleAutoBookingTodos :execr
 UPDATE booking_todos b
 SET auto = false
 WHERE b.trip_id = $1 AND b.auto = true AND b.todo_key <> ALL($2::text[])
-  AND (b.booked OR b.mode IS NOT NULL OR EXISTS (
+  AND (b.booked OR b.mode IS NOT NULL
+       OR EXISTS (SELECT 1 FROM booking_options o WHERE o.booking_todo_id = b.id)
+       OR EXISTS (
         SELECT 1 FROM trip_expenses e
         WHERE e.trip_id = b.trip_id
           AND e.source_kind = 'booking_todo' AND e.source_id = b.id))
@@ -188,12 +190,56 @@ type DemoteStaleAutoBookingTodosParams struct {
 // list where the traveler and the agent can edit or remove them. Demote rather
 // than merely skip: DeleteBookingTodoNonAuto refuses auto rows, so a skipped
 // survivor would be an undeletable zombie.
+//
+// A saved shortlist (00065) is the fourth kind of traveler state, and the most
+// expensive to lose: booking_options CASCADEs off this row, so a delete here
+// silently destroys hand-collected research. Dropping a city from the itinerary
+// must not throw away the three Airbnbs someone compared for it.
 func (q *Queries) DemoteStaleAutoBookingTodos(ctx context.Context, arg DemoteStaleAutoBookingTodosParams) (int64, error) {
 	result, err := q.db.Exec(ctx, demoteStaleAutoBookingTodos, arg.TripID, arg.Keys)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getBookingTodo = `-- name: GetBookingTodo :one
+SELECT id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label FROM booking_todos WHERE id = $1 AND trip_id = $2
+`
+
+type GetBookingTodoParams struct {
+	ID     uuid.UUID `json:"id"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+// Single leg, scoped to its trip so a foreign id can never be read or attached
+// to. Added for the booking-options paths (00065), which must confirm the leg
+// a candidate is being hung off actually belongs to this trip.
+func (q *Queries) GetBookingTodo(ctx context.Context, arg GetBookingTodoParams) (BookingTodo, error) {
+	row := q.db.QueryRow(ctx, getBookingTodo, arg.ID, arg.TripID)
+	var i BookingTodo
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Kind,
+		&i.TodoKey,
+		&i.Title,
+		&i.Subtitle,
+		&i.Provider,
+		&i.SearchUrl,
+		&i.DepartDate,
+		&i.ReturnDate,
+		&i.Booked,
+		&i.Auto,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Mode,
+		&i.Role,
+		&i.OriginLabel,
+		&i.DestinationLabel,
+	)
+	return i, err
 }
 
 const listBookingTodosByTrip = `-- name: ListBookingTodosByTrip :many

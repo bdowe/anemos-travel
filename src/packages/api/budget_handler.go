@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -272,66 +273,26 @@ func addExpenseHandler(w http.ResponseWriter, r *http.Request) {
 
 	q := store.New(dbPool)
 
-	// Linked adds are an upsert-by-source: at most one expense per booking
-	// row (partial unique index). Found & still auto -> refresh it (a
-	// re-book with a new price); found & user-owned -> return it untouched
-	// (never clobber a manual takeover). Both are 200s — idempotent
-	// re-submits, no client error handling for the retry race.
-	if req.SourceKind != nil {
-		if existing, err := q.GetExpenseBySource(r.Context(), store.GetExpenseBySourceParams{
-			TripID: trip.ID, SourceKind: req.SourceKind, SourceID: sourceID,
-		}); err == nil {
-			if !existing.Auto {
-				writeJSON(w, http.StatusOK, toExpenseResponse(existing))
-				return
-			}
-			autoTrue := true
-			updated, err := q.UpdateExpense(r.Context(), store.UpdateExpenseParams{
-				ID: existing.ID, TripID: trip.ID,
-				Category: &category, Label: &label, Amount: &req.Amount, Auto: &autoTrue,
-			})
-			if err != nil {
-				writeJSONError(w, http.StatusInternalServerError, "could not save expense")
-				return
-			}
-			_ = q.TouchTrip(r.Context(), touchedBy(trip.ID, r))
-			writeJSON(w, http.StatusOK, toExpenseResponse(updated))
+	expense, outcome, err := upsertLinkedExpense(r.Context(), q, trip.ID,
+		category, label, req.Amount, req.SourceKind, sourceID)
+	if err != nil {
+		if errors.Is(err, errExpenseLimitReached) {
+			writeJSONError(w, http.StatusUnprocessableEntity,
+				fmt.Sprintf("expense limit reached (max %d) — remove one first", maxExpensesPerTrip()))
 			return
 		}
-	}
-
-	// The per-trip cap guards creates only — the upsert path above can't
-	// grow the list.
-	if existing, err := q.ListExpensesByTrip(r.Context(), trip.ID); err == nil &&
-		len(existing) >= maxExpensesPerTrip() {
-		writeJSONError(w, http.StatusUnprocessableEntity,
-			fmt.Sprintf("expense limit reached (max %d) — remove one first", maxExpensesPerTrip()))
+		writeJSONError(w, http.StatusInternalServerError, "could not save expense")
 		return
 	}
-	expense, err := q.CreateExpense(r.Context(), store.CreateExpenseParams{
-		TripID:     trip.ID,
-		Category:   category,
-		Label:      label,
-		Amount:     req.Amount,
-		Position:   9999,
-		Auto:       req.SourceKind != nil, // server rule: auto iff linked
-		SourceKind: req.SourceKind,
-		SourceID:   sourceID,
-	})
-	if err != nil {
-		// Concurrent linked POSTs can race past the lookup; the partial
-		// unique index turns the loser into a 23505 — re-read and take the
-		// found path so the caller still gets the one linked row.
-		var pgErr *pgconn.PgError
-		if req.SourceKind != nil && errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			if existing, lookupErr := q.GetExpenseBySource(r.Context(), store.GetExpenseBySourceParams{
-				TripID: trip.ID, SourceKind: req.SourceKind, SourceID: sourceID,
-			}); lookupErr == nil {
-				writeJSON(w, http.StatusOK, toExpenseResponse(existing))
-				return
-			}
-		}
-		writeJSONError(w, http.StatusInternalServerError, "could not save expense")
+	switch outcome {
+	case expenseUntouched:
+		// A manual takeover, or the loser of a concurrent linked POST. Nothing
+		// changed, so nothing is touched.
+		writeJSON(w, http.StatusOK, toExpenseResponse(expense))
+		return
+	case expenseRefreshed:
+		_ = q.TouchTrip(r.Context(), touchedBy(trip.ID, r))
+		writeJSON(w, http.StatusOK, toExpenseResponse(expense))
 		return
 	}
 	_ = q.TouchTrip(r.Context(), touchedBy(trip.ID, r))
@@ -464,4 +425,88 @@ func writeExpenses(w http.ResponseWriter, r *http.Request, tripID uuid.UUID) {
 		resp = append(resp, toExpenseResponse(e))
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// --- linked-expense upsert (shared) -----------------------------------------
+
+// expenseOutcome names what upsertLinkedExpense actually did, because the
+// callers must treat the three cases differently: only a create is a 201 and
+// only a create/refresh has anything to touch. A bare bool would collapse
+// "refreshed the price" and "left a manual takeover alone" into one answer.
+type expenseOutcome int
+
+const (
+	expenseCreated expenseOutcome = iota
+	expenseRefreshed
+	expenseUntouched
+)
+
+// errExpenseLimitReached lets the caller map the per-trip cap to its own 422
+// without this helper knowing about HTTP.
+var errExpenseLimitReached = errors.New("expense limit reached")
+
+// upsertLinkedExpense is the ONE implementation of "record this booking's price
+// in the budget" (docs/zen.md: second implementation of anything? consume the
+// first). Extracted from addExpenseHandler when the booking-shortlist choose
+// transaction (00065) needed the same behaviour inside its own tx — hence the
+// store.Querier argument, which is either store.New(dbPool) or store.New(tx).
+//
+// Linked adds are an upsert-by-source: at most one expense per booking row
+// (the 00061 partial unique index). Found & still auto -> refresh it (a re-book
+// with a new price); found & user-owned -> return it untouched (never clobber a
+// manual takeover). Unlinked adds always create.
+func upsertLinkedExpense(ctx context.Context, q *store.Queries, tripID uuid.UUID,
+	category, label string, amount float64,
+	sourceKind *string, sourceID pgtype.UUID) (store.TripExpense, expenseOutcome, error) {
+
+	if sourceKind != nil {
+		if existing, err := q.GetExpenseBySource(ctx, store.GetExpenseBySourceParams{
+			TripID: tripID, SourceKind: sourceKind, SourceID: sourceID,
+		}); err == nil {
+			if !existing.Auto {
+				return existing, expenseUntouched, nil
+			}
+			autoTrue := true
+			updated, err := q.UpdateExpense(ctx, store.UpdateExpenseParams{
+				ID: existing.ID, TripID: tripID,
+				Category: &category, Label: &label, Amount: &amount, Auto: &autoTrue,
+			})
+			if err != nil {
+				return store.TripExpense{}, expenseUntouched, err
+			}
+			return updated, expenseRefreshed, nil
+		}
+	}
+
+	// The per-trip cap guards creates only — the upsert path above can't grow
+	// the list.
+	if existing, err := q.ListExpensesByTrip(ctx, tripID); err == nil &&
+		len(existing) >= maxExpensesPerTrip() {
+		return store.TripExpense{}, expenseUntouched, errExpenseLimitReached
+	}
+	expense, err := q.CreateExpense(ctx, store.CreateExpenseParams{
+		TripID:     tripID,
+		Category:   category,
+		Label:      label,
+		Amount:     amount,
+		Position:   9999,
+		Auto:       sourceKind != nil, // server rule: auto iff linked
+		SourceKind: sourceKind,
+		SourceID:   sourceID,
+	})
+	if err != nil {
+		// Concurrent linked POSTs can race past the lookup; the partial unique
+		// index turns the loser into a 23505 — re-read and take the found path
+		// so the caller still gets the one linked row.
+		var pgErr *pgconn.PgError
+		if sourceKind != nil && errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			if existing, lookupErr := q.GetExpenseBySource(ctx, store.GetExpenseBySourceParams{
+				TripID: tripID, SourceKind: sourceKind, SourceID: sourceID,
+			}); lookupErr == nil {
+				return existing, expenseUntouched, nil
+			}
+		}
+		return store.TripExpense{}, expenseUntouched, err
+	}
+	return expense, expenseCreated, nil
 }
