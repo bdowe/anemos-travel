@@ -306,6 +306,15 @@ func upstreamCountsSnapshot() map[string]int64 {
 		m["serpapi_flights_upstream"] = serpapiFlights.calls.upstream.Load()
 		m["serpapi_flights_cache_hits"] = serpapiFlights.calls.cacheHits.Load()
 	}
+	if serpapiHotels != nil {
+		m["serpapi_hotels_upstream"] = serpapiHotels.calls.upstream.Load()
+		m["serpapi_hotels_cache_hits"] = serpapiHotels.calls.cacheHits.Load()
+		// The one number that makes a 250-per-MONTH allowance legible on the
+		// ops page: how many rate lookups are left TODAY. Without it the two
+		// counters above only say what was spent, never how close the feature
+		// is to silently dropping to the no-prices tier.
+		m["serpapi_hotels_remaining_today"] = int64(serpapiHotels.RemainingToday())
+	}
 	// The only 429-specific signal: per-route request counts fold 429 into
 	// the generic 4xx class (ratelimit.go).
 	m["rate_limited_total"] = rateLimited429s.Load()

@@ -2062,6 +2062,29 @@
   },
   "chatToolFindParking": "Finding parking...",
   "chatCardFreeListed": "Free (listed)",
+  "chatStripHotels": "{count, plural, =1{{count} stay} other{{count} stays}}",
+  "@chatStripHotels": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatStripHotelsNoRates": "no live prices",
+  "@chatStripHotelsNoRates": {
+    "description": "Rail-header caveat when hotel results carry no rates (no dates given, allowance spent, or provider down). Must read as an absence of information, never as 'free'."
+  },
+  "chatCardPerNight": "{price}/night",
+  "@chatCardPerNight": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "chatToolSearchHotels": "Finding stays...",
+  "chatLinksStays": "Browse stays",
+  "chatLinksTransport": "Browse transport",
   "chatChipEvents": "{count, plural, =1{{count} event} other{{count} events}}",
   "@chatChipEvents": {
     "placeholders": {

@@ -5,6 +5,44 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-15 — chat dogfooding (hotels)
+
+- **[app] Friction → fixed: "Chat can't lookup hotel data — doesn't have it in
+  its tools, it says."** It didn't. Flights, events, ferries, places, weather
+  and local recs were all real-data tools; **stays alone was a link handoff** —
+  `suggest_stays` returned two Airbnb/Booking search URLs and nothing else. New
+  `search_hotels` returns real properties with real nightly and total rates for
+  the traveler's dates (specs/hotel-search).
+- **[dev] The app was asking the model for something its tools could not
+  produce.** The Next Step CTA seed for "you still need a place to stay" said
+  *"Suggest a few good lodging options (call suggest_stays) at a couple of
+  price levels, well located for my itinerary."* `suggest_stays` cannot produce
+  options, price levels, or locations — so the model either declined or
+  invented. **A seed prompt is a promise about the tools; it has to be written
+  against what they actually return.** Both lodging seeds now name
+  `search_hotels`.
+- **[dev] The tier had to become a first-class field, not an inference.** A
+  no-prices result looks exactly like a priced one with the numbers left off,
+  so `RatesLive` rides on the result SET and `summarizeHotels` states it in
+  words plus an explicit "do not estimate a price". Inferring it from "does
+  stay 0 have a price" would mislabel a priced set whose top row happened to
+  lack one. Same family as the flight-price-semantics bug: **a number in a tool
+  result has to arrive with what it means attached** — every rate here is
+  labeled per-night AND with the party size it covers.
+- **[dev] Two curls before any code, and both changed the design.** The rates
+  engine *requires* `check_in_date` (a dateless call is rejected upstream), and
+  Google Places returns `price_level: null` on **every** hotel. So the
+  two-tier split isn't a preference — dateless questions structurally cannot be
+  priced, and the cheap tier structurally cannot answer a money question. A
+  third free probe found failed searches cost no quota.
+- **[dev] `envInt` would have made the kill switch a lie.** It falls back on
+  any non-positive value, so `SERPAPI_HOTEL_SEARCHES_PER_DAY=0` — an operator
+  deliberately switching rate lookups off — would have silently meant "use the
+  default 8", spending from a shared key they cannot unset because flight
+  search needs it. This one knob reads the env itself, and a test pins that 0
+  means zero. **A shared helper's fallback rule is part of its contract; check
+  it before routing a switch through it.**
+
 ## 2026-08-15 — the chat you lose by pressing the wrong button
 
 - **[app] Friction, recurring:** *"when editing a trip via the chat, should keep
@@ -722,10 +760,13 @@ Open gaps found while fixing "chat doesn't clearly indicate it's loading"
   `turn_done`-style terminator — a NEW event, since `done` is spoken for —
   plus client stall detection, and pairs with the SDK's silent MaxRetries=2
   re-issues, which can stretch the quiet window further.
-- **[app] OPEN — `stays`/`transport` SSE events are dropped by the client:**
-  `suggest_stays` / `suggest_transport` emit side events with no case in the
-  provider switch, so those tools produce a chip that vanishes with no result
-  artifact at all.
+- **[app] FIXED (specs/hotel-search) — `stays`/`transport` SSE events were
+  dropped by the client:** `suggest_stays` / `suggest_transport` emitted side
+  events with no case in the provider switch, so those tools produced a chip
+  that vanished with no result artifact at all. Both now land as
+  `SourceLinksCard` chips that actually open the links — a `ResultSummaryChip`
+  would have been wrong here, because it opens the trip and these links ARE
+  the result.
 
 ## 2026-08-13 — trip-detail dogfooding (Bookings tab counter → pill)
 

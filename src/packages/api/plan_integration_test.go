@@ -317,8 +317,10 @@ func TestPlanSetTravelModePersistsWithItinerary(t *testing.T) {
 	if err := json.Unmarshal(reqs[0], &body); err != nil {
 		t.Fatalf("unmarshal request body: %v", err)
 	}
-	if n := len(body.Tools); n == 0 || body.Tools[n-1].Name != "set_leg_transport_mode" {
-		t.Fatalf("tools tail = %+v, want set_leg_transport_mode last", body.Tools)
+	// search_hotels is the newest tail append (specs/hotel-search) and is
+	// ungated, so it is last in every session shape.
+	if n := len(body.Tools); n == 0 || body.Tools[n-1].Name != "search_hotels" {
+		t.Fatalf("tools tail = %+v, want search_hotels last", body.Tools)
 	}
 
 	waitForEventCount(t, user.ID, "trip_created", 1)

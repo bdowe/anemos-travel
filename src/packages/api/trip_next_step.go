@@ -907,8 +907,13 @@ func seedAddLodging(d exportData, fix *FindingFix) string {
 			dates = fmt.Sprintf(" for %s to %s", *fix.CheckIn, *fix.CheckOut)
 		}
 	}
+	// This seed used to say "call suggest_stays", which returns two browse
+	// links and nothing else — so it asked the model for "options at a couple
+	// of price levels" that its tools could not produce, and the model either
+	// declined or invented them. search_hotels returns real properties with
+	// real rates, so the promise and the capability finally match.
 	return fmt.Sprintf("I want to refine %s.\n\nI still need a place to stay%s%s. "+
-		"Suggest a few good lodging options (call suggest_stays) at a couple of price levels, "+
+		"Call search_hotels with those dates and show me a few real options at a couple of price levels, "+
 		"well located for my itinerary, and help me pick one; when I choose, call "+
 		"add_accommodation with those dates. Do not change the itinerary places. "+
 		"Start by asking about my budget and preferred area.",
@@ -979,7 +984,7 @@ func seedBookTrip(d exportData, labels []string) string {
 		fmt.Fprintf(&b, "…and %d more.\n", more)
 	}
 	b.WriteString("Walk me through them one at a time — use search_flights for flights and " +
-		"suggest_stays for lodging — and as I confirm each one, mark the matching booking " +
+		"search_hotels for lodging — and as I confirm each one, mark the matching booking " +
 		"to-do booked with update_booking_todo. Start with whichever booking is most urgent.")
 	return b.String()
 }

@@ -134,6 +134,13 @@ type PlaceSearchResult struct {
 	// the public /places/search response.
 	PhotoRef         string `json:"-"`
 	PhotoAttribution string `json:"-"`
+
+	// UserRatingsTotal rides along for SearchLodging, where "4.8 from 6,749
+	// reviews" and "4.8 from 3" are very different recommendations. json:"-"
+	// for the same reason as the photo fields: adding a key would change both
+	// the model-facing tool_result and the public /places/search JSON, and
+	// nothing else asked for it.
+	UserRatingsTotal *int `json:"-"`
 }
 
 // PlaceAutocompleteResult represents autocomplete suggestions
@@ -264,6 +271,21 @@ func (gps *GooglePlacesService) SearchParkingNearby(ctx context.Context, query s
 	})
 }
 
+// SearchLodging is SearchPlaces tuned for stays (specs/hotel-search): the
+// same Text Search with Google's type=lodging filter, and its own "lodging|"
+// cache-key prefix so entries stay disjoint from the other variants sharing
+// the cache. Same shape as SearchParkingNearby, minus the location bias — a
+// lodging query is city-wide by nature.
+//
+// This is the DISCOVERY tier and can never be the rates tier: Google returns
+// price_level null for lodging in practice, so nothing here carries a price.
+func (gps *GooglePlacesService) SearchLodging(ctx context.Context, query string) ([]PlaceSearchResult, error) {
+	cacheKey := "lodging|" + strings.ToLower(strings.TrimSpace(query))
+	return gps.textSearch(ctx, cacheKey, query, func(params url.Values) {
+		params.Add("type", "lodging")
+	})
+}
+
 // textSearch is the shared Text Search body behind SearchPlaces and
 // SearchPlacesNearby: cache check, request, decode. extraParams (optional)
 // appends variant-specific query parameters.
@@ -312,10 +334,11 @@ func (gps *GooglePlacesService) textSearch(ctx context.Context, cacheKey, query 
 					Lng float64 `json:"lng"`
 				} `json:"location"`
 			} `json:"geometry"`
-			Types      []string `json:"types"`
-			Rating     *float64 `json:"rating"`
-			PriceLevel *int     `json:"price_level"`
-			Photos     []struct {
+			Types            []string `json:"types"`
+			Rating           *float64 `json:"rating"`
+			PriceLevel       *int     `json:"price_level"`
+			UserRatingsTotal *int     `json:"user_ratings_total"`
+			Photos           []struct {
 				PhotoReference   string   `json:"photo_reference"`
 				HTMLAttributions []string `json:"html_attributions"`
 			} `json:"photos"`
@@ -334,14 +357,15 @@ func (gps *GooglePlacesService) textSearch(ctx context.Context, cacheKey, query 
 	places := make([]PlaceSearchResult, len(result.Results))
 	for i, place := range result.Results {
 		places[i] = PlaceSearchResult{
-			PlaceID:    place.PlaceID,
-			Name:       place.Name,
-			Address:    place.FormattedAddress,
-			Latitude:   place.Geometry.Location.Lat,
-			Longitude:  place.Geometry.Location.Lng,
-			Types:      place.Types,
-			Rating:     place.Rating,
-			PriceLevel: place.PriceLevel,
+			PlaceID:          place.PlaceID,
+			Name:             place.Name,
+			Address:          place.FormattedAddress,
+			Latitude:         place.Geometry.Location.Lat,
+			Longitude:        place.Geometry.Location.Lng,
+			Types:            place.Types,
+			Rating:           place.Rating,
+			PriceLevel:       place.PriceLevel,
+			UserRatingsTotal: place.UserRatingsTotal,
 		}
 		if len(place.Photos) > 0 {
 			places[i].PhotoRef = place.Photos[0].PhotoReference

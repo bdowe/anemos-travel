@@ -24,18 +24,24 @@ func TestPlanSessionToolsOrderStable(t *testing.T) {
 		want    []string
 	}{
 		// set_trip_dates, set_leg_dates, set_trip_origin and
-		// set_leg_transport_mode are all authed-gated, so the anonymous tail
-		// intentionally stays find_parking — the anonymous tools array is
-		// byte-identical to before any of them existed, and anonymous sessions
-		// keep their cache line.
-		{"anonymous", &planSession{}, append(append([]string{}, base...), "create_itinerary", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking")},
+		// set_leg_transport_mode are all authed-gated, so they appear only in
+		// the authed shapes.
+		//
+		// search_hotels is NOT gated, so unlike them it lands at the tail of
+		// ALL three shapes — including anonymous, which until now had stayed
+		// byte-identical across every tool added since find_parking. That is a
+		// deliberate one-time cache re-warm on every session shape, taken
+		// because "where should I stay" is a question anonymous sessions ask
+		// constantly, and gating it would trade a permanent capability hole for
+		// a one-off cache cost.
+		{"anonymous", &planSession{}, append(append([]string{}, base...), "create_itinerary", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "search_hotels")},
 		{"authed", &planSession{authed: true},
 			append(append([]string{}, base...), "create_itinerary", "save_preferences", "get_trip",
-				"add_booking_todo", "update_booking_todo", "remove_booking_todo", "add_packing_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates", "set_trip_origin", "set_leg_transport_mode")},
+				"add_booking_todo", "update_booking_todo", "remove_booking_todo", "add_packing_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates", "set_trip_origin", "set_leg_transport_mode", "search_hotels")},
 		{"authed trip-bound", &planSession{authed: true, boundTripID: &tid},
 			append(append([]string{}, base...), "update_itinerary_section", "save_preferences", "get_trip",
 				"add_booking_todo", "update_booking_todo", "remove_booking_todo", "add_packing_item", "review_trip",
-				"add_accommodation", "add_transport_segment", "move_itinerary_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates", "set_trip_origin", "set_leg_transport_mode")},
+				"add_accommodation", "add_transport_segment", "move_itinerary_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates", "set_trip_origin", "set_leg_transport_mode", "search_hotels")},
 	}
 	for _, tc := range cases {
 		tools := planSessionTools(tc.session)
