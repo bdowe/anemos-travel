@@ -888,6 +888,21 @@ func buildRouter() *mux.Router {
 	api.Handle("/trips/{id}/booking-todos/order", authMiddleware(http.HandlerFunc(reorderBookingTodosHandler))).Methods("PUT")
 	api.Handle("/trips/{id}/booking-todos/{todoId}", authMiddleware(http.HandlerFunc(patchBookingTodoHandler))).Methods("PATCH")
 	api.Handle("/trips/{id}/booking-todos/{todoId}", authMiddleware(http.HandlerFunc(deleteBookingTodoHandler))).Methods("DELETE")
+	// Saved booking options — the per-leg shortlist (specs/booking-shortlist).
+	// No list route: options ride the GET /trips/{id} payload, since a
+	// shortlist is only ever read alongside the legs it hangs off.
+	api.Handle("/trips/{id}/booking-options", authMiddleware(http.HandlerFunc(addBookingOptionHandler))).Methods("POST")
+	api.Handle("/trips/{id}/booking-options/{optionId}", authMiddleware(http.HandlerFunc(updateBookingOptionHandler))).Methods("PATCH")
+	api.Handle("/trips/{id}/booking-options/{optionId}", authMiddleware(http.HandlerFunc(deleteBookingOptionHandler))).Methods("DELETE")
+	api.Handle("/trips/{id}/booking-options/{optionId}/choose", authMiddleware(http.HandlerFunc(chooseBookingOptionHandler))).Methods("POST")
+	api.Handle("/trips/{id}/booking-options/{optionId}/choose", authMiddleware(http.HandlerFunc(unchooseBookingOptionHandler))).Methods("DELETE")
+	// Link preview gets its OWN bucket: every call is an outbound fetch, so it
+	// can't share `general` (a paste loop would drain the JSON-API budget) and
+	// mustn't share `strict` (5/min would have one user's pasting throttle
+	// /plan and /auth). Same reasoning as photoLimiter/transcribeLimiter.
+	previewLimiter := newIPRateLimiter(20, 10)
+	preview := rateLimitMiddleware(previewLimiter)
+	api.Handle("/link-preview", preview(authMiddleware(http.HandlerFunc(linkPreviewHandler)))).Methods("GET")
 	api.Handle("/trips/{id}/checklist", authMiddleware(http.HandlerFunc(listChecklistHandler))).Methods("GET")
 	api.Handle("/trips/{id}/checklist", authMiddleware(http.HandlerFunc(addChecklistItemHandler))).Methods("POST")
 	api.Handle("/trips/{id}/checklist/{itemId}", authMiddleware(http.HandlerFunc(patchChecklistItemHandler))).Methods("PATCH")
@@ -989,6 +1004,9 @@ func startServer(router *mux.Router) {
 	log.Printf("  POST /api/v1/trips/{id}/items   - Add itinerary item (auth)")
 	log.Printf("  GET  /api/v1/transport-links     - Google Flights/Kayak/Rome2Rio browse links")
 	log.Printf("  POST/DELETE /api/v1/trips/{id}/segments - Trip travel segments (auth)")
+	log.Printf("  POST/PATCH/DELETE /api/v1/trips/{id}/booking-options - Saved booking options (auth)")
+	log.Printf("  POST/DELETE /api/v1/trips/{id}/booking-options/{id}/choose - Choose / un-choose one (auth)")
+	log.Printf("  GET  /api/v1/link-preview        - OpenGraph prefill for a pasted booking link (auth)")
 
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal("Server failed to start:", err)

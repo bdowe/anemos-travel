@@ -86,6 +86,13 @@ const (
 	defaultMaxAccommodationsPerTrip = 200
 	defaultMaxChecklistItemsPerTrip = 200
 	defaultMaxBookingTodosPerTrip   = 200
+
+	// Saved booking options (00065). Two caps, because they bound different
+	// things: the per-leg one is a product-shaped guard (a shortlist you
+	// actually compare is a handful of candidates, not fifty), the per-trip one
+	// is the usual runaway guard.
+	defaultMaxBookingOptionsPerTodo = 20
+	defaultMaxBookingOptionsPerTrip = 200
 )
 
 func maxTripsPerUser() int { return envInt("MAX_TRIPS_PER_USER", defaultMaxTripsPerUser) }
@@ -104,4 +111,10 @@ func maxChecklistItemsPerTrip() int {
 }
 func maxBookingTodosPerTrip() int {
 	return envInt("MAX_BOOKING_TODOS_PER_TRIP", defaultMaxBookingTodosPerTrip)
+}
+func maxBookingOptionsPerTodo() int {
+	return envInt("MAX_BOOKING_OPTIONS_PER_TODO", defaultMaxBookingOptionsPerTodo)
+}
+func maxBookingOptionsPerTrip() int {
+	return envInt("MAX_BOOKING_OPTIONS_PER_TRIP", defaultMaxBookingOptionsPerTrip)
 }

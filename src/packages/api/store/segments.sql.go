@@ -209,6 +209,84 @@ func (q *Queries) ListSegmentsByTrip(ctx context.Context, tripID uuid.UUID) ([]T
 	return items, nil
 }
 
+const promoteSegmentFromOption = `-- name: PromoteSegmentFromOption :one
+INSERT INTO trip_segments (trip_id, mode, origin, destination, depart_date,
+                           arrive_date, provider, url, price_note, notes,
+                           auto, auto_key, booked, dismissed, position)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, true, false, 9999)
+ON CONFLICT (trip_id, auto_key) WHERE auto_key IS NOT NULL DO UPDATE SET
+    mode        = EXCLUDED.mode,
+    origin      = EXCLUDED.origin,
+    destination = EXCLUDED.destination,
+    depart_date = EXCLUDED.depart_date,
+    arrive_date = EXCLUDED.arrive_date,
+    provider    = EXCLUDED.provider,
+    url         = EXCLUDED.url,
+    price_note  = EXCLUDED.price_note,
+    notes       = EXCLUDED.notes,
+    auto        = false,
+    dismissed   = false,
+    booked      = true
+RETURNING id, trip_id, mode, origin, destination, depart_date, arrive_date, provider, url, price_note, notes, created_at, updated_at, auto, auto_key, dismissed, position, booked
+`
+
+type PromoteSegmentFromOptionParams struct {
+	TripID      uuid.UUID   `json:"trip_id"`
+	Mode        string      `json:"mode"`
+	Origin      *string     `json:"origin"`
+	Destination *string     `json:"destination"`
+	DepartDate  pgtype.Date `json:"depart_date"`
+	ArriveDate  pgtype.Date `json:"arrive_date"`
+	Provider    *string     `json:"provider"`
+	Url         *string     `json:"url"`
+	PriceNote   *string     `json:"price_note"`
+	Notes       *string     `json:"notes"`
+	AutoKey     *string     `json:"auto_key"`
+}
+
+// Materializes a chosen booking option (00065) as the leg's real transport.
+// Same contract as PromoteAccommodationFromOption — see its comment for why
+// this upserts on (trip_id, auto_key) with no auto guard, and why stamping
+// auto_key is what puts the row in its leg's slot instead of "Other bookings"
+// (the matcher tests `autoKey.endsWith('>><label>')` before any fuzzy match).
+func (q *Queries) PromoteSegmentFromOption(ctx context.Context, arg PromoteSegmentFromOptionParams) (TripSegment, error) {
+	row := q.db.QueryRow(ctx, promoteSegmentFromOption,
+		arg.TripID,
+		arg.Mode,
+		arg.Origin,
+		arg.Destination,
+		arg.DepartDate,
+		arg.ArriveDate,
+		arg.Provider,
+		arg.Url,
+		arg.PriceNote,
+		arg.Notes,
+		arg.AutoKey,
+	)
+	var i TripSegment
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Mode,
+		&i.Origin,
+		&i.Destination,
+		&i.DepartDate,
+		&i.ArriveDate,
+		&i.Provider,
+		&i.Url,
+		&i.PriceNote,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Auto,
+		&i.AutoKey,
+		&i.Dismissed,
+		&i.Position,
+		&i.Booked,
+	)
+	return i, err
+}
+
 const setSegmentPosition = `-- name: SetSegmentPosition :exec
 UPDATE trip_segments SET position = $3 WHERE id = $1 AND trip_id = $2
 `

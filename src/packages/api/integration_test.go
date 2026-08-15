@@ -63,7 +63,8 @@ func resetDB(t *testing.T) {
 	for attempt := 0; attempt < 5; attempt++ {
 		_, err = dbPool.Exec(context.Background(), `TRUNCATE
 			users, sessions, trips, itinerary_items, traveler_preferences,
-			accommodations, trip_segments, booking_todos, trip_checklist_items,
+			accommodations, trip_segments, booking_todos, booking_options,
+			trip_checklist_items,
 			trip_budgets, trip_expenses, trip_shares,
 			trip_collaborators, email_tokens, auth_identities, analytics_events,
 			notifications, reminder_sends,

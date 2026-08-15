@@ -65,3 +65,37 @@ SET check_in  = check_in  + sqlc.arg(days)::int,
     check_out = check_out + sqlc.arg(days)::int
 WHERE trip_id = sqlc.arg(trip_id)
   AND (check_in IS NOT NULL OR check_out IS NOT NULL);
+
+-- name: PromoteAccommodationFromOption :one
+-- Materializes a chosen booking option (00065) as the leg's real stay.
+--
+-- Upsert on (trip_id, auto_key), NOT a plain insert: "Add details…" may already
+-- have created a confirmed row for this leg, and switching winners must rewrite
+-- that one row. A second insert would leave the claim-once slot matcher
+-- (trip_detail_derivation.dart) holding one and shunting the other into "Other
+-- bookings" — visible, confusing, and the exact clutter the shortlist exists to
+-- remove. So this deliberately has NO `WHERE accommodations.auto` guard, unlike
+-- UpsertDraftAccommodation: choosing overwrites a suggested draft, a dismissed
+-- tombstone, and the previous winner alike. One leg, one stay record.
+--
+-- auto_key is stamped with the todo's STORAGE key and it is load-bearing: the
+-- matcher tests `autoKey == 'stay:<label>'` FIRST and only then falls back to a
+-- name/address contains against the city label, which "Loft near Old Town"
+-- fails. Without the stamp every promoted stay would miss its own leg.
+--
+-- address/latitude/longitude stay out of the SET so a hand-typed location
+-- survives a winner swap; auto=false keeps the row out of sync ownership.
+INSERT INTO accommodations (trip_id, name, provider, url, check_in, check_out,
+                            price_note, auto, auto_key, booked, dismissed, position)
+VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, true, false, 9999)
+ON CONFLICT (trip_id, auto_key) WHERE auto_key IS NOT NULL DO UPDATE SET
+    name       = EXCLUDED.name,
+    provider   = EXCLUDED.provider,
+    url        = EXCLUDED.url,
+    check_in   = EXCLUDED.check_in,
+    check_out  = EXCLUDED.check_out,
+    price_note = EXCLUDED.price_note,
+    auto       = false,
+    dismissed  = false,
+    booked     = true
+RETURNING *;
