@@ -16,13 +16,18 @@ import 'trip_legs.dart';
 
 /// One leg's date range. [stayAnchored] marks a range taken from a confirmed
 /// accommodation's explicit dates, which exempts the leg from the
-/// visible-range zero-night collapse.
+/// visible-range zero-night collapse. [itemDerived] marks one computed from
+/// the leg's own item day numbers rather than a stay or the auto slice — the
+/// provenance the last-leg trip-end anchor keys on, mirroring the server's
+/// `RenderLeg.DateSource == "items"` (trip_render_legs.go). The two together
+/// carry what one `DateSource` string carries there; keep them in step.
 typedef LegRange = ({
   String label,
   DateTime? start,
   DateTime? end,
   ({double lat, double lng})? coord,
   bool stayAnchored,
+  bool itemDerived,
 });
 
 /// Per-location-group label and date range. Each location gets a contiguous
@@ -100,6 +105,7 @@ List<LegRange> rawLegRanges(Trip trip) {
       end: accRange?.end ?? dayRange?.end ?? a?.end,
       coord: leg.coord,
       stayAnchored: accRange != null,
+      itemDerived: accRange == null && dayRange != null,
     ));
   }
   return result;
@@ -121,21 +127,36 @@ List<LegRange> rawLegRanges(Trip trip) {
 /// screen (a "while you're here" events section on the raw ranges queried one
 /// day of a four-day Berlin stay; friction-log 2026-08-14). Map pins and
 /// leg-nights stay on the raw ranges: a pin is a point, and nights must not
-/// double-count the arrival day. The server mirrors this in
-/// visibleLegDisplayRange (plan_leg_dates.go).
+/// double-count the arrival day.
+///
+/// Then the LAST-leg trip-end anchor, the mirror of [rawLegRanges]' first-leg
+/// one: the leg that renders last, when item-derived, runs through the trip's
+/// end date. The traveler is in the final city until the day they travel home,
+/// and that day carries no places — the planner reserves it for the journey —
+/// so its item-derived end falls a day or more short, and a 2-night stay whose
+/// departure day is empty would render "1 night" and drag the return-home
+/// booking date back with it. It runs after the arrival pass and skips a
+/// COLLAPSED leg: a zero-night stop is an interim overrun state, and stretching
+/// it to the trip's end would invent the nights the squeeze says are gone.
+///
+/// The server mirrors the whole function in computeTripLegs (steps 5 and 6,
+/// trip_render_legs.go).
 List<LegRange> visibleLegRanges(Trip trip) {
   final raw = rawLegRanges(trip);
   final result = <LegRange>[];
+  final collapsed = <bool>[];
   DateTime? prevEnd;
   for (final r in raw) {
     var start = r.start;
     var end = r.end;
+    var zeroNight = false;
     if (prevEnd != null) {
       if (start == null || prevEnd.isBefore(start)) {
         start = prevEnd;
       } else if (end != null && prevEnd.isAfter(end) && !r.stayAnchored) {
         start = prevEnd;
         end = prevEnd;
+        zeroNight = true;
       }
     }
     result.add((
@@ -144,8 +165,33 @@ List<LegRange> visibleLegRanges(Trip trip) {
       end: end,
       coord: r.coord,
       stayAnchored: r.stayAnchored,
+      itemDerived: r.itemDerived,
     ));
+    collapsed.add(zeroNight);
     prevEnd = end;
+  }
+
+  // Walks from the tail the way the first-leg anchor sits at the head, so it
+  // lands on whichever leg renders last. A confirmed stay's checkout wins and
+  // an auto slice already ends at the trip's end, so only item-derived ranges
+  // move — [LegRange.itemDerived], the server's DateSource == "items".
+  final tripEnd = DateTime.tryParse(trip.endDate ?? '');
+  if (tripEnd != null) {
+    for (var i = result.length - 1; i >= 0; i--) {
+      final r = result[i];
+      if (r.end == null) continue;
+      if (r.itemDerived && !collapsed[i] && r.end!.isBefore(tripEnd)) {
+        result[i] = (
+          label: r.label,
+          start: r.start,
+          end: tripEnd,
+          coord: r.coord,
+          stayAnchored: r.stayAnchored,
+          itemDerived: r.itemDerived,
+        );
+      }
+      break;
+    }
   }
   return result;
 }

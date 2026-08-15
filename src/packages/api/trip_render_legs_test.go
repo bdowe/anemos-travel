@@ -94,6 +94,52 @@ func TestComputeTripLegsFirstLegAnchor(t *testing.T) {
 	assertSpan(t, legs[1], "2026-08-27", "2026-09-01")
 }
 
+// The mirror of the first-leg anchor: the planner leaves the day home empty
+// (it's a travel day), so the last leg's item-derived end falls short of the
+// trip's own end date. Amsterdam must still read Aug 23 – Aug 25 · 2 nights,
+// not Aug 23 – Aug 24 · 1 night.
+func TestComputeTripLegsLastLegAnchor(t *testing.T) {
+	legs := computeTripLegs(rlTrip("2026-08-20", "2026-08-25"), []store.ItineraryItem{
+		rlItem(0, "Louvre", rlCity("Paris"), 1),
+		rlItem(1, "Musée d'Orsay", rlCity("Paris"), 2),
+		rlItem(2, "Rijksmuseum", rlCity("Amsterdam"), 4),
+		rlItem(3, "Anne Frank House", rlCity("Amsterdam"), 5),
+		// Day 6 (Aug 25) is the journey home and carries nothing.
+	}, nil)
+	assertSpan(t, legs[0], "2026-08-20", "2026-08-21")
+	assertSpan(t, legs[1], "2026-08-21", "2026-08-25")
+}
+
+// A confirmed stay's checkout is explicit, so it is never stretched — the same
+// carve-out the first-leg anchor makes for check-in.
+func TestComputeTripLegsLastLegAnchorSkipsConfirmedStay(t *testing.T) {
+	legs := computeTripLegs(rlTrip("2026-08-20", "2026-08-25"), []store.ItineraryItem{
+		rlItem(0, "Louvre", rlCity("Paris"), 1),
+		rlItem(1, "Rijksmuseum", rlCity("Amsterdam"), 4),
+	}, []store.Accommodation{
+		rlStay("Hotel Pulitzer", "Prinsengracht, Amsterdam", "2026-08-23", "2026-08-24"),
+	})
+	// The START is the arrival (Paris's visible end), the pre-existing chain
+	// rule; what this pins is the END holding at the stay's checkout instead
+	// of stretching to the trip's Aug 25.
+	assertSpan(t, legs[1], "2026-08-20", "2026-08-24")
+}
+
+// A leg the arrival chain squeezed to a zero-night stop is an interim overrun
+// state. Stretching it to the trip's end would invent the very nights the
+// squeeze says are gone — and contradict the ZeroNight flag it still carries.
+func TestComputeTripLegsLastLegAnchorSkipsCollapsedLeg(t *testing.T) {
+	legs := computeTripLegs(rlTrip("2026-09-01", "2026-09-07"), []store.ItineraryItem{
+		rlItem(0, "Museo", rlCity("Medellín"), 1),
+		rlItem(1, "Comuna 13", rlCity("Medellín"), 6),
+		rlItem(2, "Quito", rlCity("Quito"), 4),
+	}, nil)
+	assertSpan(t, legs[1], "2026-09-06", "2026-09-06")
+	if !legs[1].ZeroNight {
+		t.Fatal("squeezed last leg lost its zero_night mark")
+	}
+}
+
 func TestComputeTripLegsConfirmedStayAnchors(t *testing.T) {
 	legs := computeTripLegs(rlTrip("2026-09-01", "2026-09-07"), []store.ItineraryItem{
 		rlItem(0, "Museo", rlCity("Medellín"), 1),

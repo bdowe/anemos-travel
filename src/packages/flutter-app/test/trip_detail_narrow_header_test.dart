@@ -78,9 +78,13 @@ void main() {
     await _pump(tester, _trip(), surface: phone);
 
     // Meta row: no Refine button, humanized dates instead of raw ISO.
+    // Scoped to the meta chip: the sole city leg now renders the same span
+    // (it runs through the trip's end date — the last-leg anchor), so an
+    // unscoped find.text would match twice and say nothing about the row
+    // under test.
     expect(find.text('Refine with AI'), findsNothing);
     expect(find.textContaining('2026-09-01'), findsNothing);
-    expect(find.text('Sep 1 – Sep 3'), findsOneWidget);
+    expect(find.widgetWithText(ActionChip, 'Sep 1 – Sep 3'), findsOneWidget);
 
     // The app-bar sparkle opens the refine panel (narrow => sheet).
     final sparkle = find.byTooltip('Refine with AI');
@@ -109,7 +113,7 @@ void main() {
     // Same string as narrow: the chip's format is a property of the trip, not
     // of the viewport. Wide showed the raw ISO pair until 2026-08-14 purely
     // because only narrow was ever fixed.
-    expect(find.text('Sep 1 – Sep 3'), findsOneWidget);
+    expect(find.widgetWithText(ActionChip, 'Sep 1 – Sep 3'), findsOneWidget);
     expect(find.text('2026-09-01 → 2026-09-03'), findsNothing);
     expect(find.byTooltip('Refine with AI'), findsNothing);
   });

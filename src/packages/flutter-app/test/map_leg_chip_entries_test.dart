@@ -25,6 +25,7 @@ LegRange _range(String label, DateTime? start) => (
       end: start,
       coord: null,
       stayAnchored: false,
+      itemDerived: true,
     );
 
 void main() {

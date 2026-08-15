@@ -43,7 +43,7 @@ var itineraryLocationSchema = map[string]any{
 		},
 		"day": map[string]any{
 			"type":        "integer",
-			"description": "The trip day this place belongs to, starting at 1 and increasing chronologically across the whole trip; all places on the same day share the same number (e.g. days 1–3 in Paris, then day 4 onward in Rome). Combined with time_of_day this makes each day read as a sequential schedule.",
+			"description": "The trip day this place belongs to, starting at 1 and increasing chronologically across the whole trip; all places on the same day share the same number (e.g. days 1–3 in Paris, then day 4 onward in Rome). Combined with time_of_day this makes each day read as a sequential schedule. A city's LAST day is the day the traveler leaves it, so it holds at most one easy nearby place — and the trip's final day, the journey home, usually holds none at all unless you know they travel late.",
 		},
 		"local_source_name": map[string]any{
 			"type":        "string",
