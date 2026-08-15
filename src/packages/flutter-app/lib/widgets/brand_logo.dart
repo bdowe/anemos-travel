@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/app_info.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 
@@ -7,12 +8,16 @@ import '../theme/spacing.dart';
 /// rendered by scripts/brand-render.sh. (The old horse mark retired with the
 /// Golden Tempo name; the agent persona "Ferdinand" keeps the equine nod.)
 /// Three forms:
-/// - [BrandLogo.lockup] — the full rose + "Anemos" wordmark image, for spots
-///   with horizontal room (app-bar titles).
+/// - [BrandLogo.lockup] — the full rose + "Anemos" wordmark image. Currently
+///   unused: the wordmark is live text ([BrandWordmark]) everywhere, and this
+///   PNG's art sits off-centre on a square canvas, so reintroducing it hangs
+///   ~7pt of dead space below the mark.
 /// - [BrandLogo.mark] — the rose icon only, for tight spots (nav rail,
 ///   landing hero).
 /// - [BrandLogo.markLight] — the reversed rose (white/teal-100 cardinals),
 ///   for teal fields (the boot splash).
+///
+/// The word itself is [BrandWordmark], not part of this class — see there.
 ///
 /// The dark artwork is teal + gold on a transparent background. It floats
 /// bare on page surfaces and scrimmed imagery (auth screen, nav rail, landing
@@ -67,6 +72,111 @@ class BrandLogo extends StatelessWidget {
   }
 }
 
+/// The "Anemos" wordmark as live text, in Cinzel — the brand's one piece of
+/// display type. Cinzel has no true lowercase, so the string stays
+/// [AppInfo.name] and paints as small-caps ANEMOS.
+///
+/// This is deliberately text and not the baked [BrandLogo.lockup] PNG: it
+/// recolors, scales and localizes-around cleanly, and it is the thing the
+/// house app bar carries on every page (see [BrandWordmark] call sites in
+/// `gradient_app_bar.dart`).
+///
+/// The invariants — family, weight, and the string itself — live here. The
+/// tuned values are parameters because caps run wide and each surface was
+/// measured separately: tracking opens up as the size grows (app bar 19/1.0,
+/// landing hero 24–40/1.5).
+///
+/// [color] defaults to **inherited**. Every gradient app bar already sets
+/// `foregroundColor: Colors.white`, so those are white for free, while the
+/// neutral surfaces (auth screen) and dark mode get a readable color without
+/// a hardcoded one fighting them.
+class BrandWordmark extends StatelessWidget {
+  /// The app-bar size, tuned in PR #391 when the wordmark moved to Cinzel.
+  static const double appBarFontSize = 19;
+
+  /// The default tracking. Caps run wide, so callers using a larger size open
+  /// this up — the landing hero and the splash both do.
+  static const double defaultLetterSpacing = 1.0;
+
+  final double fontSize;
+  final double letterSpacing;
+  final Color? color;
+  final double? height;
+  final List<Shadow>? shadows;
+
+  const BrandWordmark({
+    super.key,
+    this.fontSize = appBarFontSize,
+    this.letterSpacing = defaultLetterSpacing,
+    this.color,
+    this.height,
+    this.shadows,
+  });
+
+  /// The style this paints with, exposed so anything that needs to *measure*
+  /// the wordmark uses the exact numbers it renders — see [widthIn].
+  static TextStyle styleOf({
+    double fontSize = appBarFontSize,
+    double letterSpacing = defaultLetterSpacing,
+    Color? color,
+    double? height,
+    List<Shadow>? shadows,
+  }) =>
+      TextStyle(
+        fontFamily: 'Cinzel',
+        fontWeight: FontWeight.w600,
+        fontSize: fontSize,
+        letterSpacing: letterSpacing,
+        height: height,
+        color: color,
+        shadows: shadows,
+      );
+
+  /// How wide the wordmark will actually paint in [context].
+  ///
+  /// Measured, not assumed, because the answer moves: Cinzel may not have
+  /// loaded yet (or at all — in widget tests the fallback runs ~35% wider),
+  /// and the traveler's text-scale setting multiplies it. The app bar's
+  /// layout ladder is arithmetic on this number, so a hardcoded width would
+  /// tip a large-text user's bar into overflow — and a release build does not
+  /// stripe an overflow, it silently cuts the glyphs off, which is the one
+  /// thing the wordmark must never do.
+  static double widthIn(
+    BuildContext context, {
+    double fontSize = appBarFontSize,
+    double letterSpacing = defaultLetterSpacing,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: AppInfo.name,
+        style: styleOf(fontSize: fontSize, letterSpacing: letterSpacing),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      AppInfo.name,
+      maxLines: 1,
+      softWrap: false,
+      style: styleOf(
+        fontSize: fontSize,
+        letterSpacing: letterSpacing,
+        color: color,
+        height: height,
+        shadows: shadows,
+      ),
+    );
+  }
+}
+
 /// "A" monogram stand-in for the wind-rose mark when the image asset is
 /// unavailable. Fills the same [size]×[size] square the icon glyph did, so
 /// layout is identical either way. The dark form's black87 tile keeps it
@@ -114,15 +224,10 @@ class _WordmarkFallback extends StatelessWidget {
       children: [
         _MonogramFallback(size: height),
         const SizedBox(width: AppSpacing.sm),
-        Text(
-          'Anemos',
-          style: TextStyle(
-            fontFamily: 'Cinzel',
-            fontWeight: FontWeight.w600,
-            fontSize: height * 0.32,
-            color: Colors.black87,
-            letterSpacing: 0.5,
-          ),
+        BrandWordmark(
+          fontSize: height * 0.32,
+          letterSpacing: 0.5,
+          color: Colors.black87,
         ),
       ],
     );

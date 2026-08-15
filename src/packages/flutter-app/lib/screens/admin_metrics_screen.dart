@@ -6,6 +6,7 @@ import '../providers/admin_metrics_provider.dart';
 import '../theme/spacing.dart';
 import '../widgets/daily_count_chart.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/gradient_app_bar.dart';
 import '../widgets/health_pane.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
@@ -44,10 +45,17 @@ class _AdminMetricsScreenState extends ConsumerState<AdminMetricsScreen> {
       length: 5,
       initialIndex: widget.initialTabIndex,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Metrics'),
-          bottom: const TabBar(
+        // The house app bar, like every other screen — which also puts the
+        // brand up here. This was the one screen still wearing raw M3 chrome.
+        appBar: const GradientAppBar(
+          title: Text('Metrics'),
+          bottom: TabBar(
             isScrollable: true,
+            // The gradient is dark, so the tabs carry their own light palette
+            // rather than inheriting the surface-toned M3 defaults.
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            indicatorColor: Colors.white,
             tabs: [
               Tab(text: 'Overview'),
               Tab(text: 'Trends'),

@@ -525,15 +525,23 @@ void main() {
     expect(find.byType(WearPackSheetBody), findsNothing);
   });
 
-  testWidgets('icon shows on phone and desktop widths (not narrow-gated)',
-      (tester) async {
+  testWidgets(
+      'phone folds it into the overflow menu; desktop keeps the icon — '
+      'reachable at both widths either way', (tester) async {
+    // The app bar carries the ANEMOS wordmark now, and a phone cannot fit
+    // five icons beside it. Wear & pack is one of the two that fold into the
+    // ⋮ at narrow widths — moved, never dropped.
     await _pump(
       tester,
       trip: _trip(),
       report: _warmRainyForecast,
       size: const Size(390, 800),
     );
-    expect(_wearIcon(), findsOneWidget);
+    expect(_wearIcon(), findsNothing);
+
+    await tester.tap(find.byTooltip('More options'));
+    await tester.pumpAndSettle();
+    expect(find.text('What to wear & pack'), findsOneWidget);
 
     await _pump(
       tester,

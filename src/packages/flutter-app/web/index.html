@@ -68,11 +68,31 @@
     Boot splash shown while flutter_bootstrap.js + main.dart.js download and
     the engine starts. Pixel-matched to the in-app SplashScreen (lib/screens/
     splash_screen.dart) — same gradient, mark geometry (96px bare light mark,
-    no plate), and spinner position — so the flutter-first-frame handoff reads
-    as one continuous screen. If you change dimensions here, change
-    splash_screen.dart too.
+    no plate), wordmark, and spinner position — so the flutter-first-frame
+    handoff reads as one continuous screen. If you change dimensions here,
+    change splash_screen.dart too.
+
+    The native mobile splash (flutter_native_splash) deliberately stays
+    mark-only: it cannot render text, and web is the primary surface.
   -->
   <style>
+    @font-face {
+      /* The brand wordmark, from the very same file the Flutter build
+         publishes (it is in FontManifest.json and the service-worker
+         precache), so there is no second copy to keep in sync and no CSP
+         problem: same-origin satisfies `font-src 'self'`, while Google Fonts
+         would be blocked by `style-src` regardless.
+
+         The path is a Flutter build-layout detail. If an engine upgrade
+         reshuffles assets/, this silently falls back to the serif stack
+         below — check here if the splash wordmark ever stops matching. */
+      font-family: 'Cinzel';
+      src: url('assets/assets/fonts/Cinzel-SemiBold.ttf') format('truetype');
+      font-weight: 600;
+      /* This layer paints before flutter_bootstrap.js, so the 40 KB face is a
+         fresh fetch: show the fallback immediately rather than a blank gap. */
+      font-display: swap;
+    }
     html {
       /* Paints before/if the gradient parses — no white flash. */
       background-color: #00695C;
@@ -115,9 +135,28 @@
       from { transform: translate(-50%, -50%) scale(1); }
       to   { transform: translate(-50%, -50%) scale(1.04); }
     }
+    .splash-wordmark {
+      position: absolute;
+      /* Centre line 74px below the mark's, which clears the 96px mark's
+         bottom edge (+48) with room to spare. Deliberately NOT inside
+         .splash-mark: that element pulses, and the wordmark should not. */
+      top: calc(50% + 74px);
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+      font-weight: 600;
+      font-size: 22px;
+      letter-spacing: 3px;
+      /* Cinzel has no lowercase, so it paints caps on its own — the fallback
+         serif does not, and this keeps the font swap from also being a case
+         change. */
+      text-transform: uppercase;
+      color: #FFFFFF;
+      white-space: nowrap;
+    }
     .splash-spinner {
       position: absolute;
-      top: calc(50% + 96px);
+      top: calc(50% + 124px);
       left: 50%;
       width: 24px;
       height: 24px;
@@ -134,8 +173,11 @@
 <body>
   <div id="splash">
     <div class="splash-mark">
-      <img src="splash/anemos_mark_light.png" alt="Anemos">
+      <!-- Empty alt: the wordmark below is the visible, readable name, so a
+           labelled image here would just announce "Anemos" twice. -->
+      <img src="splash/anemos_mark_light.png" alt="">
     </div>
+    <div class="splash-wordmark">Anemos</div>
     <div class="splash-spinner"></div>
   </div>
 

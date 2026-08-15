@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../constants/app_info.dart';
 import '../l10n/l10n.dart';
 import '../providers/analytics_provider.dart';
 import '../providers/auth_provider.dart';
@@ -72,12 +71,9 @@ class _LandingScreenState extends State<LandingScreen> {
 
     return Scaffold(
       appBar: GradientAppBar(
-        centerTitle: false,
-        title: const BrandBadge(
-          padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-          child: BrandLogo.mark(size: 30),
-        ),
+        // No page title: the landing page's title is the brand. The bar's own
+        // lockup (plated mark + wordmark) comes from GradientAppBar — this
+        // screen sits outside the shell, so it keeps the mark at every width.
         actions: [
           const LanguageMenuButton(),
           TextButton(
@@ -241,24 +237,20 @@ class _LandingHero extends StatelessWidget {
                     ExcludeSemantics(
                       // The mark's Image already carries the "Anemos"
                       // semantic label.
-                      child: Text(
-                        AppInfo.name,
-                        style: TextStyle(
-                          fontFamily: 'Cinzel',
-                          fontWeight: FontWeight.w600,
-                          fontSize: narrow ? 24 : 40,
-                          height: 1.1,
-                          letterSpacing: 1.5,
-                          color: Colors.white,
-                          // Guards the scrim's lighter top-right corner
-                          // (alpha 0.35) against bright photo patches.
-                          shadows: const [
-                            Shadow(
-                                color: Colors.black26,
-                                blurRadius: 8,
-                                offset: Offset(0, 2)),
-                          ],
-                        ),
+                      child: BrandWordmark(
+                        fontSize: narrow ? 24 : 40,
+                        // Caps run wide, so tracking opens up with the size.
+                        letterSpacing: 1.5,
+                        height: 1.1,
+                        color: Colors.white,
+                        // Guards the scrim's lighter top-right corner
+                        // (alpha 0.35) against bright photo patches.
+                        shadows: const [
+                          Shadow(
+                              color: Colors.black26,
+                              blurRadius: 8,
+                              offset: Offset(0, 2)),
+                        ],
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),

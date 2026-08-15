@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../constants/app_info.dart';
 import '../l10n/l10n.dart';
 import '../models/local_guide.dart';
 import '../providers/auth_provider.dart';
@@ -16,7 +15,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import '../theme/spacing.dart';
 import '../widgets/account_menu.dart';
-import '../widgets/brand_logo.dart';
 import '../widgets/continue_chats_section.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/language_menu_button.dart';
@@ -49,12 +47,6 @@ String greetingText(AppLocalizations l10n, Greeting greeting) =>
       Greeting.evening => l10n.homeGreetingEvening,
     };
 
-/// Below this width the wordmark would ellipsize next to the badge (Cinzel
-/// 19px small-caps "ANEMOS" ≈ 80px + badge + gap), so the header drops to the
-/// brand mark alone. Measured on the space the brand Row itself gets — the
-/// [_BrandTitle] LayoutBuilder sits *inside* the tap padding — not on the
-/// whole app-bar title slot.
-const double _wordmarkMinWidth = 145;
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -75,12 +67,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
-  /// Logo-links-home. Note which half of this the traveler actually sees:
-  /// each tab owns its own Scaffold (the shell supplies no app bar), so this
-  /// brand is on screen ONLY at the Home root — [goHome] is therefore a
-  /// no-op-you-can't-see, kept so the brand tap honors the same contract as
-  /// the rail brand (app_shell.dart `_RailBrand`), which CAN be tapped from
-  /// anywhere. The visible half is the scroll back to the top.
+  /// Logo-links-home, plus Home's own extra: scroll back to the top.
+  ///
+  /// [GradientAppBar] already wires [goHome] for every screen inside the
+  /// shell, so this override exists only for the scroll — which is also the
+  /// visible half here. Each tab owns its own Scaffold (the shell supplies no
+  /// app bar), so this particular brand is on screen only at the Home root,
+  /// where [goHome] is a no-op-you-can't-see. It stays for contract parity
+  /// with the rail brand (app_shell.dart `_RailBrand`), which CAN be tapped
+  /// from anywhere.
   void _onBrandTap() {
     goHome(ref);
     if (!_scroll.hasClients) return;
@@ -140,8 +135,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: GradientAppBar(
-        centerTitle: false,
-        title: _BrandTitle(onTap: _onBrandTap),
+        // No page title: on Home the brand IS the title.
+        onBrandTap: _onBrandTap,
         actions: const [LanguageMenuButton(), AccountMenu()],
       ),
       body: SafeArea(
@@ -216,94 +211,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                 const SizedBox(height: AppSpacing.lg),
               ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The Home app bar's brand — the Site ID (Krug) — as ONE tap target at every
-/// width, per the universal logo-links-home convention. Three render states,
-/// keyed off window width (same measurement as the shell's rail check, NOT the
-/// title slot's constraints):
-///  - rail visible (>= kRailBreakpoint): wordmark only — the rail brand
-///    already shows the mark one corner over, so the badge here would be a
-///    duplicate. Still tappable: two brand affordances, same destination.
-///  - no rail: brand mark on a light badge (so the teal/gold logo reads on the
-///    teal app bar) next to the wordmark in white.
-///  - compact slot (< _wordmarkMinWidth): if the brand's own slot can't fit
-///    the full wordmark, the badge shows alone rather than an ellipsized brand.
-///
-/// The [InkWell] is the single target for whichever of those is on screen —
-/// the badge deliberately does NOT carry its own onTap here, or the lockup
-/// would hit-test and ripple twice. The LayoutBuilder sits inside the tap
-/// padding so the compact threshold measures the width the Row actually gets.
-class _BrandTitle extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _BrandTitle({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: context.l10n.shellNavHome,
-      // The mark's Image already carries the "Anemos" semanticLabel and the
-      // wordmark is the literal word, so without excludeSemantics a screen
-      // reader announces the button as "Anemos Anemos".
-      child: Semantics(
-        button: true,
-        label: AppInfo.name,
-        excludeSemantics: true,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: AppRadius.mdAll,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.xs),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final hasRail =
-                      MediaQuery.sizeOf(context).width >= kRailBreakpoint;
-                  final compact = constraints.maxWidth < _wordmarkMinWidth;
-                  const wordmark = Flexible(
-                    child: Text(
-                      AppInfo.name,
-                      overflow: TextOverflow.ellipsis,
-                      // Cinzel has no true lowercase — "Anemos" paints as
-                      // small-caps ANEMOS. Caps run wide, hence the tighter
-                      // size + open tracking.
-                      style: TextStyle(
-                        fontFamily: 'Cinzel',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 19,
-                        letterSpacing: 1.0,
-                        color: Colors.white,
-                      ),
-                    ),
-                  );
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!hasRail)
-                        const BrandBadge(
-                          padding: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.sm,
-                              vertical: AppSpacing.xs),
-                          child: BrandLogo.mark(size: 28),
-                        ),
-                      if (hasRail)
-                        wordmark
-                      else if (!compact) ...const [
-                        SizedBox(width: AppSpacing.sm),
-                        wordmark,
-                      ],
-                    ],
-                  );
-                },
-              ),
             ),
           ),
         ),

@@ -1,34 +1,250 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../constants/app_info.dart';
+import '../l10n/l10n.dart';
+import '../navigation/app_nav.dart';
+import '../navigation/shell_scope.dart';
 import '../theme/app_colors.dart';
+import '../theme/spacing.dart';
+import 'brand_logo.dart';
+
+/// The mark's own size in the brand row: the 28px rose, [BrandBadge]'s
+/// horizontal padding, and the gap before the wordmark.
+const double _markSlot = 28 + AppSpacing.sm * 2 + AppSpacing.sm;
+
+/// The brand's tap padding, which is [AppSpacing.xs] on every side.
+const double _brandPadding = AppSpacing.xs * 2;
+
+/// The interpunct and its gaps. Only ever decides whether the *title* fits,
+/// so an approximation of the glyph is fine where the wordmark's is not.
+const double _separatorSlot = AppSpacing.sm * 2 + 8;
+
+/// How much page title is worth putting on screen at all. Below this there is
+/// nothing left to ellipsize down to, so the title is dropped and the brand
+/// takes the slot. The screens where that bites repeat their title in the
+/// body — trip detail does, deliberately.
+const double _minTitleWidth = 56;
 
 /// App bar painted with [AppColors.brandGradient] — the same teal pair used by
 /// the home hero banner. Use in place of [AppBar] so every screen shares one
 /// header look.
-class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
-  final Widget title;
+///
+/// **This bar carries the brand.** Every screen that uses it shows the ANEMOS
+/// wordmark without doing anything, and no future screen can forget to: the
+/// wordmark is a property of the house app bar, not a convention each screen
+/// re-implements (`docs/zen.md` — explicit over implicit). Pass [title] for the
+/// page's own name; it renders after the brand as `ANEMOS · Page title`. Pass
+/// nothing where the brand *is* the title (Home, Landing).
+///
+/// Three things compete for the title slot, and the priority is fixed:
+///
+/// 1. **The wordmark** — always present, always the same size, never
+///    ellipsized. That is the whole point.
+/// 2. **The page title** — [Flexible], ellipsized, dropped below
+///    [_titleMinWidth].
+/// 3. **The plated mark** — dropped first, and always absent at rail widths,
+///    where `_RailBrand` already shows the rose one corner over on the same
+///    centre line (PR #406). Two roses 80px apart is a duplicate, not a
+///    lockup.
+///
+/// The plate is right here and nowhere else by policy: teal/gold artwork needs
+/// a light plate on gradient chrome and floats bare on neutral surfaces — see
+/// [BrandLogo]'s class doc.
+class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
+  /// The page's own title. Null where the brand stands alone.
+  final Widget? title;
   final List<Widget>? actions;
 
-  /// Null inherits the app-wide AppBarTheme (centered); the home screen passes
-  /// false so the brand mark sits on the left.
+  /// Defaults to false: the brand is left-anchored, so the whole title row is
+  /// too. (The app-wide [AppBarTheme] centres titles; this deliberately wins.)
   final bool? centerTitle;
 
-  const GradientAppBar(
-      {super.key, required this.title, this.actions, this.centerTitle});
+  /// A [TabBar] or similar, as on [AppBar.bottom].
+  final PreferredSizeWidget? bottom;
+
+  /// Overrides what tapping the brand does. Home passes one to add its
+  /// scroll-to-top; everything else inside the shell goes [goHome], and
+  /// everything outside it is not tappable at all — see [ShellScope].
+  final VoidCallback? onBrandTap;
+
+  const GradientAppBar({
+    super.key,
+    this.title,
+    this.actions,
+    this.centerTitle,
+    this.bottom,
+    this.onBrandTap,
+  });
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize =>
+      Size.fromHeight(kToolbarHeight + (bottom?.preferredSize.height ?? 0));
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final inShell = ShellScope.of(context);
+    final onTap = onBrandTap ?? (inShell ? () => goHome(ref) : null);
+
     return AppBar(
-      title: title,
+      title: _BrandTitle(title: title, onTap: onTap, inShell: inShell),
       actions: actions,
-      centerTitle: centerTitle,
+      centerTitle: centerTitle ?? false,
+      bottom: bottom,
       backgroundColor: Colors.transparent,
       foregroundColor: Colors.white,
       flexibleSpace: Container(
         decoration: BoxDecoration(gradient: AppColors.brandGradient),
+      ),
+    );
+  }
+}
+
+/// The app bar's title row: the brand, then the page's own title.
+///
+/// The tap target covers the brand only — tapping a page's name should not
+/// navigate — which is also why `Semantics(excludeSemantics: true)` wraps just
+/// the brand. Wrapping the whole row would swallow the page title from screen
+/// readers and hand the title a "Home" button role it does not have.
+class _BrandTitle extends StatelessWidget {
+  final Widget? title;
+  final VoidCallback? onTap;
+
+  /// Whether this bar is inside the persistent shell — which is what decides
+  /// if there is a rail out there to carry the mark. Window width alone would
+  /// be wrong: the signed-out screens (landing, auth, shared trip) are wide
+  /// too, and dropping the mark there leaves it nowhere.
+  final bool inShell;
+
+  const _BrandTitle(
+      {required this.title, required this.onTap, required this.inShell});
+
+  @override
+  Widget build(BuildContext context) {
+    // Measures the true title slot, so the thresholds above are stated in the
+    // width the row actually gets — the tap padding sits inside this, not
+    // around it.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Same measurement the shell uses to decide rail-vs-bar, not the slot
+        // width: whether the rail is on screen is a window question.
+        final railCarriesMark =
+            inShell && MediaQuery.sizeOf(context).width >= kRailBreakpoint;
+
+        // The ladder, as arithmetic on what the wordmark actually measures —
+        // so it holds under a missing font or a large text-scale setting,
+        // where fixed thresholds would silently start clipping.
+        final slot = constraints.maxWidth;
+        final brandCost = _brandPadding + BrandWordmark.widthIn(context);
+        final titleCost = _separatorSlot + _minTitleWidth;
+
+        final showTitle = title != null && slot >= brandCost + titleCost;
+        final showMark = !railCarriesMark &&
+            slot >= brandCost + _markSlot + (showTitle ? titleCost : 0);
+
+        Widget brand = Padding(
+          padding: const EdgeInsets.all(AppSpacing.xs),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showMark) ...const [
+                BrandBadge(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                  // No onTap of its own: one outer InkWell only, or the brand
+                  // hit-tests and ripples twice over the same pixels.
+                  child: BrandLogo.mark(size: 28),
+                ),
+                SizedBox(width: AppSpacing.sm),
+              ],
+              const BrandWordmark(),
+            ],
+          ),
+        );
+
+        // The mark's Image already carries the "Anemos" semantic label and the
+        // wordmark is the literal word, so without excludeSemantics a screen
+        // reader announces this twice.
+        //
+        // container: true makes this a semantics boundary. Without it the
+        // brand's annotations merge with the page title beside it into one
+        // node — announced as a run-on "Anemos Notifications" that also
+        // claims the brand's button role on behalf of the title.
+        brand = Semantics(
+          container: true,
+          button: onTap != null,
+          label: AppInfo.name,
+          excludeSemantics: true,
+          child: brand,
+        );
+
+        if (onTap != null) {
+          brand = Tooltip(
+            message: context.l10n.shellNavHome,
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: AppRadius.mdAll,
+                child: brand,
+              ),
+            ),
+          );
+        }
+
+        if (!showTitle) {
+          // Nothing left to compete with, so this is the one place a squeeze
+          // can be absorbed: scale rather than clip. In release builds a
+          // RenderFlex overflow does not stripe, it silently cuts glyphs off —
+          // and a truncated wordmark is the exact failure this widget exists
+          // to prevent. The ladder above is supposed to make this unreachable;
+          // brand_everywhere_test asserts it stays that way.
+          return SizedBox(
+            width: constraints.maxWidth,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: AlignmentDirectional.centerStart,
+              child: brand,
+            ),
+          );
+        }
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            brand,
+            const _BrandSeparator(),
+            // The 20 screens that pass a bare Text keep ellipsizing correctly
+            // without any of them being edited.
+            Flexible(
+              child: DefaultTextStyle.merge(
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                child: title!,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The interpunct between the brand and the page title, dimmed so the pairing
+/// reads as "brand, then page" rather than as two equal headings.
+class _BrandSeparator extends StatelessWidget {
+  const _BrandSeparator();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = DefaultTextStyle.of(context).style.color;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      child: ExcludeSemantics(
+        child: Text(
+          '·',
+          style: TextStyle(color: color?.withValues(alpha: 0.55)),
+        ),
       ),
     );
   }
