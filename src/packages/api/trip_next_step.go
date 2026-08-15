@@ -67,48 +67,70 @@ type PlanProgress struct {
 	Phases []PlanPhase `json:"phases,omitempty"`
 }
 
-// PlanPhase is one rung: a stable id, its localized short label, and — where
-// the rung has an exact denominator — its own internal tally. The id is the
-// identity clients and tests key on (locale-independent, unchanged when the
-// copy is reworded); the label is display copy and nothing else.
+// PlanPhase is one rung: a stable id, its localized short label, and at most
+// one trailing number. The id is the identity clients and tests key on
+// (locale-independent, unchanged when the copy is reworded); the label is
+// display copy and nothing else.
+//
+// Progress and Count are DIFFERENT claims and a rung carries at most one.
+// Progress is "how far through this rung are you" and needs an exact
+// denominator. Count is "how many of these do you have" — a rung whose work has
+// no target at all, where a denominator would have to be invented. Keeping them
+// as separate fields is what stops a count from being rendered as "10 of 10".
 type PlanPhase struct {
 	ID       string         `json:"id"`
 	Label    string         `json:"label"`
 	Progress *PhaseProgress `json:"progress,omitempty"`
+	Count    *int           `json:"count,omitempty"`
 }
 
 // PhaseProgress is a rung's INTERNAL progress — the units of work inside one
-// ladder phase, not the ladder itself. Only the bookings rung reports one
-// today: its units are the derived booking slots, so the denominator is exact
-// and Done counts a slot closed EITHER WAY the walk closes it (checked off, or
-// claimed by a real accommodation/segment) — the same test that decides the
-// phase is satisfied, so the tally and the rung's completion cannot disagree.
+// ladder phase, not the ladder itself. Two rungs report one, and both earn it
+// the same way: an exact denominator, and a Done counted by the very test that
+// decides the phase is satisfied, so a tally can never disagree with its rung.
+//   - bookings: the derived booking slots; Done counts a slot closed EITHER WAY
+//     the walk closes it (checked off, or claimed by a real
+//     accommodation/segment). Absent when the trip has no derived slots.
+//   - schedule: the trip's days; Done counts the days walkDayCoverage calls
+//     planned. Absent when the trip is undated — no span, no honest total.
+//
 // The other rungs deliberately stay nil: "3 unscheduled places" and the
 // book_trip aggregate have no honest total (specs/next-step-cta puts the
 // aggregate's parity out of scope), and a made-up denominator is worse than
-// none. Absent whenever the trip has no derived slots at all.
+// none. Destinations have no denominator either — the rung above counts places
+// the traveler chooses to add, and there is no number they are counting toward.
 type PhaseProgress struct {
 	Done  int `json:"done"`
 	Total int `json:"total"`
 }
 
-// planPhaseBookings is the rung the booking-slot walk tallies — named so the
-// ladder table above and the tally below refer to the same rung explicitly,
-// rather than agreeing on a bare string in two places.
-const planPhaseBookings = "bookings"
+// planPhaseItinerary / planPhaseBookings / planPhaseSchedule are the rungs that
+// carry a trailing number — named so the ladder table above and the numbers
+// below refer to the same rung explicitly, rather than agreeing on a bare
+// string in two places.
+const (
+	planPhaseItinerary = "itinerary"
+	planPhaseBookings  = "bookings"
+	planPhaseSchedule  = "schedule"
+)
 
 // planLadder IS the ladder, in order — the phase ids paired with the catalog
-// key for each rung's short label. Five of the six reuse the step titles the
-// card already shows, so the progress sheet and the card speak in one voice
-// (the same reuse staySlotStep makes of review.noLodging); only phase 3 needs
-// its own copy, because it covers lodging AND transport and neither step title
-// names the pair. Adding or reordering a rung here changes the wire, the
-// count, and the sheet together.
+// key for each rung's short label. Most reuse the step titles the card already
+// shows, so the progress sheet and the card speak in one voice (the same reuse
+// staySlotStep makes of review.noLodging); the review.ladder.* rungs are the
+// ones whose step title cannot serve as a label. Adding or reordering a rung
+// here changes the wire, the count, and the sheet together.
+//
+// A rung's label is a PROMISE about its test. "Plan your days" sat on rung 2,
+// whose test is only "some place is on some day" — so a 37-day trip with ten
+// city pins and nothing to do checked it off (Brian, 2026-08-14). The name
+// moved down to the rung that actually walks the days; rung 2 now says what it
+// checks.
 var planLadder = [...]struct{ ID, Key string }{
 	{"dates", "review.next.setDates.title"},
-	{"itinerary", "review.next.planItinerary.title"},
+	{planPhaseItinerary, "review.next.planItinerary.title"},
 	{planPhaseBookings, "review.ladder.bookings"},
-	{"schedule", "review.next.scheduleItems.title"},
+	{planPhaseSchedule, "review.ladder.days"},
 	{"confirm", "review.next.book.title"},
 	{"packing", "review.next.packing.title"},
 }
@@ -117,16 +139,39 @@ var planLadder = [...]struct{ ID, Key string }{
 // the single source of the total the phases below already imply.
 const planLadderTotal = len(planLadder)
 
-// planLadderPhases renders the ladder for one locale, hanging the booking
-// walk's tally on the rung that owns it. The walk is passed in rather than
-// re-run here: it is the same single pass phase 3 decides on, so the sheet's
-// "4 of 11" and the card's step can never come from different counts.
-func planLadderPhases(locale string, slots bookingWalk) []PlanPhase {
+// countDestinations counts the trip's rendered city legs — the stops the map
+// chips and the itinerary headers show — so the number beside "Add your
+// destinations" is the number already on screen rather than a second opinion
+// about what a destination is. Hubless runs ("Other places") never count: the
+// same reason namesAPlace rejects that label, it is a grouping placeholder, not
+// somewhere anyone goes. A revisited city counts once per visit, because that
+// is how the trip renders it.
+func countDestinations(d exportData) int {
+	n := 0
+	for _, leg := range computeTripLegs(d.Trip, d.Items, d.Accommodations) {
+		if leg.Hub != nil {
+			n++
+		}
+	}
+	return n
+}
+
+// planLadderPhases renders the ladder for one locale, hanging each walk's
+// number on the rung that owns it. The walks are passed in rather than re-run
+// here: they are the same single passes phases 2–4 decide on, so the sheet's
+// "10", "4 of 11" and "12 of 37" can never come from different counts than the
+// card's step.
+func planLadderPhases(locale string, slots bookingWalk, days dayCoverage, destinations int) []PlanPhase {
 	phases := make([]PlanPhase, 0, len(planLadder))
 	for _, p := range planLadder {
 		phase := PlanPhase{ID: p.ID, Label: tr(locale, p.Key)}
-		if p.ID == planPhaseBookings && slots.Total > 0 {
+		switch {
+		case p.ID == planPhaseItinerary && destinations > 0:
+			phase.Count = ptrTo(destinations)
+		case p.ID == planPhaseBookings && slots.Total > 0:
 			phase.Progress = &PhaseProgress{Done: slots.Closed, Total: slots.Total}
+		case p.ID == planPhaseSchedule && days.Total > 0:
+			phase.Progress = &PhaseProgress{Done: days.Planned, Total: days.Total}
 		}
 		phases = append(phases, phase)
 	}
@@ -144,17 +189,20 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 		return nil, nil
 	}
 
-	// One pass over the booking checklist, up front: phase 3 picks its step
-	// from it below, and EVERY phase's payload carries its tally — a trip
-	// stopped at "set your dates" still gets to see how much of the booking
-	// rung is already done.
+	// One pass each over the booking checklist, the trip's days and its legs,
+	// up front: phases 3 and 4 pick their steps from the first two below, and
+	// EVERY phase's payload carries all three numbers — a trip stopped at "set
+	// your dates" still gets to see how many stops it has and how much of the
+	// booking and day-planning rungs is already done.
 	slots := walkBookingSlots(data)
+	days := walkDayCoverage(data)
+	destinations := countDestinations(data)
 
 	progress := func(done int) *PlanProgress {
 		return &PlanProgress{
 			Done:   done,
 			Total:  planLadderTotal,
-			Phases: planLadderPhases(locale, slots),
+			Phases: planLadderPhases(locale, slots, days, destinations),
 		}
 	}
 
@@ -170,10 +218,15 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 		}, progress(0)
 	}
 
-	// Phase 2 — an itinerary that exists and is scheduled. The none-scheduled
-	// variant is folded in here (not phase 5): with zero scheduled days the
-	// hub/night walks below would run on air and their prefills would be
-	// meaningless.
+	// Phase 2 — destinations that exist and sit on the calendar. The
+	// none-scheduled variant is folded in here (not phase 5): with zero
+	// scheduled days the hub/night walks below would run on air and their
+	// prefills would be meaningless.
+	//
+	// The test is deliberately weak — one dated place clears it — and the rung
+	// is named for exactly that: adding destinations. City-filler rows count
+	// here, because a filler IS a destination pin even though the app hides its
+	// tile. Whether those days have anything TO DO is phase 4's question.
 	if len(data.Items) == 0 {
 		return &NextStep{
 			Kind:       "plan_itinerary",
@@ -185,8 +238,11 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 	if unscheduled := countUnscheduled(data.Items); unscheduled == len(data.Items) {
 		count := unscheduled
 		return &NextStep{
-			Kind:       "plan_itinerary",
-			Title:      tr(locale, "review.next.planItinerary.title"),
+			Kind: "plan_itinerary",
+			// Its own title: the places are already added, so "Add your
+			// destinations" over "3 items have no day assigned" would name a
+			// job that is done and ask for one it doesn't describe.
+			Title:      tr(locale, "review.next.planItinerary.undated"),
 			Detail:     unscheduledMessage(locale, count),
 			Count:      &count,
 			SeedPrompt: seedPlanItineraryUnscheduled(data, count),
@@ -257,20 +313,24 @@ func deriveNextStep(locale string, now time.Time, data exportData, findings []Fi
 		}
 	}
 
-	// Phase 4 — schedule cleanup: leftover unscheduled places and empty days.
-	// Read via the shared helpers, not by sniffing findings — empty-day
-	// findings share category "packing" with the over-packed warnings and
-	// carry no distinguishing field.
+	// Phase 4 — the days themselves: leftover unscheduled places, and days with
+	// nothing planned. Read via the shared walk, not by sniffing findings —
+	// empty-day findings share category "packing" with the over-packed warnings
+	// and carry no distinguishing field.
 	unscheduled := countUnscheduled(data.Items)
-	emptyRuns := emptyDayRuns(data.Items)
+	emptyRuns := days.Empty
 	if unscheduled > 0 || len(emptyRuns) > 0 {
 		step := &NextStep{
-			Kind:       "schedule_items",
-			Title:      tr(locale, "review.next.scheduleItems.title"),
+			Kind: "schedule_items",
+			// Two jobs live on this rung, so the title names the one the
+			// traveler is actually being handed. Loose places are tidying; a
+			// day with nothing on it is the rung's own name.
+			Title:      tr(locale, "review.ladder.days"),
 			SeedPrompt: seedScheduleItems(data, unscheduled, emptyRuns),
 		}
 		switch {
 		case unscheduled > 0:
+			step.Title = tr(locale, "review.next.scheduleItems.title")
 			step.Detail = unscheduledMessage(locale, unscheduled)
 			step.Count = &unscheduled
 		case emptyRuns[0].first == emptyRuns[0].last:

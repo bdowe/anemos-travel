@@ -33,10 +33,17 @@ Future<void> showPlanProgressSheet(
     // sheets: a six-row list reads stranded at full bleed.
     constraints: const BoxConstraints(maxWidth: 560),
     builder: (sheetContext) {
+      final screenHeight = MediaQuery.of(sheetContext).size.height;
       return SafeArea(
         child: ConstrainedBox(
+          // A FLOOR as well as a ceiling, unlike the sibling sheets. This is
+          // the only one whose content has a fixed, short length — six rows
+          // never grow — so on a tall window it hugged the bottom edge and
+          // read as a footer rather than a panel (Brian, 2026-08-14). The
+          // slack falls below the last rung; rows stay top-aligned.
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(sheetContext).size.height * 0.8,
+            minHeight: screenHeight * 0.62,
+            maxHeight: screenHeight * 0.8,
           ),
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(
@@ -172,15 +179,26 @@ class _PhaseRow extends StatelessWidget {
     final s = step;
     final showStep = s != null && s.kind != 'all_set';
     final detail = s?.detail;
+    // Rungs whose step title IS the rung label (the schedule rung, when the
+    // driver is empty days) would otherwise print "Plan your days" twice, in
+    // two colors. The label already said it; only the detail adds anything.
+    final showTitle = showStep && s.title != phase.label;
 
-    // The rung's own tally ("4 of 11"), for rungs that have one. It is the
-    // only number that moves while a many-city trip sits on "3 of 6" —
-    // eleven booking slots close one at a time under a single rung. The rung
-    // label supplies the noun, so this reuses the bare "{n} of {total}" the
-    // eyebrow counter already speaks.
+    // The rung's own number. A tally ("4 of 11") for rungs measured against an
+    // exact denominator — the only number that moves while a many-city trip
+    // sits on "3 of 6", since eleven booking slots close one at a time under a
+    // single rung. Otherwise a bare count ("10") for a rung with no target to
+    // progress toward; rendering that as a tally would say "10 of 10", which
+    // claims the rung is finished. The server never sets both. Either way the
+    // rung label supplies the noun, so this reuses the bare "{n} of {total}"
+    // the eyebrow counter already speaks and adds no copy of its own.
     final tally = phase.progress;
-    final tallyLabel =
-        tally == null ? null : l10n.nextStepProgress(tally.done, tally.total);
+    final count = phase.count;
+    final String? tallyLabel = tally != null
+        ? l10n.nextStepProgress(tally.done, tally.total)
+        : count != null
+            ? '$count'
+            : null;
 
     return Semantics(
       label: [phase.label, stateLabel, if (tallyLabel != null) tallyLabel]
@@ -209,11 +227,12 @@ class _PhaseRow extends StatelessWidget {
                   ),
                   if (showStep) ...[
                     const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      s.title,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.primary),
-                    ),
+                    if (showTitle)
+                      Text(
+                        s.title,
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.colorScheme.primary),
+                      ),
                     if (detail != null && detail.isNotEmpty)
                       Text(
                         detail,

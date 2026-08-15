@@ -196,3 +196,84 @@ Four defects the first cut of the walk shipped with, all now fixed and pinned:
   `transportHandsOff` from the same lookup the tap performs, and `_setRowMode`
   invalidates the review (the sync's `_sameTodoState` gate compares only
   key+booked, so a mode-only edit never re-read it).
+
+### "Plan your days" told the truth about the wrong rung (2026-08-14)
+
+Dogfooding a 37-day, 10-destination trip, Brian opened the progress sheet and
+found "Plan your days" checked on a trip with no activities at all. The rung's
+test is `len(items) > 0 && at least one item has a day` — an *any*, not an
+*all* — and the ten rows satisfying it were **city fillers**, the placeholders
+`create_itinerary` emits for a day with no specific activity, which the app
+HIDES (`isCityFiller`, trip_detail_derivation.dart). The server was checking a
+rung off against places the traveler could not see.
+
+**Rename over re-predicate.** The alternative — make rung 2 demand real
+activities — was rejected: it would have dropped an actively-booking traveler
+back to step 2 and held eleven flights hostage to day planning, which is not
+the order anyone books a trip in. So the *label* moved to the rung whose test
+it actually describes:
+
+| rung | was | now |
+|---|---|---|
+| 2 (`itinerary`) | Plan your days | **Add your destinations** |
+| 4 (`schedule`) | Tidy up your schedule | **Plan your days** |
+
+Ids did not move — they are identity, the labels are copy — so the wire, the
+client's ValueKeys and every test key are unchanged. `review.ladder.days`
+carries the exact strings rung 2 gave up, in both languages, so no wording is
+new. Rung 4's *step* title stays "Tidy up your schedule" when loose places
+drive it and becomes "Plan your days" when an empty day does; the sheet
+suppresses a step title identical to its rung label rather than printing it
+twice.
+
+**What made the rename safe was fixing rung 4 underneath it.** Renaming alone
+would have handed the promise to a rung that could not keep it:
+
+- `emptyDayRuns` counted ANY item, fillers included — so the rows that lied to
+  rung 2 would have lied to rung 4 too. `isCityFiller` is now ported to Go,
+  with a documented divergence (no address-regex fallback) and twin fixture
+  tables in `city_filler_test.go` ↔ `test/trip_detail_derivation_test.dart`,
+  per docs/zen.md's rule for a second implementation.
+- It also scanned only first-to-last scheduled day, so ONE dated item collapsed
+  the window to a point and declared the trip scheduled — the same bug one
+  activity later. The window is now the whole trip.
+- …minus the departure day. Extending to the literal span put "Day 2 has
+  nothing planned" on a one-night trip whose traveler flies home that morning
+  (`TestReviewTrip_CleanTripNoFindings` caught it). Plannable days = the trip's
+  nights, the unit the rest of the app already measures a stay in.
+- Travel days count as planned when a real (non-auto, non-dismissed) segment
+  lands on them. Without this the rung would have traded one lie for another,
+  calling the day you fly to Kraków empty. Booking *to-dos* deliberately do not
+  count: intending to book is not a plan for the day.
+
+`walkDayCoverage` is the single pass all of this lives in — Trip Health's
+empty-day findings, rung 4's test and rung 4's tally read the same value, so
+they cannot disagree. That earns the schedule rung a `progress` tally on the
+same terms the bookings rung has one: an exact denominator, and a Done counted
+by the very test that satisfies the rung. On Brian's trip it reads **0 of 36**,
+which is the number that was missing — a rung sitting quietly at "later" says
+nothing about how much of it is undone.
+
+**Blast radius, accepted:** every dated trip with unplanned days now gains one
+`info` health finding and stalls at rung 4, so "Book everything", "Start your
+packing list" and the all-set celebration are harder to reach. That is the
+honest ladder; the tally is what keeps it from feeling stuck.
+
+**Count vs tally (Brian, same day, after first review).** The destinations rung
+was going to ship with no number — the tally rule says "exact denominator or
+nothing", and destinations have none. Brian asked for the badge back, which is
+the right call for a different reason: the number he wants is not progress, it
+is *how big is this trip*. So `PlanPhase` grows a second, separate field,
+`count`, and a rung carries at most one of the two. Keeping them apart is the
+whole point — a count squeezed into `progress` renders "10 of 10", which claims
+the rung is finished. The number is `countDestinations`: the trip's rendered
+legs with a hub, so it equals the map chips and the itinerary headers rather
+than being a third opinion about what a destination is (hubless "Other places"
+runs excluded, a revisited city counted once per visit, absent — not zero — on
+a trip with no places).
+
+**Sheet placement (same PR).** The sheet sized to its content, so six short
+rows anchored to the bottom ~46% of a tall window and read as a footer. It now
+carries a `minHeight` floor of 62% of the window under the existing 80% cap —
+the only Tier-A sheet with a floor, because it is the only one whose content
+has a fixed, short length.

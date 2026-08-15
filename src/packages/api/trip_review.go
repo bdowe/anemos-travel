@@ -208,21 +208,74 @@ type dayRun struct {
 	first, last int
 }
 
-// emptyDayRuns returns the runs of consecutive empty days between the first
-// and last scheduled day, collapsed exactly the way checkDensity reports them.
-// Extracted so deriveNextStep (trip_next_step.go) reads the same runs instead
-// of sniffing empty-day findings by convention (they share category "packing"
-// with the over-packed warnings and carry no distinguishing field). Nil when
-// no item is scheduled at all.
-func emptyDayRuns(items []store.ItineraryItem) []dayRun {
-	counts := map[int]int{}
+// isCityFiller reports the AI's "city filler" placeholder — an item whose name
+// is just the city (or day-trip hub) it renders under, emitted by
+// create_itinerary for days with no specific activities.
+//
+// SECOND IMPLEMENTATION, deliberately: the Flutter app owns the first
+// (isCityFiller, lib/screens/trip_detail_derivation.dart) and HIDES these rows,
+// so a server that counts them speaks about places the traveler cannot see —
+// which is exactly how "Plan your days" came to check itself off on a trip with
+// nothing planned. docs/zen.md requires a parity contract for the second
+// implementation: twin fixture tables in city_filler_test.go and
+// test/trip_detail_derivation_test.dart, each naming the other.
+//
+// One DOCUMENTED divergence, pinned in both tables: the Dart predicate compares
+// against cityOf(), which falls back to a regex over the item's address when
+// the city column is empty. The server has no copy of that heuristic and is not
+// growing one — a second regex would drift. AI-emitted fillers always set city,
+// so the divergence only reaches hand-made rows with an empty city column,
+// where the server is merely less aggressive about hiding.
+func isCityFiller(it store.ItineraryItem) bool {
+	name := strings.ToLower(strings.TrimSpace(it.Name))
+	if name == "" {
+		return false
+	}
+	eq := func(s *string) bool {
+		return s != nil && strings.ToLower(strings.TrimSpace(*s)) == name
+	}
+	return eq(it.City) || eq(it.DayTripFrom)
+}
+
+// dayCoverage is the trip's day-by-day planning state, in ONE pass: which days
+// carry real content, the runs that do not, and the exact denominator the
+// ladder's "Plan your days" rung reports. Trip Health's empty-day findings, the
+// ladder's rung-4 test and that rung's tally all read this one value, so they
+// cannot disagree — the doctrine walkBookingSlots already follows for rung 3.
+type dayCoverage struct {
+	Planned int      // days inside Total carrying real content
+	Total   int      // PLANNABLE days (see walkDayCoverage); 0 when undated
+	Empty   []dayRun // runs of consecutive days with nothing planned
+}
+
+// walkDayCoverage decides what "a planned day" means, once.
+//
+// A day counts as planned when it carries at least one non-filler itinerary
+// item, OR a real transport segment departing/arriving on it: travel days ARE
+// planned days, and without that an eleven-flight trip would trade one lie
+// ("Plan your days" checked with nothing planned) for another ("Day 5 has
+// nothing planned" on the day you fly to Kraków). Booking TO-DOS deliberately
+// do not count — intending to book transport is not yet a plan for the day, and
+// counting them would let the todo list silently satisfy a rung about the
+// itinerary.
+//
+// The span is the WHOLE trip, not the first-to-last scheduled day it used to
+// be: that older window made a single dated item enough to declare a 37-day
+// trip scheduled, and hid every day past the last one. Undated trips have no
+// honest span, so they keep the old min..max window and report no denominator.
+//
+// PLANNABLE days are the span minus its last day, which is the day you leave —
+// there is nothing to plan on it, and flagging it would put a finding on every
+// tidy trip in the app. That count is the trip's nights, the unit the rest of
+// the app already measures a stay in. A single-day trip keeps its one day.
+func walkDayCoverage(d exportData) dayCoverage {
+	real := map[int]bool{}
 	minDay, maxDay := 0, 0
-	for _, it := range items {
-		if it.Day == nil {
-			continue
+	mark := func(day int) {
+		if day < 1 {
+			return
 		}
-		day := int(*it.Day)
-		counts[day]++
+		real[day] = true
 		if minDay == 0 || day < minDay {
 			minDay = day
 		}
@@ -230,26 +283,64 @@ func emptyDayRuns(items []store.ItineraryItem) []dayRun {
 			maxDay = day
 		}
 	}
-	if len(counts) == 0 {
-		return nil
-	}
-	var runs []dayRun
-	for day := minDay; day <= maxDay; day++ {
-		if counts[day] != 0 {
+	for _, it := range d.Items {
+		if it.Day == nil || isCityFiller(it) {
 			continue
 		}
-		first := day
-		for day < maxDay && counts[day+1] == 0 {
+		mark(int(*it.Day))
+	}
+
+	cov := dayCoverage{Total: tripDayCount(d.Trip)}
+	if cov.Total > 1 {
+		cov.Total-- // drop the departure day
+	}
+	if cov.Total > 0 && d.Trip.StartDate.Valid {
+		start := d.Trip.StartDate.Time
+		for _, s := range d.Segments {
+			if s.Auto || s.Dismissed {
+				continue
+			}
+			for _, when := range []pgtype.Date{s.DepartDate, s.ArriveDate} {
+				if !when.Valid {
+					continue
+				}
+				if day := nightsBetween(start, when.Time) + 1; day <= cov.Total {
+					mark(day)
+				}
+			}
+		}
+	}
+
+	first, last := 1, cov.Total
+	if cov.Total == 0 {
+		// Undated: the only span we can speak for is the one the items
+		// themselves describe. No items, no runs — same as before.
+		if len(real) == 0 {
+			return cov
+		}
+		first, last = minDay, maxDay
+	}
+	for day := first; day <= last; day++ {
+		if real[day] {
+			cov.Planned++
+			continue
+		}
+		runStart := day
+		for day < last && !real[day+1] {
 			day++
 		}
-		runs = append(runs, dayRun{first: first, last: day})
+		cov.Empty = append(cov.Empty, dayRun{first: runStart, last: day})
 	}
-	return runs
+	return cov
 }
 
-// checkDensity flags empty days between the first and last scheduled day, and
+// checkDensity flags days with nothing planned (walkDayCoverage owns what that
+// means — whole trip span, city fillers excluded, travel days included) and
 // over-packed days (more than 6 items, or two+ items sharing a time_of_day).
-// Buckets by absolute day so a day split across hubs still counts once.
+// Buckets by absolute day so a day split across hubs still counts once. The
+// zero-dated-items early return stands: "no places saved yet" is
+// checkUnscheduled's finding to make, and one empty run spanning the whole trip
+// would only repeat it.
 func checkDensity(locale string, d exportData) []Finding {
 	tripID := d.Trip.ID.String()
 	buckets := map[int][]store.ItineraryItem{}
@@ -273,7 +364,7 @@ func checkDensity(locale string, d exportData) []Finding {
 	var out []Finding
 	// One finding per empty-day run, anchored on the run's first day (that's
 	// where tap-to-scroll lands).
-	for _, r := range emptyDayRuns(d.Items) {
+	for _, r := range walkDayCoverage(d).Empty {
 		msg := tr(locale, "review.emptyDay", r.first)
 		if r.last > r.first {
 			msg = tr(locale, "review.emptyDayRange", r.first, r.last)

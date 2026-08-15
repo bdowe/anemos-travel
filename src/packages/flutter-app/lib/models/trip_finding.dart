@@ -206,12 +206,23 @@ class PlanPhase {
   final String id;
   final String label;
 
-  /// The rung's own tally, when it has an exact denominator — today only the
-  /// bookings rung, whose units are the trip's derived booking slots. Null
-  /// means the rung has nothing honest to count, NOT zero.
+  /// The rung's own tally, when it has an exact denominator: the bookings
+  /// rung's derived slots, the schedule rung's plannable days. Null means the
+  /// rung has nothing honest to count, NOT zero.
   final PhaseProgress? progress;
 
-  const PlanPhase({required this.id, required this.label, this.progress});
+  /// A bare count, for a rung whose work has no target to progress toward —
+  /// the destinations rung. Distinct from [progress] on purpose: a count
+  /// rendered as a tally would read "10 of 10", i.e. finished. At most one of
+  /// the two is ever set.
+  final int? count;
+
+  const PlanPhase({
+    required this.id,
+    required this.label,
+    this.progress,
+    this.count,
+  });
 
   factory PlanPhase.fromJson(Map<String, dynamic> json) =>
       _$PlanPhaseFromJson(json);

@@ -107,6 +107,77 @@ func TestCheckDensity_EmptyDayRuns(t *testing.T) {
 	}
 }
 
+// walkDayCoverage is the ONE definition of "a planned day" — Trip Health's
+// empty-day findings, the ladder's rung 4 and that rung's tally all read it, so
+// they cannot disagree about what counts.
+func TestWalkDayCoverage(t *testing.T) {
+	// 2026-09-01 → 09-05 is a 5-day span, so 4 plannable days (you fly home on
+	// the 5th and there is nothing to plan on it).
+	trip := store.Trip{ID: uuid.New(),
+		StartDate: dateVal(t, "2026-09-01"), EndDate: dateVal(t, "2026-09-05")}
+
+	t.Run("city fillers are not content", func(t *testing.T) {
+		cov := walkDayCoverage(exportData{Trip: trip, Items: []store.ItineraryItem{
+			{ID: uuid.New(), Name: "Prague", City: strp("Prague"), Day: i32p(1)},
+			{ID: uuid.New(), Name: "Prague", City: strp("Prague"), Day: i32p(2)},
+		}})
+		if cov.Planned != 0 || cov.Total != 4 {
+			t.Fatalf("coverage = %d of %d, want 0 of 4", cov.Planned, cov.Total)
+		}
+		if len(cov.Empty) != 1 || cov.Empty[0].first != 1 || cov.Empty[0].last != 4 {
+			t.Fatalf("empty runs = %+v, want one run covering 1–4", cov.Empty)
+		}
+	})
+
+	t.Run("the departure day is never empty", func(t *testing.T) {
+		// Days 1–4 covered; day 5 (departure) is deliberately outside the span.
+		var items []store.ItineraryItem
+		for day := 1; day <= 4; day++ {
+			items = append(items, store.ItineraryItem{
+				ID: uuid.New(), Name: "Museum", City: strp("Prague"), Day: i32p(int32(day))})
+		}
+		cov := walkDayCoverage(exportData{Trip: trip, Items: items})
+		if cov.Planned != 4 || cov.Total != 4 || len(cov.Empty) != 0 {
+			t.Fatalf("coverage = %d of %d, empty %+v, want a clean 4 of 4",
+				cov.Planned, cov.Total, cov.Empty)
+		}
+	})
+
+	t.Run("real segments fill their travel days, drafts do not", func(t *testing.T) {
+		d := exportData{Trip: trip, Items: []store.ItineraryItem{
+			{ID: uuid.New(), Name: "Museum", City: strp("Prague"), Day: i32p(1)},
+		}}
+		d.Segments = []store.TripSegment{{ID: uuid.New(), Mode: "train",
+			DepartDate: dateVal(t, "2026-09-02"), ArriveDate: dateVal(t, "2026-09-03")}}
+		if cov := walkDayCoverage(d); cov.Planned != 3 {
+			t.Fatalf("planned = %d, want 3 (day 1 + the two travel days)", cov.Planned)
+		}
+		d.Segments[0].Auto = true
+		if cov := walkDayCoverage(d); cov.Planned != 1 {
+			t.Fatalf("an itinerary-seeded draft must not fill a day: %+v", cov)
+		}
+		d.Segments[0].Auto, d.Segments[0].Dismissed = false, true
+		if cov := walkDayCoverage(d); cov.Planned != 1 {
+			t.Fatalf("a dismissed segment must not fill a day: %+v", cov)
+		}
+	})
+
+	t.Run("undated trips keep the item window and report no denominator", func(t *testing.T) {
+		cov := walkDayCoverage(exportData{
+			Trip: store.Trip{ID: uuid.New()},
+			Items: []store.ItineraryItem{
+				{ID: uuid.New(), Name: "A", Day: i32p(1)},
+				{ID: uuid.New(), Name: "C", Day: i32p(3)},
+			}})
+		if cov.Total != 0 {
+			t.Fatalf("total = %d, want 0 — an undated trip has no honest span", cov.Total)
+		}
+		if len(cov.Empty) != 1 || cov.Empty[0].first != 2 || cov.Empty[0].last != 2 {
+			t.Fatalf("empty runs = %+v, want just day 2", cov.Empty)
+		}
+	})
+}
+
 func TestCheckLodging_GateAndCoverage(t *testing.T) {
 	trip := store.Trip{ID: uuid.New(),
 		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-04")} // 3 nights: 1,2,3

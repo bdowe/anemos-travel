@@ -267,11 +267,16 @@ var messages = map[string]map[string]string{
 	"review.fix.setDates":         {"en": "Set dates", "es": "Añadir fechas"},
 	"review.itemBeyondSpan":       {"en": "%q is on day %d, past the trip's %d-day span.", "es": "%q está en el día %d, más allá de la duración de %d días del viaje."},
 	// review.ladder.* — rung labels for the plan-progress sheet, needed only by
-	// the rungs with no step title of their own. Phase 3 covers lodging AND
-	// transport, so neither review.next.addLodging/addTransport title names it;
-	// every other rung reuses its step title (see planLadder).
+	// the rungs whose step title cannot serve as a label. Phase 3 covers lodging
+	// AND transport, so neither review.next.addLodging/addTransport title names
+	// it; phase 4 covers loose places AND empty days, and only the second is
+	// what the rung promises. The rest reuse their step title (see planLadder).
 	"review.ladder.bookings": {"en": "Book travel & stays", "es": "Reserva transporte y alojamiento"},
-	"review.mayBeClosed":     {"en": "%s may be closed on %s (Day %d).", "es": "%s puede estar cerrado el %s (día %d)."},
+	// The exact strings review.next.planItinerary.title used to carry: the name
+	// moved to the rung that actually walks the days, so no wording — and no
+	// translation — is new here.
+	"review.ladder.days": {"en": "Plan your days", "es": "Planifica tus días"},
+	"review.mayBeClosed": {"en": "%s may be closed on %s (Day %d).", "es": "%s puede estar cerrado el %s (día %d)."},
 	// review.next.* — the Next Step CTA ladder (trip_next_step.go). Titles are
 	// short imperatives; details are one supporting line. The booking-slot walk
 	// (phase 3) builds its own bookStay/bookTransport copy from the slot; the
@@ -295,26 +300,30 @@ var messages = map[string]map[string]string{
 	"review.next.bookTransport.genericHome": {"en": "Book transport home", "es": "Reserva el transporte de vuelta"},
 	"review.next.packing.detail":            {"en": "Your packing checklist is empty.", "es": "Tu lista de equipaje está vacía."},
 	"review.next.packing.title":             {"en": "Start your packing list", "es": "Empieza tu lista de equipaje"},
-	"review.next.planItinerary.empty":       {"en": "No places saved yet — plan your days in chat.", "es": "Aún no hay lugares guardados — planifica tus días en el chat."},
-	"review.next.planItinerary.title":       {"en": "Plan your days", "es": "Planifica tus días"},
-	"review.next.scheduleItems.title":       {"en": "Tidy up your schedule", "es": "Ordena tu agenda"},
-	"review.next.setDates.detail":           {"en": "Dates unlock lodging, transport and day-by-day checks.", "es": "Las fechas desbloquean el alojamiento, el transporte y las comprobaciones día a día."},
-	"review.next.setDates.title":            {"en": "Set your travel dates", "es": "Elige las fechas del viaje"},
-	"review.noDates":                        {"en": "Add trip dates to unlock day-by-day checks.", "es": "Añade las fechas del viaje para desbloquear las comprobaciones día a día."},
-	"review.noLodging":                      {"en": "No lodging booked for the night of %s.", "es": "No hay alojamiento reservado para la noche del %s."},
-	"review.noLodgingRange":                 {"en": "No lodging booked for the nights of %s – %s (%d nights).", "es": "No hay alojamiento reservado para las noches del %s al %s (%d noches)."},
-	"review.noTransport":                    {"en": "No transport booked from %s to %s.", "es": "No hay transporte reservado de %s a %s."},
-	"review.overBudget":                     {"en": "Over budget by %.2f %s.", "es": "Te has pasado del presupuesto por %.2f %s."},
-	"review.packedDay":                      {"en": "Day %d has %d items planned — that may be too packed.", "es": "El día %d tiene %d actividades planificadas — puede que sea demasiado."},
-	"review.rainLikely":                     {"en": "Rain likely on Day %d (%s) — pack an umbrella.", "es": "Es probable que llueva el día %d (%s) — lleva paraguas."},
-	"review.timeOfDayCollision":             {"en": "Day %d has %d things scheduled for the %s.", "es": "El día %d tiene %d cosas programadas para %s."},
-	"review.tod.afternoon":                  {"en": "afternoon", "es": "la tarde"},
-	"review.tod.evening":                    {"en": "evening", "es": "la noche"},
-	"review.tod.morning":                    {"en": "morning", "es": "la mañana"},
-	"review.unscheduledMany":                {"en": "%d items have no day assigned — schedule them to see them on the day plan.", "es": "%d actividades no tienen día asignado — prográmalas para verlas en el plan diario."},
-	"review.unscheduledOne":                 {"en": "1 item has no day assigned — schedule it to see it on the day plan.", "es": "1 actividad no tiene día asignado — prográmala para verla en el plan diario."},
-	"review.veryCold":                       {"en": "Day %d (%s) could be very cold (%.0f°C) — pack warm layers.", "es": "El día %d (%s) puede hacer mucho frío (%.0f °C) — lleva ropa de abrigo."},
-	"review.veryHot":                        {"en": "Day %d (%s) could be very hot (%.0f°C) — plan for the heat.", "es": "El día %d (%s) puede hacer mucho calor (%.0f °C) — prepárate para el calor."},
+	"review.next.planItinerary.empty":       {"en": "No places saved yet — add your destinations in chat.", "es": "Aún no hay lugares guardados — añade tus destinos en el chat."},
+	// Rung 2's test is "some place is on some day", so its title says exactly
+	// that much. It used to say "Plan your days", which promised a filled
+	// calendar and checked itself off against ten bare city pins.
+	"review.next.planItinerary.title":   {"en": "Add your destinations", "es": "Añade tus destinos"},
+	"review.next.planItinerary.undated": {"en": "Put your places on the calendar", "es": "Pon tus lugares en el calendario"},
+	"review.next.scheduleItems.title":   {"en": "Tidy up your schedule", "es": "Ordena tu agenda"},
+	"review.next.setDates.detail":       {"en": "Dates unlock lodging, transport and day-by-day checks.", "es": "Las fechas desbloquean el alojamiento, el transporte y las comprobaciones día a día."},
+	"review.next.setDates.title":        {"en": "Set your travel dates", "es": "Elige las fechas del viaje"},
+	"review.noDates":                    {"en": "Add trip dates to unlock day-by-day checks.", "es": "Añade las fechas del viaje para desbloquear las comprobaciones día a día."},
+	"review.noLodging":                  {"en": "No lodging booked for the night of %s.", "es": "No hay alojamiento reservado para la noche del %s."},
+	"review.noLodgingRange":             {"en": "No lodging booked for the nights of %s – %s (%d nights).", "es": "No hay alojamiento reservado para las noches del %s al %s (%d noches)."},
+	"review.noTransport":                {"en": "No transport booked from %s to %s.", "es": "No hay transporte reservado de %s a %s."},
+	"review.overBudget":                 {"en": "Over budget by %.2f %s.", "es": "Te has pasado del presupuesto por %.2f %s."},
+	"review.packedDay":                  {"en": "Day %d has %d items planned — that may be too packed.", "es": "El día %d tiene %d actividades planificadas — puede que sea demasiado."},
+	"review.rainLikely":                 {"en": "Rain likely on Day %d (%s) — pack an umbrella.", "es": "Es probable que llueva el día %d (%s) — lleva paraguas."},
+	"review.timeOfDayCollision":         {"en": "Day %d has %d things scheduled for the %s.", "es": "El día %d tiene %d cosas programadas para %s."},
+	"review.tod.afternoon":              {"en": "afternoon", "es": "la tarde"},
+	"review.tod.evening":                {"en": "evening", "es": "la noche"},
+	"review.tod.morning":                {"en": "morning", "es": "la mañana"},
+	"review.unscheduledMany":            {"en": "%d items have no day assigned — schedule them to see them on the day plan.", "es": "%d actividades no tienen día asignado — prográmalas para verlas en el plan diario."},
+	"review.unscheduledOne":             {"en": "1 item has no day assigned — schedule it to see it on the day plan.", "es": "1 actividad no tiene día asignado — prográmala para verla en el plan diario."},
+	"review.veryCold":                   {"en": "Day %d (%s) could be very cold (%.0f°C) — pack warm layers.", "es": "El día %d (%s) puede hacer mucho frío (%.0f °C) — lleva ropa de abrigo."},
+	"review.veryHot":                    {"en": "Day %d (%s) could be very hot (%.0f°C) — plan for the heat.", "es": "El día %d (%s) puede hacer mucho calor (%.0f °C) — prepárate para el calor."},
 
 	"share.aTraveler":              {"en": "a traveler", "es": "un viajero"},
 	"share.dateWithYear":           {"en": "%s, %d", "es": "%s de %d"},
