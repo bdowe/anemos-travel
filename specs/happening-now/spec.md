@@ -158,6 +158,12 @@ made the old one wrong.
   line, summary — with the Live pill and "Day N of M" in the countdown's slot,
   and the trip's own duration chip suppressed because "Day 1 of 3" already
   names the span.
+- **The route band is the trips list's, not Home's.** The live card is the
+  one card that renders on both surfaces at once (AppShell's IndexedStack
+  keeps both alive), and two flutter_map instances racing for the same tiles
+  cancel each other's requests until BOTH render blank — verified A/B/A in a
+  browser. The trips list keeps the band; Home's copy carries the same facts
+  without it. The Up-next hero, which lives on one surface, is unaffected.
 - **The booking nudge stays off a started trip.** It is pre-departure copy
   ("first leg departs …"), and its window gate fires on any unbooked future
   departure — including a return leg, mid-trip. It was hero-only, never on the

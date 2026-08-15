@@ -49,6 +49,20 @@ class TripHeroCard extends StatelessWidget {
   /// read as a contradiction waiting to happen.
   final bool showDuration;
 
+  /// Whether to mount the cached route band. Off wherever a SECOND band for
+  /// the same trip would be alive at the same time: two flutter_map instances
+  /// racing for the same tile URLs cancel each other's requests
+  /// (`net::ERR_ABORTED`) and BOTH end up blank, which is worse than no band.
+  ///
+  /// That is the live trip's situation and only the live trip's: its card is
+  /// the one that renders on Home AND the trips list, and AppShell's
+  /// IndexedStack keeps both alive at once. Verified A/B/A in a browser —
+  /// black with Home's band mounted, satellite tiles without it, on the same
+  /// trip and the same cache. So the trips list keeps the band and Home's
+  /// copy goes without; the up-next hero, which exists on one surface, is
+  /// unaffected.
+  final bool showMap;
+
   const TripHeroCard({
     super.key,
     required this.trip,
@@ -57,6 +71,7 @@ class TripHeroCard extends StatelessWidget {
     required this.leadingMeta,
     required this.onTap,
     this.showDuration = true,
+    this.showMap = true,
   });
 
   /// A STATE pill in the gradient card's treatment: white-tinted so it sits ON
@@ -138,7 +153,7 @@ class TripHeroCard extends StatelessWidget {
               // leaving the gradient card on its own — TripMapBand's
               // contract. It absorbs its own pointers, so a tap anywhere on
               // the band still opens the trip.
-              TripMapBand(tripId: trip.id),
+              if (showMap) TripMapBand(tripId: trip.id),
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Row(

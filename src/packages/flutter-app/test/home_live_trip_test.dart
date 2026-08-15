@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:travel_route_planner/models/itinerary_item.dart';
 import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/models/user.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
@@ -12,6 +13,7 @@ import 'package:travel_route_planner/providers/live_trip_provider.dart';
 import 'package:travel_route_planner/providers/resumable_chats_provider.dart';
 import 'package:travel_route_planner/screens/home_screen.dart';
 import 'package:travel_route_planner/widgets/live_trip_card.dart';
+import 'package:travel_route_planner/widgets/trip_map_band.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -112,6 +114,54 @@ void main() {
     expect(find.byType(LiveTripCard), findsOneWidget);
     expect(find.text('HAPPENING NOW'), findsOneWidget);
     expect(find.text('Day 2 of 3'), findsOneWidget);
+  });
+
+  testWidgets('Home\'s live card carries no route band, cache hit or not',
+      (WidgetTester tester) async {
+    // The live card is the ONE card that renders on Home and the trips list
+    // at once (AppShell's IndexedStack keeps both alive), and two flutter_map
+    // instances racing for the same tiles leave BOTH blank — verified in a
+    // browser. The trips list owns this trip's band; suppressing it here is
+    // what makes that one work, so it is pinned rather than left to a
+    // "why is this false?" cleanup.
+    SharedPreferences.setMockInitialValues({
+      'trip_cache.user-1.trip.t1': jsonEncode({
+        'saved_at': '2026-08-01T10:00:00.000',
+        'trip': Trip(
+          id: 't1',
+          title: 'Athens Trip',
+          startDate: _iso(DateTime.now().subtract(const Duration(days: 1))),
+          endDate: _iso(DateTime.now().add(const Duration(days: 1))),
+          createdAt: '2026-06-01',
+          updatedAt: '2026-06-01',
+          items: const [
+            ItineraryItem(
+              id: 'i0',
+              position: 0,
+              name: 'Acropolis',
+              city: 'Athens',
+              latitude: 37.9715,
+              longitude: 23.7267,
+              category: 'attraction',
+            ),
+            ItineraryItem(
+              id: 'i1',
+              position: 1,
+              name: 'Plaka',
+              city: 'Athens',
+              latitude: 37.9725,
+              longitude: 23.7300,
+              category: 'attraction',
+            ),
+          ],
+        ).toJson(),
+      }),
+    });
+    await _pumpHome(tester, _liveTrip('t1'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LiveTripCard), findsOneWidget);
+    expect(find.byType(TripMapBand), findsNothing);
   });
 
   testWidgets('recent-trip tile hides when it is the live trip',

@@ -20,7 +20,17 @@ class LiveTripCard extends StatelessWidget {
   final Trip trip;
   final VoidCallback onTap;
 
-  const LiveTripCard({super.key, required this.trip, required this.onTap});
+  /// Passed through to [TripHeroCard.showMap]. Home passes false: its copy of
+  /// this card and the trips list's are alive at the same time inside
+  /// AppShell's IndexedStack, and two route bands for one trip starve each
+  /// other's tiles until both render blank.
+  final bool showMap;
+
+  const LiveTripCard(
+      {super.key,
+      required this.trip,
+      required this.onTap,
+      this.showMap = true});
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +52,7 @@ class LiveTripCard extends StatelessWidget {
       // "Day 2 of 5" already names the span, so the card's own duration label
       // would be a second total saying the same thing.
       showDuration: false,
+      showMap: showMap,
       leadingMeta: [
         TripHeroCard.heroPill(l10n.liveTripStatusLive),
         if (progress != null) TripHeroCard.heroFact(context, progress),
