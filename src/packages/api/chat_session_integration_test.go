@@ -85,9 +85,12 @@ func TestPlanTurnPersistsChatSession(t *testing.T) {
 	}
 }
 
-// (b) No persistence for anonymous turns, turns without a chat_id, or
-// trip-bound refine turns.
-func TestPlanTurnNotPersistedWhenAnonymousOrBound(t *testing.T) {
+// (b) No plan_chat_sessions row for anonymous turns or turns without a
+// chat_id. A trip-bound turn writes no row HERE either, but for a different
+// reason since specs/trip-refine-memory: it is stored in trip_refine_sessions,
+// keyed by (user, trip) and carrying no chat id at all — asserted below and,
+// in full, by trip_refine_chat_integration_test.go.
+func TestPlanTurnNotPersistedWhenAnonymousOrChatless(t *testing.T) {
 	resetDB(t)
 	user, token := createTestUser(t, "ephemeral@example.com")
 	trip := createTestTrip(t, user.ID, 1)
@@ -118,7 +121,13 @@ func TestPlanTurnNotPersistedWhenAnonymousOrBound(t *testing.T) {
 		t.Fatalf("count query: %v", err)
 	}
 	if rows != 0 {
-		t.Fatalf("session rows = %d, want 0 (anonymous, no chat_id, trip-bound)", rows)
+		t.Fatalf("plan_chat_sessions rows = %d, want 0 (anonymous, no chat_id, and the bound turn belongs in trip_refine_sessions)", rows)
+	}
+
+	// The bound turn's throwaway chat id must not be an address for anything:
+	// resuming it into the unbound Agent tab would drop the trip binding.
+	if rec := doJSON(t, "GET", "/api/v1/chats/chat-bound", token, nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("GET /chats/chat-bound = %d, want 404 (a refine transcript has no chat id)", rec.Code)
 	}
 }
 

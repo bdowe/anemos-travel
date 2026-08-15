@@ -5306,6 +5306,60 @@ abstract class AppLocalizations {
   /// **'Ask for changes...'**
   String get refineHint;
 
+  /// No description provided for @refineNewChat.
+  ///
+  /// In en, this message translates to:
+  /// **'New chat'**
+  String get refineNewChat;
+
+  /// No description provided for @refineNewChatConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a new chat?'**
+  String get refineNewChatConfirmTitle;
+
+  /// No description provided for @refineNewChatConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation will be cleared. Your trip is not affected.'**
+  String get refineNewChatConfirmBody;
+
+  /// No description provided for @refineResumeLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring your conversation…'**
+  String get refineResumeLoading;
+
+  /// No description provided for @refineResumeGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation has expired.'**
+  String get refineResumeGone;
+
+  /// No description provided for @refineResumeGoneDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'It was cleared or removed with its trip. You can start a new one.'**
+  String get refineResumeGoneDetail;
+
+  /// No description provided for @refineResumeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reopen this conversation.'**
+  String get refineResumeFailed;
+
+  /// No description provided for @tripContinueChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue chat'**
+  String get tripContinueChat;
+
+  /// No description provided for @tripContinueChatMeta.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 message} other{{count} messages}} · {age}'**
+  String tripContinueChatMeta(int count, String age);
+
   /// No description provided for @chatDictationPermission.
   ///
   /// In en, this message translates to:

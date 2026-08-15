@@ -5,6 +5,83 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-15 — the chat you lose by pressing the wrong button
+
+- **[app] Friction, recurring:** *"when editing a trip via the chat, should keep
+  track of the last chat for the trip so you can go back to it. I've
+  accidentally clicked the back button and had to restart a chat **several
+  times**."* Recurrence rule satisfied on its own.
+- **[app] One complaint, three independent causes — and only one of them was
+  the back button.**
+  1. **Back left the page.** The refine panel is drawn *inside* trip detail
+     (`_panelOpen` is widget state, not a route) and the screen had no
+     `PopScope`. On narrow it renders as a `DraggableScrollableSheet`, so it
+     *looks* modal — back is the obvious gesture for dismissing it, and it threw
+     away the whole page instead.
+  2. **Five of the six ways back in destroyed the conversation.** Every ✨ entry
+     (header chip, app-bar sparkle, per-day, per-city, Next Step) went through
+     `beginSectionRefinement`, which called `reset()` first. Only the 💬 FAB
+     reopened what was there — and it's hidden while the panel is open, so it
+     isn't the button you associate with "the chat". Going back in through the
+     button you started with is the one gesture guaranteed to wipe it.
+  3. **It was never saved at all.** `persistSession` required
+     `boundTripID == nil`, so a trip-bound turn wrote nothing. Even with 1 and 2
+     fixed, a refresh or a deploy still lost it.
+- **[app] "Nothing to resume" was a claim about the trip, not the conversation.**
+  `specs/continue-where-you-left-off` put trip-bound panels out of scope because
+  a refine "patches a trip in place — nothing to continue". True of the *trip*.
+  The transcript is the thing with continuity, and it was the thing being
+  thrown away.
+- **[app] The fix: one running conversation per trip, and `UNIQUE (user_id,
+  trip_id)` is that sentence.** New table `trip_refine_sessions` (00069) rather
+  than a nullable `trip_id` on `plan_chat_sessions`, for a reason worth
+  remembering: a refine transcript then has **no chat id anywhere**, so
+  `GET /chats/{id}` and `/plan/<id>` *structurally cannot* reach it and can
+  never rehydrate it into the unbound Agent tab (where the trip binding would
+  silently vanish and the agent would fall back to `create_itinerary`). The
+  column version needed `AND trip_id IS NULL` remembered in five places —
+  resumable list, get-by-chat-id, the 60-day prune, the weekly-nudge predicate,
+  and the upsert's conflict target. **Reusing `trips.chat_id` would have been
+  worse than untidy: that key already owns the plan_chat_sessions row of the
+  chat that CREATED the trip, so refine turns would have upserted over the
+  original planning transcript.**
+- **[app] Retention is the trip, not 60 days.** Plan chats are pruned when idle
+  two months; a trip planned in August for next March must still have its chat
+  in November. `ON DELETE CASCADE` is the entire GC story — no janitor rule.
+- **[app] Appending seeds needed the stub, or the fix would have caused the next
+  bug.** `_buildSectionSeed` dumps every item with coordinates and tags. Now
+  that ✨ appends instead of resetting, a conversation would accumulate
+  near-duplicate snapshots and the agent could not tell which is current — the
+  same shape as the `update_itinerary_section` scope bugs. So each new seed
+  rewrites the earlier ones' listings to a one-line "superseded" stub, **in
+  place and never removing a message**, because `compactedCount` is a
+  start-anchored index into `messages`. Free for the reader: labeled messages
+  render as context chips and their content is never shown.
+- **[app] The freshness hole the feature exposed.** A conversation you can
+  resume days later is a conversation whose opening description is stale — and
+  `update_itinerary_section` takes the COMPLETE list, so rebuilding from memory
+  silently reverts anything changed since, including a co-planner's edits. The
+  bound prompt now says earlier messages describe the itinerary AS IT WAS and
+  requires `get_trip` before any edit. Which surfaced a live bug: `get_trip`
+  with no `trip_id` listed `ListLatestTripsByOwner(uid)` — for a **collaborator**
+  that is their own other trips and never the trip being refined. In a bound
+  session it now returns that trip.
+- **[dev] The back fix would have introduced a silent staleness bug.** The
+  `trip_updated` → reload listener lived *inside* `TripRefinePanel`. Once back
+  can close the panel mid-turn, a patch landing afterwards would never have been
+  picked up and the itinerary would have sat there stale after an edit the agent
+  really made. Moved to the screen. **A listener's lifetime must be at least as
+  long as the thing it listens for.**
+- **[dev] A test found a dead end in the error state itself.** The
+  expired/failed panel body overflowed the narrow sheet by 48px, so its
+  "New chat" button was unreachable — an escape hatch you cannot tap is the
+  dead end it exists to escape. Now scrollable.
+- **[dev] `pumpAndSettle` never settles behind a live turn.** The closed-panel
+  FAB shows a progress indicator while a turn streams, so the mid-stream tests
+  have to `pump()` a fixed number of frames. Also: `FilledButton.tonalIcon` is
+  not found by `widgetWithText(FilledButton, …)` — the wave-20 subtype trap,
+  hit again.
+
 ## 2026-08-15 — a flight link for a 1h35 train
 
 - **[app] Friction:** planning Italy, the obvious way from Rome to Florence is

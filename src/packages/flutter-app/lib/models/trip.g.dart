@@ -13,6 +13,10 @@ Trip _$TripFromJson(Map<String, dynamic> json) => Trip(
       startDate: json['start_date'] as String?,
       endDate: json['end_date'] as String?,
       chatId: json['chat_id'] as String?,
+      refineChat: json['refine_chat'] == null
+          ? null
+          : TripRefineChat.fromJson(
+              json['refine_chat'] as Map<String, dynamic>),
       travelMode: json['travel_mode'] as String?,
       origin: json['origin'] as String?,
       originAirport: json['origin_airport'] as String?,
@@ -64,6 +68,7 @@ Map<String, dynamic> _$TripToJson(Trip instance) => <String, dynamic>{
       'start_date': instance.startDate,
       'end_date': instance.endDate,
       'chat_id': instance.chatId,
+      'refine_chat': instance.refineChat?.toJson(),
       'travel_mode': instance.travelMode,
       'origin': instance.origin,
       'origin_airport': instance.originAirport,

@@ -44,7 +44,7 @@ void main() {
 
     const seed = 'I want to refine my saved trip "Athens & Santorini". '
         '- Acropolis [attraction] (37.9715, 23.7257), city: Athens, day 1';
-    notifier.beginSectionRefinement(seed,
+    notifier.appendSectionRefinement(seed,
         displayLabel: 'Refining Day 1 — Athens');
 
     await tester.pumpWidget(

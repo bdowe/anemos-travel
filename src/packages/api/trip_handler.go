@@ -48,14 +48,23 @@ var allowedItemCategories = map[string]bool{"attraction": true, "restaurant": tr
 var allowedTimesOfDay = map[string]bool{"morning": true, "afternoon": true, "evening": true}
 
 type TripResponse struct {
-	ID         string  `json:"id"`
-	Title      string  `json:"title"`
-	Summary    *string `json:"summary,omitempty"`
-	StartDate  *string `json:"start_date,omitempty"`
-	EndDate    *string `json:"end_date,omitempty"`
-	ChatID     *string `json:"chat_id,omitempty"`
-	TravelMode *string `json:"travel_mode,omitempty"`
-	Origin     *string `json:"origin,omitempty"`
+	ID        string  `json:"id"`
+	Title     string  `json:"title"`
+	Summary   *string `json:"summary,omitempty"`
+	StartDate *string `json:"start_date,omitempty"`
+	EndDate   *string `json:"end_date,omitempty"`
+	ChatID    *string `json:"chat_id,omitempty"`
+	// RefineChat is presence + freshness for the CALLER'S OWN saved
+	// conversation about THIS trip (specs/trip-refine-memory); the transcript
+	// comes from GET /trips/{id}/refine-chat. Per-caller: an owner and each
+	// co-planner see only their own, and it is absent when they have none.
+	//
+	// NOT ChatID above — that is the OWNER's itinerary version-lineage key, a
+	// string, withheld from collaborators entirely. This is an object with no
+	// id inside it. Full trip views only.
+	RefineChat *TripRefineChatSummary `json:"refine_chat,omitempty"`
+	TravelMode *string                `json:"travel_mode,omitempty"`
+	Origin     *string                `json:"origin,omitempty"`
 	// This trip's own flight endpoints (migration 00064). Written together or
 	// not at all: absent means the trip states no airport and the legs fall
 	// back to Origin, then to the owner's saved home airport — never "same as
@@ -900,6 +909,21 @@ func getTripHandler(w http.ResponseWriter, r *http.Request) {
 			return nil
 		})
 	}
+	// The caller's own saved conversation about this trip
+	// (specs/trip-refine-memory) — presence + freshness only, so the page can
+	// offer "Continue chat" without fetching a transcript nobody may open.
+	// Viewers are skipped: they cannot open the panel at all.
+	var refineChat *TripRefineChatSummary
+	if row.Access != "viewer" {
+		g.Go(func() error {
+			s, err := tripRefineChatSummary(ctx, q, user.ID, trip.ID)
+			if err != nil {
+				return errors.New("could not load the trip conversation")
+			}
+			refineChat = s
+			return nil
+		})
+	}
 	if err := g.Wait(); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -921,6 +945,10 @@ func getTripHandler(w http.ResponseWriter, r *http.Request) {
 		resp.ChatID = nil
 		resp.OwnerName = ownerName
 	}
+	// Deliberately outside the block above: a collaborator loses the owner's
+	// ChatID and keeps their OWN RefineChat. The two must visibly never travel
+	// together (specs/trip-refine-memory).
+	resp.RefineChat = refineChat
 	// "Updated by X" attribution — omitted for the caller's own edits.
 	resp.UpdatedByName = updatedByName
 	resp.Shared = shared

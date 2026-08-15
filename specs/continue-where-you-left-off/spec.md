@@ -42,7 +42,10 @@ agent actually saved.
 - [ ] Once the agent saves a trip from a conversation, that conversation no
       longer appears in the section (the trip card represents it).
 - [ ] A conversation abandoned while refining an existing saved trip does not
-      appear in the section.
+      appear in the section. (Still true since specs/trip-refine-memory, by a
+      stronger mechanism: a trip's conversation is stored per (traveler, trip)
+      in its own table with no chat id at all, so it is resumed from the trip's
+      own page and cannot be named here.)
 - [ ] Dismissing an entry removes it immediately.
 - [ ] Anonymous users see no section and nothing is saved for them; the chat
       behaves exactly as before.
@@ -114,7 +117,8 @@ agent actually saved.
 - Server-side rendering of tool results/cards in a resumed transcript — only
   the text conversation is restored.
 - Cross-device real-time sync or conflict resolution.
-- Resuming trip-bound refine panels.
+- Resuming trip-bound refine panels — **shipped separately** as
+  `specs/trip-refine-memory`, from the trip's own page rather than this section.
 
 ## Open Questions
 

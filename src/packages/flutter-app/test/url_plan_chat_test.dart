@@ -20,7 +20,12 @@ import 'support/url_sync_fakes.dart';
 /// /plan/<chatId> (specs/url-page-persistence): the Plan tab's URL carries
 /// the conversation id once one exists, and booting on it rehydrates the
 /// transcript — with a silent fresh-chat fallback when there is nothing to
-/// restore (trip-bound, foreign, or expired ids).
+/// restore (foreign or expired ids).
+///
+/// A trip's own conversation can never be named here: since
+/// specs/trip-refine-memory it lives in its own table keyed by (traveler,
+/// trip) and has no chat id at all, so this URL has nothing to point at and
+/// the refine panel stays deliberately absent from the address bar.
 class _FakeChatsApiService extends ChatsApiService {
   final ChatSessionDetail? detail;
 

@@ -5,6 +5,7 @@ import 'trip_segment.dart';
 import 'booking_todo.dart';
 import 'city_pin.dart';
 import 'trip_leg_dto.dart';
+import 'trip_refine_chat.dart';
 
 part 'trip.g.dart';
 
@@ -19,6 +20,16 @@ class Trip {
   final String? endDate;
   @JsonKey(name: 'chat_id')
   final String? chatId;
+
+  /// This traveler's own saved conversation about this trip
+  /// (specs/trip-refine-memory) — presence + freshness only; the transcript is
+  /// fetched on demand from `GET /trips/{id}/refine-chat`. Null means they have
+  /// none, and the trip page offers a fresh chat instead of "Continue chat".
+  ///
+  /// Per-caller, unlike [chatId]: an owner and each co-planner have their own,
+  /// and a collaborator receives this while never receiving [chatId].
+  @JsonKey(name: 'refine_chat')
+  final TripRefineChat? refineChat;
 
   /// How the traveler moves between cities on this trip: 'flight', 'car',
   /// 'train', 'bus', 'ferry', or 'mixed'. Null = never stated ⇒ the legacy
@@ -136,6 +147,7 @@ class Trip {
     this.startDate,
     this.endDate,
     this.chatId,
+    this.refineChat,
     this.travelMode,
     this.origin,
     this.originAirport,

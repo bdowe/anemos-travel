@@ -69,7 +69,10 @@ display label (UI-only; never sent to the server).
   final state always reflects the last patch.
 - Refresh failing mid-refine must not replace the screen with an error page.
 - Re-opening Refine on another section re-seeds; each session starts with its
-  own context chip.
+  own context chip. *(Amended by specs/trip-refine-memory: it re-seeds into the
+  SAME conversation, adding a second context chip rather than discarding what
+  came before, and the earlier chip's itinerary listing is collapsed so only
+  one authoritative listing is ever in play.)*
 
 ## Out of Scope
 

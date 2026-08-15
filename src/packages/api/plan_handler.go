@@ -358,11 +358,35 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 	// appends whatever assistant text streamed — the same text the client
 	// commits, on both its success and error paths. When compaction ran this
 	// turn, the compacted history + new summary are stored instead of the raw
-	// snapshot, matching the client's post-`compacted` wire state. Trip-bound
-	// sessions patch a saved trip in place — nothing to resume — and anonymous
-	// or degraded sessions stay ephemeral, like anonymous trips.
-	persistSession := authed && dbPool != nil &&
-		strings.TrimSpace(req.ChatID) != "" && boundTripID == nil
+	// snapshot, matching the client's post-`compacted` wire state. Anonymous and
+	// degraded sessions stay ephemeral, like anonymous trips.
+	//
+	// Every authenticated turn is resumable, but the two kinds land in different
+	// tables (specs/trip-refine-memory). A freeform plan chat is stored under its
+	// client-minted chat id. A trip-bound refine chat is stored under
+	// (user, trip) in trip_refine_sessions, where it has NO chat id at all — so
+	// it can never be reached by GET /chats/{chatId} or /plan/<chatId> and
+	// resumed into the unbound Agent tab, which would silently drop the trip
+	// binding. A bound turn therefore deliberately does NOT require req.ChatID:
+	// the client mints a throwaway one per panel session and the server has no
+	// use for it.
+	//
+	// saveTurn is nil when nothing is to be persisted; the block below is one
+	// ordering implementation with two destinations.
+	var saveTurn func(ctx context.Context, summary string, msgs []PlanChatMessage)
+	switch {
+	case authed && dbPool != nil && boundTripID != nil:
+		tid := *boundTripID
+		saveTurn = func(ctx context.Context, summary string, msgs []PlanChatMessage) {
+			saveTripRefineSession(ctx, uid, tid, summary, msgs)
+		}
+	case authed && dbPool != nil && strings.TrimSpace(req.ChatID) != "":
+		chatID := req.ChatID
+		saveTurn = func(ctx context.Context, summary string, msgs []PlanChatMessage) {
+			savePlanChatSession(ctx, uid, chatID, summary, msgs)
+		}
+	}
+	persistSession := saveTurn != nil
 	var turnText strings.Builder
 	// Set when an iteration ended in tool calls with text already streamed:
 	// the next text delta opens a new paragraph, in the streamed bytes and
@@ -398,7 +422,7 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 			defer close(startSaved)
 			sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			savePlanChatSession(sctx, uid, req.ChatID, persistSummary, persistMsgs)
+			saveTurn(sctx, persistSummary, persistMsgs)
 		})
 		defer func() {
 			msgs := persistMsgs
@@ -410,7 +434,7 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 			// The request context is gone once the handler returns.
 			dctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			savePlanChatSession(dctx, uid, req.ChatID, persistSummary, msgs)
+			saveTurn(dctx, persistSummary, msgs)
 		}()
 	}
 
@@ -468,7 +492,7 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 		systemPrompt += profileNotesInstruction
 	}
 	if boundTripID != nil {
-		systemPrompt += "\n\nYou are refining an existing saved trip in place. The conversation's first message describes the current itinerary and which section the traveler wants to change. Apply changes by calling update_itinerary_section with the targeted scope and the COMPLETE updated list of places for that section — include unchanged places with their existing coordinates, city, day, time_of_day and category tags so they aren't lost. Use search_places to find real coordinates for any new place before adding it. Only change the section the traveler asked about unless they broaden the request. A reorder that moves places BETWEEN cities or days — swapping two cities, shifting a stop from one city to another — is a whole-trip change: call update_itinerary_section with scope 'trip' and the complete itinerary in the new order, never scope 'city' or 'day' with another section's places mixed in. A section rewrite replaces its section in place and cannot move places across sections, so mixing them in would duplicate those places rather than move them, and the call will be rejected. The traveler may also ask questions about the trip without wanting changes — answer those directly from the itinerary and your search tools; only call update_itinerary_section when they explicitly ask for a modification. If the traveler changes WHEN the trip happens — 'shift everything a week later', 'we actually start June 12' — call set_trip_dates with the new start date (and end date if the length changes): it moves the trip and every dated stay, transport leg, and booking to-do together. If only ONE city's dates change, call set_leg_dates for that city instead — it moves that leg, extends the previous city's end to meet a later start (and says so), and reports any remaining gap or overlap with the neighboring cities, all of which you should relay and offer to fix. If the result says a later city was squeezed to no nights or overlapped, offer to shift the remaining cities and, when the traveler agrees, call set_leg_dates for each in order (earliest first) in that same turn. A change to when the FIRST city begins is a change to the trip's start — use set_trip_dates. Never rebuild sections with update_itinerary_section just to change dates — its day numbers are positional (a city's LAST item day is its departure day, and the page derives each leg from the previous city's departure through its own last day), so recomputing day numbers will not produce the calendar dates you intend and can undo earlier date moves. To change WHEN anything happens, use set_trip_dates or set_leg_dates with calendar dates, and always verify the 'page now renders' ranges a tool result reports against what the traveler asked for before replying."
+		systemPrompt += "\n\nYou are refining an existing saved trip in place. This conversation is saved and may be resumed days later, so its earlier messages describe the itinerary AS IT WAS, not as it is — the traveler or a co-planner may have changed the trip since, and an earlier message may have been superseded by a later one in this same conversation. Before you apply ANY change with update_itinerary_section, call get_trip (with no arguments — in this conversation it returns THIS trip) and build the complete list of places from THAT result, never from an earlier message. Earlier messages still tell you which section the traveler is working on. Apply changes by calling update_itinerary_section with the targeted scope and the COMPLETE updated list of places for that section — include unchanged places with their existing coordinates, city, day, time_of_day and category tags so they aren't lost. Use search_places to find real coordinates for any new place before adding it. Only change the section the traveler asked about unless they broaden the request. A reorder that moves places BETWEEN cities or days — swapping two cities, shifting a stop from one city to another — is a whole-trip change: call update_itinerary_section with scope 'trip' and the complete itinerary in the new order, never scope 'city' or 'day' with another section's places mixed in. A section rewrite replaces its section in place and cannot move places across sections, so mixing them in would duplicate those places rather than move them, and the call will be rejected. The traveler may also ask questions about the trip without wanting changes — answer those directly from the itinerary and your search tools; only call update_itinerary_section when they explicitly ask for a modification. If the traveler changes WHEN the trip happens — 'shift everything a week later', 'we actually start June 12' — call set_trip_dates with the new start date (and end date if the length changes): it moves the trip and every dated stay, transport leg, and booking to-do together. If only ONE city's dates change, call set_leg_dates for that city instead — it moves that leg, extends the previous city's end to meet a later start (and says so), and reports any remaining gap or overlap with the neighboring cities, all of which you should relay and offer to fix. If the result says a later city was squeezed to no nights or overlapped, offer to shift the remaining cities and, when the traveler agrees, call set_leg_dates for each in order (earliest first) in that same turn. A change to when the FIRST city begins is a change to the trip's start — use set_trip_dates. Never rebuild sections with update_itinerary_section just to change dates — its day numbers are positional (a city's LAST item day is its departure day, and the page derives each leg from the previous city's departure through its own last day), so recomputing day numbers will not produce the calendar dates you intend and can undo earlier date moves. To change WHEN anything happens, use set_trip_dates or set_leg_dates with calendar dates, and always verify the 'page now renders' ranges a tool result reports against what the traveler asked for before replying."
 		if boundTripTravelMode != nil && *boundTripTravelMode != "" {
 			systemPrompt += "\n\nThis trip's travel mode is " + *boundTripTravelMode + "; keep new transport suggestions in that mode."
 		}

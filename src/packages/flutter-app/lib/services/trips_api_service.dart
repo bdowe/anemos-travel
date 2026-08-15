@@ -3,6 +3,7 @@ import '../models/import_trip_result.dart';
 import '../models/itinerary_item.dart';
 import '../models/shared_trip.dart';
 import '../models/trip.dart';
+import '../models/trip_refine_chat.dart';
 import 'api_client.dart';
 
 /// Wraps the authenticated /trips endpoints. Reads the bearer token from the
@@ -72,6 +73,25 @@ class TripsApiService {
   Future<Trip> getTrip(String id) async {
     final res = await apiClient.send('GET', '/trips/$id');
     return Trip.fromJson(jsonDecode(res.body));
+  }
+
+  /// This traveler's saved conversation about [tripId]
+  /// (specs/trip-refine-memory), in full.
+  ///
+  /// Deliberately goes through [ApiClient.send], which throws an
+  /// [ApiException] carrying the status: the panel has to tell "this
+  /// conversation is gone" (404 — say so and offer a new chat) from "we
+  /// couldn't reach it" (5xx/429/network — offer a retry), and a bare
+  /// `Exception('failed (404)')` cannot be classified.
+  Future<TripRefineChatDetail> getTripRefineChat(String tripId) async {
+    final res = await apiClient.send('GET', '/trips/$tripId/refine-chat');
+    return TripRefineChatDetail.fromJson(jsonDecode(res.body));
+  }
+
+  /// Discards this traveler's conversation about [tripId] ("New chat").
+  /// Idempotent server-side: succeeds whether or not one existed.
+  Future<void> deleteTripRefineChat(String tripId) async {
+    await apiClient.send('DELETE', '/trips/$tripId/refine-chat');
   }
 
   Future<Trip> patchTrip(
