@@ -173,6 +173,151 @@ func TestSpliceSectionMissErrorsWithValidOptions(t *testing.T) {
 	}
 }
 
+// --- section-membership guard ---
+
+// loc builds an agent replacement location. city/dayTripFrom "" and day 0 mean
+// the model left the field out — the common shape from create_itinerary.
+func loc(name string, day int, city, dayTripFrom string) map[string]any {
+	m := map[string]any{"name": name, "latitude": 1.0, "longitude": 1.0}
+	if day > 0 {
+		m["day"] = float64(day)
+	}
+	if city != "" {
+		m["city"] = city
+	}
+	if dayTripFrom != "" {
+		m["day_trip_from"] = dayTripFrom
+	}
+	return m
+}
+
+func pragueKrakow() []store.ItineraryItem {
+	return []store.ItineraryItem{
+		item("Charles Bridge", 1, "Prague", ""),
+		item("Old Town Square", 2, "Prague", ""),
+		item("Wawel Castle", 3, "Krakow", ""),
+		item("Rynek Glowny", 4, "Krakow", ""),
+	}
+}
+
+// The reported bug, verbatim: asked to swap two cities, the model sends both
+// cities' places under a single-city selector. Krakow survives in `out` AND
+// arrives in newLocs, so the old code emitted it twice.
+func TestSpliceSectionRejectsForeignCityUnderCityScope(t *testing.T) {
+	repl := []map[string]any{
+		loc("Wawel Castle", 1, "Krakow", ""),
+		loc("Rynek Glowny", 2, "Krakow", ""),
+		loc("Charles Bridge", 3, "Prague", ""),
+		loc("Old Town Square", 4, "Prague", ""),
+	}
+	_, err := spliceSection(pragueKrakow(), sectionSelector{Scope: "city", City: "Prague"}, repl)
+	if err == nil {
+		t.Fatal("a city rewrite carrying another city's places must be rejected")
+	}
+	for _, want := range []string{"Krakow", "scope 'trip'", "Wawel Castle", "nothing was changed"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q should mention %q", err, want)
+		}
+	}
+}
+
+func TestSpliceSectionRejectsForeignDayUnderDayScope(t *testing.T) {
+	repl := []map[string]any{loc("Pompidou", 1, "Paris", ""), loc("Colosseum", 3, "Rome", "")}
+	_, err := spliceSection(parisRome(), sectionSelector{Scope: "day", Day: intPtr(1)}, repl)
+	if err == nil {
+		t.Fatal("a day rewrite carrying another day's places must be rejected")
+	}
+	if !strings.Contains(err.Error(), "day 3") {
+		t.Fatalf("error %q should name the stray's own day", err)
+	}
+}
+
+// City scope spans days, so re-dating within the city is a legitimate edit the
+// guard must not block.
+func TestSpliceSectionCityScopeAllowsDayRewrite(t *testing.T) {
+	repl := []map[string]any{
+		loc("Louvre", 4, "Paris", ""),
+		loc("Orsay", 5, "Paris", ""),
+		loc("Versailles", 6, "Versailles", "Paris"),
+	}
+	if _, err := spliceSection(parisRome(), sectionSelector{Scope: "city", City: "Paris"}, repl); err != nil {
+		t.Fatalf("re-dating within a city is legitimate: %v", err)
+	}
+}
+
+func TestSpliceSectionCityScopeAllowsDayTripByHub(t *testing.T) {
+	ok := []map[string]any{loc("Versailles", 2, "Versailles", "Paris")}
+	if _, err := spliceSection(parisRome(), sectionSelector{Scope: "city", City: "Paris"}, ok); err != nil {
+		t.Fatalf("a day trip belongs to its hub: %v", err)
+	}
+	// Same place without the hub tag reads as another city — rejected, and the
+	// error must name the field that fixes it.
+	bad := []map[string]any{loc("Versailles", 2, "Versailles", "")}
+	err := spliceSection2Err(t, parisRome(), sectionSelector{Scope: "city", City: "Paris"}, bad)
+	if !strings.Contains(err.Error(), "day_trip_from") {
+		t.Fatalf("error %q should point at day_trip_from", err)
+	}
+}
+
+// The shape every existing caller sends: no city, no day. Omission is not
+// evidence of anything, so these must pass under both scopes.
+func TestSpliceSectionAcceptsUnspecifiedCityAndDay(t *testing.T) {
+	repl := []map[string]any{loc("Pompidou", 0, "", "")}
+	if _, err := spliceSection(parisRome(), sectionSelector{Scope: "day", Day: intPtr(1)}, repl); err != nil {
+		t.Fatalf("day scope, unspecified loc: %v", err)
+	}
+	if _, err := spliceSection(parisRome(), sectionSelector{Scope: "city", City: "Paris"}, repl); err != nil {
+		t.Fatalf("city scope, unspecified loc: %v", err)
+	}
+}
+
+func TestSpliceSectionFoldsDiacritics(t *testing.T) {
+	items := []store.ItineraryItem{item("Wawel Castle", 1, "Kraków", "")}
+	repl := []map[string]any{loc("Sukiennice", 1, "Krakow", "")}
+	got, err := spliceSection(items, sectionSelector{Scope: "city", City: "KRAKOW"}, repl)
+	if err != nil {
+		t.Fatalf("Kraków and Krakow are one city: %v", err)
+	}
+	assertOrder(t, got, []string{"Sukiennice"})
+}
+
+// scope 'trip' is the escape hatch the rejection points at, so it must stay
+// unguarded — it replaces everything and cannot duplicate.
+func TestSpliceSectionTripScopeAcceptsAnyCity(t *testing.T) {
+	repl := []map[string]any{loc("Wawel Castle", 1, "Krakow", ""), loc("Charles Bridge", 2, "Prague", "")}
+	got, err := spliceSection(pragueKrakow(), sectionSelector{Scope: "trip"}, repl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertOrder(t, got, []string{"Wawel Castle", "Charles Bridge"})
+}
+
+// keyOfLocation must coerce `day` exactly as the writer does, or the guard could
+// reject on a value itemParamsFromLocation would have ignored.
+func TestKeyOfLocationMatchesWriterDayCoercion(t *testing.T) {
+	for _, raw := range []any{float64(0), float64(-1), "3", nil} {
+		if k := keyOfLocation(map[string]any{"day": raw}); k.Day != nil {
+			t.Fatalf("day %#v should read as unspecified, got %d", raw, *k.Day)
+		}
+		p := itemParamsFromLocation(uuid.New(), 0, map[string]any{"name": "x", "day": raw})
+		if p.Day != nil {
+			t.Fatalf("writer kept day %#v; guard and writer disagree", raw)
+		}
+	}
+	if k := keyOfLocation(map[string]any{"day": float64(2)}); k.Day == nil || *k.Day != 2 {
+		t.Fatal("day 2 should read as 2")
+	}
+}
+
+func spliceSection2Err(t *testing.T, items []store.ItineraryItem, sel sectionSelector, locs []map[string]any) error {
+	t.Helper()
+	_, err := spliceSection(items, sel, locs)
+	if err == nil {
+		t.Fatal("expected a rejection")
+	}
+	return err
+}
+
 func TestSpliceSectionValidatesSelector(t *testing.T) {
 	if _, err := spliceSection(parisRome(), sectionSelector{Scope: "day"}, nil); err == nil {
 		t.Fatal("scope day without day number should error")

@@ -56,9 +56,17 @@ typedef LegDateChip = ({String range, String? nights});
 
 /// One city group as built by [TripDerivation.compute] and consumed by the
 /// screen's `_cityHeader` / group slivers.
+///
+/// [qualifier] is set only when another group renders the SAME label — a trip
+/// that revisits a city, or one a bad section rewrite split in two — and carries
+/// the leg's start date (or "visit N") so the two headers can be told apart. It
+/// is deliberately kept OUT of [label] for the same reason
+/// [mapLegChipEntries] keeps it out of its own: callers speak the label in a
+/// sentence and must not inherit "Fira · Sep 3".
 typedef CityGroup = ({
   String key,
   String label,
+  String? qualifier,
   LegDateChip? dateRange,
   List<ItineraryItem> items
 });
@@ -401,6 +409,12 @@ class TripDerivation {
     // chip-width measurement must see these exact strings, never
     // re-formatted copies.
     final locationDates = <int, LegDateChip>{};
+    // The same chips by LEG INDEX. The city headers read this rather than
+    // round-tripping through item.position: during an optimistic drag the trip's
+    // items are reordered in place but their positions still hold pre-drag
+    // values (ItineraryItem is immutable), so a position lookup could hand a
+    // header the neighbouring leg's dates for a frame.
+    final legDates = List<LegDateChip?>.filled(legs.length, null);
     for (var gi = 0; gi < legs.length; gi++) {
       final start = visibleRanges[gi].start;
       final end = visibleRanges[gi].end;
@@ -410,20 +424,27 @@ class TripDerivation {
         range: formatShortRange(start, end),
         nights: nights > 0 ? l10n.tripLegNights(nights) : null,
       );
+      legDates[gi] = chip;
       for (final item in legs[gi].items) {
         locationDates[item.position] = chip;
       }
     }
 
-    // Groups mirror [legs] one-to-one; chips key by first item position into
-    // the full-itinerary map above.
+    // Computed BEFORE the groups so the city headers can share the map chips'
+    // repeat qualifiers — two runs of one city must be distinguishable in the
+    // list, not just on the map. Index-aligned with [legs] like everything else
+    // here (all follow the one tripLegs order).
+    final legChips = mapLegChipEntries(l10n, legs, visibleRanges);
+
+    // Groups mirror [legs] one-to-one, index-aligned throughout.
     final groups = <CityGroup>[
-      for (final leg in legs)
+      for (var i = 0; i < legs.length; i++)
         (
-          key: leg.key,
-          label: leg.label,
-          dateRange: locationDates[leg.items.first.position],
-          items: leg.items,
+          key: legs[i].key,
+          label: legs[i].label,
+          qualifier: legChips[i].qualifier,
+          dateRange: legDates[i],
+          items: legs[i].items,
         ),
     ];
 
@@ -467,8 +488,6 @@ class TripDerivation {
         for (final it in g.items)
           if (!isCityFiller(it) && it.day != null) '${g.key}#${it.day}',
     };
-
-    final legChips = mapLegChipEntries(l10n, legs, visibleRanges);
 
     final geoStays = [
       for (final a in confirmedStays)

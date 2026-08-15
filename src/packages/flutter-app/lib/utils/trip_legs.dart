@@ -86,19 +86,28 @@ List<TripLeg> tripLegs(List<ItineraryItem> items) {
   String? currentKey;
   for (final item in items) {
     final locality = hubOf(item);
-    if (runs.isEmpty || locality != currentKey) {
+    // Case-insensitive, matching the Go twin's strings.EqualFold
+    // (trip_render_legs.go, plan_leg_dates.go): an exact compare split a
+    // rewritten "Krakow" from the "krakow" beside it into two runs on the
+    // client only, so the same city rendered twice with a leg-count parity
+    // mismatch. The run keeps the FIRST spelling seen as its label.
+    if (runs.isEmpty || !_sameLocality(locality, currentKey)) {
       runs.add((locality: locality, items: <ItineraryItem>[]));
       currentKey = locality;
     }
     runs.last.items.add(item);
   }
 
+  // Keyed case-insensitively for the same reason: the repeat counter must agree
+  // with the runs it names, or "Krakow" and "krakow" would each be a first
+  // occurrence and neither would get the disambiguating '#2'.
   final seen = <String, int>{};
   final legs = <TripLeg>[];
   for (final run in runs) {
     final label = run.locality ?? kOtherPlacesLabel;
-    final n = (seen[label] ?? 0) + 1;
-    seen[label] = n;
+    final fold = label.toLowerCase();
+    final n = (seen[fold] ?? 0) + 1;
+    seen[fold] = n;
     legs.add((
       key: n == 1 ? label : '$label#$n',
       label: label,
@@ -108,6 +117,14 @@ List<TripLeg> tripLegs(List<ItineraryItem> items) {
     ));
   }
   return legs;
+}
+
+/// Whether two hub localities belong to the same run. Null groups with null
+/// (the deliberate client rule — see [tripLegs]); otherwise case-insensitive,
+/// mirroring the server's strings.EqualFold.
+bool _sameLocality(String? a, String? b) {
+  if (a == null || b == null) return a == b;
+  return a.toLowerCase() == b.toLowerCase();
 }
 
 /// The first item with real coordinates, as a leg's representative point.

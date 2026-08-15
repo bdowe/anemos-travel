@@ -2604,14 +2604,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                     Icon(Icons.location_on,
                         size: 18, color: theme.colorScheme.primary),
                     const SizedBox(width: 6),
+                    // The qualifier rides INSIDE this Expanded, never as a
+                    // second flex child: a sibling Flexible would split the
+                    // free space with the label and drag the chip+chevron
+                    // cluster off the right edge (see the date chip's note
+                    // below, PR #307). It stacks BELOW the label rather than
+                    // beside it, so the label's Text keeps the outer Row as its
+                    // nearest Row ancestor — the header tests navigate that
+                    // ancestry to pair a city with its date chip.
                     Expanded(
-                      child: Text(
-                        groupLabelText(l10n, group.label),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
+                      child: _cityHeaderLabel(l10n, group, theme),
                     ),
                     if (group.dateRange != null)
                       // A rigid SizedBox at the per-build shared width
@@ -3589,6 +3591,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     ];
     setState(() {
       items.setAll(0, newItems);
+      // NOTE: each item's `position` still holds its PRE-drag value until the
+      // silent reload returns — ItineraryItem is immutable by design. The city
+      // headers no longer care (TripDerivation indexes their date chips by leg,
+      // not by position), which is what kept a dragged frame from showing a
+      // neighbouring leg's dates.
       // CONTRACT: any in-place mutation of a derivation input MUST bump the
       // epoch. This setAll is the screen's ONE in-place write — the trip's
       // item List keeps its identity, so [_derive]'s identity checks can't
@@ -3605,6 +3612,39 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       _showSnack(l10n.tripReorderFailed(friendlyError(l10n, e)));
       await _load(silent: true);
     }
+  }
+
+  /// The city header's name, with the repeat qualifier stacked beneath it when
+  /// another group renders the SAME label — a revisited city, or one a bad
+  /// section rewrite split in two. Without it the two headers read identically
+  /// and the duplicate looks like a rendering bug.
+  ///
+  /// When there is no qualifier (every ordinary trip) this returns the bare
+  /// [Text] the header has always used, so the widget tree is unchanged.
+  Widget _cityHeaderLabel(
+      AppLocalizations l10n, CityGroup group, ThemeData theme) {
+    final label = Text(
+      groupLabelText(l10n, group.label),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+    );
+    final qualifier = group.qualifier;
+    if (qualifier == null) return label;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        label,
+        Text(
+          qualifier,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ],
+    );
   }
 
   /// A small "↓ 12 min · 4.3 km" row shown between two consecutive itinerary

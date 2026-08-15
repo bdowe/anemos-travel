@@ -1,5 +1,5 @@
 # Travel Route Planner - Development Makefile
-.PHONY: help build run test clean docker-build docker-run docker-dev docker-deploy docker-stop docker-stop-deploy docker-prune docker-logs api-build api-run api-test api-test-go flutter-gen-l10n seed-local wt-new wt-init wt-rm wt-list wt-prune test-db
+.PHONY: help build run test clean docker-build docker-run docker-dev docker-deploy docker-stop docker-stop-deploy docker-prune docker-logs api-build api-run api-test api-test-go api-repair-sections flutter-gen-l10n seed-local wt-new wt-init wt-rm wt-list wt-prune test-db
 
 # Variables
 API_DIR = src/packages/api
@@ -91,6 +91,9 @@ api-vet: ## Run go vet
 
 api-migrate: ## Apply database migrations (needs DATABASE_URL; runs on boot too)
 	cd $(API_DIR) && go run . migrate
+
+api-repair-sections: ## Report trips whose cities the old section splice duplicated (APPLY=1 to fix, TRIP=<uuid> for one, VERBOSE=1 for detail)
+	cd $(API_DIR) && go run . repair-sections $(if $(APPLY),-apply) $(if $(TRIP),-trip $(TRIP)) $(if $(VERBOSE),-v)
 
 api-sqlc: ## Generate type-safe DB code from SQL (install: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest)
 	cd $(API_DIR) && PATH="$$PATH:$$(go env GOPATH)/bin" sqlc generate

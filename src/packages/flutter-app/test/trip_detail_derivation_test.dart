@@ -238,6 +238,24 @@ void main() {
       expect([for (final l in d.legs) l.key], ['Paris', 'Rome', 'Paris#2']);
     });
 
+    test('groups: same-label runs carry distinct header qualifiers', () {
+      // The two Paris runs share a label, so the city headers would read
+      // identically — which is how a duplicate city looked like a rendering
+      // bug rather than two real runs. They borrow the map chips' qualifier.
+      final d = _compute();
+      expect(d.groups[0].label, d.groups[2].label);
+      expect(d.groups[0].qualifier, isNotNull);
+      expect(d.groups[2].qualifier, isNotNull);
+      expect(d.groups[0].qualifier, isNot(d.groups[2].qualifier));
+      // The lone Rome run needs no disambiguation.
+      expect(d.groups[1].qualifier, isNull);
+      // Qualifiers stay OUT of the label: callers speak it in a sentence.
+      expect(d.groups[0].label, 'Paris');
+      // ...and agree with the map chips, which run the same derivation.
+      expect([for (final g in d.groups) g.qualifier],
+          [for (final c in d.legChips) c.qualifier]);
+    });
+
     test('locationDates: visible (arrival-adjusted) ranges + nights suffix',
         () {
       final d = _compute();
