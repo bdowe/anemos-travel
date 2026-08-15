@@ -119,14 +119,27 @@ void main() {
       updatedAt: '2026-06-01',
     );
     await tester.pumpWidget(
-      MaterialApp(
-        localizationsDelegates: testLocalizationsDelegates,
-        home: Scaffold(body: LiveTripCard(trip: trip, onTap: () {})),
+      // The hero carries a TripMapBand now, which reads the trip cache — so
+      // even a bare card pump needs the scope (the band collapses on the
+      // miss).
+      ProviderScope(
+        overrides: [tripCacheProvider.overrideWithValue(TripCache('u1'))],
+        child: MaterialApp(
+          localizationsDelegates: testLocalizationsDelegates,
+          home: Scaffold(body: LiveTripCard(trip: trip, onTap: () {})),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Big Summer Adventure 2026'), findsOneWidget);
-    expect(find.text('Prague & Kraków +1 more'), findsNothing);
+    // The cities label is the SUBTITLE line, never the headline — the hero
+    // gained that line when it took over the plain card's facts, so the
+    // assertion is about where it sits, not whether it exists.
+    expect(find.text('Prague & Kraków +1 more'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Big Summer Adventure 2026')).dy,
+      lessThan(tester.getTopLeft(find.text('Prague & Kraków +1 more')).dy),
+    );
   });
 }

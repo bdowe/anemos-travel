@@ -180,6 +180,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 if (liveTrip != null) ...[
                   LiveTripCard(
                     trip: liveTrip,
+                    // The trips list owns this trip's route band; a second
+                    // one here would starve it (see TripHeroCard.showMap).
+                    showMap: false,
                     // On the Trips tab (not pushed over Home): the Trips nav
                     // item highlights and back lands on the trips list.
                     onTap: () => openTripOnTripsTab(ref, liveTrip.id),

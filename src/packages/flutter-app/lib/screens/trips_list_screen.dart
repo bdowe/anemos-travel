@@ -144,7 +144,9 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       // Server order is newest-created-first; the list shows travel-date
       // order instead — next trip on top, finished trips tucked into a
       // collapsed group (utils/trip_list_order.dart). The live trip is
-      // exempt from the past group so its Live pill never hides in there.
+      // exempt from the past group so the promoted trip can never be filed
+      // under "Past trips"; the promotion below is what takes it out of the
+      // Upcoming run.
       final now = DateTime.now();
       final groups =
           partitionTripsForList(state.trips, now, liveTripId: liveTrip?.id);
@@ -155,12 +157,18 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       final sharedOrdered = [...sharedGroups.upcoming, ...sharedGroups.past];
       // The soonest dated upcoming trip, promoted to an "Up next" hero. A
       // live trip already owns the promoted slot, so the hero yields to it —
-      // one promoted object at a time. Unlike the live spotlight, the hero
-      // REPLACES its plain card (it shows strictly more), hence the dedupe.
+      // one promoted object at a time.
       final hero = liveTrip == null ? upNextTrip(groups.upcoming, now) : null;
+      // Whichever hero got the slot, it REPLACES its plain card: a promoted
+      // trip is never listed twice, and "Upcoming" never contains a trip
+      // already under way. ONE name for "the promoted trip" and one
+      // subtraction from the run — the live trip used to show twice precisely
+      // because there were two notions of promoted and only `hero` was
+      // subtracted.
+      final promotedId = liveTrip?.id ?? hero?.id;
       final upcomingCards = [
         for (final t in groups.upcoming)
-          if (t.id != hero?.id) t
+          if (t.id != promotedId) t
       ];
       // "Your travels" is over OWNED trips (shared-with-me is someone else's
       // travel, and its payload carries no pins anyway), split into what's
@@ -193,8 +201,9 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // The trip happening today, promoted to the very top as a
-                  // one-tap shortcut (specs/happening-now). It also stays in
-                  // "My Trips" below — this is a spotlight, not a filter.
+                  // one-tap shortcut (specs/happening-now). It sits ABOVE the
+                  // "Upcoming" header, and its plain card is gone from the
+                  // run below — a trip you're on is not upcoming.
                   if (liveTrip != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.lg),

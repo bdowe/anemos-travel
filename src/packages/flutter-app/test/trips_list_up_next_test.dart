@@ -180,6 +180,9 @@ void main() {
     expect(find.byType(UpNextTripCard), findsNothing);
     // Not promoted, so the future trip keeps its plain card.
     expect(find.text('Lisbon Trip'), findsOneWidget);
+    // And the promoted one loses its own — whichever hero holds the slot,
+    // it replaces the card (this was 2 before the 2026-08-15 amendment).
+    expect(find.text('Athens Trip'), findsOneWidget);
   });
 
   testWidgets('undated-only lists get no hero', (WidgetTester tester) async {

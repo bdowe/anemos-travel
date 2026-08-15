@@ -1,26 +1,39 @@
 import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
 import '../models/trip.dart';
-import '../theme/app_colors.dart';
-import '../theme/spacing.dart';
 import '../utils/trip_days.dart';
-import '../utils/trip_format.dart';
-import 'status_pill.dart';
+import 'trip_hero_card.dart';
 
-/// Promoted shortcut into the trip that is happening right now
-/// (specs/happening-now). Same brand-gradient treatment as the home screen's
-/// recent-trip tile, so it reads as the top-priority object wherever it sits;
-/// shown above everything else on the trips list and in the recent-trip slot
-/// on home. Tap goes straight to the trip detail, which auto-scrolls to today.
+/// The trip that is happening right now, promoted to the head of the trips
+/// list and to Home's live slot (specs/happening-now). Tap goes straight to
+/// the trip detail, which auto-scrolls to today.
+///
+/// It REPLACES the trip's plain list card — a promoted trip is never listed
+/// twice. It used to sit above the list AND stay in it ("a shortcut, not a
+/// filter"), which was defensible while the list below was one flat run
+/// called "My Trips" and this card carried nothing the row did; once the list
+/// grew sections, that left a trip already under way filed under "Upcoming".
+/// The card earns the replacement by carrying the row's facts: [TripHeroCard]
+/// is the shared body, and everything below is the two-line difference
+/// between this hero and the pre-trip one, [UpNextTripCard].
 class LiveTripCard extends StatelessWidget {
   final Trip trip;
   final VoidCallback onTap;
 
-  const LiveTripCard({super.key, required this.trip, required this.onTap});
+  /// Passed through to [TripHeroCard.showMap]. Home passes false: its copy of
+  /// this card and the trips list's are alive at the same time inside
+  /// AppShell's IndexedStack, and two route bands for one trip starve each
+  /// other's tiles until both render blank.
+  final bool showMap;
+
+  const LiveTripCard(
+      {super.key,
+      required this.trip,
+      required this.onTap,
+      this.showMap = true});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = context.l10n;
 
     // Where the trip stands today: "Day N of M", or just "Day N" for an
@@ -32,106 +45,19 @@ class LiveTripCard extends StatelessWidget {
         ? null
         : (total > 0 ? l10n.liveTripDayOfTotal(day, total) : l10n.liveTripDay(day));
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: AppRadius.mdAll,
-        gradient: AppColors.brandGradient,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.brandDark.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadius.mdAll,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.sm + 2),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child:
-                      const Icon(Icons.near_me, color: Colors.white, size: 26),
-                ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.liveTripEyebrow,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.white70,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        // Real trip title, like the trips list and detail
-                        // header; cities label only for legacy AI-summary
-                        // titles (tripHeadline, the one shared rule).
-                        tripHeadline(
-                          trip.title,
-                          citiesLabel(
-                            trip.cities,
-                            two: (a, b) => l10n.citiesTwo(a, b),
-                            more: (a, b, n) => l10n.citiesMore(a, b, n),
-                          ),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Row(
-                        children: [
-                          // White-tinted pill so it sits on the gradient like
-                          // the rest of the card, not like the light-surface
-                          // StatusPill used on the trips list.
-                          StatusPill.custom(
-                            label: l10n.liveTripStatusLive,
-                            background: Colors.white.withValues(alpha: 0.22),
-                            foreground: Colors.white,
-                          ),
-                          if (progress != null) ...[
-                            const SizedBox(width: AppSpacing.sm),
-                            Flexible(
-                              child: Text(
-                                progress,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.85),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios,
-                    size: 16, color: Colors.white70),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return TripHeroCard(
+      trip: trip,
+      eyebrow: l10n.liveTripEyebrow,
+      icon: Icons.near_me,
+      // "Day 2 of 5" already names the span, so the card's own duration label
+      // would be a second total saying the same thing.
+      showDuration: false,
+      showMap: showMap,
+      leadingMeta: [
+        TripHeroCard.heroPill(l10n.liveTripStatusLive),
+        if (progress != null) TripHeroCard.heroFact(context, progress),
+      ],
+      onTap: onTap,
     );
   }
 }
