@@ -444,13 +444,13 @@ var searchLocalRecsTool = anthropic.ToolParam{
 
 var updateSectionTool = anthropic.ToolParam{
 	Name:        "update_itinerary_section",
-	Description: anthropic.String("Replace one section of the traveler's saved itinerary in place. Pass the COMPLETE updated list of places for the targeted section, in visit order — places you omit are removed from that section. Places outside the section are untouched. Use scope 'day' for a single trip day, 'city' for one city/hub and its day trips, or 'trip' for the whole itinerary."),
+	Description: anthropic.String("Replace one section of the traveler's saved itinerary in place. Pass the COMPLETE updated list of places for the targeted section, in visit order — places you omit are removed from that section, and places outside the section are untouched. Every place you send MUST already belong to the section you target: a place counts as part of a city when its city IS that city, or when it is a day trip whose day_trip_from is that city. Use scope 'day' for a single trip day, 'city' for one city/hub and its day trips. This tool replaces a section IN PLACE and cannot move places between sections — sending another city's or another day's places under scope 'city' or 'day' is rejected, because they would be duplicated rather than moved. To swap or reorder whole cities, or to move places from one city or day to another, use scope 'trip' and send the COMPLETE itinerary: every place in the trip, in the new order."),
 	InputSchema: anthropic.ToolInputSchemaParam{
 		Properties: map[string]any{
 			"scope": map[string]any{
 				"type":        "string",
 				"enum":        []string{"day", "city", "trip"},
-				"description": "Which slice of the itinerary to replace.",
+				"description": "Which slice of the itinerary to replace. 'trip' is the ONLY scope that may move places across cities or days — use it for swaps and whole-trip reorders.",
 			},
 			"day": map[string]any{
 				"type":        "integer",
@@ -462,7 +462,7 @@ var updateSectionTool = anthropic.ToolParam{
 			},
 			"items": map[string]any{
 				"type":        "array",
-				"description": "The full replacement list for the section, in visit order. Include unchanged places with their existing coordinates and tags so they aren't lost.",
+				"description": "The full replacement list for the section, in visit order. Every entry must already belong to the targeted section — same city/hub for scope 'city' (a day trip qualifies via day_trip_from), same day for scope 'day'. Include unchanged places with their existing coordinates and tags so they aren't lost.",
 				"items":       itineraryLocationSchema,
 			},
 		},

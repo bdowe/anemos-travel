@@ -537,6 +537,25 @@ func main() {
 		return
 	}
 
+	// `repair-sections` subcommand: collapse duplicate city runs left behind by
+	// the pre-guard update_itinerary_section splice (see itinerary_repair.go).
+	// Reports only unless -apply is passed.
+	if len(os.Args) > 1 && os.Args[1] == "repair-sections" {
+		if dbURL == "" {
+			log.Fatal("DATABASE_URL is required to repair itineraries")
+		}
+		pool, err := pgxpool.New(ctx, dbURL)
+		if err != nil {
+			log.Fatalf("database unreachable: %v", err)
+		}
+		defer pool.Close()
+		dbPool = pool
+		if err := runRepairSections(ctx, os.Args[2:]); err != nil {
+			log.Fatalf("repair failed: %v", err)
+		}
+		return
+	}
+
 	// Connect to the database. Missing/unreachable DB -> degraded mode (the API
 	// still serves stateless endpoints). A migration failure on a reachable DB is
 	// a real error -> exit non-zero.

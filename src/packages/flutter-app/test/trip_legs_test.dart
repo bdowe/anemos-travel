@@ -77,6 +77,34 @@ void main() {
       expect(legs.map((l) => l.key), ['Athens', 'Fira', 'Oia', 'Fira#2']);
     });
 
+    test('one city in mixed case stays one run, keeping the first spelling', () {
+      // The Go twin splits with strings.EqualFold; an exact compare here made a
+      // rewritten "krakow" a second run beside "Krakow", so the city rendered
+      // twice on the client only and legParityMismatches reported a leg-count
+      // mismatch against the server payload.
+      final legs = tripLegs([
+        _item(0, city: 'Krakow'),
+        _item(1, city: 'krakow'),
+        _item(2, city: 'KRAKOW'),
+      ]);
+
+      expect(legs, hasLength(1));
+      expect(legs.single.label, 'Krakow');
+      expect(legs.single.items, hasLength(3));
+    });
+
+    test('the repeat counter folds case too, so a real revisit still gets #2',
+        () {
+      final legs = tripLegs([
+        _item(0, city: 'Krakow'),
+        _item(1, city: 'Prague'),
+        _item(2, city: 'krakow'),
+      ]);
+
+      expect(legs.map((l) => l.label), ['Krakow', 'Prague', 'krakow']);
+      expect(legs.map((l) => l.key), ['Krakow', 'Prague', 'krakow#2']);
+    });
+
     test('coord is the first geocoded item; all-(0,0) runs have none', () {
       final legs = tripLegs([
         _item(0, city: 'Paris'), // manually added, ungeocoded
