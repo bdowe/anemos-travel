@@ -17,8 +17,8 @@ import 'trip_map_destinations.dart';
 /// nothing on the trip is mappable — the host card then renders exactly as it
 /// would without the band. Fed by [cachedTripDetailProvider], so it is
 /// cache-ONLY: the band decorates what other screens loaded, it never
-/// fetches. Hosts: Home's recent-trip card and the trips list's "Up next"
-/// hero.
+/// fetches. Hosts: Home's recent-trip card and the shared TripHeroCard (both
+/// the "Up next" and "Happening now" heroes).
 class TripMapBand extends ConsumerStatefulWidget {
   final String tripId;
 

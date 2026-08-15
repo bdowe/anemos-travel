@@ -15,9 +15,12 @@ import 'trip_days.dart';
 ///   plans are actionable, undated drafts wait below them.
 /// - `past`: most recently finished first.
 ///
-/// The trip identified by [liveTripId] (the Happening-Now spotlight) always
-/// stays in the main list, so a Live-pill card can never end up filed under
-/// past — [tripIsPast] and the live-trip rules disagree about end-less trips.
+/// The trip identified by [liveTripId] (the Happening-Now hero) never lands in
+/// `past`, so the promoted trip can't end up filed under a collapsed "Past
+/// trips" group — [tripIsPast] and the live-trip rules disagree about end-less
+/// trips. It stays in `upcoming` here and the CALLER subtracts it, along with
+/// its own "Up next" hero, because a hero replaces the trip's plain card: one
+/// place decides the time buckets, one place decides promotion.
 ({List<Trip> upcoming, List<Trip> past}) partitionTripsForList(
   List<Trip> trips,
   DateTime today, {

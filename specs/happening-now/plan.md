@@ -62,7 +62,8 @@ None.
   the trip card share one formatter (behavior-neutral refactor).
 - **`lib/screens/trips_list_screen.dart`**: render `LiveTripCard` as the
   first `ListView` child (above the resumable-chats section); tap →
-  existing `_openTrip`. The trip stays in "My Trips".
+  existing `_openTrip`. The trip stays in "My Trips". *(Amended 2026-08-15:
+  the hero REPLACES the trip's plain card — see spec.md's amendment.)*
 - **`lib/screens/home_screen.dart`**: watch `liveTripProvider`; render the
   card in the recent-trip slot, with `_RecentTripCard` below it only when
   `recentTrip.tripId != liveTrip.id`. No `loadTrips()` call from home.

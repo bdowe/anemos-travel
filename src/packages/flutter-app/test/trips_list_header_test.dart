@@ -116,6 +116,23 @@ void main() {
     expect(find.text('Past trips'), findsOneWidget);
   });
 
+  testWidgets(
+      'a live-trip-only account keeps the Upcoming header over an empty run',
+      (WidgetTester tester) async {
+    // The twin of the all-past case: since the 2026-08-15 amendment the hero
+    // takes the live trip OUT of the run, so the one-trip account is the
+    // second way to reach an empty Upcoming. Same answer — the header stays,
+    // because it carries "New trip".
+    await _pumpList(tester, trips: [
+      _trip('live', 'Athens Trip', start: _rel(-1), end: _rel(1)),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Upcoming'), findsOneWidget);
+    expect(find.text('New trip'), findsOneWidget);
+    expect(find.text('Athens Trip'), findsOneWidget);
+  });
+
   testWidgets('shared-only accounts get no Upcoming header',
       (WidgetTester tester) async {
     await _pumpList(tester, shared: [
