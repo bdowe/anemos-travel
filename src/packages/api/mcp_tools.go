@@ -78,28 +78,69 @@ type listTripsOutput struct {
 	Trips []mcpTripSummary `json:"trips"`
 }
 
+// boolPtr exists because ToolAnnotations.DestructiveHint and .OpenWorldHint are
+// *bool with `omitempty` and a documented default of TRUE. Leaving one nil is
+// not "no opinion" — it ships absent and the client assumes the dangerous
+// reading. Every hint below is therefore stated outright, and the annotations
+// are pinned by mcp_server_integration_test.go so a nil can't creep back in.
+func boolPtr(b bool) *bool { return &b }
+
+// registerMCPTools declares the three tools plus the annotations both connector
+// directories require: OpenAI wants readOnlyHint/openWorldHint/destructiveHint
+// on every tool, Anthropic wants a title and the applicable hints. Missing or
+// wrong annotations are a named rejection cause on both.
 func registerMCPTools(s *mcp.Server, caller mcpCaller) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "create_trip",
+		Name:  "create_trip",
+		Title: "Save trip to Anemos",
 		Description: "Save an itinerary to the traveler's Anemos account. " +
 			"Supply the places by name and city — Anemos resolves map coordinates itself. " +
 			"Use this once the traveler has agreed on a plan; the reply includes a link to the saved trip.",
+		// Writes, but only ever adds: a new trip in the traveler's own private
+		// account. It overwrites nothing, deletes nothing, and publishes nothing
+		// to the open internet — hence destructive/openWorld false. Not
+		// idempotent: calling twice saves the trip twice.
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Save trip to Anemos",
+			ReadOnlyHint:    false,
+			DestructiveHint: boolPtr(false),
+			OpenWorldHint:   boolPtr(false),
+			IdempotentHint:  false,
+		},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createTripInput) (*mcp.CallToolResult, createTripOutput, error) {
 		return mcpCreateTrip(ctx, caller, in)
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "search_local_recommendations",
+		Name:  "search_local_recommendations",
+		Title: "Search local recommendations",
 		Description: "Search Anemos's recommendations from real locals for a city — places you can't find by " +
 			"searching the web, with the local's own tip and a quote. Call this FIRST when recommending places in a " +
 			"city, and credit the local by name when you use one.",
+		// Reads Anemos's own published pins. Closed world: no third-party call,
+		// no external state.
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "Search local recommendations",
+			ReadOnlyHint:    true,
+			DestructiveHint: boolPtr(false),
+			OpenWorldHint:   boolPtr(false),
+			IdempotentHint:  true,
+		},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchRecsInput) (*mcp.CallToolResult, any, error) {
 		return mcpSearchLocalRecs(ctx, caller, in)
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_trips",
+		Title:       "List saved trips",
 		Description: "List the traveler's saved Anemos trips, so you can refer to or link an existing trip.",
+		Annotations: &mcp.ToolAnnotations{
+			Title:           "List saved trips",
+			ReadOnlyHint:    true,
+			DestructiveHint: boolPtr(false),
+			OpenWorldHint:   boolPtr(false),
+			IdempotentHint:  true,
+		},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ listTripsInput) (*mcp.CallToolResult, listTripsOutput, error) {
 		return mcpListTrips(ctx, caller)
 	})

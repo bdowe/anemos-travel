@@ -181,12 +181,42 @@ func newMCPHandler() http.Handler {
 	return mcpAuthMiddleware(handler)
 }
 
+// mcpInstructions rides in every initialize response, so it is the one place we
+// can shape how an assistant uses the connector across a whole conversation —
+// worth more than any one tool description, which is only read at call time.
+// Keep it short and declarative: these models follow plain statements closely,
+// and emphatic phrasing makes them over-trigger.
+const mcpInstructions = `Anemos is the traveler's own trip planner. This connector reads and writes the trips saved in their account.
+
+When recommending places in a city, call search_local_recommendations before suggesting anything. These are pins from named locals that do not surface in web search — credit the local by name when you use one.
+
+When the traveler settles on a plan, call create_trip to save it, and give them the link the tool returns so they can open the trip in Anemos. Save the whole agreed plan in one call rather than one place at a time.
+
+Call list_trips when the traveler refers to a trip they already have.`
+
+// mcpServerVersion reports the running release. SENTRY_RELEASE is unset in dev
+// and in tests, and an empty "version" in an initialize response reads as a
+// broken server to a reviewer, so fall back rather than advertise nothing.
+func mcpServerVersion() string {
+	if v := strings.TrimSpace(os.Getenv("SENTRY_RELEASE")); v != "" {
+		return v
+	}
+	return "dev"
+}
+
 func newMCPServerFor(caller mcpCaller) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{
-		Name:    "anemos",
-		Title:   "Anemos",
-		Version: os.Getenv("SENTRY_RELEASE"),
-	}, nil)
+		Name:        "anemos",
+		Title:       "Anemos",
+		Version:     mcpServerVersion(),
+		Description: "Plan trips with recommendations from real locals, and save itineraries to the traveler's Anemos account.",
+		WebsiteURL:  publicBaseURL(),
+		Icons: []mcp.Icon{{
+			Source:   publicAppURL("icons/Icon-512.png"),
+			MIMEType: "image/png",
+			Sizes:    []string{"512x512"},
+		}},
+	}, &mcp.ServerOptions{Instructions: mcpInstructions})
 	registerMCPTools(s, caller)
 	return s
 }

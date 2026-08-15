@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Assistant Connector — Anemos</title>
+  <meta name="description" content="Connect Anemos to ChatGPT or Claude: plan a trip in your AI assistant and save it straight to your Anemos account.">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        Helvetica, Arial, sans-serif;
+      color: #263238;
+      background: #fafafa;
+      line-height: 1.6;
+    }
+    header {
+      background: linear-gradient(to bottom right, #00897B, #004D40);
+      color: #fff;
+      padding: 40px 24px 32px;
+    }
+    header .wrap, main { max-width: 760px; margin: 0 auto; }
+    header .brand {
+      font-size: 0.9rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.85;
+      margin: 0 0 8px;
+    }
+    header h1 { margin: 0; font-size: 1.9rem; }
+    header .meta { margin: 10px 0 0; opacity: 0.85; font-size: 0.95rem; }
+    main { padding: 32px 24px 64px; }
+    h2 {
+      color: #00695C;
+      font-size: 1.25rem;
+      margin: 36px 0 10px;
+      border-bottom: 2px solid #B2DFDB;
+      padding-bottom: 6px;
+    }
+    h3 { font-size: 1.05rem; margin: 22px 0 6px; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 6px 0; }
+    a { color: #00695C; }
+    code {
+      background: #E0F2F1;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.95em;
+      word-break: break-all;
+    }
+    .callout {
+      background: #E0F2F1;
+      border-left: 4px solid #00897B;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+    }
+    .url {
+      display: block;
+      background: #004D40;
+      color: #E0F2F1;
+      padding: 14px 16px;
+      border-radius: 8px;
+      margin: 16px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 1rem;
+      word-break: break-all;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 16px 0;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid #CFD8DC;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #E0F2F1; color: #00695C; }
+    .table-scroll { overflow-x: auto; }
+    footer {
+      border-top: 1px solid #CFD8DC;
+      margin-top: 48px;
+      padding-top: 16px;
+      font-size: 0.9rem;
+      color: #607D8B;
+    }
+    footer a { margin-right: 16px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <p class="brand">Anemos</p>
+      <h1>AI assistant connector</h1>
+      <p class="meta">Plan in ChatGPT or Claude · save straight to Anemos</p>
+    </div>
+  </header>
+  <main>
+    <p>
+      Plenty of people already plan trips by talking to an AI assistant. The
+      Anemos connector means you don't have to copy the result anywhere: your
+      assistant can search Anemos's recommendations from real locals while you
+      plan, and save the finished itinerary directly to your Anemos account,
+      handing you a link to open it.
+    </p>
+
+    <div class="callout">
+      <strong>You stay in control.</strong> The connector only ever touches
+      <em>your</em> Anemos account, and only after you sign in and approve it.
+      You can revoke access at any time from Settings, and revoking takes effect
+      immediately.
+    </div>
+
+    <h2>The connector URL</h2>
+    <p>This is the address you paste into your assistant:</p>
+    <code class="url">https://anemos.travel/mcp</code>
+    <p>
+      It speaks the <a href="https://modelcontextprotocol.io">Model Context
+      Protocol</a> (MCP) over HTTPS, and authenticates with OAuth 2.1 — you sign
+      in to Anemos in your own browser, and the assistant never sees your
+      password.
+    </p>
+
+    <h2>What the assistant can do</h2>
+    <div class="table-scroll">
+      <table>
+        <tr>
+          <th>Tool</th>
+          <th>What it does</th>
+          <th>Access</th>
+        </tr>
+        <tr>
+          <td><code>search_local_recommendations</code></td>
+          <td>
+            Looks up Anemos's published recommendations from named locals for a
+            city, with each local's own tip.
+          </td>
+          <td>Read-only. Published content, not your personal data.</td>
+        </tr>
+        <tr>
+          <td><code>list_trips</code></td>
+          <td>Lists the trips saved in your account, so the assistant can refer to one.</td>
+          <td>Read-only. Your saved trips.</td>
+        </tr>
+        <tr>
+          <td><code>create_trip</code></td>
+          <td>
+            Saves a new itinerary to your account and returns a link to open it.
+            Anemos resolves map coordinates for the places itself.
+          </td>
+          <td>
+            Adds a trip. It never edits or deletes an existing trip, and
+            publishes nothing publicly.
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <h2>Adding it to ChatGPT</h2>
+    <ol>
+      <li>Open <strong>Settings &rsaquo; Connectors</strong> and turn on
+        <strong>Developer mode</strong> (available on Plus, Pro, Business,
+        Enterprise, and Edu on the web).</li>
+      <li>Choose <strong>Create</strong> / <strong>Add custom connector</strong>.</li>
+      <li>Paste <code>https://anemos.travel/mcp</code> as the MCP server URL.</li>
+      <li>Sign in to Anemos when prompted and approve the connection.</li>
+    </ol>
+
+    <h2>Adding it to Claude</h2>
+    <ol>
+      <li>Open <a href="https://claude.ai/customize/connectors">Customize &rsaquo; Connectors</a>.</li>
+      <li>Choose <strong>Add custom connector</strong>.</li>
+      <li>Paste <code>https://anemos.travel/mcp</code> as the remote MCP server URL.</li>
+      <li>Sign in to Anemos when prompted and approve the connection.</li>
+    </ol>
+    <p>
+      On Claude Team and Enterprise plans an organization owner adds the
+      connector under Organization settings first; members then connect their
+      own Anemos account to it.
+    </p>
+
+    <h2>What gets shared, and when</h2>
+    <ul>
+      <li>
+        Nothing is shared until you approve the connection, and then only when
+        the assistant actually calls one of the three tools above.
+      </li>
+      <li>
+        When it does, the relevant trip data travels between Anemos and your
+        assistant's provider (OpenAI or Anthropic), where it is handled under
+        <em>their</em> privacy policy and your settings with them.
+      </li>
+      <li>
+        Anemos stores the access grant itself — which app you connected, the
+        permissions you granted, and when it was last used. Access and refresh
+        tokens are stored hashed, never in readable form.
+      </li>
+      <li>
+        The connector cannot read your Anemos planning conversations, your
+        account password, or your payment details.
+      </li>
+    </ul>
+    <p>
+      The full picture is in our <a href="/privacy">Privacy Policy</a>.
+    </p>
+
+    <h2>Revoking access</h2>
+    <p>
+      In Anemos, open <strong>Settings &rsaquo; Connected apps</strong>, find the
+      assistant, and choose <strong>Revoke</strong>. This invalidates its tokens
+      immediately — the next tool call it attempts will fail. Removing the
+      connector on the assistant's side as well keeps things tidy, but revoking
+      in Anemos is what actually cuts off access.
+    </p>
+
+    <h2>Troubleshooting</h2>
+    <h3>The assistant says it can't reach Anemos</h3>
+    <p>
+      Check that the URL is exactly <code>https://anemos.travel/mcp</code> — no
+      trailing slash, no <code>/api/v1</code> prefix.
+    </p>
+    <h3>It asks me to sign in again</h3>
+    <p>
+      Access tokens are short-lived and refresh automatically. Being asked to
+      approve again usually means the grant was revoked — check Settings
+      &rsaquo; Connected apps.
+    </p>
+    <h3>Some places didn't get saved</h3>
+    <p>
+      Anemos only saves a place it can put on a map. Anything it can't locate is
+      named back to the assistant rather than dropped silently, so ask it which
+      ones, then add them by hand in the app.
+    </p>
+
+    <h2>Support</h2>
+    <p>
+      Questions, bug reports, or trouble connecting:
+      <a href="mailto:goldentempollc@gmail.com">goldentempollc@gmail.com</a>.
+    </p>
+
+    <footer>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="/">Back to the app</a>
+    </footer>
+  </main>
+</body>
+</html>
