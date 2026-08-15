@@ -4268,6 +4268,18 @@ abstract class AppLocalizations {
   /// **'Show all places'**
   String get mapShowAllPlaces;
 
+  /// Tooltip on the map pin for the airport a trip departs from, when it differs from the one it returns into
+  ///
+  /// In en, this message translates to:
+  /// **'Departure airport ({code})'**
+  String mapDepartureAirport(String code);
+
+  /// Tooltip on the map pin for the airport a trip returns into, when it differs from the one it departs from
+  ///
+  /// In en, this message translates to:
+  /// **'Return airport ({code})'**
+  String mapReturnAirport(String code);
+
   /// No description provided for @mapHomeAirport.
   ///
   /// In en, this message translates to:

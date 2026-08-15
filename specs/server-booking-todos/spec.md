@@ -26,11 +26,21 @@ every relevant write makes the checklist a maintained view, not a cache.
       date tools, stay/segment CRUD, travel-mode and home-airport changes.
 - [ ] Manual and agent-added rows, booked flags, and dismissals survive
       re-derivation untouched.
+- [ ] Derived transport rows carry an explicit role and a stable identity that
+      does not embed a mutable endpoint label; changing a trip's departure or
+      return endpoint updates the row's title, labels and search link in place,
+      deleting nothing. (Landed ahead of this spec as
+      `specs/trip-endpoint-airports` — the criterion above is unachievable for
+      the home legs without it, since re-deriving from the owner's home airport
+      is itself an endpoint change.)
 - [ ] Rollout is shadow-first: a comparison window logs client-posted vs
       server-derived rows on real trips before the flip.
 - [ ] At the flip, the legacy client sync endpoints become no-op echoes that
       return server truth (old cached bundles then display it); the client
-      derivation code is deleted one wave later.
+      derivation code is deleted one wave later. The endpoint-labelled
+      `todo_key` the response still emits for compatibility
+      (`displayBookingTodoKey`) is deleted in the same wave — its only reader is
+      the client derivation.
 - [ ] Legacy auto draft stays/segments follow the same server derivation (no
       second client-owned derivation remains).
 - [ ] "Stay in Other places" rows are no longer produced (hubless legs get no

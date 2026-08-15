@@ -261,6 +261,10 @@ func duplicateSharedTripHandler(w http.ResponseWriter, r *http.Request) {
 		Summary:    src.Summary,
 		TravelMode: src.TravelMode,
 		Origin:     src.Origin,
+		// The endpoints travel with the copy: a duplicate that silently
+		// reverted to the home airport would derive its legs wrong from birth.
+		OriginAirport: src.OriginAirport,
+		ReturnAirport: src.ReturnAirport,
 	})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not copy trip")

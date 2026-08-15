@@ -27,11 +27,26 @@ class Trip {
   final String? travelMode;
 
   /// Where the traveler sets out from, in their own words ("Lake George, NY").
-  /// Set once when the trip is created and never edited — the derived
-  /// transport legs take their identity from it, so a later change would
-  /// orphan them (see migration 00062). Null means it was never stated, and
-  /// the legs fall back to the saved home airport.
+  /// Free text: it names a place the way they said it and the booking legs use
+  /// it verbatim, so it resolves to no coordinates and draws no map pin. Null
+  /// means it was never stated.
+  ///
+  /// Changed only in chat, via set_trip_origin (migration 00064 made that safe
+  /// — a derived leg's identity no longer contains its endpoint labels). PATCH
+  /// still ignores it.
   final String? origin;
+
+  /// This trip's own flight endpoints as IATA codes: where it departs from and
+  /// where it returns into. They can differ — out of ALB, home into EWR — which
+  /// is why there are two.
+  ///
+  /// Written together or not at all: null never means "same as the other
+  /// direction", it means this trip states no airport, and the legs and map
+  /// fall back to [origin] and then to the saved home airport.
+  @JsonKey(name: 'origin_airport')
+  final String? originAirport;
+  @JsonKey(name: 'return_airport')
+  final String? returnAirport;
   @JsonKey(name: 'version_count')
   final int? versionCount;
   final List<String>? cities;
@@ -123,6 +138,8 @@ class Trip {
     this.chatId,
     this.travelMode,
     this.origin,
+    this.originAirport,
+    this.returnAirport,
     this.versionCount,
     this.cities,
     required this.createdAt,

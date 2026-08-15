@@ -30,7 +30,7 @@ func TestPersistTripStoresOrigin(t *testing.T) {
 	user, _ := createTestUser(t, "origin@example.com")
 
 	tripID, _, err := persistTrip(context.Background(), user.ID, "chat-origin",
-		"Montreal Weekend", "", "2026-08-15", "2026-08-17", "car", "  Lake George, NY  ",
+		"Montreal Weekend", "", "2026-08-15", "2026-08-17", "car", tripEndpoints{Origin: "  Lake George, NY  "},
 		[]map[string]any{{"name": "Schwartz's Deli", "city": "Montreal"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)
@@ -52,7 +52,7 @@ func TestPersistTripOmittedOriginStaysNull(t *testing.T) {
 	user, _ := createTestUser(t, "noorigin@example.com")
 
 	tripID, _, err := persistTrip(context.Background(), user.ID, "chat-noorigin",
-		"Lisbon", "", "", "", "", "   ",
+		"Lisbon", "", "", "", "", tripEndpoints{Origin: "   "},
 		[]map[string]any{{"name": "Belém Tower", "city": "Lisbon"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)
@@ -69,7 +69,7 @@ func TestPersistTripBoundsOriginLength(t *testing.T) {
 	user, _ := createTestUser(t, "longorigin@example.com")
 
 	tripID, _, err := persistTrip(context.Background(), user.ID, "chat-longorigin",
-		"Trip", "", "", "", "", strings.Repeat("x", maxTripOriginLen+50),
+		"Trip", "", "", "", "", tripEndpoints{Origin: strings.Repeat("x", maxTripOriginLen+50)},
 		[]map[string]any{{"name": "Belém Tower", "city": "Lisbon"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)
@@ -86,7 +86,7 @@ func TestTripResponseCarriesOrigin(t *testing.T) {
 	user, token := createTestUser(t, "originjson@example.com")
 
 	tripID, _, err := persistTrip(context.Background(), user.ID, "chat-originjson",
-		"Montreal Weekend", "", "", "", "car", "Lake George, NY",
+		"Montreal Weekend", "", "", "", "car", tripEndpoints{Origin: "Lake George, NY"},
 		[]map[string]any{{"name": "Schwartz's Deli", "city": "Montreal"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)
@@ -103,7 +103,7 @@ func TestTripResponseCarriesOrigin(t *testing.T) {
 
 	// Absent stays absent rather than serializing as null.
 	plainID, _, err := persistTrip(context.Background(), user.ID, "chat-plain",
-		"Lisbon", "", "", "", "", "",
+		"Lisbon", "", "", "", "", tripEndpoints{Origin: ""},
 		[]map[string]any{{"name": "Belém Tower", "city": "Lisbon"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)
@@ -119,7 +119,7 @@ func TestPatchTripCannotSetOrigin(t *testing.T) {
 	user, token := createTestUser(t, "patchorigin@example.com")
 
 	tripID, _, err := persistTrip(context.Background(), user.ID, "chat-patchorigin",
-		"Montreal Weekend", "", "", "", "", "Lake George, NY",
+		"Montreal Weekend", "", "", "", "", tripEndpoints{Origin: "Lake George, NY"},
 		[]map[string]any{{"name": "Schwartz's Deli", "city": "Montreal"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)

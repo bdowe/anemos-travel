@@ -115,9 +115,17 @@ void main() {
   // Newark; far from the European fixtures, same point the full-screen
   // tests use.
   const homePoint = (lat: 40.6895, lng: -74.1745);
+  // Albany, ~200 km north — a second, distinct endpoint.
+  const albPoint = (lat: 42.7483, lng: -73.8017);
 
   // Three legs so the gate has a first, a middle, and a last.
-  Trip makeTrip({String? travelMode, String? origin}) => Trip(
+  Trip makeTrip({
+    String? travelMode,
+    String? origin,
+    String? originAirport,
+    String? returnAirport,
+  }) =>
+      Trip(
     id: 't1',
     title: 'Grand tour',
     createdAt: '2026-06-01',
@@ -126,6 +134,8 @@ void main() {
     endDate: '2026-09-03',
     travelMode: travelMode,
     origin: origin,
+    originAirport: originAirport,
+    returnAirport: returnAirport,
     items: [
       _item(0, 'Louvre', 'Paris', 48.8606, 2.3376, 1),
       _item(1, 'Colosseum', 'Rome', 41.8902, 12.4922, 2),
@@ -149,6 +159,7 @@ void main() {
     WidgetTester tester, {
     bool withHome = true,
     Trip? tripOverride,
+    List<Override> extraOverrides = const [],
   }) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -162,6 +173,7 @@ void main() {
             homeAirportPointProvider('EWR')
                 .overrideWith((ref) async => homePoint),
           ],
+          ...extraOverrides,
         ],
         child: MaterialApp(
           localizationsDelegates: testLocalizationsDelegates,
@@ -190,12 +202,15 @@ void main() {
       (WidgetTester tester) async {
     await pumpScreen(tester);
 
+    // One airport serving both directions stays ONE entry with both legs —
+    // byte-for-byte the shape this drew before a trip could have two.
     final home = map(tester).home;
-    expect(home, isNotNull);
-    expect(home!.label, 'EWR');
-    expect(home.point, LatLng(homePoint.lat, homePoint.lng));
-    expect(home.outboundTo, isNotNull);
-    expect(home.returnFrom, isNotNull);
+    expect(home, hasLength(1));
+    expect(home.single.label, 'EWR');
+    expect(home.single.point, LatLng(homePoint.lat, homePoint.lng));
+    expect(home.single.outboundTo, isNotNull);
+    expect(home.single.returnFrom, isNotNull);
+    expect(home.single.kind, TripMapHomeKind.home);
     expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -206,17 +221,17 @@ void main() {
 
     await tapChip(tester, 'Paris');
     var home = map(tester).home;
-    expect(home!.outboundTo, isNotNull);
-    expect(home.returnFrom, isNull);
+    expect(home.single.outboundTo, isNotNull);
+    expect(home.single.returnFrom, isNull);
 
     await tapChip(tester, 'Rome');
-    expect(map(tester).home, isNull);
+    expect(map(tester).home, isEmpty);
     expect(find.byIcon(Icons.flight_takeoff), findsNothing);
 
     await tapChip(tester, 'Berlin');
     home = map(tester).home;
-    expect(home!.outboundTo, isNull);
-    expect(home.returnFrom, isNotNull);
+    expect(home.single.outboundTo, isNull);
+    expect(home.single.returnFrom, isNotNull);
     expect(tester.takeException(), isNull);
   });
 
@@ -228,12 +243,12 @@ void main() {
     // Montreal rendered as a flight from Newark, 2026-08-14).
     await pumpScreen(tester, tripOverride: makeTrip(travelMode: 'car'));
 
-    expect(map(tester).home, isNull);
+    expect(map(tester).home, isEmpty);
     expect(find.byIcon(Icons.flight_takeoff), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a stated origin draws no home-airport leg',
+  testWidgets('an origin stated in words draws no pin',
       (WidgetTester tester) async {
     // The trip named where it starts, so the saved airport is known to be the
     // wrong origin — and the stated one is free text we hold no coordinates
@@ -241,9 +256,72 @@ void main() {
     await pumpScreen(tester,
         tripOverride: makeTrip(origin: 'Lake George, NY'));
 
-    expect(map(tester).home, isNull);
+    expect(map(tester).home, isEmpty);
     expect(find.byIcon(Icons.flight_takeoff), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets("the trip's own airport outranks the saved one, and pins",
+      (WidgetTester tester) async {
+    // The point of the whole change: "make this trip leave from ALB" moves the
+    // map, where a free-text origin only made the pin vanish.
+    await pumpScreen(
+      tester,
+      tripOverride: makeTrip(
+          origin: 'Lake George, NY', originAirport: 'ALB', returnAirport: 'ALB'),
+      extraOverrides: [
+        homeAirportPointProvider('ALB').overrideWith((ref) async => albPoint),
+      ],
+    );
+
+    final home = map(tester).home;
+    expect(home, hasLength(1));
+    expect(home.single.label, 'ALB');
+    expect(home.single.point, LatLng(albPoint.lat, albPoint.lng));
+    expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+  });
+
+  testWidgets('departing and returning through different airports draws two pins',
+      (WidgetTester tester) async {
+    // Out of ALB, home into EWR. Two pins, each carrying only its own leg.
+    await pumpScreen(
+      tester,
+      tripOverride: makeTrip(originAirport: 'ALB', returnAirport: 'EWR'),
+      extraOverrides: [
+        homeAirportPointProvider('ALB').overrideWith((ref) async => albPoint),
+      ],
+    );
+
+    final home = map(tester).home;
+    expect(home, hasLength(2));
+    expect(home.first.label, 'ALB');
+    expect(home.first.kind, TripMapHomeKind.departure);
+    expect(home.first.outboundTo, isNotNull);
+    expect(home.first.returnFrom, isNull);
+    expect(home.last.label, 'EWR');
+    expect(home.last.kind, TripMapHomeKind.arrival);
+    expect(home.last.outboundTo, isNull);
+    expect(home.last.returnFrom, isNotNull);
+    expect(find.byIcon(Icons.flight_takeoff), findsNWidgets(2));
+  });
+
+  testWidgets('one endpoint resolving still draws its own pin',
+      (WidgetTester tester) async {
+    // ALB never resolves (a provider hiccup, or a code with no coordinates).
+    // The departure pin is lost; the return pin must not be.
+    await pumpScreen(
+      tester,
+      tripOverride: makeTrip(originAirport: 'ALB', returnAirport: 'EWR'),
+      extraOverrides: [
+        homeAirportPointProvider('ALB').overrideWith((ref) async => null),
+      ],
+    );
+
+    final home = map(tester).home;
+    expect(home, hasLength(1));
+    expect(home.single.label, 'EWR');
+    expect(home.single.kind, TripMapHomeKind.arrival);
+    expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
   });
 
   testWidgets('a mixed-mode trip keeps its home leg',
@@ -252,7 +330,7 @@ void main() {
     // plausible — only a stated ground mode suppresses the overlay.
     await pumpScreen(tester, tripOverride: makeTrip(travelMode: 'mixed'));
 
-    expect(map(tester).home, isNotNull);
+    expect(map(tester).home, hasLength(1));
     expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
   });
 
@@ -262,7 +340,7 @@ void main() {
     // throw in this scope if the lookup path were exercised.
     await pumpScreen(tester, withHome: false);
 
-    expect(map(tester).home, isNull);
+    expect(map(tester).home, isEmpty);
     expect(find.byIcon(Icons.flight_takeoff), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -289,7 +367,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Boot: the prefs fetch 429'd — no home overlay yet.
-    expect(map(tester).home, isNull);
+    expect(map(tester).home, isEmpty);
 
     // Quiet refresh (drive RefreshIndicator.onRefresh directly — the fling
     // path is covered by the offline tests; over the pinned map card the
@@ -302,8 +380,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(prefsApi.calls, 2);
-    expect(map(tester).home, isNotNull);
-    expect(map(tester).home!.label, 'EWR');
+    expect(map(tester).home, hasLength(1));
+    expect(map(tester).home.single.label, 'EWR');
     expect(tester.takeException(), isNull);
   });
 }

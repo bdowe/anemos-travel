@@ -968,13 +968,32 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final ferryLegs =
         <String, ({String origin, String destination, String? date})>{};
     var pos = 0;
-    // Where the journey starts and ends. A stated origin beats the saved home
-    // airport: the airport is a standing guess about how this traveler
-    // usually leaves, while the origin is what they said about THIS trip
-    // ("driving up from Lake George"). Neither one means no home legs at all.
-    final stated = trip.origin?.trim();
-    final home = (stated != null && stated.isNotEmpty) ? stated : _homeAirport;
-    final hasHome = home != null && home.isNotEmpty && ranges.isNotEmpty;
+    // Where the journey starts and where it ends — SEPARATELY, because a trip
+    // can fly out of one airport and come home into another (trips
+    // .origin_airport / .return_airport, migration 00064). One explicit ladder,
+    // read once per direction; the two differ only in which airport they take:
+    //
+    //   this trip's airport for that direction (set in chat: set_trip_origin)
+    //   -> the origin the traveler stated in words ("Lake George, NY")
+    //   -> the saved home airport, a standing guess about how this traveler
+    //      usually leaves rather than anything about THIS trip.
+    //
+    // Server twin: tripEndpointLabels in booking_todo_identity.go — it relabels
+    // these same rows on the trip's endpoints changing, so change one and you
+    // change both.
+    String? endpointLabel(String? tripAirport) {
+      final code = tripAirport?.trim();
+      if (code != null && code.isNotEmpty) return code.toUpperCase();
+      final stated = trip.origin?.trim();
+      if (stated != null && stated.isNotEmpty) return stated;
+      return _homeAirport;
+    }
+
+    final departure = endpointLabel(trip.originAirport);
+    final arrival = endpointLabel(trip.returnAirport);
+    final hasDeparture =
+        departure != null && departure.isNotEmpty && ranges.isNotEmpty;
+    final hasArrival = arrival != null && arrival.isNotEmpty && ranges.isNotEmpty;
     final ground = _groundModeOf(trip);
 
     // Per-leg overrides: a transport row whose server-preserved [BookingTodo.mode]
@@ -1089,12 +1108,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           when, originCoord: originCoord, destCoord: destCoord);
     }
 
-    // Outbound: home airport -> first city, on the first group's start (the
-    // trip's start date via the first-leg anchor, unless a confirmed stay
+    // Outbound: departure airport -> first city, on the first group's start
+    // (the trip's start date via the first-leg anchor, unless a confirmed stay
     // overrides it). Home legs never get the Greek-ferry default.
-    if (hasHome) {
-      addLegAs(effectiveMode(home, ranges.first.label, ground ?? 'flight'),
-          home, ranges.first.label, ranges.first.start,
+    if (hasDeparture) {
+      addLegAs(effectiveMode(departure, ranges.first.label, ground ?? 'flight'),
+          departure, ranges.first.label, ranges.first.start,
           destCoord: ranges.first.coord);
     }
 
@@ -1123,10 +1142,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       }
     }
 
-    // Return: last city -> home airport, on the trip's end date.
-    if (hasHome) {
-      addLegAs(effectiveMode(ranges.last.label, home, ground ?? 'flight'),
-          ranges.last.label, home, ranges.last.end,
+    // Return: last city -> arrival airport, on the trip's end date. Read from
+    // its OWN ladder rung, so a trip that comes home into a different airport
+    // than it left from says so.
+    if (hasArrival) {
+      addLegAs(effectiveMode(ranges.last.label, arrival, ground ?? 'flight'),
+          ranges.last.label, arrival, ranges.last.end,
           originCoord: ranges.last.coord);
     }
 
@@ -5072,6 +5093,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               homeAirport: _homeAirport,
               travelMode: trip.travelMode,
               tripOrigin: trip.origin,
+              tripOriginAirport: trip.originAirport,
+              tripReturnAirport: trip.returnAirport,
               focusedLegIndex:
                   focusKey == null ? null : derivation.legIndexOf(focusKey),
               legCount: derivation.legs.length,
@@ -5252,6 +5275,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           homeAirport: _homeAirport,
           travelMode: trip.travelMode,
           tripOrigin: trip.origin,
+          tripOriginAirport: trip.originAirport,
+          tripReturnAirport: trip.returnAirport,
           firstCityPoint: endpoints.first,
           lastCityPoint: endpoints.last,
           itemsForLeg: (k) {
@@ -5304,6 +5329,23 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final trip = _trip;
+
+    // The agent can change the saved home airport mid-session
+    // (save_preferences), and the plan stream re-reads preferences when it
+    // reports profile_updated. Both the map's endpoint pins and the
+    // checklist's fallback label read _homeAirport, so mirror the change here
+    // instead of leaving the open page showing the old airport until restart.
+    // Guarded, like the load path's own write: an unrelated preferences save
+    // must not re-sync the checklist.
+    ref.listen(preferencesProvider.select((s) => s.prefs?.homeAirport),
+        (_, next) {
+      if (!mounted || next == _homeAirport) return;
+      setState(() => _homeAirport = next);
+      final t = _trip;
+      if (t != null && (t.items ?? const []).isNotEmpty) {
+        unawaited(_syncBookingTodos(t));
+      }
+    });
 
     return LayoutBuilder(builder: (context, constraints) {
       // Same width the body LayoutBuilder sees (Scaffold adds no horizontal

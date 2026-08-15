@@ -48,14 +48,20 @@ var allowedItemCategories = map[string]bool{"attraction": true, "restaurant": tr
 var allowedTimesOfDay = map[string]bool{"morning": true, "afternoon": true, "evening": true}
 
 type TripResponse struct {
-	ID             string                  `json:"id"`
-	Title          string                  `json:"title"`
-	Summary        *string                 `json:"summary,omitempty"`
-	StartDate      *string                 `json:"start_date,omitempty"`
-	EndDate        *string                 `json:"end_date,omitempty"`
-	ChatID         *string                 `json:"chat_id,omitempty"`
-	TravelMode     *string                 `json:"travel_mode,omitempty"`
-	Origin         *string                 `json:"origin,omitempty"`
+	ID         string  `json:"id"`
+	Title      string  `json:"title"`
+	Summary    *string `json:"summary,omitempty"`
+	StartDate  *string `json:"start_date,omitempty"`
+	EndDate    *string `json:"end_date,omitempty"`
+	ChatID     *string `json:"chat_id,omitempty"`
+	TravelMode *string `json:"travel_mode,omitempty"`
+	Origin     *string `json:"origin,omitempty"`
+	// This trip's own flight endpoints (migration 00064). Written together or
+	// not at all: absent means the trip states no airport and the legs fall
+	// back to Origin, then to the owner's saved home airport — never "same as
+	// the other direction".
+	OriginAirport  *string                 `json:"origin_airport,omitempty"`
+	ReturnAirport  *string                 `json:"return_airport,omitempty"`
 	VersionCount   int                     `json:"version_count"`
 	Cities         []string                `json:"cities,omitempty"`
 	CreatedAt      time.Time               `json:"created_at"`
@@ -225,6 +231,52 @@ var allowedTravelModes = map[string]bool{
 // that matters is length.
 const maxTripOriginLen = 120
 
+// tripEndpoints is where a trip starts and ends: the place the traveler named
+// in their own words, plus the airports this trip actually flies out of and
+// home into. Carried as one value because they are only ever written together
+// — by persistTrip at creation and by SetTripEndpoints afterwards — and
+// because writing the airports apart is what would let "NULL" quietly mean
+// "same as the other direction" (00064).
+//
+// Two airports, not one: a trip can leave from ALB and come home into EWR.
+type tripEndpoints struct {
+	// Origin is free text by design — it names a place the way the traveler
+	// said it ("Lake George, NY") and the booking legs use it verbatim.
+	Origin string
+	// OriginAirport / ReturnAirport are IATA codes, or "" for "this trip
+	// states no airport" (the legs then fall back to Origin, then to the
+	// owner's saved home airport). Never one without the other.
+	OriginAirport string
+	ReturnAirport string
+}
+
+// columns renders the endpoints as the three nullable trips columns, applying
+// the only guards that matter: length on the free text, and the paired
+// all-or-nothing rule on the airports that CHECK trips_endpoint_airport_pair
+// enforces in the database.
+func (e tripEndpoints) columns() (origin, originAirport, returnAirport *string) {
+	if o := strings.TrimSpace(e.Origin); o != "" {
+		if len(o) > maxTripOriginLen {
+			o = o[:maxTripOriginLen]
+		}
+		origin = &o
+	}
+	dep, arr := strings.ToUpper(strings.TrimSpace(e.OriginAirport)), strings.ToUpper(strings.TrimSpace(e.ReturnAirport))
+	if dep == "" && arr == "" {
+		return origin, nil, nil
+	}
+	// One stated airport means both: a trip that leaves from ALB and says
+	// nothing about coming back returns to ALB, and it says so in the column
+	// rather than leaving the reader to remember a rule.
+	if dep == "" {
+		dep = arr
+	}
+	if arr == "" {
+		arr = dep
+	}
+	return origin, &dep, &arr
+}
+
 // --- helpers ---
 
 func dateToPtr(d pgtype.Date) *string {
@@ -291,16 +343,18 @@ func touchedBy(tripID uuid.UUID, r *http.Request) store.TouchTripParams {
 
 func toTripResponse(t store.Trip, items []store.ItineraryItem, accommodations []store.Accommodation, segments []store.TripSegment, bookingTodos []store.BookingTodo) TripResponse {
 	resp := TripResponse{
-		ID:         t.ID.String(),
-		Title:      t.Title,
-		Summary:    t.Summary,
-		StartDate:  dateToPtr(t.StartDate),
-		EndDate:    dateToPtr(t.EndDate),
-		ChatID:     t.ChatID,
-		TravelMode: t.TravelMode,
-		Origin:     t.Origin,
-		CreatedAt:  t.CreatedAt,
-		UpdatedAt:  t.UpdatedAt,
+		ID:            t.ID.String(),
+		Title:         t.Title,
+		Summary:       t.Summary,
+		StartDate:     dateToPtr(t.StartDate),
+		EndDate:       dateToPtr(t.EndDate),
+		ChatID:        t.ChatID,
+		TravelMode:    t.TravelMode,
+		Origin:        t.Origin,
+		OriginAirport: t.OriginAirport,
+		ReturnAirport: t.ReturnAirport,
+		CreatedAt:     t.CreatedAt,
+		UpdatedAt:     t.UpdatedAt,
 	}
 	for _, it := range items {
 		resp.Items = append(resp.Items, toItineraryItemResponse(it))
@@ -326,7 +380,7 @@ func toTripResponse(t store.Trip, items []store.ItineraryItem, accommodations []
 // opposed to adding a version to an existing chat lineage). The caller uses
 // it to gate the free-cap active_trips crossing signal, which a version save
 // must never emit (specs/free-cap-instrumentation).
-func persistTrip(ctx context.Context, userID uuid.UUID, chatID, title, summary, startDate, endDate, travelMode, origin string, locations []map[string]any) (tripID string, newLineage bool, err error) {
+func persistTrip(ctx context.Context, userID uuid.UUID, chatID, title, summary, startDate, endDate, travelMode string, endpoints tripEndpoints, locations []map[string]any) (tripID string, newLineage bool, err error) {
 	tx, err := dbPool.Begin(ctx)
 	if err != nil {
 		return "", false, err
@@ -390,18 +444,10 @@ func persistTrip(ctx context.Context, userID uuid.UUID, chatID, title, summary, 
 		modePtr = &m
 	}
 
-	// Free text by design — it names a place the way the traveler said it
-	// ("Lake George, NY"), and the booking legs use it verbatim. Only bounded,
-	// so a runaway model can't write an essay into a leg title.
-	var originPtr *string
-	if o := strings.TrimSpace(origin); o != "" {
-		if len(o) > maxTripOriginLen {
-			o = o[:maxTripOriginLen]
-		}
-		originPtr = &o
-	}
+	originPtr, originAirportPtr, returnAirportPtr := endpoints.columns()
 
-	trip, err := q.CreateTrip(ctx, store.CreateTripParams{UserID: userID, Title: finalTitle, ChatID: chatPtr, Summary: summaryPtr, TravelMode: modePtr, Origin: originPtr})
+	trip, err := q.CreateTrip(ctx, store.CreateTripParams{UserID: userID, Title: finalTitle, ChatID: chatPtr, Summary: summaryPtr, TravelMode: modePtr,
+		Origin: originPtr, OriginAirport: originAirportPtr, ReturnAirport: returnAirportPtr})
 	if err != nil {
 		return "", false, err
 	}
@@ -582,7 +628,7 @@ func createTripHandler(w http.ResponseWriter, r *http.Request) {
 		locations = append(locations, loc)
 	}
 
-	tripID, newLineage, err := persistTrip(r.Context(), user.ID, "", title, "", start, end, "", "", locations)
+	tripID, newLineage, err := persistTrip(r.Context(), user.ID, "", title, "", start, end, "", tripEndpoints{}, locations)
 	if err != nil {
 		// persistTrip's cap message is written for people — pass it through,
 		// as the import handler does.
@@ -726,7 +772,7 @@ func getTripHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: row.UpdatedAt, Title: row.Title, StartDate: row.StartDate,
 		EndDate: row.EndDate, ChatID: row.ChatID,
 		Summary: row.Summary, UpdatedBy: row.UpdatedBy, TravelMode: row.TravelMode,
-		Origin: row.Origin,
+		Origin: row.Origin, OriginAirport: row.OriginAirport, ReturnAirport: row.ReturnAirport,
 	}
 	q := store.New(dbPool)
 	// The reads below are independent of each other — fan them out on the

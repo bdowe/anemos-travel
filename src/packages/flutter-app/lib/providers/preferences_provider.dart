@@ -47,11 +47,16 @@ class PreferencesNotifier extends StateNotifier<PreferencesState> {
     }
   }
 
-  /// Loads preferences only when they aren't already in state. Preferences
-  /// change in-session solely through [save] (profile sheet / onboarding),
-  /// which updates state here, so a loaded copy never goes stale — this
-  /// method is the one place that decides whether a network load is needed.
-  /// A previous failed load (prefs still null) retries, matching [load].
+  /// Loads preferences only when they aren't already in state — the one place
+  /// that decides whether a network load is needed, and it sits on the trip
+  /// screen's load path, so it stays a cache check rather than a fetch.
+  ///
+  /// The cached copy is NOT self-maintaining. [save] (profile sheet /
+  /// onboarding) updates state here, but the agent also writes preferences
+  /// server-side (save_preferences), and that copy would stay stale until an
+  /// app restart — which is why the plan stream calls [load] outright when its
+  /// profile_updated event names a field. A previous failed load (prefs still
+  /// null) retries, matching [load].
   Future<void> loadIfNeeded() async {
     if (state.prefs != null) return;
     await load();

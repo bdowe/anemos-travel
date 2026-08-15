@@ -695,6 +695,8 @@
   "mapResetMap": "Restablecer mapa",
   "mapLegVisitNumber": "Visita {n}",
   "mapShowAllPlaces": "Mostrar todos los lugares",
+  "mapDepartureAirport": "Aeropuerto de salida ({code})",
+  "mapReturnAirport": "Aeropuerto de regreso ({code})",
   "mapHomeAirport": "Aeropuerto de origen ({code})",
   "accountMenuTooltip": "Cuenta",
   "accountMenuTravelProfile": "Perfil de viaje",
