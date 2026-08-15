@@ -70,6 +70,12 @@ class FlightsState {
   final Object? error;
   final bool hasSearched;
 
+  /// Stable code for a bag fee the provider could not include in these prices
+  /// (localized at the widget). Null when the prices cover what was asked for —
+  /// carried on the STATE rather than re-derived from the offers, because only
+  /// the server knows what its provider was able to price.
+  final String? baggageNote;
+
   const FlightsState({
     this.offers = const [],
     this.bestOfferId,
@@ -77,6 +83,7 @@ class FlightsState {
     this.loading = false,
     this.error,
     this.hasSearched = false,
+    this.baggageNote,
   });
 
   FlightsState copyWith({
@@ -86,6 +93,7 @@ class FlightsState {
     bool? loading,
     Object? error = _sentinel,
     bool? hasSearched,
+    Object? baggageNote = _sentinel,
   }) {
     return FlightsState(
       offers: offers ?? this.offers,
@@ -95,6 +103,9 @@ class FlightsState {
       loading: loading ?? this.loading,
       error: error == _sentinel ? this.error : error,
       hasSearched: hasSearched ?? this.hasSearched,
+      baggageNote: baggageNote == _sentinel
+          ? this.baggageNote
+          : baggageNote as String?,
     );
   }
 }
@@ -112,6 +123,7 @@ class FlightsNotifier extends StateNotifier<FlightsState> {
       error: null,
       optimizeFor: request.optimizeFor,
       hasSearched: true,
+      baggageNote: null,
     );
     try {
       final res = await _service.searchFlights(request);
@@ -119,6 +131,7 @@ class FlightsNotifier extends StateNotifier<FlightsState> {
         offers: res.offers,
         bestOfferId: res.bestOfferId,
         optimizeFor: res.optimizeFor,
+        baggageNote: res.baggageNote,
         loading: false,
       );
     } catch (e) {

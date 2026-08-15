@@ -188,6 +188,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsOutdoorChallenging => 'challenging — long and steep';
 
   @override
+  String get prefsBaggage => 'What you fly with';
+
+  @override
+  String get prefsBaggageHelp =>
+      'Flight prices are quoted with this bag included, so the cheapest option really is the cheapest.';
+
+  @override
   String get prefsPaceRelaxed => 'relaxed';
 
   @override
@@ -652,6 +659,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get quizHomeAirportTitle => 'Where do you fly from?';
+
+  @override
+  String get quizBaggageTitle => 'What do you fly with?';
+
+  @override
+  String get quizBaggageSubtitle =>
+      'So the fares you\'re shown already include your bag fees.';
 
   @override
   String get quizTripsTitle => 'Any trips you\'re dreaming about?';
@@ -3314,6 +3328,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get flightSearchBaggageLabel => 'Baggage';
 
   @override
+  String get flightSearchCheckedNotPriced =>
+      'These prices include a carry-on fee but not a checked-bag fee — check that one with the airline.';
+
+  @override
   String get flightSearchOptimizeLabel => 'Rank results by';
 
   @override
@@ -3362,6 +3380,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String flightCardBagPaid(String fee) {
     return 'incl. bag +$fee';
   }
+
+  @override
+  String get flightCardBagInPrice => 'bag fee included';
 
   @override
   String get flightCardBagUnknown => 'Bag fee unknown';
@@ -3434,6 +3455,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String flightSheetBagFeeNote(String fee) {
     return '+$fee bag fee included in price';
   }
+
+  @override
+  String get flightSheetBagInPriceNote =>
+      'Bag fee already included in this price';
 
   @override
   String get flightSheetBagUnknownNote =>

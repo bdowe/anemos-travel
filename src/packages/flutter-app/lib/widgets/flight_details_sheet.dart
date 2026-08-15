@@ -178,6 +178,11 @@ class _BaggageRow extends StatelessWidget {
         note = l10n
             .flightSheetBagFeeNote(formatMoney(offer.bagFee, offer.currency));
         noteColor = muted;
+      case 'in_price':
+        // The provider folded the fee into the quote without breaking it out,
+        // so state the fact rather than inventing an amount.
+        note = l10n.flightSheetBagInPriceNote;
+        noteColor = muted;
       case 'unknown':
         note = l10n.flightSheetBagUnknownNote;
         noteColor = theme.colorScheme.error;

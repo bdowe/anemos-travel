@@ -12,7 +12,7 @@ import (
 )
 
 const getPreferences = `-- name: GetPreferences :one
-SELECT user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions FROM traveler_preferences WHERE user_id = $1
+SELECT user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions, baggage FROM traveler_preferences WHERE user_id = $1
 `
 
 func (q *Queries) GetPreferences(ctx context.Context, userID uuid.UUID) (TravelerPreference, error) {
@@ -31,12 +31,13 @@ func (q *Queries) GetPreferences(ctx context.Context, userID uuid.UUID) (Travele
 		&i.FitnessRoutine,
 		&i.OutdoorIntensity,
 		&i.Companions,
+		&i.Baggage,
 	)
 	return i, err
 }
 
 const upsertPreferences = `-- name: UpsertPreferences :one
-INSERT INTO traveler_preferences (user_id, budget, pace, interests, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions)
+INSERT INTO traveler_preferences (user_id, budget, pace, interests, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions, baggage)
 VALUES (
     $1,
     $2,
@@ -47,7 +48,8 @@ VALUES (
     $7,
     $8,
     $9,
-    $10
+    $10,
+    $11
 )
 ON CONFLICT (user_id) DO UPDATE SET
     budget            = COALESCE($2, traveler_preferences.budget),
@@ -58,15 +60,16 @@ ON CONFLICT (user_id) DO UPDATE SET
     -- ever be set or replaced, never emptied. Writes a real NULL rather than an
     -- empty-string sentinel, so "no home airport" has exactly one representation.
     home_airport      = CASE
-        WHEN $11::boolean THEN NULL
+        WHEN $12::boolean THEN NULL
         ELSE COALESCE($5, traveler_preferences.home_airport)
     END,
     profile_notes     = COALESCE($6, traveler_preferences.profile_notes),
     work_style        = COALESCE($7, traveler_preferences.work_style),
     fitness_routine   = COALESCE($8, traveler_preferences.fitness_routine),
     outdoor_intensity = COALESCE($9, traveler_preferences.outdoor_intensity),
-    companions        = COALESCE($10, traveler_preferences.companions)
-RETURNING user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions
+    companions        = COALESCE($10, traveler_preferences.companions),
+    baggage           = COALESCE($11, traveler_preferences.baggage)
+RETURNING user_id, budget, pace, interests, created_at, updated_at, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions, baggage
 `
 
 type UpsertPreferencesParams struct {
@@ -80,6 +83,7 @@ type UpsertPreferencesParams struct {
 	FitnessRoutine   *string     `json:"fitness_routine"`
 	OutdoorIntensity *string     `json:"outdoor_intensity"`
 	Companions       *string     `json:"companions"`
+	Baggage          *string     `json:"baggage"`
 	ClearHomeAirport bool        `json:"clear_home_airport"`
 }
 
@@ -95,6 +99,7 @@ func (q *Queries) UpsertPreferences(ctx context.Context, arg UpsertPreferencesPa
 		arg.FitnessRoutine,
 		arg.OutdoorIntensity,
 		arg.Companions,
+		arg.Baggage,
 		arg.ClearHomeAirport,
 	)
 	var i TravelerPreference
@@ -111,6 +116,7 @@ func (q *Queries) UpsertPreferences(ctx context.Context, arg UpsertPreferencesPa
 		&i.FitnessRoutine,
 		&i.OutdoorIntensity,
 		&i.Companions,
+		&i.Baggage,
 	)
 	return i, err
 }

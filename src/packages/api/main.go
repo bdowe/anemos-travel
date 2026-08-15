@@ -279,9 +279,14 @@ type FlightSearchResponse struct {
 	Offers      []FlightOffer `json:"offers"`
 	BestOfferID string        `json:"best_offer_id,omitempty"`
 	OptimizeFor string        `json:"optimize_for"`
-	Baggage     string        `json:"baggage"`
-	Count       int           `json:"count"`
-	Status      string        `json:"status"`
+	// Baggage is the tier the results were actually priced for — the resolved
+	// value, not the one posted, so a client that omitted it learns what it got.
+	Baggage string `json:"baggage"`
+	// BaggageNote is a stable code (never prose) for a bag the search could not
+	// price, localized client-side; empty when the prices cover what was asked.
+	BaggageNote string `json:"baggage_note,omitempty"`
+	Count       int    `json:"count"`
+	Status      string `json:"status"`
 }
 
 // duffelService is a process-wide singleton reused across requests (the HTTP
@@ -386,10 +391,16 @@ func flightsSearchHandler(w http.ResponseWriter, r *http.Request) {
 		writeErr("cabin_class must be one of: 'economy', 'premium_economy', 'business', 'first'")
 		return
 	}
-	if !allowedBaggageTiers[normalizeBaggage(request.Baggage)] {
+	// This endpoint is unauthenticated, so it cannot read the caller's saved
+	// preference: an omitted tier resolves to the wire default here, and the
+	// clients that DO know the traveler (the planner's search_flights, the
+	// flight screen) send a resolved tier explicitly.
+	tier := normalizeBaggage(request.Baggage)
+	if !allowedBaggageTiers[tier] {
 		writeErr("baggage must be one of: 'personal_item', 'carry_on', 'checked'")
 		return
 	}
+	request.Baggage = tier
 	if len(request.ChildAges) > 8 {
 		writeErr("at most 8 children per search")
 		return
@@ -428,7 +439,8 @@ func flightsSearchHandler(w http.ResponseWriter, r *http.Request) {
 		Offers:      ranked,
 		BestOfferID: bestID,
 		OptimizeFor: normalizeOptimizeFor(request.OptimizeFor),
-		Baggage:     normalizeBaggage(request.Baggage),
+		Baggage:     tier,
+		BaggageNote: baggageNoteCode(tier, ranked),
 		Count:       len(ranked),
 		Status:      "success",
 	})

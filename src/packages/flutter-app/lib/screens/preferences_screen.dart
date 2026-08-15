@@ -57,6 +57,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   String? _companions;
   String? _fitnessRoutine;
   String? _outdoorIntensity;
+  String? _baggage;
   final Set<String> _interests = {};
   Airport? _homeAirport;
 
@@ -97,6 +98,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
         _companions = prefs.companions;
         _fitnessRoutine = prefs.fitnessRoutine;
         _outdoorIntensity = prefs.outdoorIntensity;
+        _baggage = prefs.baggage;
         _interests.addAll(prefs.interests);
         _seedHomeAirport(prefs.homeAirport);
         _notesController.text = prefs.profileNotes ?? '';
@@ -141,6 +143,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
           companions: _companions,
           fitnessRoutine: _fitnessRoutine,
           outdoorIntensity: _outdoorIntensity,
+          baggage: _baggage,
           interests: _interests.toList(),
           // "" is an explicit clear, not an omission — null would be COALESCEd
           // back to the stored code, making a home airport unremovable.
@@ -296,6 +299,22 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
                     // Any edit retracts the complaint; Save re-checks.
                     _homeAirportError = null;
                   }),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                SectionHeader(title: l10n.prefsBaggage),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  l10n.prefsBaggageHelp,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ChoiceChipRow(
+                  options: baggageOptions,
+                  selected: _baggage,
+                  onSelected: (v) => setState(() => _baggage = v),
+                  labelBuilder: (v) => baggageLabel(l10n, v),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 SectionHeader(title: l10n.prefsProfileNotes),

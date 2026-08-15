@@ -37,6 +37,7 @@ type PreferencesResponse struct {
 	FitnessRoutine   *string  `json:"fitness_routine"`
 	OutdoorIntensity *string  `json:"outdoor_intensity"`
 	Companions       *string  `json:"companions"`
+	Baggage          *string  `json:"baggage"`
 }
 
 type PutPreferencesRequest struct {
@@ -51,6 +52,7 @@ type PutPreferencesRequest struct {
 	FitnessRoutine   *string `json:"fitness_routine"`
 	OutdoorIntensity *string `json:"outdoor_intensity"`
 	Companions       *string `json:"companions"`
+	Baggage          *string `json:"baggage"`
 }
 
 func toPreferencesResponse(p store.TravelerPreference) PreferencesResponse {
@@ -68,6 +70,7 @@ func toPreferencesResponse(p store.TravelerPreference) PreferencesResponse {
 		FitnessRoutine:   p.FitnessRoutine,
 		OutdoorIntensity: p.OutdoorIntensity,
 		Companions:       p.Companions,
+		Baggage:          p.Baggage,
 	}
 }
 
@@ -132,6 +135,14 @@ func putPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Same vocabulary as the flight-search tier (duffel_service.go) on purpose:
+	// this preference IS the default for that field, and two spellings of one
+	// enum would drift (docs/zen.md).
+	baggage, err := normalizeChoice(req.Baggage, allowedBaggageTiers, "baggage")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	homeAirport, clearHomeAirport, err := normalizeAirportCode(req.HomeAirport)
 	if err != nil {
@@ -157,6 +168,7 @@ func putPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 		FitnessRoutine:   fitnessRoutine,
 		OutdoorIntensity: outdoorIntensity,
 		Companions:       companions,
+		Baggage:          baggage,
 	})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not save preferences")

@@ -92,11 +92,19 @@ func servicesBody(services string) string {
 }
 
 func checkedBagService(id, amount, currency string, maxQty int, segIDs, paxIDs []string) string {
+	return bagService("checked", id, amount, currency, maxQty, segIDs, paxIDs)
+}
+
+func carryOnBagService(id, amount, currency string, maxQty int, segIDs, paxIDs []string) string {
+	return bagService("carry_on", id, amount, currency, maxQty, segIDs, paxIDs)
+}
+
+func bagService(kind, id, amount, currency string, maxQty int, segIDs, paxIDs []string) string {
 	seg, _ := json.Marshal(segIDs)
 	pax, _ := json.Marshal(paxIDs)
 	return fmt.Sprintf(`{"id":%q,"type":"baggage","total_amount":%q,"total_currency":%q,
-		"maximum_quantity":%d,"segment_ids":%s,"passenger_ids":%s,"metadata":{"type":"checked"}}`,
-		id, amount, currency, maxQty, seg, pax)
+		"maximum_quantity":%d,"segment_ids":%s,"passenger_ids":%s,"metadata":{"type":%q}}`,
+		id, amount, currency, maxQty, seg, pax, kind)
 }
 
 // --- included-baggage parsing ---
@@ -239,8 +247,10 @@ func TestSearchWithBaggagePersonalItemMakesNoExtraCalls(t *testing.T) {
 	)}
 	d := newBaggageStubService(t, bs)
 
+	// States the tier rather than relying on the empty default, which now
+	// resolves to carry_on (specs/traveler-baggage).
 	offers, err := searchFlightsWithBaggage(context.Background(), d, FlightSearchRequest{
-		Origin: "AAA", Destination: "BBB", DepartDate: "2026-09-01", Adults: 1,
+		Origin: "AAA", Destination: "BBB", DepartDate: "2026-09-01", Adults: 1, Baggage: baggagePersonalItem,
 	})
 	if err != nil {
 		t.Fatalf("searchFlightsWithBaggage: %v", err)
@@ -258,6 +268,37 @@ func TestSearchWithBaggagePersonalItemMakesNoExtraCalls(t *testing.T) {
 		if o.ID == "off_2" && o.IncludedChecked != 1 {
 			t.Fatalf("off_2 included checked = %d, want 1", o.IncludedChecked)
 		}
+	}
+}
+
+// The fallback chain has exactly one implementation, and it is also the
+// validation boundary for the agent path: an unrecognized tier used to reach
+// the classifier, where anything that wasn't personal_item or checked silently
+// behaved as carry_on.
+func TestResolveBaggageTier(t *testing.T) {
+	ptr := func(s string) *string { return &s }
+	cases := []struct {
+		name      string
+		requested string
+		saved     *string
+		want      string
+	}{
+		{"stated wins over saved", baggageChecked, ptr(baggageCarryOn), baggageChecked},
+		{"stated personal item is honored", baggagePersonalItem, ptr(baggageChecked), baggagePersonalItem},
+		{"case and space tolerated", " Carry_On ", nil, baggageCarryOn},
+		{"omitted falls back to saved", "", ptr(baggagePersonalItem), baggagePersonalItem},
+		{"omitted with no profile is a cabin bag", "", nil, baggageCarryOn},
+		{"invented tier falls back to saved", "suitcase", ptr(baggagePersonalItem), baggagePersonalItem},
+		{"invented tier with no profile is the default", "suitcase", nil, baggageCarryOn},
+		{"junk saved value is ignored", "", ptr("steamer trunk"), baggageCarryOn},
+		{"empty saved value is ignored", "", ptr(""), baggageCarryOn},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resolveBaggageTier(tc.requested, tc.saved); got != tc.want {
+				t.Errorf("resolveBaggageTier(%q, %v) = %q, want %q", tc.requested, tc.saved, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -342,9 +383,9 @@ func TestSearchWithBaggageKeepsEffectiveCheaperOnSharedSchedule(t *testing.T) {
 	}
 }
 
-func TestSearchNoBaggageSharedScheduleStillCollapses(t *testing.T) {
-	// Regression: with no baggage tier requested, same-schedule offers still
-	// collapse to the cheapest bare fare and no fee lookups happen at all.
+func TestSearchPersonalItemSharedScheduleStillCollapses(t *testing.T) {
+	// Regression: on a bare-fare (personal_item) search, same-schedule offers
+	// still collapse to the cheapest fare and no fee lookups happen at all.
 	depart := "2026-09-01T08:00:00"
 	bs := &baggageStub{searchBody: searchBody(
 		bagSearchOffer("cheap", "100.00", depart, ""),
@@ -353,16 +394,42 @@ func TestSearchNoBaggageSharedScheduleStillCollapses(t *testing.T) {
 	d := newBaggageStubService(t, bs)
 
 	offers, err := searchFlightsWithBaggage(context.Background(), d, FlightSearchRequest{
-		Origin: "AAA", Destination: "BBB", DepartDate: "2026-09-01", Adults: 1,
+		Origin: "AAA", Destination: "BBB", DepartDate: "2026-09-01", Adults: 1, Baggage: baggagePersonalItem,
 	})
 	if err != nil {
 		t.Fatalf("searchFlightsWithBaggage: %v", err)
 	}
 	if bs.getCount() != 0 {
-		t.Fatalf("no-baggage search made %d fee lookups, want 0", bs.getCount())
+		t.Fatalf("bare-fare search made %d fee lookups, want 0", bs.getCount())
 	}
 	if len(offers) != 1 || offers[0].ID != "cheap" {
-		t.Fatalf("no-baggage dedup changed: %+v", offers)
+		t.Fatalf("bare-fare dedup changed: %+v", offers)
+	}
+}
+
+// An omitted tier prices a CABIN BAG, not a bare fare: quoting a fare that
+// excludes the bag the traveler is carrying is the whole bug this feature
+// exists to fix, so the fallback must be the safe direction.
+func TestSearchWithoutTierDefaultsToCarryOn(t *testing.T) {
+	bs := &baggageStub{
+		searchBody: searchBody(bagSearchOffer("off_1", "100.00", "2026-09-01T08:00:00", "")),
+		serviceBody: map[string]string{
+			"off_1": servicesBody(carryOnBagService("s1", "35.00", "USD", 1, []string{"seg_1"}, []string{"pas_1"})),
+		},
+	}
+	d := newBaggageStubService(t, bs)
+
+	offers, err := searchFlightsWithBaggage(context.Background(), d, FlightSearchRequest{
+		Origin: "AAA", Destination: "BBB", DepartDate: "2026-09-01", Adults: 1,
+	})
+	if err != nil {
+		t.Fatalf("searchFlightsWithBaggage: %v", err)
+	}
+	if bs.getCount() != 1 {
+		t.Fatalf("default tier made %d fee lookups, want 1 (carry_on)", bs.getCount())
+	}
+	if len(offers) != 1 || offers[0].BaggageStatus != baggageStatusPaid || offers[0].EffectivePrice != 135 {
+		t.Fatalf("default tier did not price the cabin bag: %+v", offers)
 	}
 }
 
@@ -498,5 +565,42 @@ func TestFlightsSearchHandlerBaggageResponse(t *testing.T) {
 	}
 	if resp.Offers[1].EffectivePrice != 160 || resp.Offers[1].BaggageStatus != baggageStatusPaid {
 		t.Fatalf("paid offer serialization wrong: %+v", resp.Offers[1])
+	}
+	// Duffel priced the checked bag itself, so there is nothing to disclaim.
+	if resp.BaggageNote != "" {
+		t.Fatalf("baggage_note = %q, want empty when the checked bag was priced", resp.BaggageNote)
+	}
+}
+
+// A client that omits the tier must be told which one it got: the response
+// echoes the RESOLVED value, not the posted one, so "cheapest" is never read
+// against a bag basis nobody stated.
+func TestFlightsSearchHandlerEchoesResolvedBaggage(t *testing.T) {
+	bs := &baggageStub{
+		searchBody: searchBody(bagSearchOffer("off_1", "100.00", "2026-09-01T08:00:00", "")),
+		serviceBody: map[string]string{
+			"off_1": servicesBody(carryOnBagService("s1", "35.00", "USD", 1, []string{"seg_1"}, []string{"pas_1"})),
+		},
+	}
+	oldDuffel := duffelService
+	duffelService = newBaggageStubService(t, bs)
+	t.Cleanup(func() { duffelService = oldDuffel })
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/flights/search",
+		strings.NewReader(`{"origin":"AAA","destination":"BBB","depart_date":"2026-09-01"}`))
+	w := httptest.NewRecorder()
+	flightsSearchHandler(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", w.Code, w.Body.String())
+	}
+	var resp FlightSearchResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("bad response JSON: %v", err)
+	}
+	if resp.Baggage != baggageCarryOn {
+		t.Fatalf("response baggage = %q, want carry_on", resp.Baggage)
+	}
+	if len(resp.Offers) != 1 || resp.Offers[0].EffectivePrice != 135 {
+		t.Fatalf("omitted tier did not price the cabin bag: %+v", resp.Offers)
 	}
 }

@@ -99,6 +99,7 @@ class _FakePrefsApi implements PreferencesApiService {
     String? fitnessRoutine,
     String? outdoorIntensity,
     String? companions,
+    String? baggage,
   }) async =>
       TravelerPreferences(homeAirport: this.homeAirport);
 }

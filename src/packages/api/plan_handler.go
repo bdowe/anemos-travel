@@ -460,6 +460,10 @@ func planHandler(w http.ResponseWriter, r *http.Request) {
 	if authed {
 		if prefs, err := store.New(dbPool).GetPreferences(ctx, uid); err == nil {
 			systemPrompt = personalizedSystemPrompt(basePrompt, &prefs)
+			// The saved bag tier is ALSO carried on the session: search_flights
+			// resolves it server-side (specs/traveler-baggage) rather than
+			// hoping the model relays it out of the prompt.
+			session.bagPref = prefs.Baggage
 		}
 		systemPrompt += profileNotesInstruction
 	}
@@ -753,15 +757,21 @@ func summarizeOffers(req FlightSearchRequest, offers []FlightOffer) string {
 		}
 		return fmt.Sprintf("No flights found from %s to %s departing %s (one-way).", req.Origin, req.Destination, req.DepartDate)
 	}
+	// What the prices cover with respect to bags is identical for every offer,
+	// so it is stated ONCE here rather than repeated per line. Without it the
+	// model quotes a "cheapest" fare whose bag basis it cannot know — the
+	// unlabeled-total failure of PR #355, one dimension over.
+	tier := normalizeBaggage(req.Baggage)
+	bagBasis := baggageBasisClause(tier, offers, baggageNoteCode(tier, offers))
 	var b strings.Builder
 	tripType := "one-way"
 	if req.ReturnDate != "" {
 		tripType = "round-trip"
-		fmt.Fprintf(&b, "Found %d ranked flight options %s⇄%s round trip %s → %s, %s — prices are round-trip totals for %s; stops and durations describe the outbound leg (best first):\n",
-			len(offers), req.Origin, req.Destination, req.DepartDate, req.ReturnDate, travelerPhrase, partyPhrase)
+		fmt.Fprintf(&b, "Found %d ranked flight options %s⇄%s round trip %s → %s, %s — prices are round-trip totals for %s; %s; stops and durations describe the outbound leg (best first):\n",
+			len(offers), req.Origin, req.Destination, req.DepartDate, req.ReturnDate, travelerPhrase, partyPhrase, bagBasis)
 	} else {
-		fmt.Fprintf(&b, "Found %d ranked flight options %s→%s one-way %s, %s — prices are one-way totals for %s (best first):\n",
-			len(offers), req.Origin, req.Destination, req.DepartDate, travelerPhrase, partyPhrase)
+		fmt.Fprintf(&b, "Found %d ranked flight options %s→%s one-way %s, %s — prices are one-way totals for %s; %s (best first):\n",
+			len(offers), req.Origin, req.Destination, req.DepartDate, travelerPhrase, partyPhrase, bagBasis)
 	}
 	for i, o := range offers {
 		airline := "—"
@@ -783,6 +793,8 @@ func summarizeOffers(req FlightSearchRequest, offers []FlightOffer) string {
 			bag = " (bag included)"
 		case baggageStatusPaid:
 			bag = fmt.Sprintf(" (incl. %s %.0f bag fee)", o.Currency, o.BagFee)
+		case baggageStatusInPrice:
+			bag = " (bag fee already in this price)"
 		case baggageStatusUnknown:
 			bag = " (bag NOT included; fee unknown — warn the traveler)"
 		}
@@ -806,7 +818,7 @@ func summarizeOffers(req FlightSearchRequest, offers []FlightOffer) string {
 		fmt.Fprintf(&b, "%d. %s — %s %.0f%s, %s, %dh%02dm%s (score %.1f)\n",
 			i+1, airline, o.Currency, scoringPrice(o), bag, stops, o.DurationMin/60, o.DurationMin%60, when, o.Score)
 	}
-	fmt.Fprintf(&b, "Summarize the top 2-3 options in your own words and help the traveler choose. The traveler sees only a result count in the chat — your summary is their only record of these options — so state that every price you quote is a %s total for %s, never a per-person fare. Any clock times shown are local to each airport; use the departure home to decide how much of the traveler's last day is theirs. A '+N' means the flight lands N calendar days after it leaves — on the outbound that makes its departure date EARLIER than the trip's first day, so say both days plainly and record them with add_transport_segment's depart_date and arrive_date rather than only the day they land.", tripType, partyPhrase)
+	fmt.Fprintf(&b, "Summarize the top 2-3 options in your own words and help the traveler choose. The traveler sees only a result count in the chat — your summary is their only record of these options — so state that every price you quote is a %s total for %s, never a per-person fare, and say what bags it covers. Any clock times shown are local to each airport; use the departure home to decide how much of the traveler's last day is theirs. A '+N' means the flight lands N calendar days after it leaves — on the outbound that makes its departure date EARLIER than the trip's first day, so say both days plainly and record them with add_transport_segment's depart_date and arrive_date rather than only the day they land.", tripType, partyPhrase)
 	return b.String()
 }
 
@@ -971,10 +983,28 @@ func personalizedSystemPrompt(base string, p *store.TravelerPreference) string {
 			parts = append(parts, "traveling: varies by trip")
 		}
 	}
+	// The bag tier is the ONE preference the model doesn't have to act on:
+	// search_flights resolves it server-side from the same column, so this note
+	// exists to explain the prices the tool hands back — not to ask the model to
+	// pass a parameter it can forget (specs/traveler-baggage).
+	var bagNote string
+	if p.Baggage != nil && *p.Baggage != "" {
+		switch *p.Baggage {
+		case baggagePersonalItem:
+			parts = append(parts, "packs: one personal item")
+			bagNote = " They fly with one small under-seat bag, so flight prices are quoted as bare fares; if they mention bringing more, say the fare will not cover it."
+		case baggageCarryOn:
+			parts = append(parts, "packs: a carry-on")
+			bagNote = " Flight prices you are given already cover their cabin bag."
+		case baggageChecked:
+			parts = append(parts, "packs: a checked bag")
+			bagNote = " They check a bag, so a fare that excludes it is not the price they pay — relay whatever the flight results say about which bag fees are and aren't included."
+		}
+	}
 	out := base
 	if len(parts) > 0 {
 		out += "\n\nTraveler preferences — " + strings.Join(parts, "; ") +
-			". Tailor your suggestions accordingly." + homeNote + workNote + fitnessNote + outdoorNote + companionsNote
+			". Tailor your suggestions accordingly." + homeNote + workNote + fitnessNote + outdoorNote + companionsNote + bagNote
 	}
 	if p.ProfileNotes != nil && strings.TrimSpace(*p.ProfileNotes) != "" {
 		out += "\n\nTraveler profile notes (maintained by you):\n" + strings.TrimSpace(*p.ProfileNotes)
