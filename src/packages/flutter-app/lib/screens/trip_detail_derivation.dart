@@ -526,10 +526,17 @@ class TripDerivation {
   ///
   /// Confirmed records match their slot by the shared key grammar first
   /// (`stay:<city>` / `transport:<a>>><b>` on auto_key, stamped when a draft
-  /// was confirmed) and fall back to the same fuzzy rules the old drafts
-  /// derivation used: stays by bidirectional name/address contains of the
-  /// city label, segments by destination (arrivals) or origin (departure)
-  /// equality — mirroring how the todo keys themselves are claimed.
+  /// was confirmed) and fall back to fuzzy rules: stays by bidirectional
+  /// name/address contains of the city label, segments by [segmentConnects] —
+  /// BOTH of the leg's endpoints, the same rule the server applies in
+  /// `todoClaimed` (trip_next_step.go).
+  ///
+  /// Both ends, not just one. Matching an arrival on its destination alone
+  /// nested an "ALB → Amsterdam" segment under an "EWR → Amsterdam" leg — the
+  /// page reading as covered while Trip Health, which has always required
+  /// both, still counted the flight as an unbooked gap. A segment that does
+  /// not connect the leg falls to the residual list and renders under "Other
+  /// bookings", which is true rather than tidy.
   static GroupedBookings _computeGroupedBookings(
     List<String> groupLabels,
     List<BookingTodo> bookingTodos,
@@ -577,11 +584,16 @@ class TripDerivation {
     final stayMatches = <Accommodation?>[];
     for (final label in groupLabels) {
       final l = label.toLowerCase();
-      arrivals.add(
-          claim((t) => t.kind == 'transport' && t.todoKey.endsWith('>>$l')));
+      final arrival =
+          claim((t) => t.kind == 'transport' && t.todoKey.endsWith('>>$l'));
+      arrivals.add(arrival);
       arrivalMatches.add(claimSegment((s) =>
           (s.autoKey?.endsWith('>>$l') ?? false) ||
-          s.destination?.toLowerCase() == l));
+          // With a leg to connect, both its ends must match. Without one there
+          // is no leg to contradict, so the city label is all there is to go on.
+          (arrival != null
+              ? segmentConnectsLeg(s, arrival)
+              : s.destination?.toLowerCase() == l)));
       staySlots.add(claim((t) => t.todoKey == 'stay:$l'));
       stayMatches.add(claimStay((a) {
         if (a.autoKey == 'stay:$l') return true;
@@ -602,9 +614,12 @@ class TripDerivation {
       final last = groupLabels.last.toLowerCase();
       departure = claim((t) =>
           t.kind == 'transport' && t.todoKey.startsWith('transport:$last>>'));
+      final leg = departure;
       departureMatch = claimSegment((s) =>
           (s.autoKey?.startsWith('transport:$last>>') ?? false) ||
-          s.origin?.toLowerCase() == last);
+          (leg != null
+              ? segmentConnectsLeg(s, leg)
+              : s.origin?.toLowerCase() == last));
     }
 
     return (
@@ -629,4 +644,76 @@ class TripDerivation {
           .toList(),
     );
   }
+}
+
+// --- "does this segment cover that leg?" --------------------------------------
+//
+// The Dart twin of segmentConnects / fuzzyMatch / legEndpoints in the Go API
+// (trip_review.go, trip_next_step.go), which decide the same question for Trip
+// Health and the next-step walk. Two implementations of one rule is a
+// divergence docs/zen.md would rather not have; it exists because this screen
+// answers the question before any server round-trip, and it is kept honest by
+// twin fixtures (test/segment_connects_test.dart ↔ trip_review_test.go).
+// Change one and change both.
+
+/// The endpoints of a derived transport leg, lowercased, or null when it names
+/// none. The wire key is endpoint-labelled (`displayBookingTodoKey`), so it is
+/// the most direct source; the title is the fallback for a row keyed some other
+/// way. A reserved `@`-prefixed token names no place a segment could connect.
+({String from, String to})? legEndpoints(BookingTodo todo) {
+  const prefix = 'transport:';
+  if (todo.todoKey.startsWith(prefix)) {
+    final rest = todo.todoKey.substring(prefix.length);
+    final i = rest.indexOf('>>');
+    if (i > 0 && i + 2 < rest.length) {
+      final from = rest.substring(0, i), to = rest.substring(i + 2);
+      if (!from.startsWith('@') && !to.startsWith('@')) {
+        return (from: from, to: to);
+      }
+    }
+  }
+  final parts = todo.title.split(' → ');
+  if (parts.length == 2) {
+    final from = parts[0].trim().toLowerCase();
+    final to = parts[1].trim().toLowerCase();
+    if (from.isNotEmpty && to.isNotEmpty) return (from: from, to: to);
+  }
+  return null;
+}
+
+/// Whether [segment] plausibly IS the leg [todo] describes — both of its
+/// endpoints, in either direction. A leg that names no endpoints is covered by
+/// nothing rather than by anything.
+bool segmentConnectsLeg(TripSegment segment, BookingTodo todo) {
+  final ends = legEndpoints(todo);
+  if (ends == null) return false;
+  final o = (segment.origin ?? '').trim().toLowerCase();
+  final d = (segment.destination ?? '').trim().toLowerCase();
+  return (fuzzyMatch(o, ends.from) && fuzzyMatch(d, ends.to)) ||
+      (fuzzyMatch(o, ends.to) && fuzzyMatch(d, ends.from));
+}
+
+/// Lenient, non-empty substring match in either direction — except that short
+/// tokens match whole WORDS. A derived leg's endpoint can be an IATA code
+/// (migration 00064), and a plain substring test lets "alb" claim a segment to
+/// "Albufeira", silently marking the flight out as already booked. Whole-word
+/// matching still lets genuinely short city names work ("rio" ↔ "Rio de
+/// Janeiro").
+bool fuzzyMatch(String a, String b) {
+  if (a.isEmpty || b.isEmpty) return false;
+  if (a.length <= 3 || b.length <= 3) {
+    return a == b || _hasWord(a, b) || _hasWord(b, a);
+  }
+  return a.contains(b) || b.contains(a);
+}
+
+final _wordSeparators = RegExp(r'[^\p{L}\p{N}]+', unicode: true);
+
+/// Whether [w] appears in [s] as a whole alphanumeric word, so punctuation and
+/// separators ("New York, NY") don't hide a match.
+bool _hasWord(String s, String w) {
+  for (final f in s.split(_wordSeparators)) {
+    if (f == w) return true;
+  }
+  return false;
 }

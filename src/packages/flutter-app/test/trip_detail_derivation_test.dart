@@ -305,6 +305,46 @@ void main() {
       expect(grouped.residualSegments, isEmpty);
     });
 
+    // A confirmed segment fills a leg's slot only when it connects BOTH of the
+    // leg's endpoints — the rule the server has always applied in todoClaimed
+    // (trip_review.go), now applied here too.
+    //
+    // The friction that produced the trip-airports control: correcting the
+    // airport inside "Add details…" POSTed "ALB → Paris", and the page nested
+    // it under the "EWR → Paris" leg on the destination alone. The page read
+    // as covered while Trip Health went on counting the flight as a gap.
+    test('groupedBookings: a segment must connect BOTH ends of a leg', () {
+      final trip = _trip(items: [
+        _item(0, 'Louvre', city: 'Paris', day: 1, lat: 48.86, lng: 2.35),
+      ]);
+      final todos = [_todo('transport:ewr>>paris'), _todo('stay:paris', kind: 'stay')];
+
+      final mismatched = _compute(
+        trip: trip,
+        bookingTodos: todos,
+        segments: const [
+          TripSegment(
+              id: 's1', mode: 'flight', origin: 'ALB', destination: 'Paris'),
+        ],
+      ).groupedBookings;
+      expect(mismatched.slots.first.arrivalMatch, isNull,
+          reason: 'a segment from a different airport is not this leg');
+      // It is still the traveler's booking — it lands in "Other bookings"
+      // rather than vanishing or masquerading as the leg above it.
+      expect([for (final s in mismatched.residualSegments) s.id], ['s1']);
+
+      final matching = _compute(
+        trip: trip,
+        bookingTodos: todos,
+        segments: const [
+          TripSegment(
+              id: 's2', mode: 'flight', origin: 'EWR', destination: 'Paris'),
+        ],
+      ).groupedBookings;
+      expect(matching.slots.first.arrivalMatch?.id, 's2');
+      expect(matching.residualSegments, isEmpty);
+    });
+
     test('segmentLabels: within-city adjacent legs only, localized', () {
       final travel = {
         0: _timing(30), // Louvre -> Le Comptoir, same hub: labelled

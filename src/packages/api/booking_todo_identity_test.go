@@ -295,6 +295,48 @@ func TestFuzzyMatchShortTokens(t *testing.T) {
 	}
 }
 
+// BOTH ends, or the segment does not cover the leg. The trip page applies the
+// same rule (segmentConnectsLeg in trip_detail_derivation.dart); these cases
+// are its twin fixtures — test/segment_connects_test.dart holds the identical
+// table, so a change on one side that isn't made on the other shows up here.
+//
+// It matters because the page used to nest a segment on its DESTINATION alone:
+// an "ALB → Amsterdam" segment sat under the "EWR → Amsterdam" leg and read as
+// covered, while this rule went on counting the flight as an unbooked gap.
+func TestSegmentConnectsBothEnds(t *testing.T) {
+	seg := func(origin, dest string) store.TripSegment {
+		s := store.TripSegment{}
+		if origin != "" {
+			s.Origin = &origin
+		}
+		if dest != "" {
+			s.Destination = &dest
+		}
+		return s
+	}
+	cases := []struct {
+		name     string
+		segments []store.TripSegment
+		from, to string
+		want     bool
+	}{
+		{"both ends", []store.TripSegment{seg("EWR", "Amsterdam")}, "EWR", "Amsterdam", true},
+		{"either direction", []store.TripSegment{seg("Amsterdam", "EWR")}, "EWR", "Amsterdam", true},
+		{"different origin", []store.TripSegment{seg("ALB", "Amsterdam")}, "EWR", "Amsterdam", false},
+		{"different destination", []store.TripSegment{seg("EWR", "Rome")}, "EWR", "Amsterdam", false},
+		{"half-empty segment", []store.TripSegment{seg("", "Amsterdam")}, "EWR", "Amsterdam", false},
+		{"airport spellings", []store.TripSegment{seg("Amsterdam Schiphol", "Rome Fiumicino")}, "Amsterdam", "Rome", true},
+		{"no segments", nil, "EWR", "Amsterdam", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := segmentConnects(tc.segments, tc.from, tc.to); got != tc.want {
+				t.Errorf("segmentConnects(%s → %s) = %v, want %v", tc.from, tc.to, got, tc.want)
+			}
+		})
+	}
+}
+
 // @home must never reach a traveler: it would ride into Next Step copy, a
 // finding's fix, and the canonical-English agent seed.
 func TestNamesAPlaceRejectsReservedTokens(t *testing.T) {

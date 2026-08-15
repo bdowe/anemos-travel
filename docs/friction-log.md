@@ -5,6 +5,51 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-15 — the one affordance was doing someone else's job
+
+- **[app] Friction → fixed (specs/trip-endpoint-airports, wave 2):** "I can't
+  change the starting airport manually from the trip detail page. When I try,
+  it adds a new item below." The ⋮ on a derived `EWR → Amsterdam` row offered
+  exactly one thing — **"Add details…"** — which opens the transport form with
+  `From: EWR` prefilled **and editable**. Typing `ALB` over it looks like
+  editing the leg; it POSTs a new **segment**. The page then showed
+  `EWR → Amsterdam` with `ALB → Amsterdam` nested under it: two claims about
+  one flight, and the airport still hadn't moved.
+- **[app] The gap was written down as deferred, and came back the same day.**
+  Wave 1's spec says outright: *"Out of Scope: any trip-page control for
+  editing the endpoints (chat only, this wave)."* It shipped 2026-08-15 and the
+  friction landed hours later. **Deferring the only UI for a thing you just
+  built means the first person to look for it finds the wrong door** — and the
+  wrong door here wasn't inert, it wrote something.
+- **[app] A form that offers a field is claiming to own it.** The real defect
+  isn't the missing control, it's that one path did two jobs. A derived leg's
+  endpoints belong to the trip (its airports) or to the itinerary (its cities);
+  the details form's job is carrier/date/link/price. Its From/To are now
+  read-only on a derived row with a "Change airport" link, and free-form
+  segments — which really do define their own endpoints — stay editable.
+- **[dev] The page and the server disagreed about "is this leg covered?", and
+  the page was the wrong one.** `_computeGroupedBookings` nested a segment on
+  its **destination alone**, which is why `ALB → Amsterdam` tucked itself under
+  the EWR leg and read as handled — while `todoClaimed` (trip_review.go), which
+  has always required **both** ends, went on counting that flight as an
+  unbooked gap in Trip Health. Two answers to one question, and the *rendering*
+  one was the lie. The Dart side is now a twin of the Go rule with the same
+  fixture table on both sides. Lesson: when a screen answers a question the
+  server also answers, the screen's version is the one that gets believed —
+  because it is the one people can see.
+- **[dev] The paired CHECK had to be restated on the wire.** `columns()` copies
+  one airport onto the other when only one is given (that is what makes "we're
+  flying out of ALB" set both). Harmless for a chat sentence; wrong for an HTTP
+  body, where "change the outbound" would have silently rewritten the leg home.
+  The endpoint 400s a one-sided body instead. **A convenience default written
+  for one caller becomes a trap for the second one** — the paired invariant is
+  in the database, so it belongs on the wire too, not in a caller's memory.
+- **[dev] Extract before the second caller, not after.** The tool's write moved
+  out to `applyTripEndpoints` before the handler was written, so the handler
+  could only ever call it. The parity test
+  (`TestPageAndChatWriteTheSameEndpoints`) exists because 00064 was written
+  after exactly this class of drift.
+
 ## 2026-08-15 — the planner booked the day you fly home
 
 - **[app] Friction → fixed:** an Amsterdam leg reading `Aug 23 – Aug 25 · 2

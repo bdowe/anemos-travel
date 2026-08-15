@@ -41,6 +41,7 @@ import '../models/budget.dart';
 import '../navigation/app_nav.dart';
 import '../services/api_client.dart' show isTransientError;
 import '../services/trip_cache.dart';
+import '../services/trips_api_service.dart' show TripEndpointsException;
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
@@ -80,6 +81,7 @@ import '../widgets/place_photo_card.dart';
 import '../widgets/plan_progress_sheet.dart';
 import '../widgets/source_links_card.dart';
 import '../widgets/status_pill.dart';
+import '../widgets/trip_airports_sheet.dart';
 import '../widgets/trip_map.dart';
 import '../widgets/trip_refine_panel.dart';
 import '../widgets/wear_pack_sheet.dart';
@@ -1457,10 +1459,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // was derived with.
     final parts = todo.title.split(' → ');
     final trip = _trip;
+    // Set by the "Change airport" link, which closes this sheet; the airports
+    // sheet opens after the await rather than from the callback, so the two
+    // modals never overlap.
+    var changeAirport = false;
     final body = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => AddSegmentSheet(
+      builder: (sheetContext) => AddSegmentSheet(
         initialOrigin: parts.isNotEmpty ? parts.first : null,
         initialDestination: parts.length > 1 ? parts[1] : null,
         initialMode: todo.mode ??
@@ -1470,8 +1476,23 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               _ => 'flight',
             },
         initialDepartDate: todo.departDate,
+        // A derived leg's endpoints are the trip's (its airports) or the
+        // itinerary's (its cities) — this form's job is the booking detail.
+        // Typing over them here used to post a second row that contradicted
+        // the one above it.
+        endpointsLocked: todo.auto,
+        onChangeAirport: todo.auto && todo.isHomeLeg && !_readOnly
+            ? () {
+                changeAirport = true;
+                Navigator.of(sheetContext).pop();
+              }
+            : null,
       ),
     );
+    if (changeAirport) {
+      await _openTripAirports();
+      return;
+    }
     if (body == null) return;
     try {
       await ref
@@ -1480,6 +1501,57 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       await _load();
     } catch (e) {
       _showSnack(l10n.tripAddTransportFailed(friendlyError(l10n, e)));
+    }
+  }
+
+  /// Opens the trip's own departure/return airports (specs/trip-endpoint-
+  /// airports) and saves what comes back. The server renames the two derived
+  /// legs in the same transaction — in place, so their booked state, per-leg
+  /// mode and any linked expense survive — which is why this reloads the trip
+  /// rather than patching a title locally.
+  ///
+  /// This exists because the page had no such control: the only affordance on
+  /// a derived "EWR → Amsterdam" row was "Add details…", which posts a segment,
+  /// so correcting the airport there produced a second, contradicting row.
+  Future<void> _openTripAirports() async {
+    if (_guardOffline()) return;
+    final trip = _trip;
+    if (trip == null) return;
+    final l10n = context.l10n;
+    // What the legs read today when the trip states no airport of its own —
+    // shown as context, never seeded into the fields, so opening the sheet and
+    // pressing Save can't quietly promote a fallback into a fixed choice.
+    final fallback = (trip.origin?.trim().isNotEmpty ?? false)
+        ? trip.origin!.trim()
+        : _homeAirport;
+    final choice = await showModalBottomSheet<TripAirportsChoice>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => TripAirportsSheet(
+        originAirport: trip.originAirport,
+        returnAirport: trip.returnAirport,
+        fallbackLabel: fallback,
+      ),
+    );
+    if (choice == null) return;
+    try {
+      final result = await ref.read(tripsApiServiceProvider).updateTripEndpoints(
+            widget.tripId,
+            originAirport: choice.originAirport,
+            returnAirport: choice.returnAirport,
+          );
+      await _load();
+      if (!mounted) return;
+      _showSnack(l10n.tripAirportsSaved(result.legsRenamed.length));
+    } on TripEndpointsException catch (e) {
+      // The 422s are written for travelers and name what went wrong — an
+      // airport that matches nothing, or a trip that plainly travels by car.
+      // Flattening them into "something went wrong" throws away the answer.
+      _showSnack(e.statusCode == 422 && e.message.isNotEmpty
+          ? e.message
+          : l10n.tripAirportsFailed(friendlyError(l10n, e)));
+    } catch (e) {
+      _showSnack(l10n.tripAirportsFailed(friendlyError(l10n, e)));
     }
   }
 
@@ -2895,6 +2967,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 (_readOnly || _isOffline || todo.kind == 'other')
                     ? null
                     : () => _addDetailsFromTodo(todo),
+            // Only the two journey endpoints: those are the rows the trip's
+            // own airports title, so they are the only ones this moves. The
+            // role comes from the server, which stores it as identity —
+            // guessing it here would be wrong on a row it demoted.
+            onChangeAirport: (_readOnly || _isOffline || !todo.isHomeLeg)
+                ? null
+                : () => _openTripAirports(),
             // No picker when a confirmed segment fills the slot — that row's
             // mode truth is the segment, edited via its own sheet.
             onModeChanged: (_readOnly ||
@@ -4838,8 +4917,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             if (wear.available) const PopupMenuDivider(),
             ..._shareMenuItems(l10n),
           ],
-          if (canExit) ...[
+          // Reachable even on a trip with no cities yet, where there are no
+          // derived legs to carry the row-level entry.
+          if (!_isOffline && !_readOnly) ...[
             if (wear.available || absorbsShare) const PopupMenuDivider(),
+            PopupMenuItem(
+              value: 'airports',
+              child: ListTile(
+                leading: const Icon(Icons.flight_takeoff),
+                title: Text(l10n.tripAirportsMenuLabel),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+          if (canExit) ...[
+            if (wear.available || absorbsShare || !_readOnly)
+              const PopupMenuDivider(),
             if (trip.isOwner)
               PopupMenuItem(
                 value: 'delete',
@@ -4875,6 +4968,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             switch (v) {
               case 'wear':
                 _openWearSheet(trip, wear.regions);
+              case 'airports':
+                _openTripAirports();
               case 'delete':
                 _delete();
               case 'leave':

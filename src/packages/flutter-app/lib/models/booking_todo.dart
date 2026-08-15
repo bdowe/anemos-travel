@@ -22,9 +22,21 @@ class BookingTodo {
   /// transport rows. Null = derived default; the server preserves it across
   /// syncs like [booked].
   final String? mode;
+
+  /// Which leg of the journey this row is, as the SERVER stores it:
+  /// `home_outbound` | `home_return` | `inter_city` | `stay`
+  /// (booking_todo_identity.go). Read, never derived here — a home leg the
+  /// server demoted to `inter_city` on a key collision would fool any
+  /// client-side guess, and only the server knows that happened.
+  final String? role;
   final bool booked;
   final bool auto;
   final int position;
+
+  /// True when this row is one of the trip's two journey endpoints — the leg
+  /// out and the leg home — and so is titled from the TRIP's airports rather
+  /// than from the itinerary's cities.
+  bool get isHomeLeg => role == 'home_outbound' || role == 'home_return';
 
   const BookingTodo({
     required this.id,
@@ -37,6 +49,7 @@ class BookingTodo {
     this.departDate,
     this.returnDate,
     this.mode,
+    this.role,
     this.booked = false,
     this.auto = true,
     this.position = 0,
@@ -53,6 +66,7 @@ class BookingTodo {
         departDate: departDate,
         returnDate: returnDate,
         mode: mode,
+        role: role,
         booked: booked ?? this.booked,
         auto: auto,
         position: position,

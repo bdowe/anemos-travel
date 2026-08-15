@@ -801,6 +801,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get bookingsSegmentToLabel => 'Hasta *';
 
   @override
+  String get bookingsSegmentEndpointsFromTrip => 'Lo define el viaje.';
+
+  @override
   String get bookingsDepartureDate => 'Fecha de salida';
 
   @override
@@ -1341,6 +1344,67 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tripMoreActions => 'Más opciones';
+
+  @override
+  String get tripAirportsTitle => 'Aeropuertos del viaje';
+
+  @override
+  String get tripAirportsHelp =>
+      'Desde qué aeropuerto sale este viaje y a cuál vuelve. Tu aeropuerto habitual no cambia.';
+
+  @override
+  String get tripAirportsDepartsFrom => 'Sale desde';
+
+  @override
+  String get tripAirportsReturnsInto => 'Vuelve a';
+
+  @override
+  String get tripAirportsSameBothWays => 'Vuelve al mismo aeropuerto';
+
+  @override
+  String get tripAirportsUseHomeAirport => 'Usar mi aeropuerto habitual';
+
+  @override
+  String get tripAirportsPickOne => 'Elige un aeropuerto de la lista.';
+
+  @override
+  String get tripAirportsBothNeeded =>
+      'Elige un aeropuerto para los dos extremos, o bórralos.';
+
+  @override
+  String tripAirportsCurrentFallback(String label) {
+    return 'Ahora mismo estos trayectos usan $label.';
+  }
+
+  @override
+  String get tripAirportsMenuLabel => 'Aeropuertos del viaje…';
+
+  @override
+  String get tripAirportsChangeDeparture => 'Cambiar aeropuerto de salida…';
+
+  @override
+  String get tripAirportsChangeReturn => 'Cambiar aeropuerto de vuelta…';
+
+  @override
+  String get tripAirportsChangeLink => 'Cambiar aeropuerto';
+
+  @override
+  String tripAirportsSaved(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Guardado. $count trayectos renombrados.',
+      one: 'Guardado. 1 trayecto renombrado.',
+      zero:
+          'Guardado. Aún no hay trayecto de ida ni de vuelta: usarán estos aeropuertos cuando aparezcan.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String tripAirportsFailed(String error) {
+    return 'No se pudieron guardar los aeropuertos del viaje: $error';
+  }
 
   @override
   String get tripLocalIntel => 'Información local';

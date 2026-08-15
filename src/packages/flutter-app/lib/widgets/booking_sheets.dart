@@ -240,6 +240,21 @@ class AddSegmentSheet extends StatefulWidget {
   final String? initialMode;
   final String? initialDepartDate;
 
+  /// True when this sheet is filling in the details of a leg the itinerary
+  /// already derives, so its endpoints are not this form's to change.
+  ///
+  /// Editing them here used to look like editing the leg and actually POSTed a
+  /// second row: the page then showed "EWR → Amsterdam" with "ALB → Amsterdam"
+  /// nested underneath it, two claims about one flight. A derived leg's
+  /// endpoints come from the trip (its airports) or the itinerary (its cities),
+  /// which is one obvious place each — so here they are shown, not typed.
+  final bool endpointsLocked;
+
+  /// Offered beside the locked endpoints of a home leg: the one control that
+  /// really does change them. Null on an inter-city leg, whose endpoints follow
+  /// the itinerary's cities and have no single field to send you to.
+  final VoidCallback? onChangeAirport;
+
   const AddSegmentSheet({
     super.key,
     this.initial,
@@ -247,6 +262,8 @@ class AddSegmentSheet extends StatefulWidget {
     this.initialDestination,
     this.initialMode,
     this.initialDepartDate,
+    this.endpointsLocked = false,
+    this.onChangeAirport,
   });
 
   @override
@@ -381,6 +398,7 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
                 Expanded(
                   child: TextField(
                     controller: _origin,
+                    readOnly: widget.endpointsLocked,
                     decoration: InputDecoration(
                       labelText: l10n.bookingsSegmentFromLabel,
                       border: const OutlineInputBorder(),
@@ -391,6 +409,7 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
                 Expanded(
                   child: TextField(
                     controller: _destination,
+                    readOnly: widget.endpointsLocked,
                     decoration: InputDecoration(
                       labelText: l10n.bookingsSegmentToLabel,
                       border: const OutlineInputBorder(),
@@ -399,6 +418,26 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
                 ),
               ],
             ),
+            if (widget.endpointsLocked) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      l10n.bookingsSegmentEndpointsFromTrip,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  if (widget.onChangeAirport != null)
+                    TextButton(
+                      onPressed: widget.onChangeAirport,
+                      child: Text(l10n.tripAirportsChangeLink),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
               onPressed: _pickDate,

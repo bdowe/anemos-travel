@@ -1586,6 +1586,12 @@ abstract class AppLocalizations {
   /// **'To *'**
   String get bookingsSegmentToLabel;
 
+  /// Under the read-only From/To of a leg the itinerary derives: its endpoints come from the trip's airports or its cities, not from this form.
+  ///
+  /// In en, this message translates to:
+  /// **'Set by the trip.'**
+  String get bookingsSegmentEndpointsFromTrip;
+
   /// No description provided for @bookingsDepartureDate.
   ///
   /// In en, this message translates to:
@@ -2479,6 +2485,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More options'**
   String get tripMoreActions;
+
+  /// No description provided for @tripAirportsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trip airports'**
+  String get tripAirportsTitle;
+
+  /// No description provided for @tripAirportsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Which airports this trip flies out of and comes home into. Your saved home airport doesn\'t change.'**
+  String get tripAirportsHelp;
+
+  /// No description provided for @tripAirportsDepartsFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Departs from'**
+  String get tripAirportsDepartsFrom;
+
+  /// No description provided for @tripAirportsReturnsInto.
+  ///
+  /// In en, this message translates to:
+  /// **'Returns into'**
+  String get tripAirportsReturnsInto;
+
+  /// No description provided for @tripAirportsSameBothWays.
+  ///
+  /// In en, this message translates to:
+  /// **'Comes home into the same airport'**
+  String get tripAirportsSameBothWays;
+
+  /// No description provided for @tripAirportsUseHomeAirport.
+  ///
+  /// In en, this message translates to:
+  /// **'Use my home airport'**
+  String get tripAirportsUseHomeAirport;
+
+  /// No description provided for @tripAirportsPickOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick an airport from the list.'**
+  String get tripAirportsPickOne;
+
+  /// No description provided for @tripAirportsBothNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick an airport for both ends, or clear them.'**
+  String get tripAirportsBothNeeded;
+
+  /// Shown when the trip states no airport of its own, naming what its departure and return legs fall back to.
+  ///
+  /// In en, this message translates to:
+  /// **'Right now these legs use {label}.'**
+  String tripAirportsCurrentFallback(String label);
+
+  /// No description provided for @tripAirportsMenuLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Trip airports…'**
+  String get tripAirportsMenuLabel;
+
+  /// No description provided for @tripAirportsChangeDeparture.
+  ///
+  /// In en, this message translates to:
+  /// **'Change departure airport…'**
+  String get tripAirportsChangeDeparture;
+
+  /// No description provided for @tripAirportsChangeReturn.
+  ///
+  /// In en, this message translates to:
+  /// **'Change return airport…'**
+  String get tripAirportsChangeReturn;
+
+  /// No description provided for @tripAirportsChangeLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Change airport'**
+  String get tripAirportsChangeLink;
+
+  /// Confirmation after changing a trip's airports. The zero case is honest rather than an error: a trip with no cities has no derived legs to rename.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Saved. No departure or return leg yet — they\'ll use these airports when they appear.} =1{Saved. 1 leg renamed.} other{Saved. {count} legs renamed.}}'**
+  String tripAirportsSaved(int count);
+
+  /// No description provided for @tripAirportsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the trip\'s airports: {error}'**
+  String tripAirportsFailed(String error);
 
   /// No description provided for @tripLocalIntel.
   ///
