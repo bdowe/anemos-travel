@@ -27,33 +27,49 @@ const double _pinHitBox = 44;
 /// less than [TripMap.topOverlayInset]'s usual value.
 const double _emptyStateTopInset = 44;
 
-/// Home-airport overlay for the full-screen trip map: the home point plus
-/// which travel legs to draw. A null endpoint hides that leg (e.g. a mid-trip
-/// day-chip selection); with both endpoints null callers should pass
-/// `home: null` instead so no orphan pin renders.
+/// One journey endpoint on the trip map: the airport's point plus which travel
+/// legs to draw from it. A null endpoint hides that leg (e.g. a mid-trip
+/// day-chip selection); an entry with both endpoints null should not be passed
+/// at all, so no orphan pin renders.
+///
+/// Callers pass a LIST because a trip can depart from one airport and come home
+/// into another — out of ALB, home into EWR. When both directions use the same
+/// airport the list holds a single entry carrying both legs, which is exactly
+/// the shape (and the single pin) this had before two endpoints existed.
 ///
 /// Limitation: a leg spanning more than 180° of longitude is dropped — the
 /// map is a single non-wrapping world ([AppMapCrs]), so such a leg would draw
-/// the long way around. When every leg drops, the whole overlay (pin and
+/// the long way around. When every leg of an entry drops, that entry (pin and
 /// camera-fit inclusion) is suppressed.
+/// Which end of the journey a [TripMapHome] pin is, for its tooltip. Carried
+/// explicitly rather than inferred from which leg survived: leg-focus nulls one
+/// leg of a merged entry, and a trip that leaves and returns through one
+/// airport should not start calling it "departure" the moment you tap the first
+/// city chip.
+enum TripMapHomeKind { home, departure, arrival }
+
 class TripMapHome {
-  /// The home airport's coordinates.
+  /// The airport's coordinates.
   final LatLng point;
 
-  /// First-city coordinate; non-null draws the outbound leg home → city.
+  /// First-city coordinate; non-null draws the outbound leg airport → city.
   final LatLng? outboundTo;
 
-  /// Last-city coordinate; non-null draws the return leg city → home.
+  /// Last-city coordinate; non-null draws the return leg city → airport.
   final LatLng? returnFrom;
 
   /// Bare IATA code (e.g. "EWR") for the pin's tooltip.
   final String label;
+
+  /// [TripMapHomeKind.home] when one airport serves both directions.
+  final TripMapHomeKind kind;
 
   const TripMapHome({
     required this.point,
     required this.label,
     this.outboundTo,
     this.returnFrom,
+    this.kind = TripMapHomeKind.home,
   });
 }
 
@@ -145,10 +161,12 @@ class TripMap extends StatefulWidget {
   /// Callers overlay their own tap handler (e.g. tap-to-expand on phones).
   final bool interactive;
 
-  /// Home-airport overlay: dashed outbound/return legs, a home pin, and the
-  /// home point joining the camera fit. Null — the default, and what shared
-  /// views pass — renders exactly as before.
-  final TripMapHome? home;
+  /// Journey-endpoint overlay: dashed outbound/return legs, an airport pin per
+  /// entry, and those points joining the camera fit. Usually one entry (a trip
+  /// leaves and returns through the same airport); two when it comes home into
+  /// a different one. Empty — the default, and what shared views pass — renders
+  /// exactly as before.
+  final List<TripMapHome> home;
 
   /// Trip-overview destination pins (see [TripMapDestination]). With ≥2
   /// entries the map renders one numbered pin per destination instead of
@@ -176,7 +194,7 @@ class TripMap extends StatefulWidget {
     this.emptyAction,
     this.topOverlayInset = 0,
     this.interactive = true,
-    this.home,
+    this.home = const [],
     this.destinations,
     this.onExpand,
   });
@@ -246,10 +264,30 @@ class _TripMapState extends State<TripMap> {
   static bool _destinationMode(List<TripMapDestination>? destinations) =>
       destinations != null && destinations.length >= 2;
 
-  /// [TripMapHome] after the antimeridian guard documented on the class:
-  /// legs spanning more than 180° of longitude (or with equal endpoints) are
-  /// dropped, and when no drawable leg remains the whole overlay is
-  /// suppressed — null here means "render no home pin and fit no home point".
+  /// The drawable journey endpoints, after the antimeridian guards documented
+  /// on [TripMapHome]. An entry whose legs all drop is removed entirely, so an
+  /// empty result means "render no airport pin and fit no airport point".
+  ///
+  /// Two guards, not one. Per entry: a leg spanning more than 180° of longitude
+  /// (or with equal endpoints) is dropped. Across entries: two airports more
+  /// than 180° apart would stretch the camera fit the long way round — the very
+  /// thing the per-leg rule exists to prevent — so the first is kept and the
+  /// second dropped rather than framing a world that doesn't fit.
+  static List<TripMapHome> _effectiveHomes(List<TripMapHome> homes) {
+    final out = <TripMapHome>[];
+    for (final h in homes) {
+      final e = _effectiveHome(h);
+      if (e == null) continue;
+      if (out.isNotEmpty &&
+          (e.point.longitude - out.first.point.longitude).abs() > 180) {
+        continue;
+      }
+      out.add(e);
+    }
+    return out;
+  }
+
+  /// One entry after the per-leg guard; null when nothing remains to draw.
   static TripMapHome? _effectiveHome(TripMapHome? home) {
     if (home == null) return null;
     bool drawable(LatLng? other) =>
@@ -265,6 +303,7 @@ class _TripMapState extends State<TripMap> {
     return TripMapHome(
       point: home.point,
       label: home.label,
+      kind: home.kind,
       outboundTo: outboundTo,
       returnFrom: returnFrom,
     );
@@ -323,15 +362,15 @@ class _TripMapState extends State<TripMap> {
   }
 
   /// Every coordinate the camera should frame: destination pins (overview
-  /// mode) or mapped items, plus geocoded stays, plus the home airport when
-  /// its overlay has a visible leg (the camera must never stretch to a point
+  /// mode) or mapped items, plus geocoded stays, plus each journey endpoint
+  /// whose overlay has a visible leg (the camera must never stretch to a point
   /// nothing connects to). Mirrors the fitPoints assembled in [build]. Static
   /// so it can run against an oldWidget's lists in [didUpdateWidget].
   static List<LatLng> _fitPointsOf(
     List<TripMapDestination>? destinations,
     List<ItineraryItem> items,
     List<Accommodation> accommodations,
-    LatLng? homePoint,
+    List<LatLng> homePoints,
   ) {
     final points = <LatLng>[
       if (_destinationMode(destinations))
@@ -345,7 +384,7 @@ class _TripMapState extends State<TripMap> {
         points.add(LatLng(a.latitude!, a.longitude!));
       }
     }
-    if (homePoint != null) points.add(homePoint);
+    points.addAll(homePoints);
     return points;
   }
 
@@ -353,7 +392,7 @@ class _TripMapState extends State<TripMap> {
         widget.destinations,
         widget.items,
         widget.accommodations,
-        _effectiveHome(widget.home)?.point,
+        _effectiveHomes(widget.home).map((h) => h.point).toList(),
       );
 
   @override
@@ -369,14 +408,18 @@ class _TripMapState extends State<TripMap> {
     // already frames the new content.
     bool contentChanged() {
       if (widget.selectedPosition != null) return false;
-      // The home comparison also covers the async case: the home overlay
-      // flipping null → resolved (the IATA lookup completing after mount)
-      // changes the fit-point set, so the camera refits to include home.
+      // The endpoint comparison also covers the async case: an overlay
+      // flipping empty → resolved (the IATA lookup completing after mount)
+      // changes the fit-point set, so the camera refits to include it. Two
+      // DIFFERENT airports add two distinct points, so a second one resolving
+      // moves the set too — only an entry resolving to a point already in the
+      // set is invisible here, and that is the same-airport case, which emits
+      // one entry rather than two.
       final oldPoints = _fitPointsOf(
         oldWidget.destinations,
         oldWidget.items,
         oldWidget.accommodations,
-        _effectiveHome(oldWidget.home)?.point,
+        _effectiveHomes(oldWidget.home).map((h) => h.point).toList(),
       );
       if (oldPoints.isEmpty) return false;
       return !setEquals(_fitPoints().toSet(), oldPoints.toSet());
@@ -523,25 +566,25 @@ class _TripMapState extends State<TripMap> {
     final routePoints = destMode
         ? [for (final d in widget.destinations!) d.point]
         : mapped.map((m) => m.point).toList();
-    final home = _effectiveHome(widget.home);
-    // Camera framing covers stays and the home airport too; the route
+    final homes = _effectiveHomes(widget.home);
+    // Camera framing covers stays and the journey endpoints too; the route
     // polyline sticks to [routePoints].
     final fitPoints = [
       ...routePoints,
       for (final s in stays) s.point,
-      if (home != null) home.point,
+      for (final h in homes) h.point,
     ];
     final selected = _selectedPoint();
 
-    // Home-airport legs (outbound home → first city, return last city →
-    // home). Kept out of [mapped]/[routePoints]: appending there would
+    // Journey-endpoint legs (outbound airport → first city, return last city →
+    // airport). Kept out of [mapped]/[routePoints]: appending there would
     // silently reindex the numbered pins and break segment-label adjacency,
     // so the legs get their own dashed polylines and arrow markers below.
     final homeSegments = <({LatLng a, LatLng b})>[
-      if (home != null && home.outboundTo != null)
-        (a: home.point, b: home.outboundTo!),
-      if (home != null && home.returnFrom != null)
-        (a: home.returnFrom!, b: home.point),
+      for (final h in homes) ...[
+        if (h.outboundTo != null) (a: h.point, b: h.outboundTo!),
+        if (h.returnFrom != null) (a: h.returnFrom!, b: h.point),
+      ],
     ];
 
     // Travel-time labels at the midpoint of each within-city leg (only between
@@ -716,22 +759,32 @@ class _TripMapState extends State<TripMap> {
                 if (arrowMarkers.isNotEmpty) MarkerLayer(markers: arrowMarkers),
                 if (labelSegments.isNotEmpty)
                   _SegmentLabelLayer(segments: labelSegments),
-                // The home airport, like stays, sits outside the clusterer
-                // and beneath the numbered pins: it is a fixed journey
-                // endpoint, not an itinerary stop.
-                if (home != null)
+                // The journey endpoints, like stays, sit outside the
+                // clusterer and beneath the numbered pins: they are fixed
+                // endpoints, not itinerary stops. Two pins when the trip comes
+                // home into a different airport than it left from.
+                if (homes.isNotEmpty)
                   MarkerLayer(
                     markers: [
-                      Marker(
-                        point: home.point,
-                        // Transparent 44px halo around the 26px body; the box
-                        // stays centered on the coordinate (see _pinHitBox).
-                        width: _pinHitBox,
-                        height: _pinHitBox,
-                        child: _HomePin(
-                          message: l10n.mapHomeAirport(home.label),
+                      for (final h in homes)
+                        Marker(
+                          point: h.point,
+                          // Transparent 44px halo around the 26px body; the
+                          // box stays centered on the coordinate (see
+                          // _pinHitBox).
+                          width: _pinHitBox,
+                          height: _pinHitBox,
+                          child: _HomePin(
+                            message: switch (h.kind) {
+                              TripMapHomeKind.departure =>
+                                l10n.mapDepartureAirport(h.label),
+                              TripMapHomeKind.arrival =>
+                                l10n.mapReturnAirport(h.label),
+                              TripMapHomeKind.home =>
+                                l10n.mapHomeAirport(h.label),
+                            },
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 // Stays live in their own layer, outside the clusterer: a trip has

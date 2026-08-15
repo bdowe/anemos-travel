@@ -414,7 +414,7 @@ void main() {
       returnFrom: LatLng(items.last.latitude, items.last.longitude),
     );
 
-    testWidgets('default home: null renders no pin and no extra arrows', (
+    testWidgets('default home: empty renders no pin and no extra arrows', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(_host(TripMap(items: items)));
@@ -428,7 +428,7 @@ void main() {
     testWidgets('overlay adds the pin and two leg arrows, numbering intact', (
       WidgetTester tester,
     ) async {
-      await tester.pumpWidget(_host(TripMap(items: items, home: home)));
+      await tester.pumpWidget(_host(TripMap(items: items, home: [home])));
       await tester.pump();
       await tester.pump();
 
@@ -458,7 +458,7 @@ void main() {
       expect(_camera(tester).visibleBounds.contains(homePoint), isFalse);
 
       // ...then it resolves: didUpdateWidget's fit-set comparison must refit.
-      await tester.pumpWidget(_host(TripMap(items: items, home: home)));
+      await tester.pumpWidget(_host(TripMap(items: items, home: [home])));
       await tester.pump(); // frame scheduling the post-frame re-fit
       await tester.pump(); // camera moved
 
@@ -480,7 +480,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        _host(TripMap(items: fijiItems, home: crossingHome)),
+        _host(TripMap(items: fijiItems, home: [crossingHome])),
       );
       await tester.pump();
 
@@ -493,7 +493,7 @@ void main() {
     testWidgets('home alone must not summon a map (empty-state guard)', (
       WidgetTester tester,
     ) async {
-      await tester.pumpWidget(_host(TripMap(items: const [], home: home)));
+      await tester.pumpWidget(_host(TripMap(items: const [], home: [home])));
       await tester.pump();
 
       expect(find.text('No mapped places'), findsOneWidget);
@@ -753,7 +753,7 @@ void main() {
           TripMap(
             items: items,
             accommodations: stays,
-            home: home,
+            home: [home],
             destinations: dests,
           ),
         ),

@@ -10,6 +10,7 @@ import '../models/source_link.dart';
 import '../models/local_recommendation.dart';
 import '../services/api_client.dart';
 import '../services/plan_service.dart';
+import 'preferences_provider.dart';
 import 'api_client_provider.dart';
 
 /// A user message waiting to be sent once the in-flight turn finishes.
@@ -255,7 +256,14 @@ class PlanNotifier extends StateNotifier<PlanState> {
   // — e.g. a late suggest_replies leaking chips after Start over.
   int _turn = 0;
 
-  PlanNotifier(this._service, this._apiClient, {this.tripId}) : super(const PlanState());
+  /// Called with the profile fields the agent just wrote server-side, so the
+  /// app can refresh anything derived from them. Set by the providers below;
+  /// null in tests that don't care.
+  final void Function(Set<String> fields)? onProfileFieldsChanged;
+
+  PlanNotifier(this._service, this._apiClient,
+      {this.tripId, this.onProfileFieldsChanged})
+      : super(const PlanState());
 
   // Streamed text_deltas arrive faster than a frame; pushing a new state per
   // token rebuilds the chat per token. Deltas accumulate in [_streamBuffer]
@@ -523,6 +531,15 @@ class PlanNotifier extends StateNotifier<PlanState> {
           case 'profile_updated':
             state = state.copyWith(
                 profileUpdateNote: event.data['notes_preview'] as String? ?? '');
+            // The server names which fields it wrote. Anything cached from the
+            // traveler's profile is now stale — the home airport especially,
+            // which the trip page reads for its map pin and its checklist
+            // fallback and would otherwise keep showing until an app restart.
+            final fields = (event.data['fields'] as List<dynamic>?)
+                    ?.whereType<String>()
+                    .toSet() ??
+                const <String>{};
+            if (fields.isNotEmpty) onProfileFieldsChanged?.call(fields);
 
           case 'suggest_replies':
             // An itinerary turn's banner owns the tail — drop the chips
@@ -816,9 +833,18 @@ class PlanNotifier extends StateNotifier<PlanState> {
   }
 }
 
+/// Re-reads the traveler profile after the agent writes it. `load()`, not
+/// `loadIfNeeded()`: the cached copy is exactly what is wrong here.
+void _refetchProfileFields(Ref ref, Set<String> fields) {
+  if (fields.contains('home_airport')) {
+    ref.read(preferencesProvider.notifier).load();
+  }
+}
+
 final planProvider = StateNotifierProvider<PlanNotifier, PlanState>((ref) {
   final apiClient = ref.watch(apiClientProvider);
-  return PlanNotifier(PlanService(apiClient.baseUrl), apiClient);
+  return PlanNotifier(PlanService(apiClient.baseUrl), apiClient,
+      onProfileFieldsChanged: (f) => _refetchProfileFields(ref, f));
 });
 
 /// Per-trip refinement session for the trip-detail panel, kept separate from
@@ -828,5 +854,7 @@ final planProvider = StateNotifierProvider<PlanNotifier, PlanState>((ref) {
 /// refinement target is chosen.
 final tripRefineProvider = StateNotifierProvider.family<PlanNotifier, PlanState, String>((ref, tripId) {
   final apiClient = ref.watch(apiClientProvider);
-  return PlanNotifier(PlanService(apiClient.baseUrl), apiClient, tripId: tripId);
+  return PlanNotifier(PlanService(apiClient.baseUrl), apiClient,
+      tripId: tripId,
+      onProfileFieldsChanged: (f) => _refetchProfileFields(ref, f));
 });

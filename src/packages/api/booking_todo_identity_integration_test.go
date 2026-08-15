@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"testing"
 )
@@ -220,5 +221,56 @@ func TestStalePruneDemotesInvestedRowsAndDeletesTheRest(t *testing.T) {
 	// Demoted means the traveler can now delete it — an auto row cannot be.
 	if rec := doJSON(t, "DELETE", base+"/booking-todos/"+parisID, token, nil); rec.Code != http.StatusNoContent {
 		t.Fatalf("delete demoted row = %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// A row written BEFORE migration 00064 — or by an older binary during the
+// deploy itself — is still keyed by its endpoint labels. The sync must adopt it
+// onto the canonical identity rather than treating it as stale, or the very
+// first sync after the deploy would prune it and take its booked flag with it.
+// This is the belt to the migration's braces: it also means a failed or skipped
+// backfill degrades to "the next sync fixes it".
+func TestSyncAdoptsPre00064HomeLegs(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "legacy@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	tripID := trip.ID.String()
+	base := "/api/v1/trips/" + tripID
+
+	if rec := doJSON(t, "PUT", "/api/v1/preferences", token, map[string]any{"home_airport": "EWR"}); rec.Code != http.StatusOK {
+		t.Fatalf("save home airport = %d", rec.Code)
+	}
+	// Exactly what the old code stored: the endpoint-labelled key, no role, no
+	// labels — and a booked flag the traveler cares about.
+	var legacyID string
+	if err := dbPool.QueryRow(context.Background(),
+		`INSERT INTO booking_todos (trip_id, kind, todo_key, title, provider, position, auto, booked)
+		 VALUES ($1, 'transport', 'transport:ewr>>amsterdam', 'EWR → Amsterdam', 'google_flights', 0, true, true)
+		 RETURNING id`, trip.ID).Scan(&legacyID); err != nil {
+		t.Fatalf("seed legacy row: %v", err)
+	}
+
+	rec := doJSON(t, "PUT", base+"/booking-todos", token, homeLegPayload("EWR", "Amsterdam"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("sync = %d: %s", rec.Code, rec.Body.String())
+	}
+	after := decodeTodoList(t, rec)
+	if len(after) != 3 {
+		t.Fatalf("rows = %d, want 3 (a fourth means the legacy row was orphaned): %v", len(after), after)
+	}
+	if after[0]["id"] != legacyID {
+		t.Fatalf("legacy row was not adopted: %v", after[0])
+	}
+	if after[0]["booked"] != true || after[0]["auto"] != true {
+		t.Fatalf("adopted row lost its state: %v", after[0])
+	}
+	// And it is canonical now, so the airport can change without touching it.
+	var storedKey, role string
+	if err := dbPool.QueryRow(context.Background(),
+		`SELECT todo_key, role FROM booking_todos WHERE id = $1`, legacyID).Scan(&storedKey, &role); err != nil {
+		t.Fatalf("read adopted row: %v", err)
+	}
+	if storedKey != "transport:@home>>amsterdam" || role != "home_outbound" {
+		t.Fatalf("adopted row stored as %q/%q, want the canonical identity", storedKey, role)
 	}
 }

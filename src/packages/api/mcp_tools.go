@@ -206,7 +206,7 @@ func mcpCreateTrip(ctx context.Context, caller mcpCaller, in createTripInput) (*
 		return toolError("Anemos couldn't save the trip just now."), zero, nil
 	}
 	tripID, newLineage, err := persistTrip(ctx, caller.userID, "chat-"+chatToken,
-		in.Title, in.Summary, in.StartDate, in.EndDate, in.TravelMode, in.Origin, resolved)
+		in.Title, in.Summary, in.StartDate, in.EndDate, in.TravelMode, tripEndpoints{Origin: in.Origin}, resolved)
 	if err != nil {
 		// persistTrip's cap message is written for people — pass it through.
 		if strings.Contains(err.Error(), "trip limit reached") {

@@ -12,6 +12,43 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const adoptLegacyHomeBookingTodo = `-- name: AdoptLegacyHomeBookingTodo :execrows
+UPDATE booking_todos b
+SET todo_key = $1::text
+WHERE b.trip_id = $2 AND b.todo_key = $3::text
+  AND b.auto = true AND b.kind = 'transport'
+  AND NOT EXISTS (
+        SELECT 1 FROM booking_todos x
+        WHERE x.trip_id = b.trip_id AND x.todo_key = $1::text)
+`
+
+type AdoptLegacyHomeBookingTodoParams struct {
+	NewKey string    `json:"new_key"`
+	TripID uuid.UUID `json:"trip_id"`
+	OldKey string    `json:"old_key"`
+}
+
+// Renames a home leg still stored under its endpoint-labelled key onto the
+// canonical @home identity, in place.
+//
+// Migration 00064 backfills these, so this is the belt to that migration's
+// braces: it also catches a row written by an older binary during the deploy
+// itself, and it means a failed or skipped backfill degrades to "the next sync
+// fixes it" rather than to orphaned rows. Without it a legacy row would simply
+// fall outside the posted key set and be pruned — taking its booked flag with
+// it, which is the whole bug.
+//
+// Renames only when nothing already holds the canonical key, so it can never
+// violate idx_booking_todos_trip_key; the caller's upsert then writes the
+// content either way.
+func (q *Queries) AdoptLegacyHomeBookingTodo(ctx context.Context, arg AdoptLegacyHomeBookingTodoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, adoptLegacyHomeBookingTodo, arg.NewKey, arg.TripID, arg.OldKey)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createBookingTodo = `-- name: CreateBookingTodo :one
 INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
@@ -201,6 +238,117 @@ func (q *Queries) ListBookingTodosByTrip(ctx context.Context, tripID uuid.UUID) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const listHomeBookingTodos = `-- name: ListHomeBookingTodos :many
+SELECT id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label FROM booking_todos
+WHERE trip_id = $1 AND auto = true AND role IN ('home_outbound', 'home_return')
+ORDER BY position ASC, created_at ASC
+`
+
+// The trip's two journey-endpoint rows, in checklist order. Used when the
+// trip's endpoints change so their labels can be refreshed immediately rather
+// than at the next client sync — a tool that reports "the checklist now reads
+// ALB → Amsterdam" has to have made that true before it says so.
+func (q *Queries) ListHomeBookingTodos(ctx context.Context, tripID uuid.UUID) ([]BookingTodo, error) {
+	rows, err := q.db.Query(ctx, listHomeBookingTodos, tripID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BookingTodo
+	for rows.Next() {
+		var i BookingTodo
+		if err := rows.Scan(
+			&i.ID,
+			&i.TripID,
+			&i.Kind,
+			&i.TodoKey,
+			&i.Title,
+			&i.Subtitle,
+			&i.Provider,
+			&i.SearchUrl,
+			&i.DepartDate,
+			&i.ReturnDate,
+			&i.Booked,
+			&i.Auto,
+			&i.Position,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Mode,
+			&i.Role,
+			&i.OriginLabel,
+			&i.DestinationLabel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const relabelHomeBookingTodo = `-- name: RelabelHomeBookingTodo :one
+UPDATE booking_todos
+SET origin_label = $1,
+    destination_label = $2,
+    title = $3,
+    search_url = $4,
+    provider = $5
+WHERE id = $6 AND trip_id = $7
+RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label
+`
+
+type RelabelHomeBookingTodoParams struct {
+	OriginLabel      *string   `json:"origin_label"`
+	DestinationLabel *string   `json:"destination_label"`
+	Title            string    `json:"title"`
+	SearchUrl        *string   `json:"search_url"`
+	Provider         *string   `json:"provider"`
+	ID               uuid.UUID `json:"id"`
+	TripID           uuid.UUID `json:"trip_id"`
+}
+
+// Repoints ONE journey-endpoint row at a new airport. Content only: the row
+// keeps its id, so booked, mode, position and any trip_expenses row linked by
+// source_id ride along untouched — which is the entire reason the key stopped
+// containing the airport (00064). todo_key is deliberately absent: the @home
+// identity does not move when the label does.
+func (q *Queries) RelabelHomeBookingTodo(ctx context.Context, arg RelabelHomeBookingTodoParams) (BookingTodo, error) {
+	row := q.db.QueryRow(ctx, relabelHomeBookingTodo,
+		arg.OriginLabel,
+		arg.DestinationLabel,
+		arg.Title,
+		arg.SearchUrl,
+		arg.Provider,
+		arg.ID,
+		arg.TripID,
+	)
+	var i BookingTodo
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Kind,
+		&i.TodoKey,
+		&i.Title,
+		&i.Subtitle,
+		&i.Provider,
+		&i.SearchUrl,
+		&i.DepartDate,
+		&i.ReturnDate,
+		&i.Booked,
+		&i.Auto,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Mode,
+		&i.Role,
+		&i.OriginLabel,
+		&i.DestinationLabel,
+	)
+	return i, err
 }
 
 const setBookingTodoBooked = `-- name: SetBookingTodoBooked :one

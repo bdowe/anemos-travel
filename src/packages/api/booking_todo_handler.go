@@ -205,6 +205,21 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		departureLabel, arrivalLabel = tripEndpointLabels(trip, ownerHome)
 	}
+	// Adopt any home leg still stored under its endpoint-labelled key before
+	// the upsert, so a row the 00064 backfill missed (or one an older binary
+	// wrote mid-deploy) is RENAMED rather than pruned out from under its booked
+	// flag. A no-op for every already-canonical row.
+	for i, d := range derived {
+		if !isHomeRole(idents[i].role) || idents[i].key == d.TodoKey {
+			continue
+		}
+		if _, err := q.AdoptLegacyHomeBookingTodo(r.Context(), store.AdoptLegacyHomeBookingTodoParams{
+			TripID: tripID, OldKey: d.TodoKey, NewKey: idents[i].key,
+		}); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "could not save booking todo")
+			return
+		}
+	}
 	keys := make([]string, 0, len(derived))
 	// One batch upsert instead of a round trip per row. The batch statement
 	// cannot touch the same (trip_id, todo_key) twice, so duplicate keys are
