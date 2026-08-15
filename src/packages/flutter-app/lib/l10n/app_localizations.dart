@@ -2624,12 +2624,6 @@ abstract class AppLocalizations {
   /// **'Undo'**
   String get tripUndo;
 
-  /// No description provided for @tripAddPlacesBeforeRefine.
-  ///
-  /// In en, this message translates to:
-  /// **'Add some places before refining with AI.'**
-  String get tripAddPlacesBeforeRefine;
-
   /// No description provided for @tripAssistantLabel.
   ///
   /// In en, this message translates to:
@@ -2653,6 +2647,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Refine this day'**
   String get tripRefineThisDay;
+
+  /// No description provided for @tripDayNothingPlanned.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing planned yet'**
+  String get tripDayNothingPlanned;
+
+  /// No description provided for @tripPlanThisDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan this day'**
+  String get tripPlanThisDay;
+
+  /// No description provided for @tripPlanTheseDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan these days'**
+  String get tripPlanTheseDays;
+
+  /// No description provided for @tripUnplannedDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 day unplanned} other{{count} days unplanned}}'**
+  String tripUnplannedDays(int count);
+
+  /// No description provided for @tripPlanWithAI.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan with AI'**
+  String get tripPlanWithAI;
+
+  /// No description provided for @tripPlanFromScratch.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan your trip'**
+  String get tripPlanFromScratch;
 
   /// No description provided for @tripRefineWithAI.
   ///

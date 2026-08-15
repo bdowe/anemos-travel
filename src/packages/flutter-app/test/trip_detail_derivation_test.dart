@@ -388,7 +388,10 @@ void main() {
       final trip = _trip(items: [
         _item(0, 'Louvre', city: 'Paris', day: 1, lat: 48.86, lng: 2.35),
       ]);
-      final todos = [_todo('transport:ewr>>paris'), _todo('stay:paris', kind: 'stay')];
+      final todos = [
+        _todo('transport:ewr>>paris'),
+        _todo('stay:paris', kind: 'stay')
+      ];
 
       final mismatched = _compute(
         trip: trip,
@@ -642,8 +645,15 @@ void main() {
       // The filler still counts toward its group (suppression is render-side,
       // in _buildGroupItemSlivers)…
       expect(d.groups.single.items.length, 2);
-      // …but contributes no day key, mirroring the day-header rule.
-      expect(d.liveDayKeys, {'Prague#2'});
+      // …and contributes no PLANNED day, mirroring the day-header rule: day 1
+      // draws no header because its only item is hidden.
+      expect(d.groups.single.emptyDays, contains(1));
+      // Day keys now cover every row a group renders, which since
+      // specs/shape-before-schedule includes the empty-day placeholders — day 1
+      // among them, because a day whose only item is a hidden filler shows the
+      // traveler nothing. The trip runs Sep 1-5, so days 1, 3 and 4 are open
+      // (day 5 is the journey home) and day 2 is the one that is planned.
+      expect(d.liveDayKeys, {'Prague#1', 'Prague#2', 'Prague#3', 'Prague#4'});
     });
   });
 
@@ -720,6 +730,131 @@ void main() {
                 : 'the Go twin must agree');
       });
     }
+  });
+
+  // specs/shape-before-schedule. The planner now leaves the middle of every
+  // stay empty until the traveler asks for that city, so those days have to
+  // render — and the set has to be the days that are actually theirs to plan.
+  group('emptyDays', () {
+    test('a leg\'s rendered span minus the days it plans', () {
+      // Lisbon 3n / Porto 2n / Madrid 2n over Sep 1-8, two places a city
+      // except Madrid. The gaps are the middles: 2-3, 5 and 7.
+      final d = _compute(
+        trip: Trip(
+          id: 't-spine',
+          title: 'Iberia',
+          startDate: '2026-09-01',
+          endDate: '2026-09-08',
+          createdAt: '2026-08-01',
+          updatedAt: '2026-08-01',
+          items: [
+            _item(0, 'Time Out Market', city: 'Lisbon', day: 1),
+            _item(1, 'Belem', city: 'Lisbon', day: 4),
+            _item(2, 'Lello', city: 'Porto', day: 4),
+            _item(3, 'Ribeira', city: 'Porto', day: 6),
+            _item(4, 'Prado', city: 'Madrid', day: 6),
+          ],
+        ),
+      );
+      expect(d.groups.map((g) => g.emptyDays).toList(), [
+        [2, 3],
+        [5],
+        [7],
+      ]);
+    });
+
+    test('the journey-home day is never a gap', () {
+      final d = _compute(
+        trip: Trip(
+          id: 't-home',
+          title: 'Madrid',
+          startDate: '2026-09-01',
+          endDate: '2026-09-08',
+          createdAt: '2026-08-01',
+          updatedAt: '2026-08-01',
+          items: [_item(0, 'Prado', city: 'Madrid', day: 1)],
+        ),
+      );
+      // The leg genuinely renders through Sep 8 — that is the last-leg anchor
+      // working, and the test states it rather than hiding the divergence.
+      expect(d.visibleRanges.single.end, DateTime.parse('2026-09-08'));
+      expect(d.groups.single.emptyDays, [2, 3, 4, 5, 6, 7]);
+    });
+
+    test('an arrival day borrowed from the previous leg belongs to that leg',
+        () {
+      // The legacy fixture: Paris d1-2, Rome d3-4, Paris#2 d5 over Sep 1-5.
+      // Every day is planned, so nothing is a gap — and in particular Rome
+      // must not claim Paris's departure day as one of its own empty days.
+      final d = _compute();
+      expect(d.groups.map((g) => g.emptyDays).toList(), [[], [], []]);
+    });
+
+    test('a leg whose items carry no days has no gaps', () {
+      final d = _compute(
+        trip: Trip(
+          id: 't-undated-items',
+          title: 'Lisbon',
+          startDate: '2026-09-01',
+          endDate: '2026-09-08',
+          createdAt: '2026-08-01',
+          updatedAt: '2026-08-01',
+          items: [_item(0, 'Time Out Market', city: 'Lisbon')],
+        ),
+      );
+      expect(d.groups.single.emptyDays, isEmpty);
+    });
+
+    test('an undated trip has no gaps to name', () {
+      final d = _compute(
+        trip: Trip(
+          id: 't-undated',
+          title: 'Someday',
+          createdAt: '2026-08-01',
+          updatedAt: '2026-08-01',
+          items: [_item(0, 'Prado', city: 'Madrid', day: 1)],
+        ),
+      );
+      expect(d.groups.single.emptyDays, isEmpty);
+    });
+
+    test('a filler-only day counts as empty, because it renders as blank', () {
+      // isCityFiller rows are suppressed in the list and discounted by the
+      // server's day coverage; counting them here would promise a day has
+      // something on it when the screen shows nothing.
+      final d = _compute(
+        trip: Trip(
+          id: 't-filler',
+          title: 'Lisbon',
+          startDate: '2026-09-01',
+          endDate: '2026-09-04',
+          createdAt: '2026-08-01',
+          updatedAt: '2026-08-01',
+          items: [
+            _item(0, 'Lisbon', city: 'Lisbon', day: 1),
+            _item(1, 'Time Out Market', city: 'Lisbon', day: 2),
+          ],
+        ),
+      );
+      // Day 1's only item is hidden, and day 3 was never planned; day 4 is the
+      // journey home and is never offered.
+      expect(d.groups.single.emptyDays, [1, 3]);
+    });
+
+    test('empty days are day-jump targets', () {
+      final d = _compute(
+        trip: Trip(
+          id: 't-jump',
+          title: 'Madrid',
+          startDate: '2026-09-01',
+          endDate: '2026-09-04',
+          createdAt: '2026-08-01',
+          updatedAt: '2026-08-01',
+          items: [_item(0, 'Prado', city: 'Madrid', day: 1)],
+        ),
+      );
+      expect(d.liveDayKeys, {'Madrid#1', 'Madrid#2', 'Madrid#3'});
+    });
   });
 }
 

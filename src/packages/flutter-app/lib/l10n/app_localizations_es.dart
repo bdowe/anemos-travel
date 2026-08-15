@@ -1457,10 +1457,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripUndo => 'Deshacer';
 
   @override
-  String get tripAddPlacesBeforeRefine =>
-      'Añade algunos lugares antes de refinar con IA.';
-
-  @override
   String get tripAssistantLabel => 'Asistente de viaje';
 
   @override
@@ -1475,6 +1471,32 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tripRefineThisDay => 'Refinar este día';
+
+  @override
+  String get tripDayNothingPlanned => 'Aún no hay nada planeado';
+
+  @override
+  String get tripPlanThisDay => 'Planifica este día';
+
+  @override
+  String get tripPlanTheseDays => 'Planifica estos días';
+
+  @override
+  String tripUnplannedDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count días sin planificar',
+      one: '1 día sin planificar',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get tripPlanWithAI => 'Planifica con IA';
+
+  @override
+  String get tripPlanFromScratch => 'Planifica tu viaje';
 
   @override
   String get tripRefineWithAI => 'Refinar con IA';

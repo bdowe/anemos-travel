@@ -907,7 +907,6 @@
   "tripLeaveBody": "You'll lose access until you're invited again. The trip itself is not deleted.",
   "tripRemove": "Remove",
   "tripUndo": "Undo",
-  "tripAddPlacesBeforeRefine": "Add some places before refining with AI.",
   "tripAssistantLabel": "Trip assistant",
   "tripRefiningSection": "Refining {section}",
   "@tripRefiningSection": {
@@ -926,6 +925,19 @@
     }
   },
   "tripRefineThisDay": "Refine this day",
+  "tripDayNothingPlanned": "Nothing planned yet",
+  "tripPlanThisDay": "Plan this day",
+  "tripPlanTheseDays": "Plan these days",
+  "tripUnplannedDays": "{count, plural, one{1 day unplanned} other{{count} days unplanned}}",
+  "@tripUnplannedDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripPlanWithAI": "Plan with AI",
+  "tripPlanFromScratch": "Plan your trip",
   "tripRefineWithAI": "Refine with AI",
   "tripAskAI": "Ask AI about this trip",
   "tripShareLinkCopied": "Share link copied to clipboard",

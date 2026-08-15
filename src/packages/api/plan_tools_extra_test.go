@@ -729,6 +729,13 @@ func TestCreateItineraryResultShowsRenderedLegs(t *testing.T) {
 			t.Fatalf("result missing %q:\n%s", want, msg)
 		}
 	}
+	// Every plannable day here carries a place, so the open-days note must be
+	// ABSENT. Pinned rather than left incidental: the note is meant for the days
+	// a spine deliberately leaves open, and boilerplate on every write would
+	// teach the model to ignore it.
+	if strings.Contains(msg, "Days with nothing planned yet") {
+		t.Fatalf("a fully covered itinerary named open days:\n%s", msg)
+	}
 }
 
 // A section rewrite's result must echo the rendered leg ranges — day numbers
@@ -766,5 +773,125 @@ func TestUpdateItinerarySectionResultShowsRenderedLegs(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "trip_updated") {
 		t.Fatal("section rewrite did not emit trip_updated")
+	}
+}
+
+// The other half of an itinerary write's post-state, and the half a SPINE makes
+// load-bearing (specs/shape-before-schedule): with the middle of every stay
+// empty by agreement, "Itinerary created successfully" plus a list of leg
+// ranges no longer describes what the traveler will see.
+//
+// The day-4 and day-6 pairs are the travel days — the place the traveler leaves
+// in the morning and the one they arrive at in the evening. The time_of_day
+// split is not decoration: it keeps the two cities' places in separate
+// reorderItineraryByDistance blocks, so the walking-distance pass cannot
+// interleave them and split a leg.
+func TestCreateItineraryResultNamesOpenDays(t *testing.T) {
+	resetDB(t)
+	owner, _ := createTestUser(t, "opendays@example.com")
+
+	s, _ := testPlanSession(true, owner.ID)
+	msg, isErr := runCreateItineraryTool(s, json.RawMessage(
+		`{"title":"Iberia","start_date":"2026-09-01","end_date":"2026-09-08","locations":[`+
+			`{"name":"Time Out Market","latitude":38.70,"longitude":-9.14,"day":1,"city":"Lisbon","time_of_day":"evening"},`+
+			`{"name":"Pasteis de Belem","latitude":38.69,"longitude":-9.20,"day":4,"city":"Lisbon","time_of_day":"morning"},`+
+			`{"name":"Livraria Lello","latitude":41.14,"longitude":-8.61,"day":4,"city":"Porto","time_of_day":"evening"},`+
+			`{"name":"Cais da Ribeira","latitude":41.14,"longitude":-8.61,"day":6,"city":"Porto","time_of_day":"morning"},`+
+			`{"name":"Museo del Prado","latitude":40.41,"longitude":-3.69,"day":6,"city":"Madrid","time_of_day":"evening"}]}`))
+	if isErr {
+		t.Fatalf("spine write errored: %s", msg)
+	}
+	for _, want := range []string{
+		// A sparse itinerary renders the same ranges a dense one would.
+		"- Lisbon: 2026-09-01 to 2026-09-04 (3 nights, dated by its places)",
+		"- Porto: 2026-09-04 to 2026-09-06 (2 nights, dated by its places)",
+		"- Madrid: 2026-09-06 to 2026-09-08 (2 nights, dated by its places)",
+		"Days with nothing planned yet:",
+		"days 2-3 in Lisbon",
+		"day 5 in Porto",
+		"day 7 in Madrid",
+		"do NOT fill them in this turn",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("result missing %q:\n%s", want, msg)
+		}
+	}
+	// Day 8 is the journey home — not a plannable day. This assertion is what
+	// catches a future refactor away from walkDayCoverage, which is the only
+	// reason the day the traveler flies back can never be offered as "open".
+	if strings.Contains(msg, "day 8") {
+		t.Fatalf("the journey-home day was offered as open:\n%s", msg)
+	}
+	// A well-formed spine is not a problem, and must not be reported as one.
+	if strings.Contains(msg, "WARNING") {
+		t.Fatalf("a well-formed spine warned:\n%s", msg)
+	}
+}
+
+// The failure the whole design rests on not happening, seen from the model's
+// side: a city with no place on the day the traveler moves on renders zero
+// nights and the next city absorbs them. Nothing on the trip page says so — no
+// nights label is drawn below one night — so the tool result is the only place
+// this is visible on the turn that caused it.
+func TestCreateItineraryResultWarnsOnACollapsedLeg(t *testing.T) {
+	resetDB(t)
+	owner, _ := createTestUser(t, "collapsedleg@example.com")
+
+	s, _ := testPlanSession(true, owner.ID)
+	msg, isErr := runCreateItineraryTool(s, json.RawMessage(
+		`{"title":"Iberia","start_date":"2026-09-01","end_date":"2026-09-08","locations":[`+
+			`{"name":"Time Out Market","latitude":38.70,"longitude":-9.14,"day":1,"city":"Lisbon"},`+
+			`{"name":"Livraria Lello","latitude":41.14,"longitude":-8.61,"day":4,"city":"Porto"}]}`))
+	if isErr {
+		t.Fatalf("write errored: %s", msg)
+	}
+	for _, want := range []string{
+		"WARNING", "Lisbon renders ZERO nights", "the next city has absorbed those nights",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("result missing %q:\n%s", want, msg)
+		}
+	}
+}
+
+// The three mechanical refusals reach the model through the tool and, crucially,
+// leave the database untouched: no trip row, no `done` event, nothing for the
+// traveler's page to show. The model retries against an unchanged world.
+func TestCreateItineraryRefusesAndPersistsNothing(t *testing.T) {
+	resetDB(t)
+	owner, _ := createTestUser(t, "refusals@example.com")
+
+	cases := []struct {
+		name, input, want string
+	}{
+		{"start without end", `{"start_date":"2026-09-01","locations":[{"name":"Prado","latitude":40.41,"longitude":-3.69,"day":1,"city":"Madrid"}]}`, "end_date is required"},
+		{"dated trip, undated place", `{"start_date":"2026-09-01","end_date":"2026-09-08","locations":[{"name":"Prado","latitude":40.41,"longitude":-3.69,"city":"Madrid"}]}`, "Every place needs a day"},
+		{"mixed hub tagging", `{"start_date":"2026-09-01","end_date":"2026-09-08","locations":[{"name":"Prado","latitude":40.41,"longitude":-3.69,"day":1,"city":"Madrid"},{"name":"Lello","latitude":41.14,"longitude":-8.61,"day":4}]}`, "Every place needs the city it is in"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, rec := testPlanSession(true, owner.ID)
+			msg, isErr := runCreateItineraryTool(s, json.RawMessage(tc.input))
+			if !isErr {
+				t.Fatalf("write was accepted: %s", msg)
+			}
+			if !strings.Contains(msg, tc.want) {
+				t.Fatalf("refusal = %q, want it to contain %q", msg, tc.want)
+			}
+			if s.tripID != nil {
+				t.Fatal("a refused write still bound a trip to the session")
+			}
+			if strings.Contains(rec.Body.String(), "event: done") {
+				t.Fatalf("a refused write still streamed a done event:\n%s", rec.Body.String())
+			}
+			var trips int
+			if err := dbPool.QueryRow(context.Background(),
+				`SELECT count(*) FROM trips WHERE user_id = $1`, owner.ID).Scan(&trips); err != nil {
+				t.Fatalf("trips count: %v", err)
+			}
+			if trips != 0 {
+				t.Fatalf("trips = %d, want 0 — a refused write persisted", trips)
+			}
+		})
 	}
 }

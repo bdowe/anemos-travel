@@ -366,4 +366,70 @@ void main() {
       expect(nightsBetween(DateTime(2026, 3, 7), DateTime(2026, 3, 9)), 2);
     });
   });
+
+  // MIRRORED from api/trip_render_legs_test.go (the calendar-parity
+  // convention): same trip, same cities, same expected spans. Change either
+  // side and you must change both.
+  group('a spine itinerary (specs/shape-before-schedule)', () {
+    // Two places a city — one on the day the traveler arrives, one on the day
+    // they move on — except the last city, whose move-on day is the journey
+    // home. Days 2-3, 5 and 7 carry nothing.
+    Trip spine() => _trip(
+          [
+            _item(0, 'Time Out Market', 'Lisbon', day: 1),
+            _item(1, 'Pastéis de Belém', 'Lisbon', day: 4),
+            _item(2, 'Livraria Lello', 'Porto', day: 4),
+            _item(3, 'Cais da Ribeira', 'Porto', day: 6),
+            _item(4, 'Museo del Prado', 'Madrid', day: 6),
+          ],
+          startDate: '2026-09-01',
+          endDate: '2026-09-08',
+        );
+
+    test('renders the same ranges a dense itinerary would', () {
+      final ranges = visibleLegRanges(spine());
+      expect(ranges.length, 3);
+      expect(ranges[0].start, _d('2026-09-01'));
+      expect(ranges[0].end, _d('2026-09-04'));
+      expect(ranges[1].start, _d('2026-09-04'));
+      expect(ranges[1].end, _d('2026-09-06'));
+      // The last-leg anchor carries Madrid through the trip's end; its own
+      // items stop on the day it was reached.
+      expect(ranges[2].start, _d('2026-09-06'));
+      expect(ranges[2].end, _d('2026-09-08'));
+    });
+
+    test('a one-city spine is one arrival place stretched by the trip end', () {
+      final ranges = visibleLegRanges(_trip(
+        [_item(0, 'Museo del Prado', 'Madrid', day: 1)],
+        startDate: '2026-09-01',
+        endDate: '2026-09-08',
+      ));
+      expect(ranges.single.start, _d('2026-09-01'));
+      expect(ranges.single.end, _d('2026-09-08'));
+    });
+
+    // CHARACTERIZATION — the WRONG output, pinned on purpose. It is the failure
+    // the planner's "the move-on place is NOT optional" rule and the tool
+    // result's warning line exist to prevent. With only arrival anchors the
+    // chain pulls each leg's start back to the previous leg's single item day,
+    // so every city's nights land on the city after it.
+    test('arrival anchors alone collapse every leg but the last', () {
+      final ranges = visibleLegRanges(_trip(
+        [
+          _item(0, 'Time Out Market', 'Lisbon', day: 1),
+          _item(1, 'Livraria Lello', 'Porto', day: 4),
+          _item(2, 'Museo del Prado', 'Madrid', day: 6),
+        ],
+        startDate: '2026-09-01',
+        endDate: '2026-09-08',
+      ));
+      expect(ranges[0].start, _d('2026-09-01'));
+      expect(ranges[0].end, _d('2026-09-01')); // three nights gone
+      expect(ranges[1].start, _d('2026-09-01'));
+      expect(ranges[1].end, _d('2026-09-04'));
+      expect(ranges[2].start, _d('2026-09-04'));
+      expect(ranges[2].end, _d('2026-09-08'));
+    });
+  });
 }

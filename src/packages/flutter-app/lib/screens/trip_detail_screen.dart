@@ -2165,7 +2165,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final l10n = context.l10n;
     final items = trip.items ?? [];
     if (items.isEmpty) {
-      _showSnack(l10n.tripAddPlacesBeforeRefine);
+      // An empty trip has no section to refine — but "Refine with AI" is
+      // exactly how a traveler asks for a first itinerary, and the snack that
+      // used to stand here made the only visible AI entry on an empty trip a
+      // dead end. It promised an action the callee refused, which is why
+      // fixing the callee fixes both doors (the header chip and the narrow
+      // app-bar icon) at once. Same handoff the Next Step card's
+      // plan_itinerary step already makes: _openSeededChat is these guards
+      // minus the items check. Only trip-scope entries can reach here — no
+      // items means no groups, so no city or day affordance exists to press.
+      // continuing: false — #441's flag marks a seed APPENDED to a refine
+      // conversation already under way. This door is the opposite: an empty
+      // trip's plan-from-scratch entry, reached before _ensureRefineHydrated
+      // has even run, so there is no thread to change the subject of.
+      _openSeededChat(trip,
+          seed: _buildSectionSeed(trip, target, continuing: false),
+          displayLabel: l10n.tripPlanFromScratch);
       return;
     }
     if (!await _ensureRefineHydrated(trip)) return;
@@ -2183,6 +2198,68 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 ? l10n.tripAssistantLabel
                 : l10n.tripRefiningSection(target.displayLabel(l10n)));
     setState(() => _panelOpen = true);
+  }
+
+  /// Filling a city's open days (specs/shape-before-schedule) — the door out of
+  /// the spine, shared by the empty-day row and the city header's count line so
+  /// there is one action behind both affordances.
+  ///
+  /// It is deliberately NOT [RefineTarget.day], which the per-day sparkle uses:
+  /// that emits `scope='day'`, and a day with no items is not a section the
+  /// server can replace — `spliceSection` rejects it outright ("no itinerary
+  /// items matched day N"). Filling an empty day is a CITY-scoped rewrite, and
+  /// the seed says so.
+  ///
+  /// Null for viewers and offline, matching the per-day refine gate.
+  VoidCallback? _planDaysAction(String groupKey, String cityKey, List<int> days) {
+    if (_isOffline || !(_trip?.canEdit ?? true) || days.isEmpty) return null;
+    // 'Other places' is a fallback label, not a hub the section tool can
+    // target — the same carve-out the city sparkle makes.
+    if (cityKey == _kOtherPlaces) return null;
+    return () {
+      final trip = _trip;
+      if (trip == null) return;
+      _openSeededChat(trip,
+          seed: _buildFillDaysSeed(trip, groupKey, cityKey, days),
+          displayLabel: context.l10n.tripRefineCity(cityKey));
+    };
+  }
+
+  /// The seed for "plan these days". Carries what the job needs and nothing
+  /// else: the city, the span the page renders for it, WHICH days are open, and
+  /// the places already on it so a city-scoped rewrite keeps them.
+  ///
+  /// It asks the agent to PROPOSE first. [_buildSectionSeed] lets a refine apply
+  /// straight away, which is right when the traveler said what to change — but
+  /// this seed carries no instruction, only a gap. A seed that names a gap must
+  /// propose before it writes; that is the whole point of the two-pass flow
+  /// this door hangs off.
+  ///
+  /// Canonical English like every other seed here: agent input, not display
+  /// copy (specs/i18n-spanish).
+  String _buildFillDaysSeed(
+      Trip trip, String groupKey, String cityKey, List<int> days) {
+    final d = _derive(trip);
+    final i = d.legIndexOf(groupKey);
+    final group = i == null ? null : d.groups[i];
+    final chip = group?.dateRange;
+    final b = StringBuffer('I want to plan my days in $cityKey');
+    if (chip != null) b.write(' (${chip.range})');
+    final list = days.map((n) => 'day $n').join(', ');
+    b.writeln('. $list ${days.length == 1 ? 'has' : 'have'} nothing planned.');
+    if (group != null && group.items.isNotEmpty) {
+      b.writeln('\nAlready in $cityKey (keep these exactly as they are — their '
+          'day numbers are what set the city\'s arrival and departure dates):');
+      for (final it in group.items) {
+        b.writeln(_seedLine(it));
+      }
+    }
+    b.write('\nPropose places for those days first — do not change any other '
+        'city — and when I confirm, call update_itinerary_section with '
+        "scope='city', city='$cityKey' and that city's COMPLETE updated list: "
+        'the places above unchanged, plus the new ones tagged to the open days. '
+        'Start by proposing a plan for those days.');
+    return b.toString();
   }
 
   /// Next Step chat entry (specs/next-step-cta): the same offline + canEdit
@@ -2328,6 +2405,25 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       b.write(' (${trip.startDate} to ${trip.endDate})');
     }
     b.writeln('.');
+
+    if (items.isEmpty) {
+      // Without this branch the seed says "The full itinerary:" followed by
+      // nothing, then "keeping unchanged places exactly as listed above", then
+      // "Start by asking what I want to change" — an agent politely asking what
+      // to change about nothing. Asks for the SHAPE first, matching the two-pass
+      // flow (specs/shape-before-schedule) and the server's own seed for this
+      // state (seedPlanItineraryEmpty, api/trip_next_step.go) — deliberately
+      // the same job and the same tool; keep the two in intent-sync if either
+      // moves. Canonical English: agent input, not display copy.
+      b.write('It has no places yet. Start with the SHAPE — which cities, in '
+          'what order, how many nights in each, and how I get between them — '
+          'and wait for me to agree to it before adding any places. Then, when '
+          "I confirm, call update_itinerary_section with scope='trip' and the "
+          'COMPLETE list of places, giving each city a place on the day I '
+          'arrive and one on the day I move on. Start by asking what kind of '
+          'trip I want — pace, interests, and any must-sees.');
+      return b.toString();
+    }
 
     final inTarget = items.where((it) => _inTarget(it, t)).toList();
     if (t.scope == 'trip') {
@@ -2819,13 +2915,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// two runs never share a day header (see [_buildGroups]).
   List<Widget> _buildGroupItemSlivers(String cityKey, String groupKey,
       List<ItineraryItem> items, ThemeData theme, DateTime? tripStart,
-      {required bool showTonight, ({DateTime? start, DateTime? end})? range}) {
+      {required bool showTonight,
+      ({DateTime? start, DateTime? end})? range,
+      List<int> emptyDays = const []}) {
     // City-filler suppression happens here — NOT in the derivation's
     // filtered list — so an all-filler city keeps its group (city header +
     // embedded booking rows; the slot<->group mapping indexes over the full
     // itinerary).
     items = items.where((it) => !isCityFiller(it)).toList();
     if (!items.any((it) => it.day != null)) {
+      // A dayless leg renders flat, with no day headers — so it has no gaps to
+      // point at. The derivation mirrors this branch and hands back an empty
+      // [emptyDays] here.
       return _dayTripSectionSlivers(items, theme);
     }
     // Per-day weather (specs/weather-in-itinerary): one report per city group
@@ -2856,6 +2957,24 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // it unconditionally would leave "Sun 31 / Tue 2" genuinely ambiguous
     // across a month rollover, which is exactly where a traveler is checking.
     int? lastMonth;
+
+    // Open days interleave with the planned ones in day order. They are
+    // disjoint from the item days by construction (both come from one
+    // planned-day set in TripDerivation.compute), so this merge can never
+    // double-render a day; anything left over flushes after the loop.
+    var nextEmpty = 0;
+    void flushEmptiesBefore(int? day) {
+      while (nextEmpty < emptyDays.length &&
+          (day == null || emptyDays[nextEmpty] < day)) {
+        final d = emptyDays[nextEmpty++];
+        slivers.add(SliverToBoxAdapter(
+          child: _emptyDayRow(d, '$groupKey#$d', tripStart, theme,
+              isToday: d == todayDay,
+              onPlan: _planDaysAction(groupKey, cityKey, [d])),
+        ));
+      }
+    }
+
     var i = 0;
     while (i < items.length) {
       final day = items[i].day;
@@ -2865,6 +2984,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         i++;
       }
       if (day != null) {
+        flushEmptiesBefore(day);
         final dayKey = '$groupKey#$day';
         final collapsed = _collapsedDays.contains(dayKey);
         final month = tripStart?.add(Duration(days: day - 1)).month;
@@ -2947,6 +3067,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         slivers.addAll(_dayTripSectionSlivers(run, theme));
       }
     }
+    // Open days after the leg's last planned one — the common case on a spine,
+    // where the middle of the stay is empty and only the arrival and move-on
+    // days carry anything.
+    flushEmptiesBefore(null);
     return slivers;
   }
 
@@ -3170,6 +3294,59 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                     ),
                   ],
                 ),
+                // Open days, promoted (specs/shape-before-schedule): a visible,
+                // labelled version of the same city refine the hover sparkle
+                // above performs — one action, two affordances. It is a second
+                // LINE and never a change to the Row, because the Row's widths
+                // are what align the date chips into columns across cities (see
+                // the ghost-placeholder note above); a button in there would
+                // shift every other city's chip.
+                //
+                // Renders on the collapsed header too, which is exactly where
+                // "2 days unplanned" earns its place.
+                if (_planDaysAction(group.key, group.label, group.emptyDays)
+                    case final plan?) ...[
+                  const SizedBox(height: 2),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 24),
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_calendar_outlined,
+                            size: 14, color: theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            l10n.tripUnplannedDays(group.emptyDays.length),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Flexible + ellipsis for the same reason the label
+                        // beside it is: Spanish at 1.3x on a 320px viewport
+                        // overflowed this Row while the button was its one
+                        // unflexible child.
+                        Flexible(
+                          child: TextButton(
+                            key: ValueKey('plan-days:${group.key}'),
+                            style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8)),
+                            onPressed: plan,
+                            child: Text(
+                              l10n.tripPlanTheseDays,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 4),
                 const Divider(height: 1),
               ],
@@ -4293,6 +4470,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// [showMonth] is the caller's answer to "would dropping the month here lose
   /// anything" — see the running-month rule in [_buildGroupItemSlivers]. It
   /// only bites on narrow; a desktop row has the width to spell every date.
+  /// What a day row is called: the calendar date (day N = trip start + N-1)
+  /// when the trip has a start, else "Day N". ONE definition — the day header
+  /// and the empty-day placeholder below it must never disagree about which
+  /// date day N is, and they sit next to each other in the same list.
+  ///
+  /// The running-month rule lives HERE rather than at the header's call site so
+  /// the placeholder cannot drift from it: both rows ask the same function what
+  /// day N is called. Empty rows keep the default (month spelled out) because
+  /// they are emitted by flushEmptiesBefore, which does not carry the loop's
+  /// month state — a format difference on narrow, never a date difference.
+  String _dayHeaderLabel(int day, DateTime? tripStart,
+      {bool showMonth = true}) {
+    final date = tripStart?.add(Duration(days: day - 1));
+    if (date == null) return context.l10n.tripDayN(day);
+    return _narrow && !showMonth ? weekdayDay(date) : _fmtDayHeader(date);
+  }
   Widget _daySubHeader(
       int day,
       DateTime? tripStart,
@@ -4305,10 +4498,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       bool isToday = false,
       bool showMonth = true}) {
     final l10n = context.l10n;
-    final date = tripStart?.add(Duration(days: day - 1));
-    final label = date == null
-        ? l10n.tripDayN(day)
-        : (_narrow && !showMonth ? weekdayDay(date) : _fmtDayHeader(date));
+    final label = _dayHeaderLabel(day, tripStart, showMonth: showMonth);
     final muted = theme.colorScheme.onSurfaceVariant;
     final header = HoverReveal(
       builder: (context, revealed) => Material(
@@ -4399,6 +4589,90 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // Repaint-isolate like _cityHeader: open days pin their header over the
     // scrolling list; hover/InkWell repaints must stay in this layer.
     return RepaintBoundary(child: header);
+  }
+
+  /// A day inside a city leg that carries nothing — the state the two-pass
+  /// planner makes normal (specs/shape-before-schedule). Before this, such a
+  /// day rendered NOTHING at all: day sub-headers are derived from the items
+  /// grouped under a leg, so a Rome leg spanning Sep 1-5 with places on days 1
+  /// and 4 gave no sign that 2 and 3 existed.
+  ///
+  /// Deliberately NOT a pinned header and NOT collapsible: there is no body to
+  /// pin over, and a zero-body pinned sliver poisons the surrounding
+  /// MultiSliver's paint origin. Quieter than a planned day — muted glyph and
+  /// label — because an open day is an invitation, not a plan.
+  ///
+  /// [onPlan] is null for viewers and offline, matching the day header's own
+  /// refine gate; the row then renders as a plain statement of the gap.
+  Widget _emptyDayRow(int day, String dayKey, DateTime? tripStart,
+      ThemeData theme,
+      {bool isToday = false, VoidCallback? onPlan}) {
+    final l10n = context.l10n;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return RepaintBoundary(
+      key: ValueKey('unplanned-day:$dayKey'),
+      child: Material(
+        // The same GlobalKey registry the day headers use, so day-jump can
+        // scroll to an open day exactly as it scrolls to a planned one.
+        key: _dayHeaderKeys.putIfAbsent(dayKey, GlobalKey.new),
+        color: isToday
+            ? Color.alphaBlend(
+                theme.colorScheme.primary.withValues(alpha: 0.06),
+                theme.scaffoldBackgroundColor)
+            : theme.scaffoldBackgroundColor,
+        child: InkWell(
+          onTap: onPlan,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+            child: Row(
+              children: [
+                Icon(Icons.today, size: 16, color: muted),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _dayHeaderLabel(day, tripStart),
+                    style: theme.textTheme.labelLarge?.copyWith(color: muted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    l10n.tripDayNothingPlanned,
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Spacer(),
+                // A label, not a nested button: the row's own InkWell is the
+                // tap target, so there is one semantics node here rather than
+                // two offering the same action.
+                if (onPlan != null) ...[
+                  Icon(Icons.auto_awesome,
+                      size: 16, color: theme.colorScheme.primary),
+                  const SizedBox(width: 4),
+                  // Ellipsizing like the two labels beside it: Spanish at 1.3x
+                  // on a 360px viewport overflowed this row by 86px while this
+                  // was the one unflexible child (specs/booking-shortlist's
+                  // narrow-Spanish test is what caught it).
+                  Flexible(
+                    child: Text(
+                      l10n.tripPlanThisDay,
+                      style: theme.textTheme.labelMedium
+                          ?.copyWith(color: theme.colorScheme.primary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Per-day weather chip (specs/weather-in-itinerary): hi/lo temp + a
@@ -6642,11 +6916,31 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                   EdgeInsets.symmetric(horizontal: gutter),
                               sliver: SliverToBoxAdapter(
                                 child: SizedBox(
-                                  height: 260,
+                                  // Taller than the bare state was: the action
+                                  // below needs room above EmptyState's own
+                                  // scroll-clip floor.
+                                  height: 320,
                                   child: EmptyState(
                                     icon: Icons.place_outlined,
                                     title: l10n.tripNoPlacesYet,
                                     message: l10n.tripNoPlacesYetMessage,
+                                    // The message names a door ("Refine with AI
+                                    // or add a place") and used to hand over
+                                    // none. EmptyState has supported actions all
+                                    // along.
+                                    actions: [
+                                      FilledButton.icon(
+                                        key: const ValueKey('empty-trip-plan'),
+                                        icon: const Icon(Icons.auto_awesome,
+                                            size: 18),
+                                        label: Text(l10n.tripPlanWithAI),
+                                        onPressed:
+                                            (trip.canEdit && !_isOffline)
+                                                ? () => _openRefine(trip,
+                                                    const RefineTarget.trip())
+                                                : null,
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -6772,7 +7066,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                             tripStart,
                                             showTonight: group.key ==
                                                 firstTodayGroupKey,
-                                            range: rangeFor(gi)),
+                                            range: rangeFor(gi),
+                                            emptyDays: group.emptyDays),
                                         // Curated local recommendations for this
                                         // city — the "legit info you can't
                                         // google" surface. Leads the events

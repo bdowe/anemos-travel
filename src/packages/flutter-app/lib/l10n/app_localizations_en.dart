@@ -1445,10 +1445,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripUndo => 'Undo';
 
   @override
-  String get tripAddPlacesBeforeRefine =>
-      'Add some places before refining with AI.';
-
-  @override
   String get tripAssistantLabel => 'Trip assistant';
 
   @override
@@ -1463,6 +1459,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tripRefineThisDay => 'Refine this day';
+
+  @override
+  String get tripDayNothingPlanned => 'Nothing planned yet';
+
+  @override
+  String get tripPlanThisDay => 'Plan this day';
+
+  @override
+  String get tripPlanTheseDays => 'Plan these days';
+
+  @override
+  String tripUnplannedDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days unplanned',
+      one: '1 day unplanned',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get tripPlanWithAI => 'Plan with AI';
+
+  @override
+  String get tripPlanFromScratch => 'Plan your trip';
 
   @override
   String get tripRefineWithAI => 'Refine with AI';

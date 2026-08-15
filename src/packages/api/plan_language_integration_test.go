@@ -114,6 +114,50 @@ func TestSystemPromptEnglishUnchanged(t *testing.T) {
 		if !strings.Contains(prompt, "Fill the real days first") {
 			t.Errorf("Accept-Language %q: prompt lost the empty-middle-day instruction", header)
 		}
+		// specs/shape-before-schedule. The friction this answers: "it pulls the
+		// list of activities without confirming with me... I just want to get
+		// the high level structure done first". Each pin below guards one
+		// sentence whose removal restores that behaviour silently.
+		//
+		// The two-pass rule itself, and its hard stop. Without them the planner
+		// goes straight back to researching places on turn 1 and saving a full
+		// day-by-day itinerary nobody agreed to.
+		if !strings.Contains(prompt, "plan in TWO passes and never skip the first") {
+			t.Errorf("Accept-Language %q: prompt lost the two-pass planning rule", header)
+		}
+		if !strings.Contains(prompt, "do NOT call create_itinerary: nothing is saved until the traveler says yes") {
+			t.Errorf("Accept-Language %q: prompt lost the shape turn's hard stop", header)
+		}
+		// The shape turn is the one turn quick replies are both allowed and
+		// wanted — runSuggestRepliesTool refuses them once an itinerary has been
+		// emitted, so if this goes, adjusting the shape stops being one tap.
+		if !strings.Contains(prompt, "call suggest_replies with the changes they are most likely to want") {
+			t.Errorf("Accept-Language %q: prompt lost the shape-turn quick replies", header)
+		}
+		// The load-bearing half of the spine. A city with nothing on the day the
+		// traveler leaves renders as though they left the day they arrived, and
+		// the next city absorbs its nights (TestComputeTripLegsArrivalOnly...
+		// pins that output). Nothing downstream can repair it.
+		if !strings.Contains(prompt, "The move-on place is NOT optional") {
+			t.Errorf("Accept-Language %q: prompt lost the move-on-place rule", header)
+		}
+		// The gate itself: agreement authorizes the write, not the model's own
+		// sense of having found enough places.
+		if !strings.Contains(prompt, "only once the traveler has AGREED to the shape") {
+			t.Errorf("Accept-Language %q: prompt lost the create_itinerary agreement gate", header)
+		}
+		// A spine's highest day number is the final city's ARRIVAL, so an
+		// omitted end_date saves the trip days short (create_itinerary refuses
+		// it outright — this keeps the model from getting there).
+		if !strings.Contains(prompt, "Pass start_date AND end_date EVERY time") {
+			t.Errorf("Accept-Language %q: prompt lost the always-send-both-dates rule", header)
+		}
+		// City-name placeholders get MORE dangerous under a spine: isCityFiller
+		// hides them on the page while computeTripLegs still counts them, so a
+		// filler anchor pegs a leg's dates to a row the traveler cannot see.
+		if !strings.Contains(prompt, "never emit a location whose name is just the city itself") {
+			t.Errorf("Accept-Language %q: prompt lost the no-placeholder-place rule", header)
+		}
 		// The OTHER end of the trip: an overnight outbound leaves the calendar
 		// day before it lands, so the departure day is not the trip's first
 		// day. The absolute (say nothing you don't know) comes first on

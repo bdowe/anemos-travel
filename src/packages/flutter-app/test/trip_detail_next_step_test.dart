@@ -52,8 +52,7 @@ class _FakeReviewApiService extends TripReviewApiService {
       : super(ApiClient(baseUrl: 'http://test'));
 
   @override
-  Future<TripReview> getReview(String tripId,
-      {bool checkHours = false}) async {
+  Future<TripReview> getReview(String tripId, {bool checkHours = false}) async {
     calls++;
     return (calls > 1 ? resolved : null) ?? initial;
   }
@@ -306,7 +305,8 @@ void main() {
   testWidgets('card renders the review step with progress and detail',
       (tester) async {
     _useViewport(tester);
-    await _pump(tester, trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
+    await _pump(tester,
+        trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
 
     expect(find.byKey(const ValueKey('next-step-card')), findsOneWidget);
     expect(find.text('NEXT STEP · 3 of 6'), findsOneWidget);
@@ -317,7 +317,8 @@ void main() {
   testWidgets('planning step seeds the trip chat with the server prompt',
       (tester) async {
     _useViewport(tester);
-    await _pump(tester, trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
+    await _pump(tester,
+        trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
 
     await tester.tap(find.byKey(const ValueKey('next-step-primary')));
     await tester.pumpAndSettle();
@@ -344,23 +345,64 @@ void main() {
       planProgress: PlanProgress(done: 1, total: 6),
     );
     await _pump(tester,
-        trip: _trip(items: const []),
-        review: _FakeReviewApiService(review));
+        trip: _trip(items: const []), review: _FakeReviewApiService(review));
 
     // The chat FAB is items-gated, but the card must not be.
     expect(find.byType(FloatingActionButton), findsNothing);
     await tester.tap(find.byKey(const ValueKey('next-step-primary')));
     await tester.pumpAndSettle();
 
-    // No "add places first" snack; the seed went out.
-    expect(find.text('Add some places before refining with AI.'), findsNothing);
+    // No snack; the seed went out. Asserted as "no SnackBar at all" because
+    // the copy it used to check for no longer exists — its only caller was the
+    // guard this change removed.
+    expect(find.byType(SnackBar), findsNothing);
     expect(_refineState(tester).messages, hasLength(1));
-    expect(
-        _refineState(tester).messages.single.content, contains('no places'));
+    expect(_refineState(tester).messages.single.content, contains('no places'));
   });
 
-  testWidgets('set_dates step opens the date picker, not chat',
+  // specs/shape-before-schedule. "Refine with AI" on a trip with no items was a
+  // visible, enabled button whose only outcome was the snack below — it named a
+  // door and the callee refused to open it. The Next Step card had already
+  // routed around that guard; this makes the header chip do the same, which
+  // fixes both entry points (chip and narrow app-bar icon) at once.
+  testWidgets('zero-items trip: Refine with AI opens chat, not a snack',
       (tester) async {
+    _useViewport(tester);
+    await _pump(tester,
+        trip: _trip(items: const []),
+        review: _FakeReviewApiService(const TripReview(
+            findings: [], planProgress: PlanProgress(done: 1, total: 6))));
+
+    await tester.tap(find.text('Refine with AI'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SnackBar), findsNothing);
+    final seed = _refineState(tester).messages.single.content;
+    // And the seed tells the truth about the trip it describes: no places yet,
+    // shape first. It used to say "The full itinerary:" followed by nothing.
+    expect(seed, contains('no places yet'));
+    expect(seed, contains('SHAPE'));
+    expect(seed, isNot(contains('exactly as listed above')));
+  });
+
+  // A SEPARATE test, not a second pumpWidget: two pumpWidget calls in one test
+  // reuse the same State, so the second would silently inspect the first
+  // case's screen.
+  testWidgets('zero-items trip: the empty state offers the same door',
+      (tester) async {
+    _useViewport(tester);
+    await _pump(tester,
+        trip: _trip(items: const []),
+        review: _FakeReviewApiService(const TripReview(
+            findings: [], planProgress: PlanProgress(done: 1, total: 6))));
+
+    await tester.tap(find.byKey(const ValueKey('empty-trip-plan')));
+    await tester.pumpAndSettle();
+
+    expect(_refineState(tester).messages.single.content, contains('no places'));
+  });
+
+  testWidgets('set_dates step opens the date picker, not chat', (tester) async {
     _useViewport(tester);
     const review = TripReview(
       findings: [],
@@ -457,7 +499,8 @@ void main() {
 
   testWidgets('narrow layout renders the compact card', (tester) async {
     _useViewport(tester, width: 500);
-    await _pump(tester, trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
+    await _pump(tester,
+        trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
 
     expect(find.byKey(const ValueKey('next-step-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('next-step-view-all')), findsNothing);
@@ -469,7 +512,8 @@ void main() {
 
   testWidgets('the health entry opens the health sheet', (tester) async {
     _useViewport(tester);
-    await _pump(tester, trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
+    await _pump(tester,
+        trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
 
     await tester.tap(find.byKey(const ValueKey('next-step-view-all')));
     await tester.pumpAndSettle();
@@ -482,7 +526,8 @@ void main() {
   testWidgets('the progress counter opens the plan-progress sheet',
       (tester) async {
     _useViewport(tester);
-    await _pump(tester, trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
+    await _pump(tester,
+        trip: _trip(), review: _FakeReviewApiService(_lodgingReview()));
 
     expect(find.text('NEXT STEP · 3 of 6'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('next-step-progress')));

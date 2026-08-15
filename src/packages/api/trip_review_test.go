@@ -970,3 +970,118 @@ func TestReviewTrip_DeterministicOrder(t *testing.T) {
 		t.Fatalf("nondeterministic order:\n%s\n%s", ja, jb)
 	}
 }
+
+// spineTrip is the worked example from specs/shape-before-schedule: Sep 1-8,
+// Lisbon / Porto / Madrid, one place on each city's arrival day and one on the
+// day the traveler moves on — except Madrid, whose move-on day is the journey
+// home. Days 2-3, 5 and 7 carry nothing; day 8 is the flight back.
+func spineTrip(t *testing.T) exportData {
+	t.Helper()
+	return exportData{
+		Trip: store.Trip{ID: uuid.New(),
+			StartDate: dateVal(t, "2026-09-01"), EndDate: dateVal(t, "2026-09-08")},
+		Items: []store.ItineraryItem{
+			rlItem(0, "Time Out Market", rlCity("Lisbon"), 1),
+			rlItem(1, "Pastéis de Belém", rlCity("Lisbon"), 4),
+			rlItem(2, "Livraria Lello", rlCity("Porto"), 4),
+			rlItem(3, "Cais da Ribeira", rlCity("Porto"), 6),
+			rlItem(4, "Museo del Prado", rlCity("Madrid"), 6),
+		},
+	}
+}
+
+// The post-state half a spine makes load-bearing: which days are open, and in
+// which city. The journey-home day must never appear — walkDayCoverage drops
+// it, and that reuse is the only reason this can't offer to fill the day the
+// traveler flies back.
+func TestOpenDaysSummary(t *testing.T) {
+	got := openDaysSummary(spineTrip(t))
+	for _, want := range []string{
+		"Days with nothing planned yet:",
+		"days 2-3 in Lisbon",
+		"day 5 in Porto",
+		"day 7 in Madrid",
+		"do NOT fill them in this turn",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("open-days summary missing %q:\n%s", want, got)
+		}
+	}
+	// Day 8 is the journey home. It is not a plannable day and must not be
+	// offered — the 2026-08-15 bug, reopened from the other side.
+	if strings.Contains(got, "day 8") {
+		t.Fatalf("the journey-home day was offered as open:\n%s", got)
+	}
+}
+
+// A trip with every plannable day covered says nothing — so the note never
+// becomes boilerplate on an ordinary dense itinerary.
+func TestOpenDaysSummaryQuietWhenCovered(t *testing.T) {
+	d := exportData{
+		Trip: store.Trip{ID: uuid.New(),
+			StartDate: dateVal(t, "2026-09-01"), EndDate: dateVal(t, "2026-09-03")},
+		Items: []store.ItineraryItem{
+			rlItem(0, "Time Out Market", rlCity("Lisbon"), 1),
+			rlItem(1, "Pastéis de Belém", rlCity("Lisbon"), 2),
+		},
+	}
+	if got := openDaysSummary(d); got != "" {
+		t.Fatalf("a fully covered trip named open days:\n%s", got)
+	}
+}
+
+// A travel day covered by a real transport segment is planned, so it is not an
+// open day — the same rule walkDayCoverage applies to Trip Health.
+func TestOpenDaysSummarySkipsSegmentDays(t *testing.T) {
+	d := spineTrip(t)
+	d.Segments = []store.TripSegment{
+		{ID: uuid.New(), DepartDate: dateVal(t, "2026-09-05")},
+	}
+	if got := openDaysSummary(d); strings.Contains(got, "day 5") {
+		t.Fatalf("a day carrying a real segment was called open:\n%s", got)
+	}
+}
+
+// checkLegShape is the HUMAN channel for the failure the spine rests on not
+// happening. Both cases are invisible everywhere else: the page draws no nights
+// label below one night, and RenderLeg.ZeroNight has never had a consumer.
+func TestCheckLegShape(t *testing.T) {
+	// Arrival anchors only — Lisbon renders zero nights, Porto absorbs them.
+	collapsed := exportData{
+		Trip: store.Trip{ID: uuid.New(),
+			StartDate: dateVal(t, "2026-09-01"), EndDate: dateVal(t, "2026-09-08")},
+		Items: []store.ItineraryItem{
+			rlItem(0, "Time Out Market", rlCity("Lisbon"), 1),
+			rlItem(1, "Livraria Lello", rlCity("Porto"), 4),
+		},
+	}
+	fs := checkLegShape("en", collapsed)
+	if len(fs) != 1 {
+		t.Fatalf("findings = %+v, want one", fs)
+	}
+	if fs[0].Severity != "warn" {
+		t.Fatalf("severity = %q, want warn — this one has to reach the badge", fs[0].Severity)
+	}
+	if fs[0].Message != "Lisbon shows no nights — you arrive and leave on the same day." {
+		t.Fatalf("message = %q", fs[0].Message)
+	}
+
+	// Undated places: the split was computed, not chosen.
+	guessed := exportData{
+		Trip: store.Trip{ID: uuid.New(),
+			StartDate: dateVal(t, "2026-06-01"), EndDate: dateVal(t, "2026-06-08")},
+		Items: []store.ItineraryItem{
+			rlItem(0, "Louvre", rlCity("Paris"), 0),
+			rlItem(1, "Colosseum", rlCity("Rome"), 0),
+		},
+	}
+	if fs := checkLegShape("en", guessed); len(fs) != 2 {
+		t.Fatalf("guessed-date findings = %+v, want one per leg", fs)
+	}
+
+	// A well-formed spine is silent, including its final leg — which ends on
+	// the day the traveler flies home and is exempt by design.
+	if fs := checkLegShape("en", spineTrip(t)); len(fs) != 0 {
+		t.Fatalf("a well-formed spine raised findings: %+v", fs)
+	}
+}

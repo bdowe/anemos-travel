@@ -880,10 +880,11 @@ func seedSetDates(d exportData) string {
 }
 
 func seedPlanItineraryEmpty(d exportData) string {
-	return fmt.Sprintf("I want to plan %s. It has no places yet. Help me build the "+
-		"itinerary from scratch: suggest real places day by day (use search_places, and check "+
-		"search_local_recommendations for each city), and when I confirm a plan, call "+
-		"update_itinerary_section with scope='trip' and the COMPLETE list of places. "+
+	return fmt.Sprintf("I want to plan %s. It has no places yet. Start with the SHAPE — "+
+		"which cities, in what order, how many nights in each, and how I get between them — "+
+		"and wait for me to agree to it before adding any places. Then, when I confirm, call "+
+		"update_itinerary_section with scope='trip' and the COMPLETE list of places, giving "+
+		"each city a place on the day I arrive and one on the day I move on. "+
 		"Start by asking what kind of trip I want — pace, interests, and any must-sees.",
 		seedTripRef(d))
 }
@@ -953,6 +954,28 @@ func seedScheduleItems(d exportData, unscheduled int, runs []dayRun) string {
 			gaps = append(gaps, fmt.Sprintf("day %d is empty", r.first))
 		} else {
 			gaps = append(gaps, fmt.Sprintf("days %d–%d are empty", r.first, r.last))
+		}
+	}
+	// One city at a time when the gaps ARE a city's empty days
+	// (specs/shape-before-schedule). A spine lands every new trip on this rung
+	// with the middle of every stay open, and the whole-trip form below would
+	// make the trip page's primary CTA a one-tap "rewrite the entire itinerary"
+	// — the very thing the two-pass flow exists to stop, and a call that has to
+	// re-emit every anchor's day number correctly or re-date every leg.
+	//
+	// Loose undated places keep the whole-trip form on purpose: they can land in
+	// any city, and moving a place across cities is exactly what scope 'trip' is
+	// the only legal scope for.
+	if unscheduled == 0 && len(runs) > 0 {
+		if city := legLabelOnDay(d, runs[0].first); city != "" {
+			return fmt.Sprintf("I want to fill in %s on %s — %s. "+
+				"Call get_trip to see what's already there, propose places for those days, and "+
+				"when I confirm, call update_itinerary_section with scope='city', city='%s' and "+
+				"that city's COMPLETE updated list: the places already on its first and last days "+
+				"unchanged (same coordinates, tags and day numbers — they set the city's arrival "+
+				"and departure dates), plus the new ones. Leave the other cities alone. "+
+				"Start by proposing a plan for those days.",
+				city, seedTripRef(d), strings.Join(gaps, "; "), city)
 		}
 	}
 	return fmt.Sprintf("I want to refine %s. The schedule has gaps: %s. "+

@@ -260,6 +260,16 @@ func legRangeText(start, end time.Time) string {
 	return start.Format(dateLayout) + " to " + end.Format(dateLayout)
 }
 
+// nightsText spells a leg's night count the way the trip page's chip does —
+// the unit the rest of the app measures a stay in, and the one the traveler
+// agreed to when they approved the trip's shape.
+func nightsText(nights int) string {
+	if nights == 1 {
+		return "1 night"
+	}
+	return fmt.Sprintf("%d nights", nights)
+}
+
 // legsSummary lists the trip's movable legs with their current spans — the
 // honest error payload when the requested city doesn't resolve.
 func legsSummary(runs []legRun, stays []store.Accommodation, tripStart time.Time) string {
@@ -283,13 +293,27 @@ func legsSummary(runs []legRun, stays []store.Accommodation, tripStart time.Time
 // computation the `legs` payload serializes — so what the model reads is
 // exactly what the page shows. Spanless legs are skipped; hubless legs with
 // spans print under the "Other places" label. Empty when nothing is spanned.
+//
+// Each line carries the range, its NIGHT COUNT and how the span was decided —
+// not the range alone (specs/shape-before-schedule). A spine dates each city
+// from two rows, so the two ways that goes wrong both read as ordinary output
+// unless they are named: a city that lost its move-on place renders
+// "2026-06-04 to 2026-06-04" beside a neighbour running "2026-06-04 to
+// 2026-06-11", which the model can only catch by doing arithmetic on dates it
+// half-trusts; and a city whose places carry no day numbers gets an equal share
+// of the trip invented for it, which looks exactly like a real range. Nights
+// make the first arithmetic-free, provenance makes the second visible, and
+// legsRenderWarning puts the ones that matter above the list.
 func legsRenderSummary(trip store.Trip, items []store.ItineraryItem, stays []store.Accommodation) string {
+	legs := computeTripLegs(trip, items, stays)
 	var b strings.Builder
-	for _, leg := range computeTripLegs(trip, items, stays) {
+	b.WriteString(legsRenderWarning(legs))
+	for _, leg := range legs {
 		if leg.Start == nil || leg.End == nil {
 			continue
 		}
-		fmt.Fprintf(&b, "- %s: %s\n", leg.Label, legRangeText(*leg.Start, *leg.End))
+		fmt.Fprintf(&b, "- %s: %s (%s, %s)\n", leg.Label, legRangeText(*leg.Start, *leg.End),
+			nightsText(nightsBetween(*leg.Start, *leg.End)), legDateSourceText(leg.DateSource))
 	}
 	return b.String()
 }
@@ -349,6 +373,58 @@ func legModeOverrides(todos []store.BookingTodo) map[string]string {
 		}
 	}
 	return out
+}
+
+// legDateSourceText says in words where a leg's span came from — RenderLeg's
+// DateSource, which rides the trip payload but has never reached the model.
+// "auto" is the one that must not read like a fact: it is the weighted split of
+// the trip span that fires when no place on the leg carries a day, and it is
+// indistinguishable from a real range once rendered.
+func legDateSourceText(source string) string {
+	switch source {
+	case "stay":
+		return "dated by its confirmed stay"
+	case "items":
+		return "dated by its places"
+	case "auto":
+		return "dates GUESSED — no place on this leg carries a day"
+	default:
+		return "no date source"
+	}
+}
+
+// legsRenderWarning names, ABOVE the list, the legs whose spans are wrong in
+// the two ways a sparse itinerary goes wrong — a leg that lost the place fixing
+// its departure date, and a leg whose dates were guessed. It leads because the
+// last-day arc showed a rule buried under a table gets averaged away ("putting
+// it FIRST fixed it outright"), and because both failures are silent on every
+// other surface: the trip page renders no nights label for a zero-night leg,
+// and RenderLeg.ZeroNight has never had a consumer.
+//
+// The FINAL leg is exempt from the zero-night check: it legitimately ends the
+// day the traveler flies home, and the trip-end anchor has already stretched it
+// if it could. Legs without a span are skipped — they print nothing either.
+func legsRenderWarning(legs []RenderLeg) string {
+	var problems []string
+	for i, leg := range legs {
+		if leg.Start == nil || leg.End == nil {
+			continue
+		}
+		last := i == len(legs)-1
+		if !last && nightsBetween(*leg.Start, *leg.End) == 0 {
+			problems = append(problems, fmt.Sprintf("%s renders ZERO nights — the traveler arrives and leaves the same day, because no place sits on the day they move on; the next city has absorbed those nights", leg.Label))
+			continue
+		}
+		if leg.DateSource == "auto" {
+			problems = append(problems, fmt.Sprintf("%s has no dated place, so its range is a guess, not the nights that were agreed", leg.Label))
+		}
+	}
+	if len(problems) == 0 {
+		return ""
+	}
+	return "WARNING — the page is not rendering what the traveler agreed to: " +
+		strings.Join(problems, "; ") +
+		". Fix it before you reply: give the city a place on the day they move on to the next one, or set its dates with set_leg_dates.\n"
 }
 
 func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
@@ -691,6 +767,18 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s is now %s.", run.hub, rangeText)
+	// ...and then what the PAGE draws, which is not the same claim. rangeText is
+	// item-day math; the rendered span runs from the previous leg's departure
+	// and, on the last leg, through the trip's end date. The no-op branch above
+	// has echoed the rendered range since the Sep-24-27 loop; the SUCCESS branch
+	// never did, so a call that worked reported a span the traveler's screen
+	// contradicted. That gap was one day while every day carried places — the
+	// day-home rule — and is a whole leg once a spine leaves the last city a
+	// single dated place. Re-read post-commit: the in-scope items and stays are
+	// the pre-move values this function loaded before the transaction.
+	if legs := postMoveRenderedLeg(s, tid, run.hub); legs != "" && legs != rangeText {
+		fmt.Fprintf(&b, " The trip page renders this leg as %s — that, not the range above, is what the traveler sees.", legs)
+	}
 	var parts []string
 	if itemsMoved > 0 {
 		parts = append(parts, fmt.Sprintf("%d itinerary item(s) onto new days", itemsMoved))
@@ -752,6 +840,31 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 
 	b.WriteString(" IMPORTANT: anything already booked with a real provider (flights, hotels, ferries) still holds its ORIGINAL dates — remind the traveler to re-check and rebook those. If any manually added booking to-dos carry the old dates, update them with update_booking_todo. The traveler's trip page has refreshed.")
 	return b.String(), false
+}
+
+// postMoveRenderedLeg re-reads a trip a leg-date move just committed and
+// returns the span the page now renders for one hub, or "" when it can't say.
+// Best-effort by design: the write has already committed, so a failed read
+// costs the extra sentence, never the result.
+func postMoveRenderedLeg(s *planSession, tripID uuid.UUID, hub string) string {
+	q := store.New(dbPool)
+	trip, err := q.GetEditableTripByID(s.ctx, store.GetEditableTripByIDParams{ID: tripID, UserID: s.uid})
+	if err != nil {
+		return ""
+	}
+	items, err := q.GetItineraryItemsByTrip(s.ctx, tripID)
+	if err != nil {
+		return ""
+	}
+	stays, err := q.ListAccommodationsByTrip(s.ctx, tripID)
+	if err != nil {
+		return ""
+	}
+	start, end, ok := renderedLegRange(trip, items, stays, hub)
+	if !ok {
+		return ""
+	}
+	return legRangeText(start, end)
 }
 
 // prevDatedRunIdx / nextDatedRunIdx find the nearest movable neighbor for

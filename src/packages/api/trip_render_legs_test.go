@@ -300,3 +300,66 @@ func TestAllocateLegDays(t *testing.T) {
 		t.Fatalf("allocateLegDays(2, [5 5 5]) = %v, want [1 1 1]", got)
 	}
 }
+
+// A SPINE (specs/shape-before-schedule): two places a city — one on the day the
+// traveler arrives, one on the day they move on — except the last city, which
+// gets only its arrival because the day you leave it is the journey home. Five
+// places for three cities, and the days in between deliberately empty.
+//
+// The point of the fixture is that a SPARSE itinerary renders the SAME ranges a
+// dense one would. Only each leg's min and max item day is read, so the empty
+// middle days change nothing; the move-on place is what dates each city, and
+// the last-leg anchor carries Madrid through the trip's end.
+func TestComputeTripLegsSparseSpineRanges(t *testing.T) {
+	legs := computeTripLegs(rlTrip("2026-09-01", "2026-09-08"), []store.ItineraryItem{
+		rlItem(0, "Time Out Market", rlCity("Lisbon"), 1),
+		rlItem(1, "Pastéis de Belém", rlCity("Lisbon"), 4), // move-on day
+		rlItem(2, "Livraria Lello", rlCity("Porto"), 4),    // same day, arriving
+		rlItem(3, "Cais da Ribeira", rlCity("Porto"), 6),   // move-on day
+		rlItem(4, "Museo del Prado", rlCity("Madrid"), 6),  // arrival only
+		// Days 2-3, 5 and 7 carry nothing; day 8 is the journey home.
+	}, nil)
+	if len(legs) != 3 {
+		t.Fatalf("legs = %d, want 3", len(legs))
+	}
+	assertSpan(t, legs[0], "2026-09-01", "2026-09-04")
+	assertSpan(t, legs[1], "2026-09-04", "2026-09-06")
+	assertSpan(t, legs[2], "2026-09-06", "2026-09-08")
+	for _, leg := range legs {
+		if leg.DateSource != "items" {
+			t.Fatalf("%s date source = %q, want items", leg.Label, leg.DateSource)
+		}
+		if leg.ZeroNight {
+			t.Fatalf("%s collapsed to a zero-night stop", leg.Label)
+		}
+	}
+}
+
+// A one-city spine is a single arrival place. Its own span is that one day; the
+// last-leg anchor is the whole reason the trip still reads as a week — which is
+// also why create_itinerary refuses a write that omits end_date (plan_spine.go):
+// without a stored end there is nothing here to anchor against.
+func TestComputeTripLegsOneCitySpine(t *testing.T) {
+	legs := computeTripLegs(rlTrip("2026-09-01", "2026-09-08"), []store.ItineraryItem{
+		rlItem(0, "Museo del Prado", rlCity("Madrid"), 1),
+	}, nil)
+	assertSpan(t, legs[0], "2026-09-01", "2026-09-08")
+}
+
+// CHARACTERIZATION — this pins the WRONG output on purpose. It is the failure
+// the prompt's "the move-on place is NOT optional" sentence and the tool
+// result's warning line both exist to prevent, not a bug in this module.
+//
+// With only arrival anchors, the chain (step 5) pulls each leg's start back to
+// the previous leg's single item day: Lisbon keeps none of its three nights,
+// and every city's nights land on the city after it.
+func TestComputeTripLegsArrivalOnlyAnchorsCollapseEveryLeg(t *testing.T) {
+	legs := computeTripLegs(rlTrip("2026-09-01", "2026-09-08"), []store.ItineraryItem{
+		rlItem(0, "Time Out Market", rlCity("Lisbon"), 1),
+		rlItem(1, "Livraria Lello", rlCity("Porto"), 4),
+		rlItem(2, "Museo del Prado", rlCity("Madrid"), 6),
+	}, nil)
+	assertSpan(t, legs[0], "2026-09-01", "2026-09-01") // three nights gone
+	assertSpan(t, legs[1], "2026-09-01", "2026-09-04")
+	assertSpan(t, legs[2], "2026-09-04", "2026-09-08")
+}
