@@ -89,6 +89,46 @@ RUN sed -i 's/origin\.length + 1/origin.length + 5/g' build/web/flutter_service_
     && grep -q 'origin.length + 5' build/web/flutter_service_worker.js \
     && ! grep -q 'origin\.length + 1' build/web/flutter_service_worker.js
 
+# One-time content-cache eviction for clients poisoned while nginx still served
+# /app/assets/ as `immutable` (see app-locations.conf). activate() only drops a
+# cached entry when its RESOURCES md5 differs between the OLD and NEW manifest,
+# so once a client stored stale bytes under the CURRENT hash, nothing will ever
+# evict them: the hash is already "right". Renaming the manifest cache makes
+# activate() take its no-prior-manifest branch, which opens with
+# `caches.delete(CACHE_NAME)` — Flutter's own first-install path — nuking the
+# poisoned content cache exactly once per bump. Renaming CACHE_NAME instead
+# would orphan that whole multi-MB cache in storage forever; this leaks only
+# the ~4 KB old manifest cache. Idempotent on later deploys: the manifest
+# exists under the new name, so the normal diff path resumes. Bump the suffix
+# again only if this class ever recurs.
+RUN sed -i "s/'flutter-app-manifest'/'flutter-app-manifest-v2'/" build/web/flutter_service_worker.js \
+    && grep -q "const MANIFEST = 'flutter-app-manifest-v2';" build/web/flutter_service_worker.js \
+    && ! grep -q "'flutter-app-manifest'" build/web/flutter_service_worker.js
+
+# Send every service-worker cache MISS to the network instead of to the
+# browser's HTTP cache. The stock fetch handler falls back to a default-mode
+# `fetch(event.request)`, which the HTTP cache answers — and a client that
+# stored an asset while the header still said `max-age=31536000, immutable`
+# keeps that copy for a YEAR whatever the origin sends afterwards, because a
+# stored response's freshness lifetime is fixed at store time and the client
+# never revalidates, so it never learns the new header. `reload` bypasses that
+# entry AND overwrites it with the network response, healing the poisoned
+# HTTP-cache entry on the same request; `no-cache` mode would not, since a
+# stale ETag can still earn a 304.
+#
+# Only the cache-miss site is patched, NOT onlineFirst()'s twin: that one
+# serves the navigation request, and passing any init coerces a navigate-mode
+# Request to same-origin, changing redirect handling for no benefit
+# (index.html is uncached at the edge and already revalidates). downloadOffline()
+# is deliberately left alone too — nothing posts it that message, so it is dead
+# code in this app.
+#
+# This does NOT bypass Cloudflare, which ignores client Cache-Control/Pragma
+# request headers — which is why the fix shipped alongside an edge purge.
+RUN sed -i 's/return response || fetch(event\.request)/return response || fetch(event.request, {cache: "reload"})/' build/web/flutter_service_worker.js \
+    && grep -q 'fetch(event.request, {cache: "reload"})' build/web/flutter_service_worker.js \
+    && ! grep -q 'return response || fetch(event\.request)\.' build/web/flutter_service_worker.js
+
 # Serve static files and proxy API via nginx. alpine-slim is the base the
 # stock nginx:alpine image is built FROM by adding a ~50 MB dynamic-module
 # layer (xslt, geoip, image-filter, njs, acme) that no config here loads —

@@ -48,7 +48,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Anemos">
-  <!-- ?v=2 busts nginx's year-long immutable cache on /app/icons/* (Anemos art) -->
+  <!-- ?v=2 dates from when nginx served /app/icons/* immutable for a year; it
+       is now no-cache, so this is belt-and-braces for pre-2026-08-15 caches. -->
   <link rel="apple-touch-icon" href="icons/Icon-192.png?v=2">
 
   <!-- Favicon: ?v=2 because Chrome's favicon cache is keyed by URL and

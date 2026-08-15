@@ -75,6 +75,11 @@ Historical gotcha this table exists to prevent: og-card and badge_4x were
 missing from the old README's table, so they silently kept two-brands-ago art
 (a metronome!) through two renames. If you add a brand asset, add its row.
 
-Cache note: `/app/icons/*` is served `immutable` for a year (nginx) — when the
-art changes, bump the `?v=N` query in `web/index.html`, `web/manifest.json`,
-and `print_view_handler.go`.
+Cache note: `/app/icons/*` is served `no-cache` (nginx), so a changed icon
+propagates on the next load without help. It used to be `immutable` for a year,
+which is why the `?v=N` query exists in `web/index.html`, `web/manifest.json`
+and `print_view_handler.go` — those are now belt-and-braces rather than the
+mechanism, and are still worth bumping for anything a browser may have cached
+from before 2026-08-15. (The `immutable` header was removed because Flutter
+does not content-hash these filenames; see
+`dockerize/deployment/nginx/snippets/app-locations.conf`.)
