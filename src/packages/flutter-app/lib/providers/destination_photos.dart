@@ -22,7 +22,7 @@ const Map<String, DestinationPhoto> kDestinationPhotos = {
   ),
   'bali': DestinationPhoto(
     'assets/images/destinations/bali.webp',
-    'Hendrojkson / CC BY-SA 4.0',
+    'Chainwit / CC BY 4.0',
   ),
   'bangkok': DestinationPhoto(
     'assets/images/destinations/bangkok.webp',
@@ -34,7 +34,7 @@ const Map<String, DestinationPhoto> kDestinationPhotos = {
   ),
   'greece': DestinationPhoto(
     'assets/images/destinations/greece.webp',
-    'Giles Laurent / CC BY-SA 4.0',
+    'karol m / CC BY 2.0',
   ),
   'kenya': DestinationPhoto(
     'assets/images/destinations/kenya.webp',
@@ -46,7 +46,7 @@ const Map<String, DestinationPhoto> kDestinationPhotos = {
   ),
   'newyork': DestinationPhoto(
     'assets/images/destinations/newyork.webp',
-    'King of Hearts / CC BY-SA 3.0',
+    'Jakub Hałun / CC BY 4.0',
   ),
   'paris': DestinationPhoto(
     'assets/images/destinations/paris.webp',
@@ -54,11 +54,11 @@ const Map<String, DestinationPhoto> kDestinationPhotos = {
   ),
   'patagonia': DestinationPhoto(
     'assets/images/destinations/patagonia.webp',
-    'Pedro Szekely / CC BY-SA 2.0',
+    'Prissantenbär / Public domain',
   ),
   'rome': DestinationPhoto(
     'assets/images/destinations/rome.webp',
-    'Diliff / CC BY-SA 2.5',
+    'Wilfredor / CC0',
   ),
   'tokyo': DestinationPhoto(
     'assets/images/destinations/tokyo.webp',

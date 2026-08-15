@@ -5,20 +5,22 @@ hand. Every image is a crop of a Wikimedia Commons file, resized to
 600x288 WebP for the chat empty-state suggestion cards.
 
 The crops are derivative works, so each one stays under its source's
-license: the CC BY-SA files below remain CC BY-SA. The credit line is
-rendered over the card in-app; the full attribution is here.
+license. Sources are therefore restricted to CC0, public domain and
+plain CC BY — never share-alike, which would put our files under
+share-alike too; the generator refuses anything else. The credit line
+is rendered over the card in-app; the full attribution is here.
 
 | File | Source | Author | License |
 | --- | --- | --- | --- |
 | `amalfi.webp` | [Positano (Italy) 03.jpg](https://commons.wikimedia.org/wiki/File:Positano_(Italy)_03.jpg) | Bernard Gagnon | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) |
-| `bali.webp` | [Atuh Beach, Nusa Penida Bali.jpg](https://commons.wikimedia.org/wiki/File:Atuh_Beach,_Nusa_Penida_Bali.jpg) | Hendrojkson | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| `bali.webp` | [Kelingking Beach (T-Rex Bay) of Nusa Penida, Bali (2025) - img 07.jpg](https://commons.wikimedia.org/wiki/File:Kelingking_Beach_(T-Rex_Bay)_of_Nusa_Penida,_Bali_(2025)_-_img_07.jpg) | Chainwit. | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) |
 | `bangkok.webp` | [Chinatown, Bangkok (5).jpg](https://commons.wikimedia.org/wiki/File:Chinatown,_Bangkok_(5).jpg) | Radosław Botev | [CC BY 3.0 pl](https://creativecommons.org/licenses/by/3.0/pl/deed.en) |
 | `barcelona.webp` | [La Boqueria.JPG](https://commons.wikimedia.org/wiki/File:La_Boqueria.JPG) | Dungodung | Public domain |
-| `greece.webp` | [1000 Three domes of Oia in Santorini Photo by Giles Laurent.jpg](https://commons.wikimedia.org/wiki/File:1000_Three_domes_of_Oia_in_Santorini_Photo_by_Giles_Laurent.jpg) | Giles Laurent | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| `greece.webp` | [Oia Sunset 4.jpg](https://commons.wikimedia.org/wiki/File:Oia_Sunset_4.jpg) | karol m | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0) |
 | `kenya.webp` | [2 Male Cheetahs of the Tano Bora (magnificent five), Maasai Mara - Flickr - . Ray in Manila.jpg](https://commons.wikimedia.org/wiki/File:2_Male_Cheetahs_of_the_Tano_Bora_(magnificent_five),_Maasai_Mara_-_Flickr_-_._Ray_in_Manila.jpg) | . Ray in Manila | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0) |
 | `lisbon.webp` | [Trams in Lisbon -a.jpg](https://commons.wikimedia.org/wiki/File:Trams_in_Lisbon_-a.jpg) | Jorge Franganillo from Barcelona, Spain | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0) |
-| `newyork.webp` | [Lower Manhattan from Jersey City November 2014 panorama 2.jpg](https://commons.wikimedia.org/wiki/File:Lower_Manhattan_from_Jersey_City_November_2014_panorama_2.jpg) | King of Hearts | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
+| `newyork.webp` | [Manhattan skyline from Upper New York Bay, 20231001 1041 0889.jpg](https://commons.wikimedia.org/wiki/File:Manhattan_skyline_from_Upper_New_York_Bay,_20231001_1041_0889.jpg) | Jakub Hałun | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) |
 | `paris.webp` | [Eiffel Tower sunset skyline (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Eiffel_Tower_sunset_skyline_(Unsplash).jpg) | Pedro Kümmel pedrokummel | [CC0](http://creativecommons.org/publicdomain/zero/1.0/deed.en) |
-| `patagonia.webp` | [Cuernos del Paine in Torres del Paine National Park.jpg](https://commons.wikimedia.org/wiki/File:Cuernos_del_Paine_in_Torres_del_Paine_National_Park.jpg) | Pedro Szekely from Los Angeles, USA | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0) |
-| `rome.webp` | [Colosseum in Rome-April 2007-1- copie 2B.jpg](https://commons.wikimedia.org/wiki/File:Colosseum_in_Rome-April_2007-1-_copie_2B.jpg) | Diliff | [CC BY-SA 2.5](https://creativecommons.org/licenses/by-sa/2.5) |
+| `patagonia.webp` | [Fitz Roy 2.jpg](https://commons.wikimedia.org/wiki/File:Fitz_Roy_2.jpg) | Prissantenbär | Public domain |
+| `rome.webp` | [Colosseum of Rome, Italy.jpg](https://commons.wikimedia.org/wiki/File:Colosseum_of_Rome,_Italy.jpg) | Wilfredor | [CC0](http://creativecommons.org/publicdomain/zero/1.0/deed.en) |
 | `tokyo.webp` | [Tokyo Tower, Minato City.jpg](https://commons.wikimedia.org/wiki/File:Tokyo_Tower,_Minato_City.jpg) | David Kernan | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) |

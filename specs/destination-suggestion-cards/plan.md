@@ -74,6 +74,18 @@ never hand-edit the output. Generating the credits in the same pass as the
 images is the point — attribution is a license obligation, and a hand-kept
 credit list drifts the first time a photo is swapped.
 
+**Permissive licenses only.** A crop is a derivative work, so a share-alike
+source would put our file under share-alike too — an obligation we don't want
+riding along in a commercial app's asset bundle. Sources are limited to CC0,
+public domain and plain CC BY. This is enforced twice: `allowed_license()`
+aborts the generator *before it writes anything* if any pinned source fails
+(a half-generated set with one bad license is worse than no change), and a
+test rejects a share-alike string in the generated table, which catches a
+hand-edit the generator never sees.
+
+The wider asset-provenance record lives in `assets/images/LICENSES.md`, added
+here because this feature is what surfaced that `hero_santorini.jpg` had none.
+
 ## Divergences  ← per docs/zen.md, written down and pinned
 
 **1. `suggestionPool` holds records, not two parallel lists.** The obvious

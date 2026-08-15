@@ -40,6 +40,8 @@ so the screen reads as part of the app rather than a new idea.
   a language switch relabels the same three without reshuffling them.
 - [ ] Every card carries a visible photographer + license credit, including
   when the photo fails to load.
+- [ ] No shipped photo is under a share-alike or copyleft license, since a
+  crop would inherit that obligation.
 - [ ] A card whose photo is missing or fails to load still shows its text and
   is still tappable — no blank box, no dead card.
 - [ ] On a phone-width window the cards fit two across and wrap, with nothing
@@ -80,8 +82,9 @@ already were.
 - Live or per-city photos from a search provider — these are bundled images.
 - Photos anywhere else in the app (trip detail, destination headers).
 - Personalising which destinations are suggested.
-- Backfilling a license record for the existing home hero photo
-  (`hero_santorini.jpg`), which has none. Flagged, not fixed here.
+- Replacing the existing home hero photo (`hero_santorini.jpg`). Its
+  provenance is now recorded in `assets/images/LICENSES.md` as far as the repo
+  knows it; identifying the exact Unsplash photo is left open there.
 
 ## Open Questions
 

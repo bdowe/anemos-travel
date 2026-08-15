@@ -56,6 +56,19 @@ void main() {
     }
   });
 
+  test('no shipped photo carries a share-alike or copyleft license', () {
+    // A crop is a derivative work, so a share-alike source would put OUR
+    // file under share-alike too. The generator refuses such sources; this
+    // catches a hand-edited table, which the generator never sees.
+    final banned = RegExp(r'BY-SA|Share|GFDL|\bFAL\b|copyleft',
+        caseSensitive: false);
+    for (final entry in kDestinationPhotos.entries) {
+      expect(banned.hasMatch(entry.value.credit), isFalse,
+          reason: '${entry.key} is "${entry.value.credit}" — re-source it '
+              'from a CC0, public-domain or plain CC BY file');
+    }
+  });
+
   test('the generated table has no photos the pool never uses', () {
     final used = {for (final prompt in suggestionPool) prompt.photo};
     expect(kDestinationPhotos.keys.toSet().difference(used), isEmpty,

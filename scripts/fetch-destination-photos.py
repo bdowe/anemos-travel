@@ -40,6 +40,15 @@ DART = os.path.join(APP, "lib/providers/destination_photos.dart")
 OUT_W, OUT_H = 600, 288
 QUALITY = 80
 
+# Permissive licenses only. A crop is a derivative work, so a share-alike
+# source would put OUR file under share-alike too — an obligation we do not
+# want riding along in a commercial app's asset bundle. CC0 / public domain /
+# plain CC BY (any version, any country port) are fine; anything share-alike
+# or copyleft is rejected at generation time rather than noticed in review.
+LICENSE_DENY = re.compile(r"BY-SA|Share|GFDL|\bFAL\b|Free Art|copyleft", re.I)
+LICENSE_ALLOW = re.compile(
+    r"^(CC0|CC BY(?!-SA)|Public domain|PD([- ]|$)|No restrictions)", re.I)
+
 # slug -> (Commons file title, focus, zoom).
 #
 # `focus` is the 0..1 point the crop centres on and `zoom` (>= 1) tightens it
@@ -52,20 +61,19 @@ SOURCES = {
     "paris": ("File:Eiffel Tower sunset skyline (Unsplash).jpg",
               (0.62, 0.55), 1.9),
     # Lift the crop so the top tier of the arena stays in frame.
-    "rome": ("File:Colosseum in Rome-April 2007-1- copie 2B.jpg",
-             (0.5, 0.34), 1.0),
+    "rome": ("File:Colosseum of Rome, Italy.jpg", (0.5, 0.34), 1.0),
     "tokyo": ("File:Tokyo Tower, Minato City.jpg", (0.5, 0.5), 1.0),
-    "greece": ("File:1000 Three domes of Oia in Santorini Photo by Giles "
-               "Laurent.jpg", (0.5, 0.5), 1.0),
+    "greece": ("File:Oia Sunset 4.jpg", (0.5, 0.5), 1.0),
     "lisbon": ("File:Trams in Lisbon -a.jpg", (0.5, 0.5), 1.0),
     "barcelona": ("File:La Boqueria.JPG", (0.5, 0.5), 1.0),
     "bangkok": ("File:Chinatown, Bangkok (5).jpg", (0.5, 0.5), 1.0),
     "amalfi": ("File:Positano (Italy) 03.jpg", (0.5, 0.5), 1.0),
-    "newyork": ("File:Lower Manhattan from Jersey City November 2014 "
-                "panorama 2.jpg", (0.5, 0.5), 1.0),
-    "bali": ("File:Atuh Beach, Nusa Penida Bali.jpg", (0.5, 0.5), 1.0),
-    "patagonia": ("File:Cuernos del Paine in Torres del Paine National "
-                  "Park.jpg", (0.5, 0.5), 1.0),
+    # Favour the skyline; a centre crop spends half the card on open water.
+    "newyork": ("File:Manhattan skyline from Upper New York Bay, 20231001 "
+                "1041 0889.jpg", (0.5, 0.3), 1.25),
+    "bali": ("File:Kelingking Beach (T-Rex Bay) of Nusa Penida, Bali (2025) "
+             "- img 07.jpg", (0.5, 0.5), 1.0),
+    "patagonia": ("File:Fitz Roy 2.jpg", (0.5, 0.5), 1.0),
     # Cheetahs, not the wide bush landscape the search ranked first: at card
     # size distant game is invisible and the card stops saying "safari".
     "kenya": ("File:2 Male Cheetahs of the Tano Bora (magnificent five), "
@@ -82,6 +90,12 @@ def get(url):
 def plain(value):
     """Commons ships extmetadata as HTML fragments; we want a credit line."""
     return html.unescape(re.sub(r"<[^>]+>", " ", value or "")).strip()
+
+
+def allowed_license(name):
+    """True only for licenses we can crop without inheriting share-alike."""
+    return bool(name) and not LICENSE_DENY.search(name) \
+        and bool(LICENSE_ALLOW.match(name))
 
 
 def metadata(titles):
@@ -136,6 +150,20 @@ def main():
 
     os.makedirs(DEST, exist_ok=True)
     meta = metadata([SOURCES[s][0] for s in slugs])
+
+    # Fail before writing anything: a half-generated set with one bad license
+    # is worse than no change at all.
+    rejected = [
+        "  %-10s %-16s %s" % (slug, meta[SOURCES[slug][0]]["license"],
+                              SOURCES[slug][0][5:])
+        for slug in slugs
+        if not allowed_license(meta[SOURCES[slug][0]]["license"])
+    ]
+    if rejected:
+        sys.exit("Refusing to ship non-permissive source(s):\n"
+                 + "\n".join(rejected)
+                 + "\n\nA crop inherits its source's license; pick a CC0, "
+                   "public-domain or plain CC BY file instead.")
 
     credits = {}
     for slug in slugs:
@@ -233,8 +261,10 @@ def write_credits(credits):
         "%dx%d WebP for the chat empty-state suggestion cards." % (OUT_W, OUT_H),
         "",
         "The crops are derivative works, so each one stays under its source's",
-        "license: the CC BY-SA files below remain CC BY-SA. The credit line is",
-        "rendered over the card in-app; the full attribution is here.",
+        "license. Sources are therefore restricted to CC0, public domain and",
+        "plain CC BY — never share-alike, which would put our files under",
+        "share-alike too; the generator refuses anything else. The credit line",
+        "is rendered over the card in-app; the full attribution is here.",
         "",
         "| File | Source | Author | License |",
         "| --- | --- | --- | --- |",
