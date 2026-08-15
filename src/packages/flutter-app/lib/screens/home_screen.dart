@@ -433,14 +433,18 @@ class _AgentHeroCard extends StatelessWidget {
                   labelStyle: theme.textTheme.labelMedium?.copyWith(
                       color: AppColors.brandDark, fontWeight: FontWeight.w500),
                 ),
+                // Chips, not photo cards: this hero already sits on the
+                // Santorini photo, and cards on top of it would be
+                // photo-on-photo (specs/destination-suggestion-cards). Only
+                // the drawn text is used here.
                 ...prompts.map((s) => ActionChip(
-                      label: Text(s,
+                      label: Text(s.text,
                           style: theme.textTheme.labelMedium?.copyWith(
                               color: AppColors.brandDark,
                               fontWeight: FontWeight.w500)),
                       backgroundColor: Colors.white,
                       side: BorderSide.none,
-                      onPressed: () => onStart(initialMessage: s),
+                      onPressed: () => onStart(initialMessage: s.text),
                     )),
               ],
             ),

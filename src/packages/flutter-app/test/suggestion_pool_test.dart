@@ -35,7 +35,7 @@ void main() {
   test('labels are non-empty and distinct in every shipped locale', () {
     for (final locale in kSupportedLocales) {
       final l10n = lookupAppLocalizations(locale);
-      final labels = [for (final pick in suggestionPool) pick(l10n)];
+      final labels = [for (final pick in suggestionPool) pick.label(l10n)];
       expect(labels.where((s) => s.trim().isEmpty), isEmpty,
           reason: 'empty label in $locale');
       // Distinctness is load-bearing: labels are find.text targets in tests

@@ -6,23 +6,25 @@ import 'package:travel_route_planner/models/plan_message.dart';
 import 'package:travel_route_planner/models/user.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/notifications_provider.dart';
+import 'package:travel_route_planner/providers/destination_photos.dart';
 import 'package:travel_route_planner/providers/plan_provider.dart';
 import 'package:travel_route_planner/providers/suggestions_provider.dart';
 import 'package:travel_route_planner/screens/agent_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/plan_service.dart';
+import 'package:travel_route_planner/widgets/destination_suggestion_card.dart';
 import 'package:travel_route_planner/widgets/empty_state.dart';
 import 'package:travel_route_planner/widgets/near_me_chip.dart';
 
 import 'support/l10n_test_app.dart';
 
-/// The agent screen's empty state draws its suggestion chips from the shared
-/// randomized pool: the near-me chip always leads, exactly
-/// [kSuggestionCount] pool picks follow (the import-from-AI-chat button
-/// closes the row — a button, not a chip, because it navigates instead of
-/// sending), a pick is drawn once per mount (a locale switch relabels
-/// WITHOUT reshuffling; a chat reset re-rolls), and tapping a chip sends
-/// exactly the visible label.
+/// The agent screen's empty state draws from the shared randomized pool:
+/// exactly [kSuggestionCount] picks render as destination photo cards in the
+/// content slot, the near-me chip and the import-from-AI-chat button stay in
+/// actions (both are actions rather than destinations, and the import one is
+/// a button because it navigates instead of sending), a pick is drawn once
+/// per mount (a locale switch relabels WITHOUT reshuffling; a chat reset
+/// re-rolls), and tapping a card sends exactly the visible label.
 
 class _RecordingPlanNotifier extends PlanNotifier {
   final List<(String, String?)> sent = [];
@@ -106,23 +108,49 @@ void main() {
     nextPicks = const [3, 4, 5]; // beyond the legacy trio: proves pool wiring
   });
 
-  testWidgets('renders near-me first plus the picked pool prompts',
+  testWidgets('picks render as photo cards; near-me and import stay actions',
       (WidgetTester tester) async {
     await pumpAgent(tester, overrides());
 
     final emptyState = tester.widget<EmptyState>(find.byType(EmptyState));
     expect(emptyState.actions.first, isA<NearMeChip>());
-    // near-me + pool picks + the trailing import entry point.
-    expect(emptyState.actions, hasLength(1 + kSuggestionCount + 1));
     expect(emptyState.actions.last, isA<OutlinedButton>());
+    expect(emptyState.actions, hasLength(2),
+        reason: 'destinations belong in the content slot, not actions');
+    // The photos are the visual anchor; a generic glyph over them is weight.
+    expect(emptyState.icon, isNull);
 
+    expect(find.byType(DestinationSuggestionCard),
+        findsNWidgets(kSuggestionCount));
     expect(find.text('Island hopping in Greece'), findsOneWidget);
     expect(find.text('3 days in Lisbon'), findsOneWidget);
     expect(find.text('Tapas in Barcelona'), findsOneWidget);
     expect(find.text('2 days in Paris'), findsNothing);
   });
 
-  testWidgets('tapping a chip sends exactly the visible label',
+  testWidgets('each card shows its own destination photo and credit',
+      (WidgetTester tester) async {
+    await pumpAgent(tester, overrides());
+
+    final cards = tester
+        .widgetList<DestinationSuggestionCard>(
+            find.byType(DestinationSuggestionCard))
+        .toList();
+    // Picks [3, 4, 5] are Greece, Lisbon, Barcelona — each must carry ITS
+    // photo, which a parallel-list wiring bug would silently scramble.
+    expect(cards.map((c) => c.asset), [
+      kDestinationPhotos['greece']!.asset,
+      kDestinationPhotos['lisbon']!.asset,
+      kDestinationPhotos['barcelona']!.asset,
+    ]);
+    // Attribution is a license obligation, so it is rendered, not optional.
+    for (final card in cards) {
+      expect(card.credit, isNotEmpty);
+      expect(find.text(card.credit), findsOneWidget);
+    }
+  });
+
+  testWidgets('tapping a card sends exactly the visible label',
       (WidgetTester tester) async {
     await pumpAgent(tester, overrides());
 

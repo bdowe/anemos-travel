@@ -5,9 +5,18 @@ import '../theme/spacing.dart';
 /// for every "nothing here yet", error, or "no results" state so they read the
 /// same across the app instead of some being styled and others plain text.
 class EmptyState extends StatelessWidget {
-  final IconData icon;
+  /// Null on surfaces that carry their own visual anchor — the agent chat's
+  /// empty state leads with destination photos, above which a generic glyph
+  /// is just weight.
+  final IconData? icon;
+
   final String title;
   final String? message;
+
+  /// Rich content between the message and [actions]. Anything much taller than
+  /// a button belongs here rather than in [actions], where the Wrap would
+  /// centre it against the chips and read as broken alignment.
+  final Widget? content;
 
   /// Optional buttons (e.g. a Retry or a CTA) rendered below the message.
   final List<Widget> actions;
@@ -25,6 +34,7 @@ class EmptyState extends StatelessWidget {
     required this.icon,
     required this.title,
     this.message,
+    this.content,
     this.actions = const [],
     this.iconColor,
     this.compact = false,
@@ -46,13 +56,15 @@ class EmptyState extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: compact ? 32 : 64,
-                color: iconColor ??
-                    theme.colorScheme.primary.withValues(alpha: 0.5),
-              ),
-              SizedBox(height: compact ? AppSpacing.sm : AppSpacing.lg),
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: compact ? 32 : 64,
+                  color: iconColor ??
+                      theme.colorScheme.primary.withValues(alpha: 0.5),
+                ),
+                SizedBox(height: compact ? AppSpacing.sm : AppSpacing.lg),
+              ],
               Text(
                 title,
                 style: (compact
@@ -71,6 +83,10 @@ class EmptyState extends StatelessWidget {
                           : theme.textTheme.bodyMedium)
                       ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
+              ],
+              if (content != null) ...[
+                SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
+                content!,
               ],
               if (actions.isNotEmpty) ...[
                 SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),

@@ -8,6 +8,7 @@ import '../theme/spacing.dart';
 import '../widgets/account_menu.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/chat_panel.dart';
+import '../widgets/destination_suggestion_card.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/near_me_chip.dart';
 import '../widgets/random_suggestions.dart';
@@ -130,19 +131,31 @@ class _EmptyState extends ConsumerWidget {
     final l10n = context.l10n;
     return RandomSuggestions(
       builder: (context, prompts) => EmptyState(
-        icon: Icons.chat_bubble_outline,
+        // No glyph here: the destination photos are this screen's visual
+        // anchor, and a generic chat bubble over them is just weight
+        // (specs/destination-suggestion-cards).
+        icon: null,
         title: l10n.agentScreenEmptyTitle,
         message: l10n.agentScreenEmptyMessage,
+        // The drawn destinations as photo cards. Tapping one sends exactly
+        // its visible label: it becomes a message in the traveler's own
+        // transcript, so an English message they never wrote would read as a
+        // bug. The agent answers in their language anyway
+        // (specs/i18n-spanish).
+        content: DestinationSuggestionRow(
+          prompts: prompts,
+          onSelect: (prompt) =>
+              ref.read(planProvider.notifier).sendMessage(prompt),
+        ),
         actions: [
           NearMeChip(
             onSend: (text, {displayLabel}) => ref
                 .read(planProvider.notifier)
                 .sendMessage(text, displayLabel: displayLabel),
           ),
-          for (final prompt in prompts) _SuggestionChip(prompt),
           // Planned elsewhere (ChatGPT/Claude)? Paste it in instead
           // (specs/import-trip-from-ai-chat). A button, not a chip: the
-          // chips above put words into the chat, this navigates — to the
+          // cards above put words into the chat, this navigates — to the
           // Trips tab, same as /import's refresh-restore.
           OutlinedButton.icon(
             onPressed: () => openImportOnTripsTab(ref),
@@ -151,24 +164,6 @@ class _EmptyState extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// A one-tap conversation starter. The localized text is BOTH what the user
-/// reads and what gets sent: it becomes a message in the traveler's own
-/// transcript, so an English message they never wrote would read as a bug. The
-/// agent answers in the traveler's language anyway (specs/i18n-spanish). This
-/// matches the home screen's suggestion chips.
-class _SuggestionChip extends ConsumerWidget {
-  final String prompt;
-  const _SuggestionChip(this.prompt);
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ActionChip(
-      label: Text(prompt),
-      onPressed: () => ref.read(planProvider.notifier).sendMessage(prompt),
     );
   }
 }
