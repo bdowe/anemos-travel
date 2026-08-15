@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +28,10 @@ class _FakeBudgetApiService extends BudgetApiService {
   final List<Map<String, dynamic>> puts = [];
   int addCount = 0;
   int deleteCount = 0;
+
+  /// Set to hold [addExpense] open, so a test can unmount the section while a
+  /// save is still in flight.
+  Completer<void>? addGate;
 
   _FakeBudgetApiService(this.expenses, {this.targetAmount, this.currency = 'USD'})
       : super(ApiClient(baseUrl: 'http://test'));
@@ -60,6 +66,7 @@ class _FakeBudgetApiService extends BudgetApiService {
       required double amount,
       String? sourceKind,
       String? sourceId}) async {
+    if (addGate != null) await addGate!.future;
     addCount++;
     final e = Expense(
         id: 'new-$addCount',
@@ -131,6 +138,87 @@ Future<_FakeBudgetApiService> _pump(
   await tester.pumpAndSettle();
   return fake;
 }
+
+/// The Budget tab in miniature: a `BudgetSection` that comes and goes behind a
+/// conditional, exactly as `trip_detail_screen`'s `if (_inBudgetView)` sliver
+/// does. Everything a header-tab switch, a chat-panel toggle or an offline
+/// banner does to that widget reduces to this.
+class _Mountable extends StatefulWidget {
+  final String tripId;
+  const _Mountable({super.key, this.tripId = 't1'});
+
+  @override
+  State<_Mountable> createState() => _MountableState();
+}
+
+class _MountableState extends State<_Mountable> {
+  bool _shown = true;
+  late String _tripId = widget.tripId;
+
+  /// Same element, different trip — drives `BudgetSection.didUpdateWidget`.
+  void showTrip(String id) => setState(() => _tripId = id);
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+        child: Column(
+          children: [
+            TextButton(
+              onPressed: () => setState(() => _shown = !_shown),
+              child: const Text('toggle'),
+            ),
+            if (_shown)
+              BudgetSection(tripId: _tripId, canEdit: true, isOffline: false),
+          ],
+        ),
+      );
+}
+
+/// Pumps [_Mountable]s inside ONE `ProviderScope`. A second `pumpWidget` with
+/// its own scope would build a fresh container and prove nothing about state
+/// surviving — the container has to be the same one throughout.
+Future<_FakeBudgetApiService> _pumpMountable(
+  WidgetTester tester,
+  List<Expense> expenses, {
+  List<String> tripIds = const ['t1'],
+  GlobalKey<_MountableState>? hostKey,
+}) async {
+  final fake = _FakeBudgetApiService(expenses);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [budgetApiServiceProvider.overrideWithValue(fake)],
+      child: MaterialApp(
+        theme: AppTheme.light,
+        localizationsDelegates: testLocalizationsDelegates,
+        home: Scaffold(
+          body: Column(
+            children: [
+              for (final id in tripIds)
+                Expanded(
+                  child: _Mountable(
+                      key: id == tripIds.first ? hostKey : null, tripId: id),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return fake;
+}
+
+/// Toggles the [index]th section off and back on — one unmount/remount round
+/// trip.
+Future<void> _remount(WidgetTester tester, {int index = 0}) async {
+  final toggle = find.text('toggle').at(index);
+  await tester.tap(toggle);
+  await tester.pumpAndSettle();
+  await tester.tap(toggle);
+  await tester.pumpAndSettle();
+}
+
+TextEditingController _controllerAt(WidgetTester tester, int index) =>
+    tester.widget<TextField>(find.byType(TextField).at(index)).controller!;
 
 void main() {
   testWidgets(
@@ -347,5 +435,141 @@ void main() {
     await tester.tap(find.byTooltip('Add expense'));
     await tester.pumpAndSettle();
     expect(fake.expenses.last.category, 'flights');
+  });
+
+  // Pricing a flight means leaving this tab — "Find flights" lives on the
+  // booking rows, and asking the chat re-parents the whole trip body — so the
+  // add row is unmounted mid-thought as a matter of course. What was typed
+  // has to be there on the way back.
+  testWidgets('a half-typed expense survives the section being unmounted',
+      (tester) async {
+    await _pumpMountable(tester, []);
+
+    await tester.tap(find.byTooltip('Category'));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.widgetWithText(CheckedPopupMenuItem<String>, 'Flights'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'JFK→CDG');
+    await tester.enterText(find.byType(TextField).last, '400');
+
+    await _remount(tester);
+
+    expect(_controllerAt(tester, 0).text, 'JFK→CDG');
+    expect(_controllerAt(tester, 1).text, '400');
+    // The category is part of the draft too — it was a choice, not a default.
+    expect(find.byIcon(Icons.flight_outlined), findsOneWidget);
+  });
+
+  testWidgets('the restored text can be typed onto, not in front of',
+      (tester) async {
+    await _pumpMountable(tester, []);
+    await tester.enterText(find.byType(TextField).first, 'Taxi');
+    await tester.enterText(find.byType(TextField).last, '15');
+
+    await _remount(tester);
+
+    // Assigning `controller.text` would park the caret at -1 (normalized to
+    // 0), so the next keystroke would land in FRONT of the restored value.
+    expect(_controllerAt(tester, 0).selection.baseOffset, 'Taxi'.length);
+    expect(_controllerAt(tester, 1).selection.baseOffset, '15'.length);
+  });
+
+  testWidgets('drafts do not leak between trips', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpMountable(tester, [], tripIds: const ['t1', 't2']);
+
+    await tester.enterText(find.byType(TextField).at(0), 'Ferry to Naxos');
+    await tester.enterText(find.byType(TextField).at(1), '38');
+    await tester.pumpAndSettle();
+
+    // The other trip's row is its own draft, not a shared one.
+    expect(_controllerAt(tester, 2).text, isEmpty);
+    expect(_controllerAt(tester, 3).text, isEmpty);
+  });
+
+  testWidgets('a saved expense leaves no draft behind', (tester) async {
+    final fake = await _pumpMountable(tester, []);
+    await tester.enterText(find.byType(TextField).first, 'Taxi');
+    await tester.enterText(find.byType(TextField).last, '15');
+    await tester.tap(find.byTooltip('Add expense'));
+    await tester.pumpAndSettle();
+
+    await _remount(tester);
+
+    expect(_controllerAt(tester, 0).text, isEmpty);
+    expect(_controllerAt(tester, 1).text, isEmpty);
+    expect(fake.addCount, 1);
+  });
+
+  // The clear happens after the POST resolves, by which point the row may be
+  // gone and its controllers disposed. If the draft were only cleared through
+  // them, the just-saved expense would still be sitting in the row — one tap
+  // from being added twice — and the refetch that makes it appear would have
+  // been thrown away with them.
+  testWidgets('…even when the section is unmounted mid-save', (tester) async {
+    final fake = await _pumpMountable(tester, []);
+    fake.addGate = Completer<void>();
+    await tester.enterText(find.byType(TextField).first, 'Taxi');
+    await tester.enterText(find.byType(TextField).last, '15');
+    await tester.tap(find.byTooltip('Add expense'));
+    await tester.pump();
+
+    // Tab away while the save is still in flight.
+    await tester.tap(find.text('toggle'));
+    await tester.pumpAndSettle();
+    fake.addGate!.complete();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('toggle'));
+    await tester.pumpAndSettle();
+
+    expect(_controllerAt(tester, 0).text, isEmpty);
+    expect(_controllerAt(tester, 1).text, isEmpty);
+    expect(fake.addCount, 1);
+    // And the expense is actually on screen: the invalidation that refetches
+    // it outlives the widget too.
+    expect(find.text('Taxi'), findsOneWidget);
+  });
+
+  testWidgets('a trip swap on a reused element re-seeds from the new trip',
+      (tester) async {
+    final host = GlobalKey<_MountableState>();
+    await _pumpMountable(tester, [], hostKey: host);
+    await tester.enterText(find.byType(TextField).first, 'Flight to Amsterdam');
+
+    host.currentState!.showTrip('t2');
+    await tester.pumpAndSettle();
+    expect(_controllerAt(tester, 0).text, isEmpty, reason: "t1's draft leaked");
+
+    host.currentState!.showTrip('t1');
+    await tester.pumpAndSettle();
+    expect(_controllerAt(tester, 0).text, 'Flight to Amsterdam');
+  });
+
+  // The draft is written on every keystroke, so watching it from build() would
+  // re-render the headline, every expense row and the totals per character.
+  testWidgets('typing in the add row never rebuilds the expense list',
+      (tester) async {
+    await _pump(tester, [_exp('a', 'food', 'Lunch', 20)], targetAmount: 100);
+
+    // _buildHeadline constructs a fresh LinearProgressIndicator every build,
+    // so widget identity is a faithful "did build() re-run" sentinel.
+    final before = tester
+        .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator));
+    await tester.enterText(find.byType(TextField).first, 'Taxi');
+    await tester.pump();
+
+    expect(
+      identical(
+        before,
+        tester.widget<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator)),
+      ),
+      isTrue,
+      reason: 'the draft is write-through only — ref.watch()ing it from '
+          'build() re-renders every expense row on every keystroke',
+    );
   });
 }

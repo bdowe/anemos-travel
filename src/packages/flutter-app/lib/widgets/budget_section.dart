@@ -17,7 +17,10 @@ import 'empty_state.dart';
 /// of expense line-items grouped by category with per-category subtotals, a
 /// running total, and a remaining footer.
 /// Self-contained — it owns its data via [budgetProvider] + [expensesProvider]
-/// and reconciles mutations by invalidating both family keys. (The
+/// and reconciles mutations by invalidating both family keys. The add row's
+/// unsaved contents live in [expenseDraftProvider] rather than in this
+/// widget's State, because the widget is unmounted every time the traveler
+/// changes header tab or opens the chat panel. (The
 /// `showHeader` knob died with the collapsed cluster row this tab replaced —
 /// precedent: [TripReviewSection]'s knob retiring with the health sheet.)
 class BudgetSection extends ConsumerStatefulWidget {
@@ -42,8 +45,66 @@ class BudgetSection extends ConsumerStatefulWidget {
 class _BudgetSectionState extends ConsumerState<BudgetSection> {
   final TextEditingController _labelController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
-  String _addCategory = 'general';
   bool _busy = false;
+  // The picked category has no field here on purpose: it lives in the draft,
+  // which is the one place any part of this row's unsaved contents lives.
+
+  @override
+  void initState() {
+    super.initState();
+    _seedFrom(widget.tripId);
+  }
+
+  @override
+  void didUpdateWidget(BudgetSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Nothing to flush — every keystroke already wrote through — so a trip
+    // swap on a reused element only has to re-seed. Unreachable from the one
+    // mount site today, where the id is fixed for the screen's life; here so
+    // that "which trip's draft is in these fields" is answered by the code
+    // rather than by that convention.
+    if (oldWidget.tripId != widget.tripId) _seedFrom(widget.tripId);
+  }
+
+  /// Loads [tripId]'s kept draft into the fields, then arms the write-back.
+  /// Called from `initState`, never from `build`: seeding on rebuild would
+  /// clobber the character just typed, and this way the early
+  /// `SizedBox.shrink()` return cannot race it.
+  ///
+  /// `read`, never `watch` — watching the draft from `build` would re-render
+  /// every expense row on every keystroke.
+  void _seedFrom(String tripId) {
+    final draft = ref.read(expenseDraftProvider(tripId));
+    // Detached across the two assignments: [_saveDraft] writes both fields at
+    // once, so a half-applied seed would post the outgoing trip's amount into
+    // the incoming trip's draft before the next line corrected it. Removing a
+    // listener that was never added is a no-op, so this is safe on first call.
+    _labelController.removeListener(_saveDraft);
+    _amountController.removeListener(_saveDraft);
+    _labelController.value = _endCollapsed(draft.label);
+    _amountController.value = _endCollapsed(draft.amountText);
+    // Recorded on every change rather than on the way out: this row is
+    // unmounted without warning (a header-tab switch, the chat panel
+    // re-parenting the body), and by the time `dispose` runs the element is
+    // already unmounted, so `ref` throws there.
+    _labelController.addListener(_saveDraft);
+    _amountController.addListener(_saveDraft);
+  }
+
+  /// Never assign `controller.text`: that setter parks the selection at
+  /// offset -1, which the engine normalizes to 0, so the next keystroke lands
+  /// in *front* of the restored value (the trap `airport_field.dart`
+  /// documents).
+  static TextEditingValue _endCollapsed(String text) => TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+
+  void _saveDraft() =>
+      ref.read(expenseDraftProvider(widget.tripId).notifier).setText(
+            label: _labelController.text,
+            amountText: _amountController.text,
+          );
 
   @override
   void dispose() {
@@ -64,11 +125,16 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
 
   Future<void> _run(Future<void> Function() op) async {
     if (_guard() || _busy) return;
+    // Captured while mounted. `ref` throws the moment this State is disposed
+    // — and tabbing away mid-request is the routine case here, not the edge
+    // one — which used to send both invalidations into the catch below: the
+    // server had taken the write and no client ever refetched it.
+    final container = ProviderScope.containerOf(context, listen: false);
     setState(() => _busy = true);
     try {
       await op();
-      ref.invalidate(budgetProvider(widget.tripId));
-      ref.invalidate(expensesProvider(widget.tripId));
+      container.invalidate(budgetProvider(widget.tripId));
+      container.invalidate(expensesProvider(widget.tripId));
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -88,15 +154,26 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     final label = _labelController.text.trim();
     final amount = double.tryParse(_amountController.text.trim());
     if (label.isEmpty || amount == null || amount < 0) return;
+    final key = expenseDraftProvider(widget.tripId);
+    final category = ref.read(key).category;
+    // Captured before the await: this row can be unmounted mid-save (tab away
+    // while the POST is in flight), and by the time it returns the controllers
+    // are disposed and `ref` throws. The draft outlives both, so clearing it
+    // has to go through the notifier — otherwise the expense just saved sits
+    // in the row waiting to be added a second time.
+    final draft = ref.read(key.notifier);
     _run(() async {
       await ref.read(budgetApiServiceProvider).addExpense(
             widget.tripId,
-            category: _addCategory,
+            category: category,
             label: label,
             amount: amount,
           );
-      _labelController.clear();
-      _amountController.clear();
+      if (mounted) {
+        _labelController.clear();
+        _amountController.clear();
+      }
+      draft.clearText();
     });
   }
 
@@ -490,40 +567,51 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
         // phones); the open menu spells out each category. A popup menu (not
         // a DropdownButton) because a dropdown's menu is hard-constrained to
         // the trigger's width — an icon-only trigger would clip every label.
-        PopupMenuButton<String>(
-          tooltip: context.l10n.budgetCategoryLabel,
-          enabled: !widget.isOffline,
-          position: PopupMenuPosition.under,
-          color: theme.colorScheme.surface,
-          elevation: 3,
-          shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
-          icon: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(kExpenseCategoryIcons[_addCategory],
-                  size: 18, color: theme.colorScheme.onSurfaceVariant),
-              Icon(Icons.arrow_drop_down,
-                  size: 18, color: theme.colorScheme.onSurfaceVariant),
-            ],
-          ),
-          onSelected: (v) => setState(() => _addCategory = v),
-          itemBuilder: (_) => [
-            for (final cat in kExpenseCategories)
-              CheckedPopupMenuItem<String>(
-                value: cat,
-                checked: cat == _addCategory,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(kExpenseCategoryIcons[cat],
-                        size: 18, color: theme.colorScheme.onSurfaceVariant),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(expenseCategoryLabel(context.l10n, cat)),
-                  ],
+        //
+        // The pick is read straight from the draft rather than mirrored into a
+        // field, so there is one answer to "which category is armed". The
+        // watch is scoped to this button and selects one String, so typing in
+        // the fields beside it can never re-render the expense list.
+        Consumer(builder: (context, ref, _) {
+          final category = ref.watch(
+              expenseDraftProvider(widget.tripId).select((d) => d.category));
+          return PopupMenuButton<String>(
+            tooltip: context.l10n.budgetCategoryLabel,
+            enabled: !widget.isOffline,
+            position: PopupMenuPosition.under,
+            color: theme.colorScheme.surface,
+            elevation: 3,
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+            icon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(kExpenseCategoryIcons[category],
+                    size: 18, color: theme.colorScheme.onSurfaceVariant),
+                Icon(Icons.arrow_drop_down,
+                    size: 18, color: theme.colorScheme.onSurfaceVariant),
+              ],
+            ),
+            onSelected: (v) => ref
+                .read(expenseDraftProvider(widget.tripId).notifier)
+                .setCategory(v),
+            itemBuilder: (_) => [
+              for (final cat in kExpenseCategories)
+                CheckedPopupMenuItem<String>(
+                  value: cat,
+                  checked: cat == category,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(kExpenseCategoryIcons[cat],
+                          size: 18, color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(expenseCategoryLabel(context.l10n, cat)),
+                    ],
+                  ),
                 ),
-              ),
-          ],
-        ),
+            ],
+          );
+        }),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: TextField(

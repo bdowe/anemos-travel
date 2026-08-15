@@ -5,6 +5,62 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-15 — the budget row that empties itself while you fetch the price
+
+- **[app] Friction:** logging a flight as an expense means going and getting
+  the price. Type "Flight to Amsterdam", go look it up, come back — the row is
+  blank. Type it again.
+- **[app] Four things unmount that row, and the flow needs at least one of
+  them.** The draft lived only in `_BudgetSectionState`'s two controllers plus
+  `_addCategory`. `BudgetSection` is a **conditional sliver**
+  (`if (_inBudgetView)`), so any header-tab switch destroys it — and "Find
+  flights" only renders on the booking rows, so getting there means leaving
+  Budget. Worse, the **chat panel** (the other place to ask about flights)
+  never pushed a route: the body returns a bare `RefreshIndicator` when closed
+  and a `Row`/`Stack` when open, so `Widget.canUpdate` fails and the entire
+  body subtree is re-inflated — on open **and** on close, and again at the
+  900px docked/undocked boundary. The text was gone before the question was
+  asked. The offline banner (which wraps the body in a `Column`) and any loud
+  `_load()` do the same.
+- **[app] The one that sounded worst was already fine.** Pushing the Find
+  Flights screen is a plain `MaterialPageRoute` with `maintainState: true`, and
+  top-level tab switches keep every tab mounted (`IndexedStack` +
+  `TickerMode`). Both preserve everything. Worth checking before fixing: two of
+  the five suspects were innocent.
+- **[app] Fix: the draft is not widget state.** `expenseDraftProvider`, a
+  non-autoDispose `StateNotifierProvider.family` keyed by trip — the same
+  bargain `tripRefineProvider` already makes for the panel conversation, whose
+  docstring says out loud that keepAlive "preserves the conversation across
+  panel close/reopen". The chat transcript already survived this exact remount
+  because someone hit it before; the expense row never got the same treatment.
+  The category moved there too and stopped being a second copy: it was a
+  *choice*, and silently resetting it to General misfiles the next expense.
+- **[dev] `ref` inside `dispose()` is not a risk to weigh, it is a guaranteed
+  throw.** `StatefulElement.unmount()` nulls `_widget` *before* calling
+  `state.dispose()`, and every riverpod `ref` method gates on
+  `context.mounted`. So "write the draft on the way out" is not an option at
+  all — write-through on change is the only design. Which surfaced the next
+  one:
+- **[app] A shipped bug the draft made visible: `_run` invalidated through a
+  dead `ref`.** `_run` awaits the POST and *then* calls
+  `ref.invalidate(budget/expenses)`. Tab away mid-request — the routine case
+  here, not an edge one — and both throw into `catch (_)`. The server had taken
+  the expense and no client ever refetched it, so it simply did not appear.
+  Fixed by capturing the `ProviderContainer` while still mounted. Pinned by a
+  test that fails with `ref.` restored. **Lesson, the same one the draft
+  teaches: anything that has to happen after an await cannot be reached
+  through the widget that started it.**
+- **[dev] A remount test needs one container, not two.** `pumpWidget` a second
+  time with a fresh `ProviderScope` builds a new `ProviderContainer` and proves
+  nothing — it would pass against the broken code. The section has to be
+  toggled behind a conditional *inside* one scope, which is also exactly what
+  `if (_inBudgetView)` does in the real screen.
+- **[dev] Both non-obvious tests were checked against the un-fixed code
+  first.** The "typing never rebuilds the list" test (watch the
+  `LinearProgressIndicator`'s identity) and the mid-save one both fail when
+  their fix is reverted. A guard test nobody has watched fail is a guard test
+  nobody has tested.
+
 ## 2026-08-15 — the flight that leaves the day before it lands
 
 - **[app] Friction:** the Amsterdam leg read `Aug 24 – Aug 26 · 2 nights` and the
