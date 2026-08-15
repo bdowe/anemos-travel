@@ -85,6 +85,10 @@ func TestExpenseCRUDAndSpent(t *testing.T) {
 		created["amount"].(float64) != 300 || created["auto"] != false {
 		t.Fatalf("created expense wrong: %v", created)
 	}
+	if created["purchased"] != true || created["actual_amount"].(float64) != 300 ||
+		created["planned_amount"] != nil {
+		t.Fatalf("legacy amount should land as a payment: %v", created)
+	}
 
 	rec = doJSON(t, "POST", "/api/v1/trips/"+tripID+"/budget/expenses", token, map[string]any{"label": "Snacks", "amount": 20})
 	if rec.Code != http.StatusCreated || decode(t, rec)["category"] != "general" {
@@ -92,10 +96,18 @@ func TestExpenseCRUDAndSpent(t *testing.T) {
 	}
 
 	// spent (300+20) reflected on the budget; remaining = 1000-320.
+	// THE COMPATIBILITY ASSERTION: both rows were created with the legacy
+	// `amount` field only, and a bare amount still means money spent (00066).
 	rec = doJSON(t, "GET", "/api/v1/trips/"+tripID+"/budget", token, nil)
 	got := decode(t, rec)
 	if got["spent"].(float64) != 320 || got["remaining"].(float64) != 680 {
 		t.Fatalf("spent/remaining wrong: %v", got)
+	}
+	// Nothing was planned, so the plan totals stay at zero and there is
+	// nothing to compare — plan_variance is null, never 0.
+	if got["planned"].(float64) != 0 || got["projected"].(float64) != 320 ||
+		got["plan_variance"] != nil {
+		t.Fatalf("plan totals wrong: %v", got)
 	}
 
 	// List shows both.
@@ -153,6 +165,21 @@ func TestBudgetValidation(t *testing.T) {
 		{"patch negative amount", "PATCH", "/budget/expenses/" + expenseID, map[string]any{"amount": -3}, http.StatusBadRequest},
 		{"patch bad category", "PATCH", "/budget/expenses/" + expenseID, map[string]any{"category": "misc"}, http.StatusBadRequest},
 		{"patch unknown id", "PATCH", "/budget/expenses/" + uuid.NewString(), map[string]any{"amount": 5}, http.StatusNotFound},
+		// 00066: an expense must carry at least one number. Before this, a
+		// body with no amount at all silently created a $0 line.
+		{"no amount at all", "POST", "/budget/expenses", map[string]any{"label": "x"}, http.StatusBadRequest},
+		{"negative planned", "POST", "/budget/expenses", map[string]any{"label": "x", "planned_amount": -1}, http.StatusBadRequest},
+		{"negative actual", "POST", "/budget/expenses", map[string]any{"label": "x", "actual_amount": -1}, http.StatusBadRequest},
+		{"patch negative planned", "PATCH", "/budget/expenses/" + expenseID, map[string]any{"planned_amount": -3}, http.StatusBadRequest},
+		// Two writers for one column: `amount` resolves to planned on an
+		// unpaid row, which planned_amount also targets.
+		{"patch both amount spellings", "PATCH", "/budget/expenses/" + expenseID, map[string]any{"amount": 5, "planned_amount": 6}, http.StatusBadRequest},
+		// A linked expense mirrors a booking that just went booked, so it
+		// records a payment; a plan-only linked add is refused, not guessed.
+		{"linked plan-only", "POST", "/budget/expenses", map[string]any{
+			"label": "x", "planned_amount": 5,
+			"source_kind": "booking_todo", "source_id": uuid.NewString(),
+		}, http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		rec := doJSON(t, tc.method, "/api/v1/trips/"+tripID+tc.path, token, tc.body)
@@ -182,6 +209,8 @@ func TestBudgetOwnershipAndAccess(t *testing.T) {
 		{"POST", "/budget/expenses", map[string]any{"label": "sneak", "amount": 1}},
 		{"PATCH", "/budget/expenses/" + expenseID, map[string]any{"amount": 1}},
 		{"DELETE", "/budget/expenses/" + expenseID, nil},
+		{"POST", "/budget/expenses/" + expenseID + "/purchase", map[string]any{"amount": 1}},
+		{"DELETE", "/budget/expenses/" + expenseID + "/purchase", nil},
 	} {
 		if rec := doJSON(t, m.method, "/api/v1/trips/"+tripID+m.path, strangerToken, m.body); rec.Code != http.StatusNotFound {
 			t.Fatalf("stranger %s %s = %d, want 404", m.method, m.path, rec.Code)
@@ -213,6 +242,8 @@ func TestBudgetOwnershipAndAccess(t *testing.T) {
 		{"POST", "/budget/expenses", map[string]any{"label": "sneak", "amount": 1}},
 		{"PATCH", "/budget/expenses/" + expenseID, map[string]any{"amount": 5}},
 		{"DELETE", "/budget/expenses/" + expenseID, nil},
+		{"POST", "/budget/expenses/" + expenseID + "/purchase", map[string]any{"amount": 5}},
+		{"DELETE", "/budget/expenses/" + expenseID + "/purchase", nil},
 	} {
 		if rec := doJSON(t, m.method, "/api/v1/trips/"+tripID+m.path, viewerToken, m.body); rec.Code != http.StatusNotFound {
 			t.Fatalf("viewer %s %s = %d, want 404", m.method, m.path, rec.Code)
@@ -228,10 +259,16 @@ func TestBudgetOwnershipAndAccess(t *testing.T) {
 	if rec := doJSON(t, "PATCH", "/api/v1/trips/"+tripID+"/budget/expenses/"+expenseID, editorToken, map[string]any{"amount": 5}); rec.Code != http.StatusOK {
 		t.Fatalf("editor patch = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
+	if rec := doJSON(t, "POST", "/api/v1/trips/"+tripID+"/budget/expenses/"+expenseID+"/purchase", editorToken, map[string]any{"amount": 7}); rec.Code != http.StatusOK {
+		t.Fatalf("editor purchase = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
 
 	// Anonymous is 401.
 	if rec := doJSON(t, "GET", "/api/v1/trips/"+tripID+"/budget", "", nil); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous get = %d, want 401", rec.Code)
+	}
+	if rec := doJSON(t, "POST", "/api/v1/trips/"+tripID+"/budget/expenses/"+expenseID+"/purchase", "", nil); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous purchase = %d, want 401", rec.Code)
 	}
 }
 
@@ -320,6 +357,18 @@ func TestExpenseSourceLinkUpsert(t *testing.T) {
 	rec = doJSON(t, "PATCH", "/api/v1/trips/"+tripID+"/budget/expenses/"+autoRow["id"].(string), token, map[string]any{"position": 1})
 	if moved := decode(t, rec); moved["auto"] != true {
 		t.Fatalf("position-only patch flipped auto: %v", moved)
+	}
+
+	// Nor does stating a PLAN on that auto row (00066). Ownership of a linked
+	// line is split: the system owns the payment (it mirrors the booking), the
+	// traveler owns the plan. Flipping auto here would break the mirror and
+	// strand a stale payment on the next unbook.
+	rec = doJSON(t, "PATCH", "/api/v1/trips/"+tripID+"/budget/expenses/"+autoRow["id"].(string), token,
+		map[string]any{"planned_amount": 75})
+	planned := decode(t, rec)
+	if planned["auto"] != true || planned["planned_amount"].(float64) != 75 ||
+		planned["actual_amount"].(float64) != 80 || planned["amount"].(float64) != 80 {
+		t.Fatalf("planned_amount patch on an auto row: %v", planned)
 	}
 
 	// Plain manual POST unaffected: 201, auto=false, nil link.

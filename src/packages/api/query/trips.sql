@@ -57,7 +57,7 @@ SELECT * FROM trips WHERE user_id = $1 ORDER BY created_at DESC;
 --        ListConfirmedAccommodationsByTrip rule — drafts churn with the
 --        itinerary sync and would make the count flap).
 --   pk — packing-checklist progress.
---   tb/ex — budget target+currency and expense sum, joined SEPARATELY so a
+--   tb/ex — budget target+currency and PAID expense sum, joined SEPARATELY so a
 --        trip with expenses but no budget row still reports spent; currency
 --        defaults to USD, matching buildBudgetResponse (single-currency by
 --        design — no FX).
@@ -128,7 +128,13 @@ LEFT JOIN LATERAL (
 ) pk ON true
 LEFT JOIN trip_budgets tb ON tb.trip_id = latest.id
 LEFT JOIN LATERAL (
-  SELECT sum(e.amount) AS spent FROM trip_expenses e WHERE e.trip_id = latest.id
+  -- actual_amount, NOT amount: since 00066 `amount` is
+  -- COALESCE(actual, planned), so summing it here would quietly fold money the
+  -- traveler has only PLANNED into a pill labelled "spent" — and the Budget tab
+  -- would report a different number for the same trip, with no error anywhere.
+  -- budget_spent means money actually spent, exactly as buildBudgetResponse's
+  -- `spent` does. Pinned by TestListRowBudgetMatchesBudgetEndpoint.
+  SELECT sum(e.actual_amount) AS spent FROM trip_expenses e WHERE e.trip_id = latest.id
 ) ex ON true
 ORDER BY latest.created_at DESC;
 

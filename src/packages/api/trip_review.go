@@ -738,17 +738,36 @@ func hasWord(s, w string) bool {
 	return false
 }
 
-// checkBudget flags a trip whose spending exceeds its target.
+// checkBudget flags a trip whose spending exceeds its target — or, failing
+// that, one whose PLAN already does.
+//
+// At most one budget finding ever fires: two overlapping warnings about the
+// same target is noise, and the overspend is strictly the more urgent of the
+// two. The second reads `Projected`, not `Planned`: planned ignores purchases
+// that never carried a plan and would under-report where the trip is heading.
+// It is `info`, not `warn`, because nothing has actually gone wrong yet — this
+// is the version of the warning a traveler can still act on.
 func checkBudget(locale string, d exportData, budget *BudgetResponse) []Finding {
-	if budget == nil || budget.Remaining == nil || *budget.Remaining >= 0 {
+	if budget == nil {
 		return nil
 	}
-	over := -*budget.Remaining
-	return []Finding{{
-		Severity: "warn", Category: "budget", TripID: d.Trip.ID.String(),
-		Message: tr(locale, "review.overBudget", over, budget.Currency),
-		Fix:     &FindingFix{Action: "raise_budget", Label: tr(locale, "review.fix.adjustBudget")},
-	}}
+	if budget.Remaining != nil && *budget.Remaining < 0 {
+		over := -*budget.Remaining
+		return []Finding{{
+			Severity: "warn", Category: "budget", TripID: d.Trip.ID.String(),
+			Message: tr(locale, "review.overBudget", over, budget.Currency),
+			Fix:     &FindingFix{Action: "raise_budget", Label: tr(locale, "review.fix.adjustBudget")},
+		}}
+	}
+	if budget.TargetAmount != nil && budget.Projected > *budget.TargetAmount {
+		over := budget.Projected - *budget.TargetAmount
+		return []Finding{{
+			Severity: "info", Category: "budget", TripID: d.Trip.ID.String(),
+			Message: tr(locale, "review.planOverBudget", over, budget.Currency),
+			Fix:     &FindingFix{Action: "raise_budget", Label: tr(locale, "review.fix.adjustBudget")},
+		}}
+	}
+	return nil
 }
 
 // checkBookings flags each unbooked accommodation and segment at info level —

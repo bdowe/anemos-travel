@@ -258,6 +258,100 @@ func TestChooseRecordsMatchingCurrencyExpense(t *testing.T) {
 	if exp["source_kind"] != "booking_todo" {
 		t.Fatalf("expense must be sourced on the leg (it outlives the record): %v", exp)
 	}
+	// A booking is money SPENT (00066), and it carried no plan.
+	if exp["purchased"] != true || exp["actual_amount"].(float64) != 354 ||
+		exp["planned_amount"] != nil {
+		t.Fatalf("choose must record a payment, not a plan: %v", exp)
+	}
+}
+
+// TestChoosePreservesPlannedAmountOnRefresh is the payoff case: the traveler
+// budgeted for this leg before booking it, so choosing a winner fills in what
+// it ACTUALLY cost and leaves the plan alone — the variance appears for free.
+func TestChoosePreservesPlannedAmountOnRefresh(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "shortlist-plan@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	base, todos := shortlistTrip(t, token, trip.ID.String())
+	if rec := doJSON(t, "PUT", base+"/budget", token, map[string]any{"currency": "USD"}); rec.Code != http.StatusOK {
+		t.Fatalf("set budget = %d: %s", rec.Code, rec.Body.String())
+	}
+	legID := todos[1]["id"].(string)
+
+	// The plan, stated against the leg before any option is chosen.
+	rec := doJSON(t, "POST", base+"/budget/expenses", token, map[string]any{
+		"label": "Stay", "category": "lodging", "actual_amount": 400,
+		"source_kind": "booking_todo", "source_id": legID,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("seed linked expense = %d: %s", rec.Code, rec.Body.String())
+	}
+	seeded := decode(t, rec)["id"].(string)
+	if rec := doJSON(t, "PATCH", base+"/budget/expenses/"+seeded, token,
+		map[string]any{"planned_amount": 400}); rec.Code != http.StatusOK {
+		t.Fatalf("state the plan = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	opt := saveOption(t, token, base, legID, map[string]any{"price": 354.0, "currency": "USD"})
+	body := decode(t, doJSON(t, "POST", base+"/booking-options/"+opt["id"].(string)+"/choose", token, nil))
+	exp, ok := body["expense"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected an expense: %v", body)
+	}
+	if exp["id"] != seeded {
+		t.Fatalf("choose should refresh the linked row, not add one: %v", exp)
+	}
+	if exp["actual_amount"].(float64) != 354 || exp["planned_amount"].(float64) != 400 {
+		t.Fatalf("the plan must survive the booking: %v", exp)
+	}
+	budget := decode(t, doJSON(t, "GET", base+"/budget", token, nil))
+	if budget["plan_variance"].(float64) != -46 {
+		t.Fatalf("variance = %v, want -46", budget["plan_variance"])
+	}
+}
+
+// TestUnbookKeepsAPlannedLinkedExpense: un-booking clears the PAYMENT, which
+// the system owns, and never the PLAN, which the traveler owns. The row stays
+// auto — it is still the leg's mirror, and re-booking re-pays it.
+func TestUnbookKeepsAPlannedLinkedExpense(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "shortlist-unbook@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	base, todos := shortlistTrip(t, token, trip.ID.String())
+	doJSON(t, "PUT", base+"/budget", token, map[string]any{"currency": "USD"})
+	legID := todos[1]["id"].(string)
+
+	rec := doJSON(t, "POST", base+"/budget/expenses", token, map[string]any{
+		"label": "Stay", "category": "lodging", "actual_amount": 400,
+		"source_kind": "booking_todo", "source_id": legID,
+	})
+	seeded := decode(t, rec)["id"].(string)
+	doJSON(t, "PATCH", base+"/budget/expenses/"+seeded, token, map[string]any{"planned_amount": 400})
+
+	opt := saveOption(t, token, base, legID, map[string]any{"price": 354.0, "currency": "USD"})
+	optID := opt["id"].(string)
+	doJSON(t, "POST", base+"/booking-options/"+optID+"/choose", token, nil)
+	if rec := doJSON(t, "DELETE", base+"/booking-options/"+optID+"/choose", token, nil); rec.Code != http.StatusOK {
+		t.Fatalf("un-choose = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	list := decodeExpenses(t, doJSON(t, "GET", base+"/budget/expenses", token, nil))
+	if len(list) != 1 {
+		t.Fatalf("the planned line must survive un-booking: %v", list)
+	}
+	kept := list[0]
+	if kept["purchased"] != false || kept["actual_amount"] != nil ||
+		kept["planned_amount"].(float64) != 400 || kept["auto"] != true {
+		t.Fatalf("un-book should un-pay, not delete: %v", kept)
+	}
+
+	// Re-booking re-pays the same row through the refresh path.
+	doJSON(t, "POST", base+"/booking-options/"+optID+"/choose", token, nil)
+	list = decodeExpenses(t, doJSON(t, "GET", base+"/budget/expenses", token, nil))
+	if len(list) != 1 || list[0]["actual_amount"].(float64) != 354 ||
+		list[0]["planned_amount"].(float64) != 400 {
+		t.Fatalf("re-book should refresh the one row: %v", list)
+	}
 }
 
 // A leg that is only "something to arrange" has no target table, and picking

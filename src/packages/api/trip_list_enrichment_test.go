@@ -232,7 +232,7 @@ func TestTripListInsightEnrichment(t *testing.T) {
 	for i, amount := range []float64{150, 50} {
 		if _, err := q.CreateExpense(ctx, store.CreateExpenseParams{
 			TripID: trip.ID, Category: "general",
-			Label: fmt.Sprintf("expense %d", i), Amount: amount,
+			Label: fmt.Sprintf("expense %d", i), ActualAmount: ptrTo(amount),
 		}); err != nil {
 			t.Fatalf("CreateExpense(%d): %v", i, err)
 		}
@@ -402,7 +402,7 @@ func TestSharedWithMeInsightAbsence(t *testing.T) {
 		t.Fatalf("UpsertBudget: %v", err)
 	}
 	if _, err := q.CreateExpense(ctx, store.CreateExpenseParams{
-		TripID: trip.ID, Category: "general", Label: "hotel", Amount: 120,
+		TripID: trip.ID, Category: "general", Label: "hotel", ActualAmount: ptrTo(120.0),
 	}); err != nil {
 		t.Fatalf("CreateExpense: %v", err)
 	}
