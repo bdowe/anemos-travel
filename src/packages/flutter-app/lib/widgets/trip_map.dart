@@ -1213,7 +1213,7 @@ class _StayPin extends StatelessWidget {
           // Same white ring + shadow treatment as _Pin so it reads as part
           // of the family, but square where itinerary pins are round.
           decoration: BoxDecoration(
-            color: AppColors.toolAirbnb,
+            color: AppColors.toolStays,
             borderRadius: BorderRadius.circular(7),
             border: Border.all(color: Colors.white, width: 2),
             boxShadow: [

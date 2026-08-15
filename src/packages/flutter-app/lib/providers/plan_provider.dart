@@ -7,11 +7,31 @@ import '../models/flight_offer.dart';
 import '../models/event.dart';
 import '../models/ferry_option.dart';
 import '../models/source_link.dart';
+import '../models/hotel_stay.dart';
 import '../models/local_recommendation.dart';
 import '../services/api_client.dart';
 import '../services/plan_service.dart';
 import 'preferences_provider.dart';
 import 'api_client_provider.dart';
+
+/// Parses a `links` array of {provider,url} into SourceLinks. Shared by the
+/// `stays` and `transport` events, whose payloads are the same shape as
+/// `event_links` minus the label.
+List<SourceLink> _providerLinks(Object? raw) => raw is List
+    ? raw
+        .whereType<Map<String, dynamic>>()
+        .map(SourceLink.fromJson)
+        .toList()
+    : const [];
+
+/// "Athens → Naxos" from a transport payload, or just whichever end is known.
+String? _routeLabel(Map<String, dynamic> data) {
+  final from = (data['origin'] as String?)?.trim() ?? '';
+  final to = (data['destination'] as String?)?.trim() ?? '';
+  if (from.isNotEmpty && to.isNotEmpty) return '$from → $to';
+  final one = from.isNotEmpty ? from : to;
+  return one.isEmpty ? null : one;
+}
 
 /// A user message waiting to be sent once the in-flight turn finishes.
 /// [id] is a notifier-local monotonic id — stable identity for remove buttons
@@ -46,6 +66,15 @@ class PlanState {
   final String? ferryRouteLabel;
   final List<SourceLink>? eventLinks;
   final String? eventLinksCity;
+
+  /// suggest_stays / suggest_transport browse links. Both events were emitted
+  /// by the server and silently DROPPED here — no case in the switch — so both
+  /// tools rendered a working-chip that vanished leaving no artifact at all
+  /// (docs/friction-log.md). Same {provider,url} shape as [eventLinks].
+  final List<SourceLink>? stayLinks;
+  final String? stayLinksWhere;
+  final List<SourceLink>? transportLinks;
+  final String? transportRoute;
   final List<LocalRecommendation>? localRecs;
   final String? localRecsCity;
 
@@ -67,6 +96,12 @@ class PlanState {
 
   /// The beach behind [parkingSpots], for the rail's header label.
   final String? parkingBeach;
+
+  /// The `hotels` SSE event (specs/hotel-search), whole. One field rather than
+  /// five parallel ones because the values are correlated — a tier without its
+  /// list is a bug — which also makes "replace whole, never mutate" (the rule
+  /// the record-selects in _ResultStrips depend on) true by construction.
+  final HotelStayResults? hotels;
 
   // Either a friendly String the /plan SSE stream sent, or a raw caught error
   // (ApiException) from a failed connect. friendlyError() renders both: it
@@ -138,12 +173,17 @@ class PlanState {
     this.ferryRouteLabel,
     this.eventLinks,
     this.eventLinksCity,
+    this.stayLinks,
+    this.stayLinksWhere,
+    this.transportLinks,
+    this.transportRoute,
     this.localRecs,
     this.localRecsCity,
     this.places,
     this.placesQuery,
     this.parkingSpots,
     this.parkingBeach,
+    this.hotels,
     this.error,
     this.queuedMessages = const [],
     this.suggestedReplies = const [],
@@ -173,12 +213,17 @@ class PlanState {
     Object? ferryRouteLabel = _sentinel,
     Object? eventLinks = _sentinel,
     Object? eventLinksCity = _sentinel,
+    Object? stayLinks = _sentinel,
+    Object? stayLinksWhere = _sentinel,
+    Object? transportLinks = _sentinel,
+    Object? transportRoute = _sentinel,
     Object? localRecs = _sentinel,
     Object? localRecsCity = _sentinel,
     Object? places = _sentinel,
     Object? placesQuery = _sentinel,
     Object? parkingSpots = _sentinel,
     Object? parkingBeach = _sentinel,
+    Object? hotels = _sentinel,
     Object? error = _sentinel,
     List<QueuedMessage>? queuedMessages,
     List<String>? suggestedReplies,
@@ -209,12 +254,17 @@ class PlanState {
       ferryRouteLabel: ferryRouteLabel == _sentinel ? this.ferryRouteLabel : ferryRouteLabel as String?,
       eventLinks: eventLinks == _sentinel ? this.eventLinks : eventLinks as List<SourceLink>?,
       eventLinksCity: eventLinksCity == _sentinel ? this.eventLinksCity : eventLinksCity as String?,
+      stayLinks: stayLinks == _sentinel ? this.stayLinks : stayLinks as List<SourceLink>?,
+      stayLinksWhere: stayLinksWhere == _sentinel ? this.stayLinksWhere : stayLinksWhere as String?,
+      transportLinks: transportLinks == _sentinel ? this.transportLinks : transportLinks as List<SourceLink>?,
+      transportRoute: transportRoute == _sentinel ? this.transportRoute : transportRoute as String?,
       localRecs: localRecs == _sentinel ? this.localRecs : localRecs as List<LocalRecommendation>?,
       localRecsCity: localRecsCity == _sentinel ? this.localRecsCity : localRecsCity as String?,
       places: places == _sentinel ? this.places : places as List<AgentPlace>?,
       placesQuery: placesQuery == _sentinel ? this.placesQuery : placesQuery as String?,
       parkingSpots: parkingSpots == _sentinel ? this.parkingSpots : parkingSpots as List<AgentPlace>?,
       parkingBeach: parkingBeach == _sentinel ? this.parkingBeach : parkingBeach as String?,
+      hotels: hotels == _sentinel ? this.hotels : hotels as HotelStayResults?,
       error: error == _sentinel ? this.error : error,
       queuedMessages: queuedMessages ?? this.queuedMessages,
       suggestedReplies: suggestedReplies ?? this.suggestedReplies,
@@ -391,12 +441,17 @@ class PlanNotifier extends StateNotifier<PlanState> {
       ferryRouteLabel: null,
       eventLinks: null,
       eventLinksCity: null,
+      stayLinks: null,
+      stayLinksWhere: null,
+      transportLinks: null,
+      transportRoute: null,
       localRecs: null,
       localRecsCity: null,
       places: null,
       placesQuery: null,
       parkingSpots: null,
       parkingBeach: null,
+      hotels: null,
       error: null,
       suggestedReplies: [],
       profileUpdateNote: null,
@@ -655,6 +710,31 @@ class PlanNotifier extends StateNotifier<PlanState> {
             state = state.copyWith(
               parkingSpots: spots,
               parkingBeach: event.data['beach'] as String?,
+            );
+
+          case 'hotels':
+            // Replaced whole (record-select invariant). No itineraryThisTurn
+            // guard: unlike search_places, search_hotels never doubles as
+            // geocoding, so its rail is always real advice even under a
+            // trip banner — same reasoning as parking.
+            state =
+                state.copyWith(hotels: HotelStayResults.fromEvent(event.data));
+
+          case 'stays':
+            // suggest_stays' browse links. Had NO case here at all until now,
+            // so the tool rendered a chip that vanished leaving nothing
+            // (docs/friction-log.md). Kept beside search_hotels because the
+            // two answer different asks: real properties vs "let me browse".
+            state = state.copyWith(
+              stayLinks: _providerLinks(event.data['links']),
+              stayLinksWhere: event.data['destination'] as String?,
+            );
+
+          case 'transport':
+            // Same dropped-event bug as `stays`, same one-line fix.
+            state = state.copyWith(
+              transportLinks: _providerLinks(event.data['links']),
+              transportRoute: _routeLabel(event.data),
             );
 
           case 'error':

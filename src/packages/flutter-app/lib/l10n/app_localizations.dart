@@ -5180,6 +5180,42 @@ abstract class AppLocalizations {
   /// **'Free (listed)'**
   String get chatCardFreeListed;
 
+  /// No description provided for @chatStripHotels.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} stay} other{{count} stays}}'**
+  String chatStripHotels(int count);
+
+  /// Rail-header caveat when hotel results carry no rates (no dates given, allowance spent, or provider down). Must read as an absence of information, never as 'free'.
+  ///
+  /// In en, this message translates to:
+  /// **'no live prices'**
+  String get chatStripHotelsNoRates;
+
+  /// No description provided for @chatCardPerNight.
+  ///
+  /// In en, this message translates to:
+  /// **'{price}/night'**
+  String chatCardPerNight(String price);
+
+  /// No description provided for @chatToolSearchHotels.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding stays...'**
+  String get chatToolSearchHotels;
+
+  /// No description provided for @chatLinksStays.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse stays'**
+  String get chatLinksStays;
+
+  /// No description provided for @chatLinksTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse transport'**
+  String get chatLinksTransport;
+
   /// No description provided for @chatChipEvents.
   ///
   /// In en, this message translates to:

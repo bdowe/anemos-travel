@@ -87,7 +87,11 @@ abstract final class AppColors {
   // Planning-toolkit tool accents (Home screen).
   static Color get toolRoute => Colors.deepOrange.shade600;
   static Color get toolFlights => Colors.blue.shade700;
-  static Color get toolAirbnb => Colors.pink.shade600;
+  /// Lodging accent — stay pins on the map and the chat's hotel rail. Named
+  /// toolAirbnb until search_hotels arrived; the app links to Booking.com and
+  /// surfaces hotels and vacation rentals from several sources, so a colour
+  /// named after one provider was a stale name, not a meaning.
+  static Color get toolStays => Colors.pink.shade600;
   static Color get toolEvents => Colors.purple.shade600;
   static Color get toolFerries => Colors.cyan.shade700;
   static Color get toolLocal => Colors.amber.shade800;

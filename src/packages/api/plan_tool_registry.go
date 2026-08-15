@@ -172,6 +172,17 @@ var planToolRegistry = []planTool{
 	// Target-trip resolution shares resolveDateShiftTrip. Tail-appended per the
 	// prompt-cache rule above.
 	{def: setLegTransportModeTool, enabled: authedOnly, run: runSetLegTransportModeTool},
+
+	// Real lodging lookup (specs/hotel-search) — the first stays tool that
+	// returns properties rather than links. No gate: it degrades to Google
+	// Places lodging discovery when dates are unknown, the provider is
+	// unconfigured, or the day's rate allowance is spent, so every session
+	// shape can offer it and the tools array stays a pure append.
+	// suggest_stays deliberately survives beside it, byte-identical: it is
+	// still the right answer for "let me browse Airbnb myself", and rewording
+	// it would invalidate the prompt-cache prefix for no gain.
+	// Tail-appended per the prompt-cache rule above.
+	{def: searchHotelsTool, run: runSearchHotelsTool},
 }
 
 // planToolByName dispatches tool_use blocks; derived from the registry so the
@@ -1143,4 +1154,61 @@ func runSearchLocalRecsTool(s *planSession, input json.RawMessage) (string, bool
 		summary = fmt.Sprintf("Error searching local recommendations: %v", err)
 	}
 	return summary, err != nil
+}
+
+var searchHotelsTool = anthropic.ToolParam{
+	Name: "search_hotels",
+	Description: anthropic.String("Look up real places to stay in a city — actual named hotels and vacation rentals with ratings, star class and photos. " +
+		"Give check_in AND check_out to get real nightly and total prices for those exact nights; without both dates you still get well-rated properties but NO prices at all. " +
+		"Ask the traveler for their dates first when they care about cost. " +
+		"Use this whenever they ask what a stay costs, or want lodging suggestions to choose from. " +
+		"Use suggest_stays instead only when they just want to browse Airbnb or Booking.com themselves."),
+	InputSchema: anthropic.ToolInputSchemaParam{
+		Properties: map[string]any{
+			"city":       map[string]any{"type": "string", "description": "City or area to stay in, e.g. 'Athens' or 'Plaka, Athens'"},
+			"check_in":   map[string]any{"type": "string", "description": "YYYY-MM-DD. Required together with check_out to get prices."},
+			"check_out":  map[string]any{"type": "string", "description": "YYYY-MM-DD. Required together with check_in to get prices."},
+			"adults":     map[string]any{"type": "integer", "description": "Number of adults sharing the room (default 2)"},
+			"max_price":  map[string]any{"type": "integer", "description": "Optional ceiling on the NIGHTLY rate, in the result currency. Only applies when dates are given."},
+			"min_rating": map[string]any{"type": "number", "description": "Optional minimum guest rating out of 5, e.g. 4.5"},
+		},
+		Required: []string{"city"},
+	},
+}
+
+func runSearchHotelsTool(s *planSession, input json.RawMessage) (string, bool) {
+	var in struct {
+		City      string  `json:"city"`
+		CheckIn   string  `json:"check_in"`
+		CheckOut  string  `json:"check_out"`
+		Adults    int     `json:"adults"`
+		MaxPrice  int     `json:"max_price"`
+		MinRating float64 `json:"min_rating"`
+	}
+	json.Unmarshal(input, &in)
+
+	// One date is not half an answer — it cannot mean anything, and guessing a
+	// stay length would price nights the traveler never asked about. Refuse
+	// loudly so the model asks, rather than silently dropping to the no-price
+	// tier and reporting a "result" for a question nobody asked.
+	if (in.CheckIn == "") != (in.CheckOut == "") {
+		return "Both check_in and check_out are needed to price a stay (or neither, for suggestions without prices). Ask the traveler for the missing date.", true
+	}
+
+	res, err := searchHotels(s.ctx, HotelSearchRequest{
+		City: in.City, CheckIn: in.CheckIn, CheckOut: in.CheckOut,
+		Adults: in.Adults, MaxPrice: in.MaxPrice, MinRating: in.MinRating,
+	})
+	if err != nil {
+		return fmt.Sprintf("Error searching stays: %v", err), true
+	}
+
+	if len(res.Stays) > 0 {
+		sendSSE(s.w, "hotels", map[string]any{
+			"city": res.City, "check_in": res.CheckIn, "check_out": res.CheckOut,
+			"rates_live": res.RatesLive, "rates_note": res.RatesNote,
+			"stays": res.Stays,
+		})
+	}
+	return summarizeHotels(res), false
 }

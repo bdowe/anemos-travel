@@ -181,7 +181,7 @@ List<ItineraryItem> _twoCityItems() => [
 const _lodgingSeed =
     'I want to refine my saved trip "Greece" (2026-09-01 to 2026-09-05).\n\n'
     'I still need a place to stay in Athens for 2026-09-01 to 2026-09-03. '
-    'Suggest a few good lodging options (call suggest_stays)…';
+    'Call search_hotels with those dates and show me a few real options…';
 
 /// The ladder the server ships alongside every step — what the eyebrow's
 /// "3 of 6" counter expands into (specs/next-step-cta).

@@ -5,6 +5,7 @@ import '../models/agent_place.dart';
 import '../models/event.dart';
 import '../models/local_recommendation.dart';
 import '../theme/app_colors.dart';
+import '../models/hotel_stay.dart';
 import '../theme/spacing.dart';
 import 'add_to_trip_sheet.dart' show AddToTripButton;
 import 'event_card.dart' show eventWhenLabel;
@@ -27,6 +28,19 @@ class PlaceCardData {
   final String metaLine; // category / neighborhood·category / when-label
   final double? rating; // places only → star row
   final int? priceLevel; // places only → $-signs
+
+  /// A formatted rate ("$154/night") for the trailing half of the meta row —
+  /// the slot [priceLevel]'s `$`-signs occupy on place cards. Hotels set this
+  /// and leave [priceLevel] null; the two are mutually exclusive and this one
+  /// wins. It is deliberately a pre-formatted STRING, not a number+currency
+  /// pair: the server already decided the one currency a result set is priced
+  /// in (there is no FX in this app), so the card must not be able to render
+  /// a figure in a currency the rest of the result never mentioned.
+  ///
+  /// Null on discovery-tier hotels — the rail header, not the card, is what
+  /// says prices weren't checked, because a 200x160 card with a rating has no
+  /// room for a caveat and the tier is a property of the whole result set.
+  final String? priceLabel;
   final IconData fallbackIcon;
   final Color accent;
   final bool localBadge; // rec-sourced cards get the verified badge
@@ -41,6 +55,7 @@ class PlaceCardData {
     this.metaLine = '',
     this.rating,
     this.priceLevel,
+    this.priceLabel,
     required this.fallbackIcon,
     required this.accent,
     this.localBadge = false,
@@ -124,6 +139,31 @@ class PlaceCardData {
       accent: AppColors.toolEvents,
       externalLink: event.url.isNotEmpty,
       metaIsAccent: true,
+    );
+  }
+
+  /// A live lodging result (specs/hotel-search). This IS what PlaceCardData
+  /// describes — a search result with a rating, a photo and an accent — so
+  /// unlike DestinationSuggestionCard it belongs here rather than in its own
+  /// widget. [priceLabel] is null on discovery-tier stays, which carry no
+  /// price at all; the rail header says why.
+  factory PlaceCardData.hotel(
+    HotelStay stay, {
+    required String? photoUrl,
+    required String? priceLabel,
+  }) {
+    return PlaceCardData(
+      title: stay.name,
+      photoUrl: photoUrl,
+      // Shown only when there is no rating — nearly every stay has one, so
+      // this is the rare-case fallback rather than the usual line.
+      metaLine: stay.address,
+      rating: stay.rating,
+      priceLabel: priceLabel,
+      fallbackIcon:
+          stay.kind == 'vacation_rental' ? Icons.house_outlined : Icons.hotel,
+      accent: AppColors.toolStays,
+      externalLink: stay.bookingUrl.isNotEmpty,
     );
   }
 
@@ -298,7 +338,17 @@ class PlacePhotoCard extends StatelessWidget {
             style: theme.textTheme.bodySmall
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),
-          if (data.priceLevel != null && data.priceLevel! > 0)
+          // priceLabel and priceLevel share one slot and are mutually
+          // exclusive by construction (see the field doc): a real rate wins
+          // over Google's $-sign bucket, and hotels never carry both.
+          if (data.priceLabel != null)
+            Flexible(
+              child: Text(' · ${data.priceLabel}',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis),
+            )
+          else if (data.priceLevel != null && data.priceLevel! > 0)
             Flexible(
               child: Text(' · ${'\$' * data.priceLevel!}',
                   style: muted, overflow: TextOverflow.ellipsis),

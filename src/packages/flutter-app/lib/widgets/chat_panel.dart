@@ -22,9 +22,11 @@ import '../utils/errors.dart';
 import '../utils/clipboard_images_stub.dart'
     if (dart.library.js_interop) '../utils/clipboard_images_web.dart';
 import '../utils/place_links.dart';
+import '../utils/money_format.dart';
 import '../utils/tracked_launch.dart';
 import 'add_to_trip_sheet.dart';
 import 'place_photo_card.dart';
+import 'source_links_card.dart';
 import 'result_summary_chip.dart';
 
 /// The plan-agent chat surface (messages, tool chips, result chips, input bar)
@@ -579,6 +581,7 @@ class _ChatTail extends StatelessWidget {
         _ItineraryUpdatedChip(state: state),
         _ResultStrips(state: state, notifier: notifier, onViewTrip: onViewTrip),
         _ResultChips(state: state, notifier: notifier, onViewTrip: onViewTrip),
+        _ResultLinks(state: state),
         _QuickReplyChips(state: state, notifier: notifier),
         if (footerBuilder != null)
           _ChatFooter(state: state, footerBuilder: footerBuilder!),
@@ -799,6 +802,8 @@ class _ActiveToolChips extends ConsumerWidget {
         return l10n.chatToolWeather;
       case 'search_nearby':
         return l10n.chatToolSearchNearby;
+      case 'search_hotels':
+        return l10n.chatToolSearchHotels;
       default:
         // Every other tool gets a real localized label, never the raw
         // snake_case name — quick writes flash by; naming them all would be
@@ -955,6 +960,7 @@ class _ResultStrips extends ConsumerWidget {
           eventsCity: s.eventsCityLabel,
           parkingSpots: s.parkingSpots,
           parkingBeach: s.parkingBeach,
+          hotels: s.hotels,
           savedTripId: s.savedTripId,
         )));
     final signedIn = ref.watch(authProvider.select((s) => s.isSignedIn));
@@ -1061,6 +1067,39 @@ class _ResultStrips extends ConsumerWidget {
               ),
           ],
         ),
+      if (r.hotels != null && r.hotels!.stays.isNotEmpty)
+        PlacePhotoStrip(
+          icon: Icons.hotel,
+          accent: AppColors.toolStays,
+          // The "no live rates" caveat rides the HEADER, not the cards: the
+          // tier is a property of the whole result set, and a 200x160 card
+          // showing a rating has no room for a disclaimer anyway.
+          label: label(
+            l10n.chatStripHotels(r.hotels!.stays.length),
+            [
+              if (r.hotels!.city.isNotEmpty) r.hotels!.city,
+              if (!r.hotels!.ratesLive) l10n.chatStripHotelsNoRates,
+            ].join(' · '),
+          ),
+          onViewTrip: onHeaderTap,
+          cards: [
+            for (final stay in r.hotels!.stays.take(_maxCards))
+              PlacePhotoCard(
+                data: PlaceCardData.hotel(
+                  stay,
+                  photoUrl: stay.resolvedPhotoUrl(apiBase),
+                  priceLabel: stay.ratePerNight == null || stay.currency == null
+                      ? null
+                      : l10n.chatCardPerNight(
+                          formatMoney(stay.ratePerNight!, stay.currency!)),
+                ),
+                onTap: stay.bookingUrl.isEmpty
+                    ? null
+                    : () => trackedLaunchUrl(context, stay.bookingUrl,
+                        provider: 'booking', surface: 'chat_hotel_card'),
+              ),
+          ],
+        ),
     ];
 
     if (strips.isEmpty) return const SizedBox.shrink();
@@ -1149,6 +1188,57 @@ class _ResultChips extends ConsumerWidget {
       child:
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: chips),
     );
+  }
+}
+
+/// Browse-out links from `suggest_stays` / `suggest_transport`.
+///
+/// Both events were emitted by the server and had NO case in the client's
+/// provider switch, so each tool rendered a working-chip that vanished leaving
+/// no artifact at all — the traveler asked for lodging and got nothing
+/// (docs/friction-log.md). They render as [SourceLinksCard] rather than a
+/// [ResultSummaryChip] because these results ARE the links: a summary chip
+/// opens the trip, which is not where an Airbnb search lives.
+class _ResultLinks extends ConsumerWidget {
+  final ProviderListenable<PlanState> state;
+
+  const _ResultLinks({required this.state});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Same record-select invariant as the strips: the provider replaces each
+    // list whole on its event, never mutates one in place.
+    final r = ref.watch(state.select((s) => (
+          stayLinks: s.stayLinks,
+          stayWhere: s.stayLinksWhere,
+          transportLinks: s.transportLinks,
+          transportRoute: s.transportRoute,
+        )));
+    final l10n = context.l10n;
+
+    String title(String base, String? suffix) =>
+        (suffix == null || suffix.trim().isEmpty) ? base : '$base · $suffix';
+
+    final cards = <Widget>[
+      if (r.stayLinks != null && r.stayLinks!.isNotEmpty)
+        SourceLinksCard(
+          icon: Icons.hotel,
+          accent: AppColors.toolStays,
+          title: title(l10n.chatLinksStays, r.stayWhere),
+          links: r.stayLinks!,
+        ),
+      if (r.transportLinks != null && r.transportLinks!.isNotEmpty)
+        SourceLinksCard(
+          icon: Icons.directions,
+          accent: AppColors.toolFlights,
+          title: title(l10n.chatLinksTransport, r.transportRoute),
+          links: r.transportLinks!,
+        ),
+    ];
+
+    if (cards.isEmpty) return const SizedBox.shrink();
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch, children: cards);
   }
 }
 

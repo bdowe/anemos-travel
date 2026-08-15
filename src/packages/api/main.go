@@ -742,6 +742,14 @@ func buildRouter() *mux.Router {
 	api.HandleFunc("/flights/search", flightsSearchHandler).Methods("POST")
 	api.HandleFunc("/flights/airports", airportsSearchHandler).Methods("GET")
 	api.HandleFunc("/events/search", eventsSearchHandler).Methods("GET")
+	// On `strict` (5/min), not the general tier: unlike its /places and
+	// /events neighbours this endpoint spends from a 250-per-MONTH SerpApi
+	// allowance shared with flight search, and it is unauthenticated. The
+	// per-day cap is the real backstop, but the burst limit is what stops one
+	// IP draining a day's lodging rates in a few seconds. Same bucket as
+	// /plan, which can already reach this capability anonymously — so this
+	// adds no new risk class.
+	api.Handle("/hotels/search", strict(http.HandlerFunc(hotelsSearchHandler))).Methods("GET")
 	api.HandleFunc("/weather", weatherSearchHandler).Methods("GET")
 	api.HandleFunc("/ferries/search", ferriesSearchHandler).Methods("GET")
 	api.HandleFunc("/events/greece-links", greeceEventsLinksHandler).Methods("GET")
@@ -1028,6 +1036,7 @@ func startServer(router *mux.Router) {
 	log.Printf("  GET  /api/v1/places/photo       - Place Photo (302 redirect)")
 	log.Printf("  POST /api/v1/flights/search     - Ranked Flight Search (Duffel)")
 	log.Printf("  GET  /api/v1/flights/airports   - Airport/City Autocomplete (Duffel)")
+	log.Printf("  GET  /api/v1/hotels/search      - Hotel Search (rates via SerpApi; falls back to Places lodging)")
 	log.Printf("  POST /api/v1/auth/register      - Register")
 	log.Printf("  POST /api/v1/auth/login         - Login")
 	log.Printf("  GET  /api/v1/auth/google        - Sign in with Google (redirect flow)")

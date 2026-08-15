@@ -3100,6 +3100,34 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatCardFreeListed => 'Gratis (según el listado)';
 
   @override
+  String chatStripHotels(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alojamientos',
+      one: '$count alojamiento',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatStripHotelsNoRates => 'sin precios en directo';
+
+  @override
+  String chatCardPerNight(String price) {
+    return '$price/noche';
+  }
+
+  @override
+  String get chatToolSearchHotels => 'Buscando alojamientos...';
+
+  @override
+  String get chatLinksStays => 'Ver alojamientos';
+
+  @override
+  String get chatLinksTransport => 'Ver transporte';
+
+  @override
   String chatChipEvents(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
