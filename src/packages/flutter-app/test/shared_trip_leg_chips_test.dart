@@ -137,7 +137,7 @@ void main() {
     expect(map(tester).emptyAction, isNull);
 
     // Shared views are viewer-agnostic: never a home-airport overlay.
-    expect(map(tester).home, isNull);
+    expect(map(tester).home, isEmpty);
   });
 
   testWidgets('a city chip filters the shared map to that leg; All restores',

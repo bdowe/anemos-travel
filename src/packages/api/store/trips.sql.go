@@ -108,22 +108,27 @@ func (q *Queries) CreateItineraryItem(ctx context.Context, arg CreateItineraryIt
 }
 
 const createTrip = `-- name: CreateTrip :one
-INSERT INTO trips (user_id, title, chat_id, summary, travel_mode, origin, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $1)
+INSERT INTO trips (user_id, title, chat_id, summary, travel_mode, origin, origin_airport, return_airport, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $1)
 RETURNING id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin, origin_airport, return_airport
 `
 
 type CreateTripParams struct {
-	UserID     uuid.UUID `json:"user_id"`
-	Title      string    `json:"title"`
-	ChatID     *string   `json:"chat_id"`
-	Summary    *string   `json:"summary"`
-	TravelMode *string   `json:"travel_mode"`
-	Origin     *string   `json:"origin"`
+	UserID        uuid.UUID `json:"user_id"`
+	Title         string    `json:"title"`
+	ChatID        *string   `json:"chat_id"`
+	Summary       *string   `json:"summary"`
+	TravelMode    *string   `json:"travel_mode"`
+	Origin        *string   `json:"origin"`
+	OriginAirport *string   `json:"origin_airport"`
+	ReturnAirport *string   `json:"return_airport"`
 }
 
-// `origin` is set here and only here — see 00062_trip_origin.sql for why it
-// never joins UpdateTrip's COALESCE set.
+// origin / origin_airport / return_airport are set here and by SetTripEndpoints
+// (the agent's set_trip_origin tool) — and nowhere else. They stay out of
+// UpdateTrip's COALESCE set so PATCH cannot move them: a departure airport is
+// not a field to be poked at, it is a change that has to travel with the trip's
+// derived legs (see 00064 and TestPatchTripCannotSetOrigin).
 func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, error) {
 	row := q.db.QueryRow(ctx, createTrip,
 		arg.UserID,
@@ -132,6 +137,8 @@ func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, e
 		arg.Summary,
 		arg.TravelMode,
 		arg.Origin,
+		arg.OriginAirport,
+		arg.ReturnAirport,
 	)
 	var i Trip
 	err := row.Scan(
@@ -633,6 +640,58 @@ type SetTripDatesParams struct {
 func (q *Queries) SetTripDates(ctx context.Context, arg SetTripDatesParams) error {
 	_, err := q.db.Exec(ctx, setTripDates, arg.ID, arg.StartDate, arg.EndDate)
 	return err
+}
+
+const setTripEndpoints = `-- name: SetTripEndpoints :one
+UPDATE trips
+SET origin = $1,
+    origin_airport = $2,
+    return_airport = $3
+WHERE id = $4
+RETURNING id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin, origin_airport, return_airport
+`
+
+type SetTripEndpointsParams struct {
+	Origin        *string   `json:"origin"`
+	OriginAirport *string   `json:"origin_airport"`
+	ReturnAirport *string   `json:"return_airport"`
+	ID            uuid.UUID `json:"id"`
+}
+
+// The ONE writer of a saved trip's departure/return endpoints. Deliberately
+// unscoped by user_id, like SetTripDates: the caller authorizes (owner or
+// editor collaborator, via resolveDateShiftTrip).
+//
+// The two airports are written TOGETHER, always. NULL never means "same as the
+// other direction" — a default nobody can see is what put an EWR leg on a trip
+// leaving from Albany — it means only that this trip states no airport, and the
+// legs fall back to trips.origin and then the owner's saved home airport.
+// CHECK trips_endpoint_airport_pair (00064) makes that a DB invariant.
+func (q *Queries) SetTripEndpoints(ctx context.Context, arg SetTripEndpointsParams) (Trip, error) {
+	row := q.db.QueryRow(ctx, setTripEndpoints,
+		arg.Origin,
+		arg.OriginAirport,
+		arg.ReturnAirport,
+		arg.ID,
+	)
+	var i Trip
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Title,
+		&i.StartDate,
+		&i.EndDate,
+		&i.ChatID,
+		&i.Summary,
+		&i.UpdatedBy,
+		&i.TravelMode,
+		&i.Origin,
+		&i.OriginAirport,
+		&i.ReturnAirport,
+	)
+	return i, err
 }
 
 const setTripTravelMode = `-- name: SetTripTravelMode :exec

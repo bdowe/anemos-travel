@@ -30,7 +30,7 @@ func TestPersistTripStoresOrigin(t *testing.T) {
 	user, _ := createTestUser(t, "origin@example.com")
 
 	tripID, _, err := persistTrip(context.Background(), user.ID, "chat-origin",
-		"Montreal Weekend", "", "2026-08-15", "2026-08-17", "car", "  Lake George, NY  ",
+		"Montreal Weekend", "", "2026-08-15", "2026-08-17", "car", tripEndpoints{Origin: "  Lake George, NY  "},
 		[]map[string]any{{"name": "Schwartz's Deli", "city": "Montreal"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)
@@ -52,7 +52,7 @@ func TestPersistTripOmittedOriginStaysNull(t *testing.T) {
 	user, _ := createTestUser(t, "noorigin@example.com")
 
 	tripID, _, err := persistTrip(context.Background(), user.ID, "chat-noorigin",
-		"Lisbon", "", "", "", "", "   ",
+		"Lisbon", "", "", "", "", tripEndpoints{Origin: "   "},
 		[]map[string]any{{"name": "Belém Tower", "city": "Lisbon"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)
@@ -69,7 +69,7 @@ func TestPersistTripBoundsOriginLength(t *testing.T) {
 	user, _ := createTestUser(t, "longorigin@example.com")
 
 	tripID, _, err := persistTrip(context.Background(), user.ID, "chat-longorigin",
-		"Trip", "", "", "", "", strings.Repeat("x", maxTripOriginLen+50),
+		"Trip", "", "", "", "", tripEndpoints{Origin: strings.Repeat("x", maxTripOriginLen+50)},
 		[]map[string]any{{"name": "Belém Tower", "city": "Lisbon"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)
@@ -86,7 +86,7 @@ func TestTripResponseCarriesOrigin(t *testing.T) {
 	user, token := createTestUser(t, "originjson@example.com")
 
 	tripID, _, err := persistTrip(context.Background(), user.ID, "chat-originjson",
-		"Montreal Weekend", "", "", "", "car", "Lake George, NY",
+		"Montreal Weekend", "", "", "", "car", tripEndpoints{Origin: "Lake George, NY"},
 		[]map[string]any{{"name": "Schwartz's Deli", "city": "Montreal"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)
@@ -101,16 +101,39 @@ func TestTripResponseCarriesOrigin(t *testing.T) {
 		t.Fatalf("trip JSON missing origin: %s", rec.Body.String())
 	}
 
-	// Absent stays absent rather than serializing as null.
+	// The airports ride the same response: the Flutter map resolves them to
+	// pins and the derivation titles the legs from them, so a field that never
+	// reaches the wire is a trip that silently keeps using the saved home
+	// airport (migration 00064).
+	airportsID, _, err := persistTrip(context.Background(), user.ID, "chat-airports",
+		"Amsterdam", "", "", "", "", tripEndpoints{OriginAirport: "ALB", ReturnAirport: "EWR"},
+		[]map[string]any{{"name": "Rijksmuseum", "city": "Amsterdam"}})
+	if err != nil {
+		t.Fatalf("persistTrip: %v", err)
+	}
+	rec = doJSON(t, http.MethodGet, "/api/v1/trips/"+airportsID, token, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get trip: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	for _, want := range []string{`"origin_airport":"ALB"`, `"return_airport":"EWR"`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("trip JSON missing %s: %s", want, rec.Body.String())
+		}
+	}
+
+	// Absent stays absent rather than serializing as null — for the airports
+	// too, so a client can tell "states none" from a stated code.
 	plainID, _, err := persistTrip(context.Background(), user.ID, "chat-plain",
-		"Lisbon", "", "", "", "", "",
+		"Lisbon", "", "", "", "", tripEndpoints{Origin: ""},
 		[]map[string]any{{"name": "Belém Tower", "city": "Lisbon"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)
 	}
 	plain := doJSON(t, http.MethodGet, "/api/v1/trips/"+plainID, token, nil)
-	if strings.Contains(plain.Body.String(), `"origin"`) {
-		t.Fatalf("unstated origin should be omitted: %s", plain.Body.String())
+	for _, absent := range []string{`"origin"`, `"origin_airport"`, `"return_airport"`} {
+		if strings.Contains(plain.Body.String(), absent) {
+			t.Fatalf("unstated %s should be omitted: %s", absent, plain.Body.String())
+		}
 	}
 }
 
@@ -119,7 +142,7 @@ func TestPatchTripCannotSetOrigin(t *testing.T) {
 	user, token := createTestUser(t, "patchorigin@example.com")
 
 	tripID, _, err := persistTrip(context.Background(), user.ID, "chat-patchorigin",
-		"Montreal Weekend", "", "", "", "", "Lake George, NY",
+		"Montreal Weekend", "", "", "", "", tripEndpoints{Origin: "Lake George, NY"},
 		[]map[string]any{{"name": "Schwartz's Deli", "city": "Montreal"}})
 	if err != nil {
 		t.Fatalf("persistTrip: %v", err)

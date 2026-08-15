@@ -1,8 +1,28 @@
 -- name: CreateTrip :one
--- `origin` is set here and only here — see 00062_trip_origin.sql for why it
--- never joins UpdateTrip's COALESCE set.
-INSERT INTO trips (user_id, title, chat_id, summary, travel_mode, origin, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $1)
+-- origin / origin_airport / return_airport are set here and by SetTripEndpoints
+-- (the agent's set_trip_origin tool) — and nowhere else. They stay out of
+-- UpdateTrip's COALESCE set so PATCH cannot move them: a departure airport is
+-- not a field to be poked at, it is a change that has to travel with the trip's
+-- derived legs (see 00064 and TestPatchTripCannotSetOrigin).
+INSERT INTO trips (user_id, title, chat_id, summary, travel_mode, origin, origin_airport, return_airport, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $1)
+RETURNING *;
+
+-- name: SetTripEndpoints :one
+-- The ONE writer of a saved trip's departure/return endpoints. Deliberately
+-- unscoped by user_id, like SetTripDates: the caller authorizes (owner or
+-- editor collaborator, via resolveDateShiftTrip).
+--
+-- The two airports are written TOGETHER, always. NULL never means "same as the
+-- other direction" — a default nobody can see is what put an EWR leg on a trip
+-- leaving from Albany — it means only that this trip states no airport, and the
+-- legs fall back to trips.origin and then the owner's saved home airport.
+-- CHECK trips_endpoint_airport_pair (00064) makes that a DB invariant.
+UPDATE trips
+SET origin = sqlc.narg('origin'),
+    origin_airport = sqlc.narg('origin_airport'),
+    return_airport = sqlc.narg('return_airport')
+WHERE id = sqlc.arg('id')
 RETURNING *;
 
 -- name: CreateItineraryItem :one

@@ -414,7 +414,7 @@ void main() {
       returnFrom: LatLng(items.last.latitude, items.last.longitude),
     );
 
-    testWidgets('default home: null renders no pin and no extra arrows', (
+    testWidgets('default home: empty renders no pin and no extra arrows', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(_host(TripMap(items: items)));
@@ -428,7 +428,7 @@ void main() {
     testWidgets('overlay adds the pin and two leg arrows, numbering intact', (
       WidgetTester tester,
     ) async {
-      await tester.pumpWidget(_host(TripMap(items: items, home: home)));
+      await tester.pumpWidget(_host(TripMap(items: items, home: [home])));
       await tester.pump();
       await tester.pump();
 
@@ -458,7 +458,7 @@ void main() {
       expect(_camera(tester).visibleBounds.contains(homePoint), isFalse);
 
       // ...then it resolves: didUpdateWidget's fit-set comparison must refit.
-      await tester.pumpWidget(_host(TripMap(items: items, home: home)));
+      await tester.pumpWidget(_host(TripMap(items: items, home: [home])));
       await tester.pump(); // frame scheduling the post-frame re-fit
       await tester.pump(); // camera moved
 
@@ -480,7 +480,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        _host(TripMap(items: fijiItems, home: crossingHome)),
+        _host(TripMap(items: fijiItems, home: [crossingHome])),
       );
       await tester.pump();
 
@@ -490,10 +490,65 @@ void main() {
       expect(find.byIcon(Icons.navigation), findsOneWidget);
     });
 
+    testWidgets('two endpoints more than 180° apart drop the far one', (
+      WidgetTester tester,
+    ) async {
+      // Departing Tokyo and returning into Newark: each leg is drawable on its
+      // own, but framing BOTH pins would stretch the camera the long way round
+      // the single-world map — the very thing the per-leg rule prevents. The
+      // departure is kept and the arrival dropped, rather than fitting a world
+      // that doesn't fit.
+      final departure = TripMapHome(
+        point: const LatLng(35.5494, 139.7798), // HND
+        label: 'HND',
+        outboundTo: LatLng(items.first.latitude, items.first.longitude),
+        kind: TripMapHomeKind.departure,
+      );
+      final arrival = TripMapHome(
+        point: const LatLng(40.6895, -74.1745), // EWR, >180° of lng from HND
+        label: 'EWR',
+        returnFrom: LatLng(items.last.latitude, items.last.longitude),
+        kind: TripMapHomeKind.arrival,
+      );
+
+      await tester.pumpWidget(
+        _host(TripMap(items: items, home: [departure, arrival])),
+      );
+      await tester.pump();
+
+      expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+    });
+
+    testWidgets('two endpoints within one world both draw', (
+      WidgetTester tester,
+    ) async {
+      final departure = TripMapHome(
+        point: const LatLng(42.7483, -73.8017), // ALB
+        label: 'ALB',
+        outboundTo: LatLng(items.first.latitude, items.first.longitude),
+        kind: TripMapHomeKind.departure,
+      );
+      final arrival = TripMapHome(
+        point: const LatLng(40.6895, -74.1745), // EWR
+        label: 'EWR',
+        returnFrom: LatLng(items.last.latitude, items.last.longitude),
+        kind: TripMapHomeKind.arrival,
+      );
+
+      await tester.pumpWidget(
+        _host(TripMap(items: items, home: [departure, arrival])),
+      );
+      await tester.pump();
+
+      expect(find.byIcon(Icons.flight_takeoff), findsNWidgets(2));
+      expect(_camera(tester).visibleBounds.contains(departure.point), isTrue);
+      expect(_camera(tester).visibleBounds.contains(arrival.point), isTrue);
+    });
+
     testWidgets('home alone must not summon a map (empty-state guard)', (
       WidgetTester tester,
     ) async {
-      await tester.pumpWidget(_host(TripMap(items: const [], home: home)));
+      await tester.pumpWidget(_host(TripMap(items: const [], home: [home])));
       await tester.pump();
 
       expect(find.text('No mapped places'), findsOneWidget);
@@ -753,7 +808,7 @@ void main() {
           TripMap(
             items: items,
             accommodations: stays,
-            home: home,
+            home: [home],
             destinations: dests,
           ),
         ),

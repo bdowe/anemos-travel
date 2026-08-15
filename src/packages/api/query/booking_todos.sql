@@ -80,6 +80,52 @@ ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     origin_label = EXCLUDED.origin_label,
     destination_label = EXCLUDED.destination_label;
 
+-- name: AdoptLegacyHomeBookingTodo :execrows
+-- Renames a home leg still stored under its endpoint-labelled key onto the
+-- canonical @home identity, in place.
+--
+-- Migration 00064 backfills these, so this is the belt to that migration's
+-- braces: it also catches a row written by an older binary during the deploy
+-- itself, and it means a failed or skipped backfill degrades to "the next sync
+-- fixes it" rather than to orphaned rows. Without it a legacy row would simply
+-- fall outside the posted key set and be pruned — taking its booked flag with
+-- it, which is the whole bug.
+--
+-- Renames only when nothing already holds the canonical key, so it can never
+-- violate idx_booking_todos_trip_key; the caller's upsert then writes the
+-- content either way.
+UPDATE booking_todos b
+SET todo_key = sqlc.arg('new_key')::text
+WHERE b.trip_id = sqlc.arg('trip_id') AND b.todo_key = sqlc.arg('old_key')::text
+  AND b.auto = true AND b.kind = 'transport'
+  AND NOT EXISTS (
+        SELECT 1 FROM booking_todos x
+        WHERE x.trip_id = b.trip_id AND x.todo_key = sqlc.arg('new_key')::text);
+
+-- name: ListHomeBookingTodos :many
+-- The trip's two journey-endpoint rows, in checklist order. Used when the
+-- trip's endpoints change so their labels can be refreshed immediately rather
+-- than at the next client sync — a tool that reports "the checklist now reads
+-- ALB → Amsterdam" has to have made that true before it says so.
+SELECT * FROM booking_todos
+WHERE trip_id = $1 AND auto = true AND role IN ('home_outbound', 'home_return')
+ORDER BY position ASC, created_at ASC;
+
+-- name: RelabelHomeBookingTodo :one
+-- Repoints ONE journey-endpoint row at a new airport. Content only: the row
+-- keeps its id, so booked, mode, position and any trip_expenses row linked by
+-- source_id ride along untouched — which is the entire reason the key stopped
+-- containing the airport (00064). todo_key is deliberately absent: the @home
+-- identity does not move when the label does.
+UPDATE booking_todos
+SET origin_label = sqlc.narg('origin_label'),
+    destination_label = sqlc.narg('destination_label'),
+    title = sqlc.arg('title'),
+    search_url = sqlc.narg('search_url'),
+    provider = sqlc.narg('provider')
+WHERE id = sqlc.arg('id') AND trip_id = sqlc.arg('trip_id')
+RETURNING *;
+
 -- name: DemoteStaleAutoBookingTodos :execrows
 -- Half of the prune, and it MUST run before DeleteStaleAutoBookingTodos.
 --

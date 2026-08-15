@@ -56,6 +56,11 @@ type planSession struct {
 	// travelMode is the traveler's stated mode for this trip (set_travel_mode);
 	// create_itinerary persists it onto the trip. Empty = never stated.
 	travelMode string
+	// endpoints is where this trip starts and ends (set_trip_origin), carried
+	// for the same reason travelMode is: persistTrip INSERTs a NEW trips row
+	// per version, so anything stated before the itinerary exists — or before
+	// the next version save — is lost unless the session holds it.
+	endpoints tripEndpoints
 	// itineraryEmitted is set once this turn streamed `done` or
 	// `trip_updated`; suggest_replies refuses after it (the itinerary banner
 	// owns the turn — specs/chat-quick-replies). Not s.tripID: that stays nil
@@ -146,6 +151,14 @@ var planToolRegistry = []planTool{
 	// set_trip_dates; target-trip resolution shares resolveDateShiftTrip.
 	// Tail-appended per the prompt-cache rule above.
 	{def: setLegDatesTool, enabled: authedOnly, run: runSetLegDatesTool},
+	// Set where a saved trip DEPARTS from and RETURNS to (specs/trip-endpoint-
+	// airports). Signed-in only for the same stability reason as the date
+	// tools — which also keeps the anonymous tools array byte-identical, so
+	// only the two authed shapes take the one-time cache re-warm. Target-trip
+	// resolution shares resolveDateShiftTrip; before a trip exists the value
+	// rides on the session into create_itinerary, like set_travel_mode's.
+	// Tail-appended per the prompt-cache rule above.
+	{def: setTripOriginTool, enabled: authedOnly, run: runSetTripOriginTool},
 }
 
 // planToolByName dispatches tool_use blocks; derived from the registry so the
@@ -649,7 +662,7 @@ func runCreateItineraryTool(s *planSession, input json.RawMessage) (string, bool
 	// Persist the trip only for signed-in callers; anonymous sessions
 	// stay ephemeral (no trip_id in the done event).
 	if s.authed {
-		if tripID, newLineage, err := persistTrip(s.ctx, s.uid, s.req.ChatID, in.Title, in.Summary, in.StartDate, in.EndDate, s.travelMode, "", in.Locations); err != nil {
+		if tripID, newLineage, err := persistTrip(s.ctx, s.uid, s.req.ChatID, in.Title, in.Summary, in.StartDate, in.EndDate, s.travelMode, s.endpoints, in.Locations); err != nil {
 			log.Printf("failed to persist trip: %v", err)
 		} else {
 			donePayload["trip_id"] = tripID

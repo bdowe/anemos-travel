@@ -710,7 +710,12 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 	if trip.TravelMode != nil && *trip.TravelMode != "" {
 		fmt.Fprintf(&b, ". Travel mode: %s — keep transport suggestions in that mode", *trip.TravelMode)
 	}
-	fmt.Fprintf(&b, ". %d places:\n", len(items))
+	// Where this trip starts and ends. Without it the model cannot tell an
+	// explicit endpoint from the saved-home-airport default, and improvises —
+	// which is how a request to fly out of ALB became a duplicate checklist
+	// item nobody asked for.
+	b.WriteString(". " + tripEndpointSummary(trip))
+	fmt.Fprintf(&b, " %d places:\n", len(items))
 	for _, it := range items {
 		line := "- " + it.Name
 		var tags []string
@@ -794,7 +799,7 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 			origin := "added by traveler"
 			switch {
 			case td.Auto:
-				origin = "auto — tracks the itinerary; not editable"
+				origin = "auto — tracks the itinerary; not editable directly (change what it tracks: set_trip_origin / set_leg_dates / set_travel_mode), never duplicate it"
 			case strings.HasPrefix(td.TodoKey, "agent:"):
 				origin = "agent-added"
 			}
@@ -895,7 +900,7 @@ func touchTripAs(ctx context.Context, tripID, actor uuid.UUID) {
 
 // bookingTodoMissingMsg covers both "wrong id" and "auto row" — the queries
 // exclude auto=true rows, so the two cases are indistinguishable here.
-const bookingTodoMissingMsg = "No such checklist item on that trip, or it's an auto item managed from the itinerary — those can't be changed. Call get_trip to see the current checklist."
+const bookingTodoMissingMsg = "No such checklist item on that trip, or it's an auto item managed from the itinerary — those can't be changed directly. If it is the trip's departure or return leg, change the trip's endpoints with set_trip_origin instead of adding a new item. Call get_trip to see the current checklist."
 
 func runUpdateBookingTodoTool(s *planSession, input json.RawMessage) (string, bool) {
 	var in struct {

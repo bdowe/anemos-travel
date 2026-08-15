@@ -14,20 +14,25 @@ import '../widgets/gradient_app_bar.dart';
 import '../widgets/map_leg_chips.dart';
 import '../widgets/trip_map.dart';
 
-/// Builds the home-airport overlay for a trip-map surface, or null while the
-/// IATA → coordinate lookup is pending / failed (the map simply omits the
-/// legs; the provider watch rebuilds when it resolves). The outbound leg
-/// belongs to the FIRST city leg and the return leg to the LAST, so a
-/// mid-trip city focus shows no orphan home pin ([focusedLegIndex] null =
+/// Builds the journey-endpoint overlay for a trip-map surface: the airports
+/// this trip departs from and returns into, as pins with dashed legs. Usually
+/// one entry — most trips leave and return through the same airport — and two
+/// when they differ (out of ALB, home into EWR). Empty while the IATA →
+/// coordinate lookup is pending or failed, and each end resolves INDEPENDENTLY:
+/// one code that resolves still draws its pin when the other doesn't.
+///
+/// The outbound leg belongs to the FIRST city leg and the return leg to the
+/// LAST, so a mid-trip city focus shows no orphan pin ([focusedLegIndex] null =
 /// All shows both; a stale key resolved to -1 shows neither, which is safe
-/// because a stale focus also empties the item list). Shared by the
-/// full-screen map and the inline trip-detail card so both surfaces gate
-/// identically.
-TripMapHome? homeOverlayFor(
+/// because a stale focus also empties the item list). Shared by the full-screen
+/// map and the inline trip-detail card so both surfaces gate identically.
+List<TripMapHome> homeOverlayFor(
   WidgetRef ref, {
   required String? homeAirport,
   required String? travelMode,
   required String? tripOrigin,
+  required String? tripOriginAirport,
+  required String? tripReturnAirport,
   required int? focusedLegIndex, // null = All
   required int legCount,
   required LatLng? firstCityPoint,
@@ -37,29 +42,73 @@ TripMapHome? homeOverlayFor(
   // stated ground trip it is not the origin — someone driving to Montreal from
   // upstate New York does not set out from Newark — so drawing a leg from it
   // would invent a journey the trip never described. Say nothing instead.
-  if (groundTravelMode(travelMode) != null) return null;
-  // Same rule for a trip that named its own origin: the saved airport is then
-  // known to be the wrong start, and the stated one is free text we hold no
-  // coordinates for. The booking legs still carry it by name.
-  if ((tripOrigin?.trim() ?? '').isNotEmpty) return null;
-  final code = homeAirport;
-  if (code == null || code.isEmpty) return null;
-  final point = ref.watch(homeAirportPointProvider(code)).valueOrNull;
-  if (point == null) return null;
-  final outboundTo = (focusedLegIndex == null || focusedLegIndex == 0)
-      ? firstCityPoint
+  if (groundTravelMode(travelMode) != null) return const [];
+
+  /// The code to pin for one end of the journey, or null when we hold no
+  /// coordinates for it. Mirrors _deriveTodos' label ladder rung for rung
+  /// (trip_detail_screen.dart), minus the free-text rung: an origin stated in
+  /// words ENDS the ladder — the saved airport is then known to be the wrong
+  /// start, and "Lake George, NY" has no coordinates to pin. The booking legs
+  /// still carry it by name.
+  String? codeFor(String? tripAirport) {
+    final own = tripAirport?.trim();
+    if (own != null && own.isNotEmpty) return own.toUpperCase();
+    if ((tripOrigin?.trim() ?? '').isNotEmpty) return null;
+    final saved = homeAirport?.trim();
+    return (saved == null || saved.isEmpty) ? null : saved.toUpperCase();
+  }
+
+  LatLng? pointFor(String? code) {
+    if (code == null) return null;
+    final p = ref.watch(homeAirportPointProvider(code)).valueOrNull;
+    return p == null ? null : LatLng(p.lat, p.lng);
+  }
+
+  final departureCode = codeFor(tripOriginAirport);
+  final arrivalCode = codeFor(tripReturnAirport);
+  final outboundTo =
+      (focusedLegIndex == null || focusedLegIndex == 0) ? firstCityPoint : null;
+  final returnFrom = (focusedLegIndex == null || focusedLegIndex == legCount - 1)
+      ? lastCityPoint
       : null;
-  final returnFrom =
-      (focusedLegIndex == null || focusedLegIndex == legCount - 1)
-          ? lastCityPoint
-          : null;
-  if (outboundTo == null && returnFrom == null) return null;
-  return TripMapHome(
-    point: LatLng(point.lat, point.lng),
-    label: code,
-    outboundTo: outboundTo,
-    returnFrom: returnFrom,
-  );
+
+  // One airport for both directions — the common case, and byte-for-byte the
+  // single pin this drew before a trip could have two.
+  if (departureCode != null && departureCode == arrivalCode) {
+    final point = pointFor(departureCode);
+    if (point == null || (outboundTo == null && returnFrom == null)) {
+      return const [];
+    }
+    return [
+      TripMapHome(
+        point: point,
+        label: departureCode,
+        outboundTo: outboundTo,
+        returnFrom: returnFrom,
+      ),
+    ];
+  }
+
+  final out = <TripMapHome>[];
+  final departurePoint = pointFor(departureCode);
+  if (departurePoint != null && outboundTo != null) {
+    out.add(TripMapHome(
+      point: departurePoint,
+      label: departureCode!,
+      outboundTo: outboundTo,
+      kind: TripMapHomeKind.departure,
+    ));
+  }
+  final arrivalPoint = pointFor(arrivalCode);
+  if (arrivalPoint != null && returnFrom != null) {
+    out.add(TripMapHome(
+      point: arrivalPoint,
+      label: arrivalCode!,
+      returnFrom: returnFrom,
+      kind: TripMapHomeKind.arrival,
+    ));
+  }
+  return out;
 }
 
 /// Full-screen interactive trip map, pushed from the trip detail screen on
@@ -107,9 +156,15 @@ class TripMapScreen extends ConsumerStatefulWidget {
   /// overlay entirely (see [homeOverlayFor]).
   final String? travelMode;
 
-  /// The trip's stated origin; like a ground [travelMode], its presence
-  /// suppresses the home-airport overlay.
+  /// The trip's stated origin (free text); like a ground [travelMode], its
+  /// presence suppresses the overlay — there are no coordinates for a place
+  /// name. An airport below outranks it.
   final String? tripOrigin;
+
+  /// The trip's own departure/return airports (IATA), which may differ from
+  /// each other and from [homeAirport]. Null = this trip states none.
+  final String? tripOriginAirport;
+  final String? tripReturnAirport;
   final LatLng? firstCityPoint;
   final LatLng? lastCityPoint;
 
@@ -133,6 +188,8 @@ class TripMapScreen extends ConsumerStatefulWidget {
     this.homeAirport,
     this.travelMode,
     this.tripOrigin,
+    this.tripOriginAirport,
+    this.tripReturnAirport,
     this.firstCityPoint,
     this.lastCityPoint,
     this.destinations,
@@ -146,11 +203,13 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
   late String? _legKey = widget.initialLegKey;
   int? _selectedPosition;
 
-  TripMapHome? _homeOverlay() => homeOverlayFor(
+  List<TripMapHome> _homeOverlay() => homeOverlayFor(
         ref,
         homeAirport: widget.homeAirport,
         travelMode: widget.travelMode,
         tripOrigin: widget.tripOrigin,
+        tripOriginAirport: widget.tripOriginAirport,
+        tripReturnAirport: widget.tripReturnAirport,
         focusedLegIndex: _legKey == null
             ? null
             : widget.legChips.indexWhere((c) => c.key == _legKey),

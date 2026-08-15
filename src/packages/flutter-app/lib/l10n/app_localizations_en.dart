@@ -2490,6 +2490,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mapShowAllPlaces => 'Show all places';
 
   @override
+  String mapDepartureAirport(String code) {
+    return 'Departure airport ($code)';
+  }
+
+  @override
+  String mapReturnAirport(String code) {
+    return 'Return airport ($code)';
+  }
+
+  @override
   String mapHomeAirport(String code) {
     return 'Home airport ($code)';
   }
