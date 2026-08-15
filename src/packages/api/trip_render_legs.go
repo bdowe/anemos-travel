@@ -251,6 +251,39 @@ func computeTripLegs(trip store.Trip, items []store.ItineraryItem, stays []store
 		prevEnd = leg.End
 	}
 
+	// 6. Last-leg anchor, the mirror of step 4: the leg that renders LAST,
+	// when item-derived, ends at the trip end. The traveler is in the final
+	// city until the day they travel home, and that day carries no items — the
+	// planner reserves it for the journey — so the item-derived end runs a day
+	// or more short. Without this a 2-night stay whose departure day is empty
+	// renders "1 night" and drags the return-home booking date back with it.
+	//
+	// Walks from the tail exactly as step 4 walks from the head, so it lands on
+	// whichever leg renders last, hubless runs included (step 4 would equally
+	// anchor one at the head). "items" excludes confirmed stays — their
+	// checkout is explicit — and auto slices, which already end at the trip's
+	// end: step 4's carve-outs exactly.
+	//
+	// Runs AFTER the chain, and never on a collapsed leg. Both matter: a leg
+	// the chain squeezed to a zero-night stop is an interim overrun state, and
+	// stretching it to the trip's end would invent the very nights the squeeze
+	// says are gone (and contradict its own ZeroNight flag). The last leg's end
+	// feeds nothing downstream, so moving it here cannot disturb the chain.
+	if trip.EndDate.Valid {
+		tripEnd := trip.EndDate.Time
+		for i := len(legs) - 1; i >= 0; i-- {
+			leg := &legs[i]
+			if leg.End == nil {
+				continue
+			}
+			if leg.DateSource == "items" && !leg.ZeroNight && tripEnd.After(*leg.End) {
+				e := tripEnd
+				leg.End = &e
+			}
+			break
+		}
+	}
+
 	return legs
 }
 

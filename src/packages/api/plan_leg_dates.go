@@ -190,34 +190,31 @@ func anchoredLegDisplayRange(runs []legRun, i int, stays []store.Accommodation, 
 	return s, e
 }
 
-// visibleLegDisplayRange is the span the trip page actually RENDERS for run
-// i: anchoredLegDisplayRange with the arrival rule folded in, as a forward
-// pass over the dated runs so consecutive squeezed legs chain. A leg renders
-// from its arrival (the previous dated leg's VISIBLE end) when that comes
-// first; when the arrival has run PAST the leg's own last day, an
-// item-derived leg collapses to a zero-night stop at the arrival (a
-// confirmed stay's explicit dates never collapse — same carve-out as the
-// first-leg anchor). An arrival strictly inside the leg's own span keeps the
-// leg's start (partial overlap, unchanged). Mirrors _visibleGroupRanges in
-// trip_detail_screen.dart.
-func visibleLegDisplayRange(runs []legRun, i int, stays []store.Accommodation, tripStart time.Time) (time.Time, time.Time) {
-	var s, e, prevEnd time.Time
-	havePrev := false
-	for j := 0; j <= i; j++ {
-		if runs[j].minDay < 1 || runs[j].hub == "" {
+// renderedLegRange resolves the span the trip page RENDERS for a hub, from
+// computeTripLegs — the one derivation the page, the `legs` payload and
+// legsRenderSummary already share.
+//
+// It replaced a third twin (visibleLegDisplayRange) that re-implemented the
+// arrival rule here. The twins ABOVE stay, deliberately: the renumbering math
+// needs item-day semantics, where a leg ends on its last item day. But a
+// result that promises what the traveler SEES cannot be built from those —
+// the page anchors the final leg to the trip's end date (computeTripLegs step
+// 6), which item days no longer imply now that the day home is left empty.
+// The leg-dates arc paid for this rule: anything speaking about the dates on
+// screen derives from the dates on screen. ok=false when the hub has no
+// spanned leg, in which case the caller must say nothing rather than quote a
+// number from the wrong derivation.
+func renderedLegRange(trip store.Trip, items []store.ItineraryItem, stays []store.Accommodation, hub string) (start, end time.Time, ok bool) {
+	want := strings.TrimSpace(hub)
+	for _, leg := range computeTripLegs(trip, items, stays) {
+		if leg.Start == nil || leg.End == nil || leg.Hub == nil {
 			continue
 		}
-		s, e = anchoredLegDisplayRange(runs, j, stays, tripStart)
-		if havePrev {
-			if prevEnd.Before(s) {
-				s = prevEnd
-			} else if prevEnd.After(e) && matchedConfirmedStay(runs[j], stays) == nil {
-				s, e = prevEnd, prevEnd
-			}
+		if strings.EqualFold(strings.TrimSpace(*leg.Hub), want) {
+			return *leg.Start, *leg.End, true
 		}
-		prevEnd, havePrev = e, true
 	}
-	return s, e
+	return time.Time{}, time.Time{}, false
 }
 
 // legDateChange is the pure outcome of a leg move: the resolved new span,
@@ -591,8 +588,11 @@ func runSetLegDatesTool(s *planSession, input json.RawMessage) (string, bool) {
 		if prevRun != nil {
 			fmt.Fprintf(&b, "; the previous leg (%s) ends %s", prevRun.hub, prevEnd.Format(dateLayout))
 		}
-		visStart, visEnd := visibleLegDisplayRange(runs, matched[0], stays, tripStart)
-		fmt.Fprintf(&b, ". The trip page shows this leg as %s (a leg renders from its arrival — the previous leg's visible end, or the trip's start date for the first leg — when that comes first, and collapses to a zero-night stop at that arrival when the previous leg has run past this leg's last day) and was NOT refreshed.", legRangeText(visStart, visEnd))
+		if visStart, visEnd, ok := renderedLegRange(trip, items, stays, run.hub); ok {
+			fmt.Fprintf(&b, ". The trip page shows this leg as %s (a leg renders from its arrival — the previous leg's visible end, or the trip's start date for the first leg — when that comes first, collapses to a zero-night stop at that arrival when the previous leg has run past this leg's last day, and the LAST leg runs through the trip's end date because the day home carries no places) and was NOT refreshed.", legRangeText(visStart, visEnd))
+		} else {
+			b.WriteString(". The trip page was NOT refreshed.")
+		}
 		b.WriteString(" Never tell the traveler anything changed; if this state doesn't match what they asked for, tell them the actual dates and ask how to adjust.")
 		return b.String(), false
 	}

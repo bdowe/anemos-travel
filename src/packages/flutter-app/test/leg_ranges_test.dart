@@ -222,6 +222,73 @@ void main() {
       expect(ranges[2].end, _d('2026-09-06'));
     });
 
+    // The mirror of the first-leg anchor: the planner leaves the day home
+    // empty (it's a travel day), so the last leg's item-derived end falls
+    // short of the trip's own end date. Amsterdam must still read
+    // Aug 21 – Aug 25 · 4 nights, not Aug 21 – Aug 24.
+    test('the last leg runs through the trip end when its day home is empty',
+        () {
+      final ranges = visibleLegRanges(_trip(
+        [
+          _item(0, 'Louvre', 'Paris', day: 1),
+          _item(1, "Musée d'Orsay", 'Paris', day: 2),
+          _item(2, 'Rijksmuseum', 'Amsterdam', day: 4),
+          _item(3, 'Anne Frank House', 'Amsterdam', day: 5),
+          // Day 6 (Aug 25) is the journey home and carries nothing.
+        ],
+        startDate: '2026-08-20',
+        endDate: '2026-08-25',
+      ));
+      expect(ranges[0].start, _d('2026-08-20'));
+      expect(ranges[0].end, _d('2026-08-21'));
+      expect(ranges[1].start, _d('2026-08-21'));
+      expect(ranges[1].end, _d('2026-08-25'));
+    });
+
+    // A confirmed stay's checkout is explicit, so it is never stretched — the
+    // same carve-out the first-leg anchor makes for check-in. The START is the
+    // arrival (Paris's visible end), the pre-existing chain rule.
+    test('the last-leg anchor leaves a confirmed stay alone', () {
+      final ranges = visibleLegRanges(_trip(
+        [
+          _item(0, 'Louvre', 'Paris', day: 1),
+          _item(1, 'Rijksmuseum', 'Amsterdam', day: 4),
+        ],
+        startDate: '2026-08-20',
+        endDate: '2026-08-25',
+        stays: const [
+          Accommodation(
+            id: 'a1',
+            name: 'Hotel Pulitzer',
+            address: 'Prinsengracht, Amsterdam',
+            checkIn: '2026-08-23',
+            checkOut: '2026-08-24',
+          ),
+        ],
+      ));
+      expect(ranges[1].start, _d('2026-08-20'));
+      expect(ranges[1].end, _d('2026-08-24'));
+    });
+
+    // A leg the chain squeezed to a zero-night stop is an interim overrun
+    // state. Stretching it to the trip's end would invent the very nights the
+    // squeeze says are gone. (The 'consecutive squeezed legs' case above pins
+    // the same guard from the other direction — Guayaquil stays Sep 6/Sep 6 on
+    // a trip that runs to Sep 7.)
+    test('the last-leg anchor leaves a collapsed leg alone', () {
+      final ranges = visibleLegRanges(_trip(
+        [
+          _item(0, 'Museo', 'Medellín', day: 1),
+          _item(1, 'Comuna 13', 'Medellín', day: 6),
+          _item(2, 'Quito', 'Quito', day: 4),
+        ],
+        startDate: '2026-09-01',
+        endDate: '2026-09-07',
+      ));
+      expect(ranges[1].start, _d('2026-09-06'));
+      expect(ranges[1].end, _d('2026-09-06'));
+    });
+
     test('a confirmed stay is never collapsed', () {
       final ranges = visibleLegRanges(_trip(
         [

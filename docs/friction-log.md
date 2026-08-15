@@ -5,6 +5,72 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-15 — the planner booked the day you fly home
+
+- **[app] Friction → fixed:** an Amsterdam leg reading `Aug 23 – Aug 25 · 2
+  nights` had **Rijksmuseum, Anne Frank House and Door 74 on Tue Aug 25** — the
+  day you leave — while **Mon Aug 24, the one genuinely free day, was empty.**
+  The plan inverted the good day and the travel day. Brian: "generally we
+  shouldn't recommend activities on the last day", then the sharper version
+  that became the design: **"should ideally depend on the time of the departing
+  flight."**
+- **[app] The app already believed it. Nobody told the planner.**
+  `trip_review.go:293` is literally `cov.Total--  // drop the departure day`,
+  under a comment reading *"PLANNABLE days are the span minus its last day,
+  which is the day you leave — there is nothing to plan on it"*; the
+  return-home transport to-do is already dated on `ranges.last.end`; and
+  `update_itinerary_section`'s result has long told the model *"a city's LAST
+  item day is its departure day"* — **but only on a refine turn, never at
+  create_itinerary**, which is where itineraries are actually born. Trip Health
+  and the planner had opposite beliefs about the same day for months.
+- **[app] The model could not have obeyed a flight-time rule anyway.**
+  `FlightOffer` has carried `DepartTime`/`ArriveTime` from both providers all
+  along — and `summarizeOffers`, the ONLY flight text the model ever reads,
+  rendered airline/price/stops/duration and **dropped them**. Straight after a
+  flight search the planner could not tell a 06:00 departure from a 22:00 one;
+  it knew the leg was `4h35m` and nothing about when it left. Fixed there
+  first — the rule is worthless without the input.
+- **[app] "Don't plan the last day" would have silently rewritten every leg.**
+  A leg's rendered end date IS its max item day (`leg_ranges.dart`), and trip
+  `end_date` falls out of `maxDay` when the agent omits it
+  (`trip_handler.go:432`). So the naive fix turns `Aug 23 – Aug 25 · 2 nights`
+  into `Aug 23 – Aug 24 · 1 night` and drags the return-flight to-do back a
+  day. The load-bearing half of this change is therefore a **last-leg trip-end
+  anchor — the exact mirror of the first-leg trip-start anchor that has always
+  sat three lines above it**: the traveler is in the final city until the day
+  they go home, and that day now holds nothing. It runs after the arrival chain
+  and skips a collapsed leg (stretching a zero-night stop would invent the very
+  nights the squeeze says are gone — the existing cascade test caught that on
+  the first run).
+- **[app] It was a latent bug already.** Any trip whose last city's items
+  stopped before `end_date` has been under-rendering its final leg. A one-city
+  3-day fixture in the suite was pinned at `Jun 10 – Jun 11 · 1 night` on a
+  trip ending Jun 12 — the missing day was in the expectations, not just the
+  code.
+- **[dev] Deleting a twin beat fixing one, again.** `plan_leg_dates.go` had a
+  third implementation of the arrival rule (`visibleLegDisplayRange`) whose
+  only consumer was the one sentence promising *"the trip page shows this leg
+  as X"* — and no test referenced it. It is gone; that sentence now reads
+  `computeTripLegs`. The item-day twins beside it stay on purpose: the
+  renumbering math needs "a leg ends on its last item day", which is exactly
+  what the page no longer means. Same lesson as `groupRanges` last week —
+  anything speaking about the dates on screen derives from the dates on screen.
+- **[dev] The first prompt draft got a split decision, and the model was right
+  the second time.** Draft one produced *"Aug 25 is the last day — I'll keep it
+  light"* and then booked the Stedelijk Museum plus a cocktail bar there, while
+  its own prose claimed it had "left the afternoon open". Cause: the
+  unknown-time case was buried behind the time-window table, so the model
+  averaged the two. Putting **"unless you know when they leave, put NOTHING on
+  it"** first fixed it outright — Aug 25 empty, days 1–2 *denser* (4 and 5
+  items), and the reply offering to fill it in once it knows the time.
+- **[dev] Over-broad rules get ignored, and deserve to be.** Draft two also
+  banned museums on the last day outright; told about a 9pm flight, the model
+  scheduled the Van Gogh Museum that morning anyway and explained it would
+  "leave for the airport around 6pm". It was right — a 10-hour window is a real
+  day. The constraint is now proportional: one easy skippable place when the
+  window is a sliver, plan normally when the whole day is open. **The live run
+  was what found this; no test would have.**
+
 ## 2026-08-14 — screen transitions replaying (two correct commits, colliding)
 
 - **[app] Breakage → fixed (#421, stack resets land instantly):** Brian —

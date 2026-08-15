@@ -101,6 +101,19 @@ func TestSystemPromptEnglishUnchanged(t *testing.T) {
 		if !strings.Contains(prompt, "never add a second checklist item for a leg the trip already has") {
 			t.Errorf("Accept-Language %q: prompt lost the no-duplicate-leg rule", header)
 		}
+		// Positive pin: the last day belongs to the journey home, and how
+		// much of it survives depends on the departure time. Without this the
+		// planner books a museum, a house tour and a cocktail bar on the day
+		// the traveler flies out — while the app's own review code has
+		// counted that day unplannable all along (walkDayCoverage).
+		if !strings.Contains(prompt, "The trip's LAST day is the day the traveler journeys home") {
+			t.Errorf("Accept-Language %q: prompt lost the travel-day instruction", header)
+		}
+		// Its companion: the same turn that stops over-filling the travel day
+		// must stop UNDER-filling the real ones, or the plan just gets thinner.
+		if !strings.Contains(prompt, "Fill the real days first") {
+			t.Errorf("Accept-Language %q: prompt lost the empty-middle-day instruction", header)
+		}
 		// These requests are anonymous and not trip-bound, so the prompt is
 		// exactly basePrompt — it must still end on basePrompt's final
 		// sentence, proving nothing was appended.

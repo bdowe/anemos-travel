@@ -620,6 +620,37 @@ func TestGetTripToolShowsStayAndTransportDates(t *testing.T) {
 	}
 }
 
+// create_itinerary must echo the same rendered leg ranges its sibling writer
+// does. It matters most on the shape this test builds: the last day carries
+// NOTHING (it's the journey home), so the itinerary's own day numbers stop a
+// day short of the trip. Only the echo can tell the model that Amsterdam still
+// renders through Aug 25 — without it the model sees a 2-day itinerary on a
+// 3-day trip and "fixes" a range that was never wrong.
+func TestCreateItineraryResultShowsRenderedLegs(t *testing.T) {
+	resetDB(t)
+	owner, _ := createTestUser(t, "createlegs@example.com")
+
+	s, _ := testPlanSession(true, owner.ID)
+	msg, isErr := runCreateItineraryTool(s, json.RawMessage(
+		`{"title":"Amsterdam","start_date":"2026-08-23","end_date":"2026-08-25","locations":[`+
+			`{"name":"Rijksmuseum","latitude":52.36,"longitude":4.885,"day":1,"city":"Amsterdam"},`+
+			`{"name":"Anne Frank House","latitude":52.375,"longitude":4.884,"day":2,"city":"Amsterdam"}]}`))
+	if isErr {
+		t.Fatalf("create errored: %s", msg)
+	}
+	for _, want := range []string{
+		"Itinerary created successfully.",
+		"The page now renders these city legs:",
+		// Day 2 is Aug 24; the leg still runs to the trip's end date.
+		"- Amsterdam: 2026-08-23 to 2026-08-25",
+		"leaving the day home empty does not shorten it",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("result missing %q:\n%s", want, msg)
+		}
+	}
+}
+
 // A section rewrite's result must echo the rendered leg ranges — day numbers
 // are positional, so a wrong day->date mental model would otherwise survive
 // any number of "successful" rewrites (the Sep-24-27 loop).

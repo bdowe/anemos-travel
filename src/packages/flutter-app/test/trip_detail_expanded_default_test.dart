@@ -108,10 +108,13 @@ void main() {
     expect(find.text('Rome'), findsOneWidget);
     // Scoping revealed what the old global finder hid: the counted range
     // belongs to ROME (Paris's single day-1 item makes it a zero-night leg
-    // with a bare date chip).
+    // with a bare date chip). Rome runs to Jun 12, the trip's end date, not
+    // to its own last item day — the last-leg anchor, because the day the
+    // traveler journeys home carries no places. Before it, this 3-day trip
+    // rendered a 2-day span and lost Jun 12 entirely.
     expect(chipTextIn('Paris', 'Jun 10'), findsOneWidget);
-    expect(chipTextIn('Rome', 'Jun 10 – Jun 11'), findsOneWidget);
-    expect(chipTextIn('Rome', '· 1 night'), findsOneWidget);
+    expect(chipTextIn('Rome', 'Jun 10 – Jun 12'), findsOneWidget);
+    expect(chipTextIn('Rome', '· 2 nights'), findsOneWidget);
 
     // Every group's items and embedded booking rows are visible on landing
     // — no expand step.

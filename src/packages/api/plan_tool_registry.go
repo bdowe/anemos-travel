@@ -695,7 +695,19 @@ func runCreateItineraryTool(s *planSession, input json.RawMessage) (string, bool
 	}
 	sendSSE(s.w, "done", donePayload)
 	s.itineraryEmitted = true
-	return "Itinerary created successfully.", false
+	// Echo the post-state the traveler will SEE, exactly as a section rewrite
+	// does. It matters more here now that a departure day may carry nothing:
+	// without the echo the model cannot tell that a city whose last day is
+	// empty still renders through the trip's end date, and would "fix" a range
+	// that was never wrong.
+	result := "Itinerary created successfully."
+	if s.tripID != nil {
+		if legs := tripLegsRender(s, *s.tripID); legs != "" {
+			result += " The page now renders these city legs:\n" + legs +
+				"Each leg renders from the previous city's departure through its own last day, and the final city through the trip's end date — so leaving the day home empty does not shorten it. If a range is wrong, use set_leg_dates (one city) or set_trip_dates (the whole trip) with calendar dates, never recomputed day numbers."
+		}
+	}
+	return result, false
 }
 
 func runUpdateItinerarySectionTool(s *planSession, input json.RawMessage) (string, bool) {
@@ -737,28 +749,29 @@ func runUpdateItinerarySectionTool(s *planSession, input json.RawMessage) (strin
 	// same tool result. Best-effort: any read error degrades to the plain
 	// confirmation rather than failing a write that already committed.
 	result := "Section updated — the traveler's trip page has refreshed."
-	if legs := sectionLegsRender(s); legs != "" {
+	if legs := tripLegsRender(s, *s.boundTripID); legs != "" {
 		result += " The page now renders these city legs:\n" + legs +
-			"A city's LAST item day is its departure day; each leg renders from the previous city's departure through its own last day. If these ranges don't match what the traveler asked for, do NOT resend the list with recomputed day numbers — use set_leg_dates (one city's dates) or set_trip_dates (the whole trip) with calendar dates."
+			"A city's LAST item day is its departure day; each leg renders from the previous city's departure through its own last day, and the FINAL city through the trip's end date — so leaving the day home empty does not shorten it. If these ranges don't match what the traveler asked for, do NOT resend the list with recomputed day numbers — use set_leg_dates (one city's dates) or set_trip_dates (the whole trip) with calendar dates."
 	}
 	return result, false
 }
 
-// sectionLegsRender re-reads the bound trip after a section rewrite and
-// returns legsRenderSummary for it — "" when the trip has no start date, no
-// dated legs, or any read fails (the write already committed; visibility is
-// best-effort).
-func sectionLegsRender(s *planSession) string {
+// tripLegsRender re-reads a trip an itinerary write just committed and returns
+// legsRenderSummary for it — "" when the trip has no start date, no dated legs,
+// or any read fails (the write already committed; visibility is best-effort).
+// Shared by create_itinerary and update_itinerary_section so both writers echo
+// the same post-state.
+func tripLegsRender(s *planSession, tripID uuid.UUID) string {
 	q := store.New(dbPool)
-	trip, err := q.GetEditableTripByID(s.ctx, store.GetEditableTripByIDParams{ID: *s.boundTripID, UserID: s.uid})
+	trip, err := q.GetEditableTripByID(s.ctx, store.GetEditableTripByIDParams{ID: tripID, UserID: s.uid})
 	if err != nil || !trip.StartDate.Valid {
 		return ""
 	}
-	items, err := q.GetItineraryItemsByTrip(s.ctx, *s.boundTripID)
+	items, err := q.GetItineraryItemsByTrip(s.ctx, tripID)
 	if err != nil {
 		return ""
 	}
-	stays, err := q.ListAccommodationsByTrip(s.ctx, *s.boundTripID)
+	stays, err := q.ListAccommodationsByTrip(s.ctx, tripID)
 	if err != nil {
 		return ""
 	}
