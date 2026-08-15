@@ -4696,27 +4696,170 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// matching the old row's gate. Not _inBudgetView-gated: that gate
   /// belonged to the scroll body, and health set the precedent that
   /// app-bar icons stay put across views.
+  /// Whether wear & pack has anything to show, and the regions it would show.
+  ///
+  /// One derivation with two entry points — the app-bar icon at wide widths
+  /// and the overflow item at narrow ones — so the gate can never disagree
+  /// with itself about whether the surface is worth offering. [ref] must be a
+  /// Consumer's, never the State's: the weather watches inside
+  /// [_legClothingRecs] subscribe whatever ref they are handed, and the whole
+  /// point is to subscribe one app-bar widget rather than the screen.
+  ({bool available, List<WearRegionRec> regions}) _wearState(
+      WidgetRef ref, Trip trip) {
+    final items = ref.watch(checklistProvider(trip.id)).valueOrNull;
+    final showChecklist = items != null && !(items.isEmpty && _readOnly);
+    final recs = _legClothingRecs(trip, ref);
+    return (available: recs.isNotEmpty || showChecklist, regions: recs);
+  }
+
+  void _openWearSheet(Trip trip, List<WearRegionRec> regions) =>
+      showWearPackSheet(
+        context,
+        tripId: trip.id,
+        // Snapshot: regions freeze at open (reopen refreshes); the
+        // checklist half stays live via its own provider watch.
+        regions: regions,
+        canEdit: !_readOnly,
+        // Live read, not a captured bool: the sheet route never
+        // rebuilds on this screen's connectivity setState.
+        isOffline: () => _isOffline,
+      );
+
   Widget _wearAppBarAction(Trip trip) {
     return Consumer(
       builder: (context, ref, _) {
-        final items = ref.watch(checklistProvider(trip.id)).valueOrNull;
-        final showChecklist = items != null && !(items.isEmpty && _readOnly);
-        final recs = _legClothingRecs(trip, ref);
-        if (recs.isEmpty && !showChecklist) return const SizedBox.shrink();
+        final wear = _wearState(ref, trip);
+        if (!wear.available) return const SizedBox.shrink();
         return IconButton(
           tooltip: context.l10n.wearSectionTitle,
           icon: const Icon(Icons.luggage_outlined),
-          onPressed: () => showWearPackSheet(
-            context,
-            tripId: trip.id,
-            // Snapshot: regions freeze at open (reopen refreshes); the
-            // checklist half stays live via its own provider watch.
-            regions: recs,
-            canEdit: !_readOnly,
-            // Live read, not a captured bool: the sheet route never
-            // rebuilds on this screen's connectivity setState.
-            isOffline: () => _isOffline,
-          ),
+          onPressed: () => _openWearSheet(trip, wear.regions),
+        );
+      },
+    );
+  }
+
+  /// The share menu's dispatch and its items, factored out so the wide app
+  /// bar's own share button and the narrow overflow menu that absorbs it can
+  /// never drift into offering different things.
+  void _onShareMenuSelected(String v) {
+    switch (v) {
+      case 'copy':
+        _shareLink();
+      case 'invite':
+        _inviteCoPlanner();
+      case 'manage':
+        _manageCoPlanners();
+      case 'print':
+        _openPrintExport();
+      case 'calendar':
+        _openCalendarExport();
+      case 'revoke':
+        _revokeLink();
+    }
+  }
+
+  List<PopupMenuEntry<String>> _shareMenuItems(AppLocalizations l10n) => [
+        PopupMenuItem(
+            value: 'copy',
+            child: Text(shareUsesNativeSheet
+                ? l10n.tripShareLinkAction
+                : l10n.tripCopyShareLink)),
+        PopupMenuItem(
+            value: 'invite',
+            child: Text(shareUsesNativeSheet
+                ? l10n.tripShareInviteAction
+                : l10n.tripCopyInviteLink)),
+        PopupMenuItem(value: 'manage', child: Text(l10n.tripManageAccess)),
+        const PopupMenuDivider(),
+        PopupMenuItem(value: 'print', child: Text(l10n.tripPrintSavePdf)),
+        PopupMenuItem(value: 'calendar', child: Text(l10n.tripAddToCalendar)),
+        const PopupMenuDivider(),
+        PopupMenuItem(value: 'revoke', child: Text(l10n.tripTurnOffSharing)),
+      ];
+
+  /// The app bar's `⋮`. Always the home of the destructive exits — owners get
+  /// delete, members (editors and viewer follows) get remove-from-my-list, so
+  /// the owner's trip is untouched; both still confirm in their handlers.
+  ///
+  /// At narrow widths it also absorbs wear & pack and the whole share menu.
+  /// That is what buys the ANEMOS wordmark its room: five icons on a 360px
+  /// bar leave the title slot smaller than the wordmark itself.
+  ///
+  /// A Consumer rather than a bare PopupMenuButton because the wear gate is a
+  /// provider watch that must subscribe this button alone, not the screen —
+  /// and the entries are built here rather than inside `itemBuilder` for the
+  /// same reason: a menu builder has no ref to watch with.
+  Widget _overflowAppBarAction(Trip trip, AppLocalizations l10n) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final wear = _narrow
+            ? _wearState(ref, trip)
+            : (available: false, regions: const <WearRegionRec>[]);
+        final absorbsShare = _narrow && trip.isOwner && !_isOffline;
+        // Offline hides the mutating exits; the read-only sheets stay.
+        final canExit = !_isOffline;
+
+        final entries = <PopupMenuEntry<String>>[
+          if (wear.available)
+            PopupMenuItem(
+              value: 'wear',
+              child: ListTile(
+                leading: const Icon(Icons.luggage_outlined),
+                title: Text(l10n.wearSectionTitle),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          if (absorbsShare) ...[
+            if (wear.available) const PopupMenuDivider(),
+            ..._shareMenuItems(l10n),
+          ],
+          if (canExit) ...[
+            if (wear.available || absorbsShare) const PopupMenuDivider(),
+            if (trip.isOwner)
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.error),
+                  title: Text(l10n.tripDeleteTrip,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              )
+            else
+              PopupMenuItem(
+                value: 'leave',
+                child: ListTile(
+                  leading: const Icon(Icons.bookmark_remove_outlined),
+                  title: Text(l10n.tripRemoveFromMyTrips),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+          ],
+        ];
+        if (entries.isEmpty) return const SizedBox.shrink();
+
+        return PopupMenuButton<String>(
+          // share_plus needs a rect to point the iPad popover at, and the
+          // anchor has to be whichever button is actually on screen.
+          key: absorbsShare ? _shareMenuKey : null,
+          icon: const Icon(Icons.more_vert),
+          tooltip: l10n.tripMoreActions,
+          onSelected: (v) {
+            switch (v) {
+              case 'wear':
+                _openWearSheet(trip, wear.regions);
+              case 'delete':
+                _delete();
+              case 'leave':
+                _leaveTrip();
+              default:
+                _onShareMenuSelected(v);
+            }
+          },
+          itemBuilder: (context) => entries,
         );
       },
     );
@@ -5172,15 +5315,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             maxLines: 1,
             overflow: TextOverflow.ellipsis),
         actions: [
-          // Contextual icons lead; share/delete/leave keep the outer-edge
-          // spots for every role. Health goes first: its severity count
-          // badge is glanceable state, worth the leading slot on every
-          // breakpoint. Wear & pack rides beside it — both replaced
-          // trailing-cluster rows, and neither is breakpoint-gated.
+          // The app bar now also carries the ANEMOS wordmark, and a phone
+          // cannot fit five icons beside it — at 360px five actions leave the
+          // title slot ~48px, less than the wordmark itself. So at narrow the
+          // two actions that are already menus/sheets fold into the overflow
+          // (see [_overflowAppBarAction]) and the icon row drops to three.
+          //
+          // The two that keep their icons earned it: health leads because its
+          // severity count is a glanceable badge, and refine is the header
+          // card's own Refine button relocated — narrow drops it down there
+          // (one clean chip row) precisely so the app bar can carry it.
           if (trip != null) _healthAppBarAction(trip, theme),
-          if (trip != null) _wearAppBarAction(trip),
-          // Narrow: the header card drops its Refine button (one clean chip
-          // row), so the trip-level refine entry moves up here.
+          if (trip != null && !_narrow) _wearAppBarAction(trip),
           // Same gates as the button it replaces: editors only
           // (specs/collaborator-refine), disabled — not hidden — offline.
           if (_narrow && trip != null && trip.canEdit)
@@ -5193,78 +5339,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             ),
           // Sharing is an owner-only surface; it mutates, so it's hidden
           // while offline-serving.
-          if (trip != null && trip.isOwner && !_isOffline)
+          if (trip != null && trip.isOwner && !_isOffline && !_narrow)
             PopupMenuButton<String>(
               key: _shareMenuKey,
               icon: const Icon(Icons.share_outlined),
               tooltip: l10n.tripShareTrip,
-              onSelected: (v) => switch (v) {
-                'copy' => _shareLink(),
-                'invite' => _inviteCoPlanner(),
-                'manage' => _manageCoPlanners(),
-                'print' => _openPrintExport(),
-                'calendar' => _openCalendarExport(),
-                _ => _revokeLink(),
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                    value: 'copy',
-                    child: Text(shareUsesNativeSheet
-                        ? l10n.tripShareLinkAction
-                        : l10n.tripCopyShareLink)),
-                PopupMenuItem(
-                    value: 'invite',
-                    child: Text(shareUsesNativeSheet
-                        ? l10n.tripShareInviteAction
-                        : l10n.tripCopyInviteLink)),
-                PopupMenuItem(
-                    value: 'manage', child: Text(l10n.tripManageAccess)),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                    value: 'print', child: Text(l10n.tripPrintSavePdf)),
-                PopupMenuItem(
-                    value: 'calendar', child: Text(l10n.tripAddToCalendar)),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                    value: 'revoke', child: Text(l10n.tripTurnOffSharing)),
-              ],
+              onSelected: _onShareMenuSelected,
+              itemBuilder: (context) => _shareMenuItems(l10n),
             ),
-          // Destructive exits live behind an overflow menu, not a bare
-          // icon: owners get delete, members (editors and viewer follows)
-          // get remove-from-my-list — the owner's trip is untouched. Both
-          // still confirm via their handlers' dialogs.
-          if (trip != null && !_isOffline)
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
-              tooltip: l10n.tripMoreActions,
-              onSelected: (v) => switch (v) {
-                'delete' => _delete(),
-                _ => _leaveTrip(),
-              },
-              itemBuilder: (context) => [
-                if (trip.isOwner)
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: ListTile(
-                      leading: Icon(Icons.delete_outline,
-                          color: Theme.of(context).colorScheme.error),
-                      title: Text(l10n.tripDeleteTrip,
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.error)),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  )
-                else
-                  PopupMenuItem(
-                    value: 'leave',
-                    child: ListTile(
-                      leading: const Icon(Icons.bookmark_remove_outlined),
-                      title: Text(l10n.tripRemoveFromMyTrips),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-              ],
-            ),
+          if (trip != null) _overflowAppBarAction(trip, l10n),
         ],
       ),
       body: _loading

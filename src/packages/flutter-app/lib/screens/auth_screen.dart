@@ -214,6 +214,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const BrandLogo.mark(size: 72),
+                    const SizedBox(height: AppSpacing.sm),
+                    // Neutral surface, so the wordmark takes the theme's own
+                    // text color rather than the app bars' white — the plate
+                    // policy in brand_logo.dart, applied to type.
+                    const ExcludeSemantics(
+                      // The mark's Image already carries the "Anemos" label.
+                      child: BrandWordmark(fontSize: 26, letterSpacing: 1.5),
+                    ),
                     const SizedBox(height: AppSpacing.lg),
                     Text(
                       _isLogin

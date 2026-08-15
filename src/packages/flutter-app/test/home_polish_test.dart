@@ -7,6 +7,7 @@ import 'package:travel_route_planner/constants/app_info.dart';
 import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/models/user.dart';
 import 'package:travel_route_planner/navigation/app_nav.dart';
+import 'package:travel_route_planner/navigation/shell_scope.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/live_trip_provider.dart';
 import 'package:travel_route_planner/providers/resumable_chats_provider.dart';
@@ -16,8 +17,9 @@ import 'package:travel_route_planner/widgets/brand_logo.dart';
 import 'support/l10n_test_app.dart';
 
 /// Home polish regressions (UI polish wave 2, PR 9):
-/// - the app bar drops the wordmark for the brand mark alone when the
-///   title slot can't fit it, instead of ellipsizing the brand;
+/// - the app bar's brand ladder: the wordmark is always on screen, and it is
+///   the plated MARK that yields when the title slot narrows (the priority
+///   used to be the other way round, back when only Home carried the brand);
 /// - the compact plan strip's tagline wraps to two lines instead of
 ///   truncating ("Plan less. Trav…").
 class _FakeAuthNotifier extends StateNotifier<AuthState>
@@ -93,7 +95,12 @@ Future<void> _pumpHome(
         liveTripProvider.overrideWithValue(liveTrip),
         resumableChatsProvider.overrideWith((ref) async => const []),
       ],
-      child: localizedTestApp(locale: locale, home: const HomeScreen()),
+      // Inside a ShellScope, because in the app Home always is: it is a tab
+      // root. GradientAppBar reads it to know whether there is a rail out
+      // there carrying the mark — pumped bare, Home would (correctly, but
+      // unrepresentatively) keep its own mark at every width.
+      child: localizedTestApp(
+          locale: locale, home: const ShellScope(child: HomeScreen())),
     ),
   );
   // Extra pumps flush the SharedPreferences read behind recentTripProvider
@@ -116,12 +123,13 @@ void main() {
   });
 
   testWidgets(
-      'tiny app bar drops the wordmark for the brand mark alone — '
-      'no ellipsized wordmark', (WidgetTester tester) async {
+      'tiny app bar drops the MARK and keeps the wordmark — the brand '
+      'name is what has to survive', (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(230, 690));
 
-    expect(find.text(AppInfo.name), findsNothing);
-    expect(find.byType(BrandLogo), findsOneWidget);
+    expect(find.text(AppInfo.name), findsOneWidget);
+    expect(find.byType(BrandLogo), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

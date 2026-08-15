@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../navigation/app_nav.dart';
+import '../navigation/shell_scope.dart';
 import '../navigation/url_sync.dart';
 import '../theme/spacing.dart';
 import '../widgets/account_menu.dart';
@@ -45,7 +46,8 @@ class AppShell extends ConsumerWidget {
     // The root navigator only holds the shell, so forward a system/browser back
     // to the active tab's navigator — otherwise nested pushes (trip detail, etc.)
     // couldn't be dismissed with the back button. At a tab root this is a no-op.
-    final content = PopScope(
+    final content = ShellScope(
+        child: PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
@@ -73,7 +75,7 @@ class AppShell extends ConsumerWidget {
             ),
         ],
       ),
-    );
+    ));
 
     if (isWide) {
       return Scaffold(
