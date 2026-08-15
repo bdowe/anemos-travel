@@ -151,7 +151,7 @@ List<PopupMenuEntry<String>> _items(
     PopupMenuItem<String>(
       value: 'account_settings',
       child: _menuRow(
-        Icon(Icons.manage_accounts_outlined,
+        Icon(Icons.settings_outlined,
             size: 20, color: theme.colorScheme.onSurfaceVariant),
         l10n.accountMenuAccountSettings,
       ),
