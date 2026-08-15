@@ -59,9 +59,11 @@ type BookingTodoResponse struct {
 
 func toBookingTodoResponse(t store.BookingTodo) BookingTodoResponse {
 	return BookingTodoResponse{
-		ID:         t.ID.String(),
-		Kind:       t.Kind,
-		TodoKey:    t.TodoKey,
+		ID:   t.ID.String(),
+		Kind: t.Kind,
+		// The endpoint-labelled key, not the storage key — see
+		// displayBookingTodoKey (booking_todo_identity.go).
+		TodoKey:    displayBookingTodoKey(t),
 		Title:      t.Title,
 		Subtitle:   t.Subtitle,
 		Provider:   t.Provider,
@@ -170,6 +172,13 @@ func strPtrOrNil(s string) *string {
 // syncBookingTodosHandler upserts the client's itinerary-derived auto-TODOs and
 // prunes any auto rows whose legs no longer exist, preserving the booked flag
 // across syncs. Returns the full ordered list.
+//
+// Two things happen here that the client cannot do for itself (00064):
+// classifyDerivedTodos rewrites the two home legs onto their canonical @home
+// keys, so whoever posts — a stale tab, an old cached bundle, a collaborator's
+// device — lands on the SAME row; and the home legs' endpoint labels are then
+// taken from the TRIP rather than from the poster, so a collaborator's saved
+// airport can no longer retitle the owner's flights.
 func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 	trip, ok := editableTrip(w, r)
 	if !ok {
@@ -183,13 +192,26 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := store.New(dbPool)
+	idents := classifyDerivedTodos(derived)
+	// The owner's saved airport is the last rung of the endpoint ladder, so it
+	// is read only when a home leg exists and the trip states nothing itself.
+	var departureLabel, arrivalLabel string
+	if hasHomeLeg(idents) {
+		var ownerHome *string
+		if strings.TrimSpace(strPtrVal(trip.Origin)) == "" && strings.TrimSpace(strPtrVal(trip.OriginAirport)) == "" {
+			if prefs, err := q.GetPreferences(r.Context(), trip.UserID); err == nil {
+				ownerHome = prefs.HomeAirport
+			}
+		}
+		departureLabel, arrivalLabel = tripEndpointLabels(trip, ownerHome)
+	}
 	keys := make([]string, 0, len(derived))
 	// One batch upsert instead of a round trip per row. The batch statement
 	// cannot touch the same (trip_id, todo_key) twice, so duplicate keys are
 	// collapsed last-wins — the same final state sequential upserts produced.
 	rows := make([]store.UpsertBookingTodoParams, 0, len(derived))
 	rowIdx := make(map[string]int, len(derived))
-	for _, d := range derived {
+	for i, d := range derived {
 		kind := strings.TrimSpace(d.Kind)
 		if !allowedBookingKinds[kind] || strings.TrimSpace(d.TodoKey) == "" || strings.TrimSpace(d.Title) == "" {
 			writeJSONError(w, http.StatusBadRequest, "each todo needs a valid kind, todo_key, and title")
@@ -205,12 +227,28 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusBadRequest, "return_date must be YYYY-MM-DD")
 			return
 		}
-		url, provider := bookingSearchURL(kind, d.Destination, d.Origin, d.DepartDate, d.ReturnDate, d.Guests, d.Passengers, d.Provider)
+		ident := idents[i]
+		// The endpoints actually stored. For the two home legs the trip's own
+		// answer overrides whatever the posting device derived — that is the
+		// whole point of holding the endpoints on the trip. Resolved BEFORE
+		// the link builders so the search URL, the title and the labels can
+		// never disagree with each other.
+		origin, destination := d.Origin, d.Destination
+		title := strings.TrimSpace(d.Title)
+		switch {
+		case ident.role == roleHomeOutbound && departureLabel != "":
+			origin = &departureLabel
+			title = departureLabel + " → " + destination
+		case ident.role == roleHomeReturn && arrivalLabel != "":
+			destination = arrivalLabel
+			title = strPtrVal(origin) + " → " + arrivalLabel
+		}
+		url, provider := bookingSearchURL(kind, destination, origin, d.DepartDate, d.ReturnDate, d.Guests, d.Passengers, d.Provider)
 		if kind == "transport" && strPtrVal(d.Provider) == "ferry" {
 			// pickProviderLink has no ferry candidate, so the fallback would
 			// store google_flights for a derived ferry leg; keep the ferry
 			// provider and its Ferryhopper deep link instead.
-			if u, p := transportModeLink("ferry", d.Destination, d.Origin, d.DepartDate, d.Passengers); u != "" {
+			if u, p := transportModeLink("ferry", destination, origin, d.DepartDate, d.Passengers); u != "" {
 				url, provider = u, p
 			}
 		}
@@ -219,24 +257,27 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 			providerPtr = d.Provider
 		}
 		row := store.UpsertBookingTodoParams{
-			TripID:     tripID,
-			Kind:       kind,
-			TodoKey:    d.TodoKey,
-			Title:      strings.TrimSpace(d.Title),
-			Subtitle:   d.Subtitle,
-			Provider:   providerPtr,
-			SearchUrl:  strPtrOrNil(url),
-			DepartDate: depart,
-			ReturnDate: ret,
-			Position:   int32(d.Position),
+			TripID:           tripID,
+			Kind:             kind,
+			TodoKey:          ident.key,
+			Title:            title,
+			Subtitle:         d.Subtitle,
+			Provider:         providerPtr,
+			SearchUrl:        strPtrOrNil(url),
+			DepartDate:       depart,
+			ReturnDate:       ret,
+			Position:         int32(d.Position),
+			Role:             strPtrOrNil(ident.role),
+			OriginLabel:      strPtrOrNil(strPtrVal(origin)),
+			DestinationLabel: strPtrOrNil(destination),
 		}
-		if i, seen := rowIdx[d.TodoKey]; seen {
-			rows[i] = row
+		if j, seen := rowIdx[ident.key]; seen {
+			rows[j] = row
 		} else {
-			rowIdx[d.TodoKey] = len(rows)
+			rowIdx[ident.key] = len(rows)
 			rows = append(rows, row)
 		}
-		keys = append(keys, d.TodoKey)
+		keys = append(keys, ident.key)
 	}
 	if len(rows) > 0 {
 		if err := q.UpsertBookingTodosBatch(r.Context(), upsertBookingTodosBatchParams(tripID, rows)); err != nil {
@@ -245,6 +286,17 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Demote before delete, and never the other way round: a stale row the
+	// traveler has booked, given a mode, or spent money against becomes an
+	// ordinary manual row (it then falls outside the DELETE, which only sees
+	// auto rows) instead of being destroyed along with its expense link.
+	if _, err := q.DemoteStaleAutoBookingTodos(r.Context(), store.DemoteStaleAutoBookingTodosParams{
+		TripID: tripID,
+		Keys:   keys,
+	}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "could not prune booking todos")
+		return
+	}
 	if _, err := q.DeleteStaleAutoBookingTodos(r.Context(), store.DeleteStaleAutoBookingTodosParams{
 		TripID: tripID,
 		Keys:   keys,
@@ -254,6 +306,17 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeBookingTodos(w, r, tripID)
+}
+
+// hasHomeLeg reports whether any posted row was recognized as a journey
+// endpoint — the only case where the trip's endpoint labels are needed.
+func hasHomeLeg(idents []derivedIdentity) bool {
+	for _, id := range idents {
+		if isHomeRole(id.role) {
+			return true
+		}
+	}
+	return false
 }
 
 // upsertBookingTodosBatchParams flattens per-row upsert params into the
@@ -276,6 +339,11 @@ func upsertBookingTodosBatchParams(tripID uuid.UUID, rows []store.UpsertBookingT
 		DepartDates:    make([]pgtype.Date, len(rows)),
 		ReturnDates:    make([]pgtype.Date, len(rows)),
 		Positions:      make([]int32, len(rows)),
+		// role/origin_label/destination_label need no null mask: the statement
+		// NULLIFs the empty string, and a label has no meaningful empty value.
+		Roles:             make([]string, len(rows)),
+		OriginLabels:      make([]string, len(rows)),
+		DestinationLabels: make([]string, len(rows)),
 	}
 	for i, r := range rows {
 		p.Kinds[i] = r.Kind
@@ -299,6 +367,9 @@ func upsertBookingTodosBatchParams(tripID uuid.UUID, rows []store.UpsertBookingT
 		p.DepartDates[i] = r.DepartDate
 		p.ReturnDates[i] = r.ReturnDate
 		p.Positions[i] = r.Position
+		p.Roles[i] = strPtrVal(r.Role)
+		p.OriginLabels[i] = strPtrVal(r.OriginLabel)
+		p.DestinationLabels[i] = strPtrVal(r.DestinationLabel)
 	}
 	return p
 }
@@ -561,7 +632,9 @@ func patchBookingTodoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Booked != nil && *req.Booked {
 		user, _ := userFromContext(r.Context())
-		meta := map[string]any{"kind": todo.Kind, "todo_key": todo.TodoKey}
+		// The endpoint-labelled key, so this event stays comparable with the
+		// years of booking_marked_booked rows recorded before 00064.
+		meta := map[string]any{"kind": todo.Kind, "todo_key": displayBookingTodoKey(todo)}
 		if todo.Provider != nil {
 			meta["provider"] = *todo.Provider
 		}

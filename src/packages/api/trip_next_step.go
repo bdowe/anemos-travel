@@ -455,9 +455,11 @@ func todoClaimed(d exportData, t store.BookingTodo) bool {
 			}
 		}
 	case "transport":
-		key := strings.TrimPrefix(t.TodoKey, "transport:")
-		origin, dest, ok := strings.Cut(key, ">>")
-		if !ok || key == t.TodoKey {
+		// The stored endpoints (00064), not a key parse: a home leg's key
+		// carries the reserved @home token, which names no place a segment
+		// could connect. legEndpoints applies the same precedence.
+		origin, dest, ok := legEndpoints(t)
+		if !ok {
 			return false
 		}
 		var confirmed []store.TripSegment
@@ -613,13 +615,17 @@ func bookingSlotStep(locale string, d exportData, t store.BookingTodo) *NextStep
 	return staySlotStep(locale, d, t)
 }
 
-// legEndpoints extracts a transport slot's origin/destination, preferring the
-// title ("<Origin> → <Destination>", the only survivor of the client's
-// casing — see the section comment above) and falling back to the todo_key
-// "transport:<o>>><d>" parse todoClaimed uses (lowercase). ok=false when both
-// fail (a hand-renamed title over an unparseable key); the step then keeps
-// the generic endpoint-less copy.
+// legEndpoints extracts a transport slot's origin/destination. The stored
+// endpoint labels win (00064 promoted them out of the string), then the title
+// ("<Origin> → <Destination>", which carried the client's casing before those
+// columns existed), then the todo_key parse — which a home leg's key can no
+// longer satisfy, since @home names no place. ok=false when all three fail (a
+// hand-renamed title over an unparseable key); the step then keeps the generic
+// endpoint-less copy.
 func legEndpoints(t store.BookingTodo) (origin, dest string, ok bool) {
+	if o, d := strings.TrimSpace(strPtrVal(t.OriginLabel)), strings.TrimSpace(strPtrVal(t.DestinationLabel)); namesAPlace(o) && namesAPlace(d) {
+		return o, d, true
+	}
 	if o, d, found := strings.Cut(t.Title, " → "); found {
 		if o, d = strings.TrimSpace(o), strings.TrimSpace(d); namesAPlace(o) && namesAPlace(d) {
 			return o, d, true
@@ -635,17 +641,20 @@ func legEndpoints(t store.BookingTodo) (origin, dest string, ok bool) {
 	return "", "", false
 }
 
-// namesAPlace rejects the empty string and the two grouping placeholders that
-// stand in for "we could not resolve a city": the server's own "Itinerary"
-// hub and the client's kOtherPlacesLabel (trip_legs.dart — documented as
-// never translated, because screens localize it at render time). Neither is
-// somewhere a traveler can sleep or fly to, so a slot naming one keeps the
-// generic copy and an endpoint-less fix — the same silence checkLodging and
-// checkTransit keep for a hubless group, and it also keeps the placeholder
-// out of the canonical-English seed, where it would send the agent hunting
-// for hotels in a city called "Other places".
+// namesAPlace rejects the empty string, any reserved `@`-prefixed identity
+// token (@home — see booking_todo_identity.go; `@` cannot occur in an IATA
+// code or a Places label, so the prefix covers every token we ever add), and
+// the two grouping placeholders that stand in for "we could not resolve a
+// city": the server's own "Itinerary" hub and the client's kOtherPlacesLabel
+// (trip_legs.dart — documented as never translated, because screens localize
+// it at render time). None is somewhere a traveler can sleep or fly to, so a
+// slot naming one keeps the generic copy and an endpoint-less fix — the same
+// silence checkLodging and checkTransit keep for a hubless group, and it also
+// keeps the placeholder out of the canonical-English seed, where it would send
+// the agent hunting for hotels in a city called "Other places".
 func namesAPlace(s string) bool {
-	return s != "" && !strings.EqualFold(s, "Itinerary") && !strings.EqualFold(s, "Other places")
+	return s != "" && !strings.HasPrefix(s, "@") &&
+		!strings.EqualFold(s, "Itinerary") && !strings.EqualFold(s, "Other places")
 }
 
 // staySlotCity extracts a stay slot's city: the "Stay in <Label>" title keeps
@@ -653,6 +662,9 @@ func namesAPlace(s string) bool {
 // fallback for hand-renamed titles; "" when neither yields one (the step then
 // keeps the generic addLodging title).
 func staySlotCity(t store.BookingTodo) string {
+	if c := strings.TrimSpace(strPtrVal(t.DestinationLabel)); namesAPlace(c) {
+		return c
+	}
 	if c := strings.TrimPrefix(t.Title, "Stay in "); c != t.Title {
 		if c = strings.TrimSpace(c); namesAPlace(c) {
 			return c
@@ -736,8 +748,14 @@ func slotDay(trip store.Trip, depart pgtype.Date) *int {
 func transportSlotStep(locale string, d exportData, t store.BookingTodo) *NextStep {
 	origin, dest, ok := legEndpoints(t)
 	mode := transportSlotMode(d.Trip, t)
-	set := stayCitySet(d.BookingTodos)
-	home := ok && len(set) > 0 && !set[strings.ToLower(dest)]
+	// The stored role (00064) says outright whether this is the leg home; the
+	// stay-set inference below is the fallback for rows written before it, and
+	// is what the role column was promoted from.
+	home := strPtrVal(t.Role) == roleHomeReturn
+	if t.Role == nil {
+		set := stayCitySet(d.BookingTodos)
+		home = ok && len(set) > 0 && !set[strings.ToLower(dest)]
+	}
 
 	modeKey := "generic"
 	switch strPtrVal(mode) {

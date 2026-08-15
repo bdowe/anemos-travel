@@ -52,7 +52,7 @@ func (q *Queries) CreateTripCollaborator(ctx context.Context, arg CreateTripColl
 }
 
 const getEditableTripByID = `-- name: GetEditableTripByID :one
-SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, t.origin FROM trips t
+SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, t.origin, t.origin_airport, t.return_airport FROM trips t
 WHERE t.id = $1
   AND (t.user_id = $2 OR EXISTS (
         SELECT 1 FROM trip_collaborators c
@@ -84,12 +84,14 @@ func (q *Queries) GetEditableTripByID(ctx context.Context, arg GetEditableTripBy
 		&i.UpdatedBy,
 		&i.TravelMode,
 		&i.Origin,
+		&i.OriginAirport,
+		&i.ReturnAirport,
 	)
 	return i, err
 }
 
 const getViewableTripByID = `-- name: GetViewableTripByID :one
-SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, t.origin, CASE WHEN t.user_id = $2 THEN 'owner' ELSE c.role END::text AS access
+SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, t.origin, t.origin_airport, t.return_airport, CASE WHEN t.user_id = $2 THEN 'owner' ELSE c.role END::text AS access
 FROM trips t
 LEFT JOIN trip_collaborators c ON c.owner_id = t.user_id AND c.chat_id = t.chat_id
      AND c.user_id = $2 AND c.revoked_at IS NULL
@@ -102,19 +104,21 @@ type GetViewableTripByIDParams struct {
 }
 
 type GetViewableTripByIDRow struct {
-	ID         uuid.UUID   `json:"id"`
-	UserID     uuid.UUID   `json:"user_id"`
-	CreatedAt  time.Time   `json:"created_at"`
-	UpdatedAt  time.Time   `json:"updated_at"`
-	Title      string      `json:"title"`
-	StartDate  pgtype.Date `json:"start_date"`
-	EndDate    pgtype.Date `json:"end_date"`
-	ChatID     *string     `json:"chat_id"`
-	Summary    *string     `json:"summary"`
-	UpdatedBy  pgtype.UUID `json:"updated_by"`
-	TravelMode *string     `json:"travel_mode"`
-	Origin     *string     `json:"origin"`
-	Access     string      `json:"access"`
+	ID            uuid.UUID   `json:"id"`
+	UserID        uuid.UUID   `json:"user_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	Title         string      `json:"title"`
+	StartDate     pgtype.Date `json:"start_date"`
+	EndDate       pgtype.Date `json:"end_date"`
+	ChatID        *string     `json:"chat_id"`
+	Summary       *string     `json:"summary"`
+	UpdatedBy     pgtype.UUID `json:"updated_by"`
+	TravelMode    *string     `json:"travel_mode"`
+	Origin        *string     `json:"origin"`
+	OriginAirport *string     `json:"origin_airport"`
+	ReturnAirport *string     `json:"return_airport"`
+	Access        string      `json:"access"`
 }
 
 // Read access: owner or ANY active collaborator (viewer follows included).
@@ -137,6 +141,8 @@ func (q *Queries) GetViewableTripByID(ctx context.Context, arg GetViewableTripBy
 		&i.UpdatedBy,
 		&i.TravelMode,
 		&i.Origin,
+		&i.OriginAirport,
+		&i.ReturnAirport,
 		&i.Access,
 	)
 	return i, err

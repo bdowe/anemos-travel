@@ -21,6 +21,16 @@ type DraftStay struct {
 	CheckOut *string `json:"check_out"`
 }
 
+// DraftTransport's auto_key is the ONE place the endpoint-labelled
+// `transport:<a>>><b>` grammar still doubles as an identity (booking_todos
+// moved off it in 00064). Deliberately frozen rather than canonicalized: no
+// current client posts to this endpoint, so surviving rows are legacy and are
+// never re-derived — which means they can never be pruned by a label change
+// either. _computeGroupedBookings matches them on the CITY side of the key
+// (endsWith '>><city>' / startsWith 'transport:<city>>>') with an origin/
+// destination equality fallback, so a stale endpoint label costs nothing.
+// If this endpoint is ever revived, canonicalize it through
+// classifyDerivedTodos instead of growing a second grammar.
 type DraftTransport struct {
 	AutoKey     string  `json:"auto_key"` // transport:<a>>><b>
 	Mode        string  `json:"mode"`

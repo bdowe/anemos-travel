@@ -110,7 +110,7 @@ func (q *Queries) CreateItineraryItem(ctx context.Context, arg CreateItineraryIt
 const createTrip = `-- name: CreateTrip :one
 INSERT INTO trips (user_id, title, chat_id, summary, travel_mode, origin, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $1)
-RETURNING id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin
+RETURNING id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin, origin_airport, return_airport
 `
 
 type CreateTripParams struct {
@@ -147,6 +147,8 @@ func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, e
 		&i.UpdatedBy,
 		&i.TravelMode,
 		&i.Origin,
+		&i.OriginAirport,
+		&i.ReturnAirport,
 	)
 	return i, err
 }
@@ -246,7 +248,7 @@ func (q *Queries) GetItineraryItemsByTrip(ctx context.Context, tripID uuid.UUID)
 }
 
 const getTripByIDAndOwner = `-- name: GetTripByIDAndOwner :one
-SELECT id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin FROM trips WHERE id = $1 AND user_id = $2
+SELECT id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin, origin_airport, return_airport FROM trips WHERE id = $1 AND user_id = $2
 `
 
 type GetTripByIDAndOwnerParams struct {
@@ -270,12 +272,14 @@ func (q *Queries) GetTripByIDAndOwner(ctx context.Context, arg GetTripByIDAndOwn
 		&i.UpdatedBy,
 		&i.TravelMode,
 		&i.Origin,
+		&i.OriginAirport,
+		&i.ReturnAirport,
 	)
 	return i, err
 }
 
 const getTripForUpdate = `-- name: GetTripForUpdate :one
-SELECT id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin FROM trips WHERE id = $1 FOR UPDATE
+SELECT id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin, origin_airport, return_airport FROM trips WHERE id = $1 FOR UPDATE
 `
 
 // Row-locks the trip for the duration of the transaction. Full-itinerary
@@ -298,6 +302,8 @@ func (q *Queries) GetTripForUpdate(ctx context.Context, id uuid.UUID) (Trip, err
 		&i.UpdatedBy,
 		&i.TravelMode,
 		&i.Origin,
+		&i.OriginAirport,
+		&i.ReturnAirport,
 	)
 	return i, err
 }
@@ -529,7 +535,7 @@ func (q *Queries) ListLatestTripsByOwner(ctx context.Context, userID uuid.UUID) 
 }
 
 const listTripVersionsByChat = `-- name: ListTripVersionsByChat :many
-SELECT id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin FROM trips WHERE user_id = $1 AND chat_id = $2 ORDER BY created_at DESC
+SELECT id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin, origin_airport, return_airport FROM trips WHERE user_id = $1 AND chat_id = $2 ORDER BY created_at DESC
 `
 
 type ListTripVersionsByChatParams struct {
@@ -559,6 +565,8 @@ func (q *Queries) ListTripVersionsByChat(ctx context.Context, arg ListTripVersio
 			&i.UpdatedBy,
 			&i.TravelMode,
 			&i.Origin,
+			&i.OriginAirport,
+			&i.ReturnAirport,
 		); err != nil {
 			return nil, err
 		}
@@ -571,7 +579,7 @@ func (q *Queries) ListTripVersionsByChat(ctx context.Context, arg ListTripVersio
 }
 
 const listTripsByOwner = `-- name: ListTripsByOwner :many
-SELECT id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin FROM trips WHERE user_id = $1 ORDER BY created_at DESC
+SELECT id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin, origin_airport, return_airport FROM trips WHERE user_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListTripsByOwner(ctx context.Context, userID uuid.UUID) ([]Trip, error) {
@@ -596,6 +604,8 @@ func (q *Queries) ListTripsByOwner(ctx context.Context, userID uuid.UUID) ([]Tri
 			&i.UpdatedBy,
 			&i.TravelMode,
 			&i.Origin,
+			&i.OriginAirport,
+			&i.ReturnAirport,
 		); err != nil {
 			return nil, err
 		}
@@ -780,7 +790,7 @@ SET title      = COALESCE($1, title),
     chat_id    = COALESCE($4, chat_id),
     travel_mode = COALESCE($5, travel_mode)
 WHERE id = $6 AND user_id = $7
-RETURNING id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin
+RETURNING id, user_id, created_at, updated_at, title, start_date, end_date, chat_id, summary, updated_by, travel_mode, origin, origin_airport, return_airport
 `
 
 type UpdateTripParams struct {
@@ -817,6 +827,8 @@ func (q *Queries) UpdateTrip(ctx context.Context, arg UpdateTripParams) (Trip, e
 		&i.UpdatedBy,
 		&i.TravelMode,
 		&i.Origin,
+		&i.OriginAirport,
+		&i.ReturnAirport,
 	)
 	return i, err
 }

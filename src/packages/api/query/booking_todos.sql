@@ -6,8 +6,13 @@ SELECT * FROM booking_todos WHERE trip_id = $1 ORDER BY position ASC, created_at
 -- reference for UpsertBookingTodosBatch's column list / ON CONFLICT set, and
 -- its generated Params struct is the row type the batch path builds
 -- (booking_todo_handler.go). Delete only together with a handler refactor.
-INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+--
+-- role/origin_label/destination_label (00064) are CONTENT, like title: they
+-- ride the DO UPDATE set so a re-sync refreshes them. What must never join it
+-- is booked/auto/mode — that exclusion is the whole preservation contract, and
+-- it is what lets a changed departure airport rewrite a home leg in place.
+INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto, role, origin_label, destination_label)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $12, $13)
 ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     kind = EXCLUDED.kind,
     title = EXCLUDED.title,
@@ -16,7 +21,10 @@ ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     search_url = EXCLUDED.search_url,
     depart_date = EXCLUDED.depart_date,
     return_date = EXCLUDED.return_date,
-    position = EXCLUDED.position
+    position = EXCLUDED.position,
+    role = EXCLUDED.role,
+    origin_label = EXCLUDED.origin_label,
+    destination_label = EXCLUDED.destination_label
 RETURNING *;
 
 -- name: UpsertBookingTodosBatch :exec
@@ -32,12 +40,16 @@ RETURNING *;
 -- CONFLICT cannot update the same row twice. (Parallel single-array unnest
 -- calls in one SELECT list expand in lockstep for equal-length arrays;
 -- sqlc's catalog lacks the multi-array unnest form.)
-INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto)
+INSERT INTO booking_todos (trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, position, auto, role, origin_label, destination_label)
 SELECT sqlc.arg(trip_id)::uuid, u.kind, u.todo_key, u.title,
        CASE WHEN u.subtitle_null THEN NULL ELSE u.subtitle END,
        CASE WHEN u.provider_null THEN NULL ELSE u.provider END,
        CASE WHEN u.search_url_null THEN NULL ELSE u.search_url END,
-       u.depart_date, u.return_date, u.position, true
+       u.depart_date, u.return_date, u.position, true,
+       u.role,
+       -- A label has no meaningful empty value, so NULLIF carries the "this
+       -- row has no origin" case (every stay row) without a third null mask.
+       NULLIF(u.origin_label, ''), NULLIF(u.destination_label, '')
 FROM (
     SELECT unnest(sqlc.arg(kinds)::text[])            AS kind,
            unnest(sqlc.arg(todo_keys)::text[])        AS todo_key,
@@ -50,7 +62,10 @@ FROM (
            unnest(sqlc.arg(search_url_nulls)::bool[]) AS search_url_null,
            unnest(sqlc.arg(depart_dates)::date[])     AS depart_date,
            unnest(sqlc.arg(return_dates)::date[])     AS return_date,
-           unnest(sqlc.arg(positions)::int[])         AS position
+           unnest(sqlc.arg(positions)::int[])         AS position,
+           unnest(sqlc.arg(roles)::text[])            AS role,
+           unnest(sqlc.arg(origin_labels)::text[])    AS origin_label,
+           unnest(sqlc.arg(destination_labels)::text[]) AS destination_label
 ) AS u
 ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     kind = EXCLUDED.kind,
@@ -60,9 +75,36 @@ ON CONFLICT (trip_id, todo_key) DO UPDATE SET
     search_url = EXCLUDED.search_url,
     depart_date = EXCLUDED.depart_date,
     return_date = EXCLUDED.return_date,
-    position = EXCLUDED.position;
+    position = EXCLUDED.position,
+    role = EXCLUDED.role,
+    origin_label = EXCLUDED.origin_label,
+    destination_label = EXCLUDED.destination_label;
+
+-- name: DemoteStaleAutoBookingTodos :execrows
+-- Half of the prune, and it MUST run before DeleteStaleAutoBookingTodos.
+--
+-- A stale auto row that carries traveler state is not garbage — it is a booked
+-- flight, a per-leg mode override, or the source of a budget expense. Deleting
+-- it destroys all three silently (the expense survives with a dangling
+-- source_id, still summed into `spent`, and unbooking can never find it again
+-- — 00061 has no FK by design). So state-carrying rows are DEMOTED to manual
+-- instead: auto = false takes them out of the derived set for good, they stop
+-- being re-derived, and they render in the existing residual "Other bookings"
+-- list where the traveler and the agent can edit or remove them. Demote rather
+-- than merely skip: DeleteBookingTodoNonAuto refuses auto rows, so a skipped
+-- survivor would be an undeletable zombie.
+UPDATE booking_todos b
+SET auto = false
+WHERE b.trip_id = $1 AND b.auto = true AND b.todo_key <> ALL(@keys::text[])
+  AND (b.booked OR b.mode IS NOT NULL OR EXISTS (
+        SELECT 1 FROM trip_expenses e
+        WHERE e.trip_id = b.trip_id
+          AND e.source_kind = 'booking_todo' AND e.source_id = b.id));
 
 -- name: DeleteStaleAutoBookingTodos :execrows
+-- The rest of the prune: stale rows nobody has touched. Runs AFTER
+-- DemoteStaleAutoBookingTodos, whose survivors are auto = false by then and so
+-- fall outside this statement.
 DELETE FROM booking_todos
 WHERE trip_id = $1 AND auto = true AND todo_key <> ALL(@keys::text[]);
 

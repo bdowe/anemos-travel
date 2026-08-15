@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/sync/errgroup"
@@ -713,7 +714,28 @@ func fuzzyMatch(a, b string) bool {
 	if a == "" || b == "" {
 		return false
 	}
+	// Short tokens match whole WORDS, not substrings. A derived home leg's
+	// endpoint can now be an IATA code (00064), and a plain substring test lets
+	// "alb" claim a confirmed segment to "Albufeira" — which would silently
+	// mark the flight out as already booked. Whole-word matching still lets
+	// genuinely short city names work ("rio" ↔ "Rio de Janeiro").
+	if len(a) <= 3 || len(b) <= 3 {
+		return a == b || hasWord(a, b) || hasWord(b, a)
+	}
 	return strings.Contains(a, b) || strings.Contains(b, a)
+}
+
+// hasWord reports whether w appears in s as a whole alphanumeric word, so
+// punctuation and separators ("New York, NY") don't hide a match.
+func hasWord(s, w string) bool {
+	for _, f := range strings.FieldsFunc(s, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		if f == w {
+			return true
+		}
+	}
+	return false
 }
 
 // checkBudget flags a trip whose spending exceeds its target.
