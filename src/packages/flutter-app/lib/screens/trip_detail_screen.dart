@@ -42,6 +42,7 @@ import '../navigation/app_nav.dart';
 import '../services/api_client.dart' show isTransientError;
 import '../services/trip_cache.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
 import '../utils/calendar_links.dart';
 import '../utils/clothing_recs.dart';
@@ -4883,8 +4884,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             Expanded(
               child: Text(
                 _displayTitle(trip),
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                // Same string as the app bar directly above, so same face —
+                // but keeping titleLarge's size, because this block is a
+                // compact anchor and headlineSmall would inflate it into the
+                // hero panel the comment above rules out.
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontFamily: AppFonts.display,
+                  fontWeight: FontWeight.w400,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

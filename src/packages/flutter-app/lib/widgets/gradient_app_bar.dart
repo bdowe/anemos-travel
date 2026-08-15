@@ -6,6 +6,7 @@ import '../l10n/l10n.dart';
 import '../navigation/app_nav.dart';
 import '../navigation/shell_scope.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
 import 'brand_logo.dart';
 
@@ -93,6 +94,26 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
       bottom: bottom,
       backgroundColor: Colors.transparent,
       foregroundColor: Colors.white,
+      // The page title is a heading, so it takes the display face — a trip
+      // name reads the same here as it does in the header below it.
+      //
+      // Set here rather than on AppBarTheme.titleTextStyle because AppBar
+      // folds foregroundColor into the *defaults* branch only
+      // (`widget.titleTextStyle ?? appBarTheme.titleTextStyle ??
+      // defaults.titleTextStyle?.copyWith(color: foregroundColor)`): a themed
+      // style without a color would quietly paint every title onSurface —
+      // dark text on the teal gradient. Hence the explicit white.
+      //
+      // Size holds at 22 despite the face change: Marcellus sets ~9% narrower
+      // than Inter Bold, so the longest trip titles gain room here, not lose
+      // it.
+      titleTextStyle: const TextStyle(
+        fontFamily: AppFonts.display,
+        fontWeight: FontWeight.w400,
+        fontSize: 22,
+        letterSpacing: 0.2,
+        color: Colors.white,
+      ),
       flexibleSpace: Container(
         decoration: BoxDecoration(gradient: AppColors.brandGradient),
       ),

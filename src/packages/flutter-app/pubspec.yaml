@@ -153,14 +153,24 @@ flutter:
   assets:
     - assets/images/
 
-  # Cinzel wordmark font (OFL-licensed) — the brand wordmark only; static w600
-  # instance of the variable font, subsetted (see docs/branding/README.md).
+  # Three faces, three jobs (see lib/theme/app_typography.dart). All bundled
+  # and subsetted — never google_fonts, which prod CSP blocks.
+  #
+  # Cinzel (OFL) — the brand wordmark only; static w600 instance of the
+  # variable font, subsetted (see docs/branding/README.md).
   fonts:
     - family: Cinzel
       fonts:
         - asset: assets/fonts/Cinzel-SemiBold.ttf
           weight: 600
-    # Inter (OFL) — app-wide UI font; hierarchy via weight, not size.
+    # Marcellus (OFL) — the heading/display face: Roman inscriptional shapes
+    # like Cinzel, but with a true lowercase, so headings read engraved rather
+    # than shouted. Ships in its ONE weight (400) — see AppFonts.
+    - family: Marcellus
+      fonts:
+        - asset: assets/fonts/Marcellus-Regular.ttf
+          weight: 400
+    # Inter (OFL) — the UI font: body, labels, buttons, numbers.
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter-Regular.ttf

@@ -25,6 +25,24 @@ light mark** on the teal gradient — no white plate; **gradient app bars still
 plate the dark mark** on a light `BrandBadge` (see
 `lib/widgets/brand_logo.dart`).
 
+## Type
+
+Three faces, declared once in `flutter-app/lib/theme/app_typography.dart`
+(`AppFonts`) and bundled as subsetted TTFs — never `google_fonts`, which prod
+CSP blocks:
+
+- **Cinzel** — the wordmark, and only the wordmark.
+- **Marcellus** — headings and app-bar page titles. Roman inscriptional shapes
+  like Cinzel, but with a true lowercase, so headings read engraved rather than
+  shouted. It ships in its ONE weight (400): any style naming it must say
+  `w400`, because asking for a weight the family lacks gets synthetic faux-bold
+  on web.
+- **Inter** — body, labels, buttons, and every number, including the big values
+  in stat tiles (which opt out of the heading face explicitly).
+
+Only Cinzel is baked into rasters (`anemos_logo.png`, `og-card.png`); a heading
+face change needs no re-render and no `?v=` bump.
+
 ## Rendering pipeline (committed — do not run rasterizers ad hoc)
 
 ```
