@@ -2595,7 +2595,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+        onTap: () => pushOnce(
+            context,
+            MaterialPageRoute(
               builder: (_) => LocalGuideDetailScreen(guide: guide),
             )),
         child: Padding(
@@ -5224,9 +5226,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// covers the bottom navigation bar; the closures read the live [_trip] so
   /// a silent refresh propagates on the next chip tap.
   void _openFullMap(Trip trip) {
+    final rootNav = Navigator.of(context, rootNavigator: true);
+    // Double-tap guard, and the one place isTopRoute cannot serve: it answers
+    // about THIS tab's navigator, where the detail stays current no matter
+    // what lands on the root one. The root navigator holds only the shell
+    // (main.dart's one-initial-route invariant), so anything poppable there
+    // is already covering it — including the map a first tap just opened.
+    if (rootNav.canPop()) return;
     final derivation = _derive(trip);
     final endpoints = derivation.homeLegEndpoints;
-    Navigator.of(context, rootNavigator: true).push(
+    rootNav.push(
       MaterialPageRoute(
         fullscreenDialog: true,
         // Escape closes the map when focus rests on the route's own scope
@@ -5998,15 +6007,17 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             todoKey: todo.todoKey,
             kind: todo.kind,
           );
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => FlightSearchScreen(
-              prefillOrigin: leg.origin,
-              prefillDestination: leg.destination,
-              prefillDepartDate: leg.date,
-              prefillOriginCoord: leg.originCoord,
-              prefillDestinationCoord: leg.destCoord,
-            ),
-          ));
+          pushOnce(
+              context,
+              MaterialPageRoute(
+                builder: (_) => FlightSearchScreen(
+                  prefillOrigin: leg.origin,
+                  prefillDestination: leg.destination,
+                  prefillDepartDate: leg.date,
+                  prefillOriginCoord: leg.originCoord,
+                  prefillDestinationCoord: leg.destCoord,
+                ),
+              ));
         };
       }
     }

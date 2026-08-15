@@ -576,7 +576,8 @@ class _LocalGuidesRow extends ConsumerWidget {
         SectionHeader(
           title: context.l10n.homeLocalGuidesTitle,
           action: TextButton(
-            onPressed: () => Navigator.of(context).push(
+            onPressed: () => pushOnce(
+              context,
               locatedRoute(
                   const GuidesScreen(), utilityLocation(BootUtility.guides)),
             ),
@@ -627,7 +628,8 @@ class _GuideCard extends StatelessWidget {
         child: InkWell(
           // Unnamed on purpose: the screen takes the full guide object, so a
           // URL couldn't reconstruct it — refresh lands on the page beneath.
-          onTap: () => Navigator.of(context).push(
+          onTap: () => pushOnce(
+            context,
             MaterialPageRoute(
               builder: (_) => LocalGuideDetailScreen(guide: guide),
             ),

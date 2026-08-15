@@ -131,7 +131,12 @@ class _SharedTripBodyState extends ConsumerState<_SharedTripBody> {
   Future<bool> _ensureSignedIn() async {
     if (ref.read(authProvider).isSignedIn) return true;
     warmSsoAvailability(context);
-    await Navigator.of(context).push(
+    // pushOnce: Join and Save-a-copy both route through here and neither sets
+    // its _saving flag until this returns, so a double tap would otherwise
+    // stack two auth screens. A blocked call returns not-signed-in, which
+    // makes the caller bail — correct, since the first tap owns the flow.
+    await pushOnce(
+      context,
       MaterialPageRoute(builder: (_) => const AuthScreen()),
     );
     return ref.read(authProvider).isSignedIn;

@@ -94,6 +94,13 @@ void resetToRoot(NavigatorState? nav) {
 /// Push [page] onto the currently-selected tab's navigator, so the content area
 /// animates while the persistent rail/bar stays put. Pass [location] when the
 /// page is restorable from a URL (see [locatedRoute]).
+///
+/// No double-tap guard here: [isTopRoute] answers about the CALLER's route,
+/// which this helper cannot see — and its main caller, the rail account menu,
+/// renders outside the tab navigators entirely, so the answer would be about
+/// the wrong navigator. Callers that live on the tab's top route (the
+/// notification card) guard themselves; menu items need no guard because
+/// selecting one dismisses the menu.
 void pushOnActiveTab(WidgetRef ref, Widget page, {String? location}) {
   final keys = ref.read(tabNavKeysProvider);
   final state = keys[ref.read(navIndexProvider)].currentState;
@@ -101,6 +108,45 @@ void pushOnActiveTab(WidgetRef ref, Widget page, {String? location}) {
       ? MaterialPageRoute(builder: (_) => page)
       : locatedRoute(page, location));
 }
+
+/// Whether [context]'s route is still the one on top of its navigator — i.e.
+/// nothing has been pushed since the tap now being handled.
+///
+/// **This is the double-tap guard.** Nothing in this app debounces taps, and
+/// [NavigatorState.push] flushes its history synchronously, so a second tap
+/// already sees the button's own route stop being current. Two pushes leave a
+/// duplicate screen stacked under an opaque one — invisible until "back"
+/// returns you to the page you were already looking at.
+///
+/// Flutter half-covers this itself and says so: `_cancelActivePointers`
+/// (navigator.dart) flips the navigator's AbsorbPointer on when a route
+/// changes between frames, under a comment reading "This mechanism is far from
+/// perfect" (flutter#4770). It only holds for the rest of that inter-frame
+/// gap — it does nothing for a handler that pushes **after an await**, which
+/// is the reachable case here (see `_signIn` in connect_app_screen.dart, where
+/// the second call would also wipe the pending token the first one saved), nor
+/// for a push issued from inside a frame.
+///
+/// Answers about [context]'s OWN navigator, so it cannot see a push onto a
+/// different one (a `rootNavigator: true` push from inside a tab — see
+/// `_openFullMap` in trip_detail_screen.dart, which guards on the root
+/// navigator directly). Fails open when there is no route at all: a missing
+/// guard must never be able to block navigation outright.
+bool isTopRoute(BuildContext context) =>
+    ModalRoute.of(context)?.isCurrent ?? true;
+
+/// Push [route] onto [context]'s navigator unless a push already landed
+/// ([isTopRoute]) — in which case nothing happens and the future completes
+/// with null.
+///
+/// Handlers that do more than push — cleanup after the await, a refetch, a
+/// saved token to clear — must test [isTopRoute] and return early themselves
+/// instead, so that trailing work is skipped too rather than running against
+/// the navigation the first tap started.
+Future<T?> pushOnce<T extends Object?>(BuildContext context, Route<T> route) =>
+    isTopRoute(context)
+        ? Navigator.of(context).push(route)
+        : Future<T?>.value();
 
 /// Tabs whose pushed stack survives switching away and back via a nav
 /// button: selecting the tab returns you to where you left it (e.g. the trip

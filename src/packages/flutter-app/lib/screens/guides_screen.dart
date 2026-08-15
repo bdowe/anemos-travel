@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../models/local_guide.dart';
+import '../navigation/app_nav.dart';
 import '../providers/local_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
@@ -130,7 +131,8 @@ class _GuideListTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () => Navigator.of(context).push(
+        onTap: () => pushOnce(
+          context,
           MaterialPageRoute(
             builder: (_) => LocalGuideDetailScreen(guide: guide),
           ),

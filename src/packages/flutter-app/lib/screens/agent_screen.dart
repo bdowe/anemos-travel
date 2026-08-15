@@ -53,13 +53,17 @@ class _AgentScreenState extends ConsumerState<AgentScreen> {
   /// singleton ApiClient (the token mutates in place).
   void _openSignIn() {
     warmSsoAvailability(context);
-    Navigator.of(context).push(
+    pushOnce(
+      context,
       MaterialPageRoute(builder: (_) => const AuthScreen()),
     );
   }
 
   void _openTrip(String tripId) {
-    Navigator.of(context).push(
+    // pushOnce: the banner and the chat's own "view trip" both land here, so
+    // this is reachable twice in a frame from two different widgets.
+    pushOnce(
+      context,
       locatedRoute(
           TripDetailScreen(tripId: tripId), tripDetailLocation(tripId)),
     );

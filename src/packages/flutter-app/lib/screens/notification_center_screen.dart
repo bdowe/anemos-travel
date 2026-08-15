@@ -195,13 +195,20 @@ class _NotificationTile extends ConsumerWidget {
   /// rows (the monitor fans out over `ListAdminUsers`), and the screen it
   /// opens is enforced by `adminMiddleware` server-side regardless. A second,
   /// client-side notion of who is an admin would be a duplicated derivation.
-  VoidCallback? _tapAction(WidgetRef ref) => switch (notification.type) {
-        'ops_alert' || 'ops_recovered' => () => pushOnActiveTab(
+  VoidCallback? _tapAction(BuildContext context, WidgetRef ref) =>
+      switch (notification.type) {
+        'ops_alert' || 'ops_recovered' => () {
+            // This card sits on the active tab's top route, so pushOnActiveTab
+            // targets the very navigator isTopRoute reports on — a rapid
+            // double tap would otherwise stack two admin screens.
+            if (!isTopRoute(context)) return;
+            pushOnActiveTab(
               ref,
               const AdminMetricsScreen(
                   initialTabIndex: AdminMetricsScreen.healthTabIndex),
               location: utilityLocation(BootUtility.adminMetrics),
-            ),
+            );
+          },
         _ => null,
       };
 
@@ -241,7 +248,7 @@ class _NotificationTile extends ConsumerWidget {
       // squares off the corners.
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: _tapAction(ref),
+        onTap: _tapAction(context, ref),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Row(
