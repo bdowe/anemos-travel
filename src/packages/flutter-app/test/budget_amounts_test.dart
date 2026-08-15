@@ -6,7 +6,7 @@ import 'package:travel_route_planner/widgets/budget_amounts.dart';
 
 import 'support/l10n_test_app.dart';
 
-// budget_amounts_test.dart — the per-row half of planned-vs-paid (00066). The
+// budget_amounts_test.dart — the per-row half of planned-vs-paid (00067). The
 // TOTALS are the server's (sumExpenses) and are asserted in Go; what is
 // asserted here is how one line reads.
 
@@ -38,7 +38,7 @@ void main() {
     });
 
     test('a payload that predates the split reads as paid', () {
-      // An old server (or a response cached before 00066 shipped) sends only
+      // An old server (or a response cached before 00067 shipped) sends only
       // `amount`, and that number always meant money spent.
       const legacy = Expense(
         id: 'legacy',

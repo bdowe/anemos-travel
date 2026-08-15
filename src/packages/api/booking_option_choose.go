@@ -257,7 +257,7 @@ func chooseBookingOptionHandler(w http.ResponseWriter, r *http.Request) {
 	if skip == "" {
 		// ActualAmount, not a plan: choosing a winner books it, and a booking is
 		// money spent. Any planned_amount already on that line is the
-		// traveler's and rides through untouched (00066).
+		// traveler's and rides through untouched (00067).
 		expense, _, err := upsertLinkedExpense(ctx, q, linkedExpense{
 			TripID:       trip.ID,
 			Category:     category,
@@ -381,7 +381,7 @@ func unchooseBookingOptionHandler(w http.ResponseWriter, r *http.Request) {
 	// booked state and goes with it; a manual takeover (auto=false) is the
 	// traveler's own line item and stays.
 	//
-	// 00066 splits that by column rather than by row: the PAYMENT is the
+	// 00067 splits that by column rather than by row: the PAYMENT is the
 	// mirror, the PLAN is the traveler's. So a linked line that carries a plan
 	// is un-paid instead of deleted — it stays auto, still the leg's mirror,
 	// and re-booking re-pays it through upsertLinkedExpense's refresh path. No

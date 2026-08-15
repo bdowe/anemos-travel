@@ -1,7 +1,7 @@
 package main
 
 // budget_planned_integration_test.go — the planned-vs-paid contract
-// (migration 00066, specs/budget-planned-vs-paid). The compatibility half —
+// (migration 00067, specs/budget-planned-vs-paid). The compatibility half —
 // a bare legacy `amount` still means money spent — lives in
 // budget_integration_test.go, deliberately unchanged.
 
@@ -274,7 +274,7 @@ func TestLegacyAmountPatchWritesTheColumnItWasReadFrom(t *testing.T) {
 }
 
 // TestExpenseAmountColumnIsDerived pins the enforced boundary: `amount` has
-// exactly one writer, the 00066 trigger. A hand-written value raises rather
+// exactly one writer, the 00067 trigger. A hand-written value raises rather
 // than being silently recomputed over — a discarded write is how a wrong
 // mental model survives unlimited "successful" calls (docs/zen.md).
 func TestExpenseAmountColumnIsDerived(t *testing.T) {

@@ -97,7 +97,7 @@ func TestExpenseCRUDAndSpent(t *testing.T) {
 
 	// spent (300+20) reflected on the budget; remaining = 1000-320.
 	// THE COMPATIBILITY ASSERTION: both rows were created with the legacy
-	// `amount` field only, and a bare amount still means money spent (00066).
+	// `amount` field only, and a bare amount still means money spent (00067).
 	rec = doJSON(t, "GET", "/api/v1/trips/"+tripID+"/budget", token, nil)
 	got := decode(t, rec)
 	if got["spent"].(float64) != 320 || got["remaining"].(float64) != 680 {
@@ -165,7 +165,7 @@ func TestBudgetValidation(t *testing.T) {
 		{"patch negative amount", "PATCH", "/budget/expenses/" + expenseID, map[string]any{"amount": -3}, http.StatusBadRequest},
 		{"patch bad category", "PATCH", "/budget/expenses/" + expenseID, map[string]any{"category": "misc"}, http.StatusBadRequest},
 		{"patch unknown id", "PATCH", "/budget/expenses/" + uuid.NewString(), map[string]any{"amount": 5}, http.StatusNotFound},
-		// 00066: an expense must carry at least one number. Before this, a
+		// 00067: an expense must carry at least one number. Before this, a
 		// body with no amount at all silently created a $0 line.
 		{"no amount at all", "POST", "/budget/expenses", map[string]any{"label": "x"}, http.StatusBadRequest},
 		{"negative planned", "POST", "/budget/expenses", map[string]any{"label": "x", "planned_amount": -1}, http.StatusBadRequest},
@@ -359,7 +359,7 @@ func TestExpenseSourceLinkUpsert(t *testing.T) {
 		t.Fatalf("position-only patch flipped auto: %v", moved)
 	}
 
-	// Nor does stating a PLAN on that auto row (00066). Ownership of a linked
+	// Nor does stating a PLAN on that auto row (00067). Ownership of a linked
 	// line is split: the system owns the payment (it mirrors the booking), the
 	// traveler owns the plan. Flipping auto here would break the mirror and
 	// strand a stale payment on the next unbook.

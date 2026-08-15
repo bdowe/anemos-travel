@@ -9,7 +9,7 @@ part 'budget.g.dart';
 ///
 /// [spent] and [remaining] keep the meaning they have always had — money
 /// actually spent, and target minus that. The planned-vs-paid split (migration
-/// 00066) added three more, all computed in one place on the server:
+/// 00067) added three more, all computed in one place on the server:
 ///
 ///  * [planned] — the sum of every stated plan. It does NOT shrink as lines are
 ///    paid; that is the point, since at the end of a trip everything is bought.

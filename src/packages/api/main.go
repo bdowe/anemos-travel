@@ -944,7 +944,7 @@ func buildRouter() *mux.Router {
 	api.Handle("/trips/{id}/budget/expenses", authMiddleware(http.HandlerFunc(addExpenseHandler))).Methods("POST")
 	api.Handle("/trips/{id}/budget/expenses/{expenseId}", authMiddleware(http.HandlerFunc(patchExpenseHandler))).Methods("PATCH")
 	api.Handle("/trips/{id}/budget/expenses/{expenseId}", authMiddleware(http.HandlerFunc(deleteExpenseHandler))).Methods("DELETE")
-	// Paying a line is its own verb pair (00066) — the only way to set or clear
+	// Paying a line is its own verb pair (00067) — the only way to set or clear
 	// what something actually cost; PATCH never touches actual_amount.
 	api.Handle("/trips/{id}/budget/expenses/{expenseId}/purchase", authMiddleware(http.HandlerFunc(purchaseExpenseHandler))).Methods("POST")
 	api.Handle("/trips/{id}/budget/expenses/{expenseId}/purchase", authMiddleware(http.HandlerFunc(unpurchaseExpenseHandler))).Methods("DELETE")

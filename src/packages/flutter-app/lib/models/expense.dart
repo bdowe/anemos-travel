@@ -7,7 +7,7 @@ part 'expense.g.dart';
 /// shopping | general), used only for client-side subtotals — there are no
 /// per-category targets. Amounts are assumed to be in the budget's currency.
 ///
-/// A line carries up to TWO numbers (migration 00066): [plannedAmount], what
+/// A line carries up to TWO numbers (migration 00067): [plannedAmount], what
 /// the traveler meant to spend, and [actualAmount], what it cost. At least one
 /// is always present, and [purchased] is the server's statement of which — a
 /// line is paid exactly when it has an amount paid. The plan SURVIVES the

@@ -298,7 +298,7 @@ func TestBuildPrintBudget(t *testing.T) {
 	target := 2000.0
 	b := &store.TripBudget{TargetAmount: &target, Currency: "EUR"}
 	// One line planned and paid at a different price, one paid with no plan,
-	// one still only planned — the three shapes 00066 allows, which is also the
+	// one still only planned — the three shapes 00067 allows, which is also the
 	// fixture the Budget tab and the list-row parity test use.
 	expenses := []store.TripExpense{
 		{Category: "lodging", Label: "Hotel Grande", PlannedAmount: ptrTo(550.0), ActualAmount: ptrTo(600.0)},
@@ -310,7 +310,7 @@ func TestBuildPrintBudget(t *testing.T) {
 		t.Fatal("expected a budget")
 	}
 	// Spent counts only what was paid; Remaining is target − spent, unchanged
-	// since before 00066. Planned is the plan and does not shrink.
+	// since before 00067. Planned is the plan and does not shrink.
 	if pb.Currency != "EUR" || pb.Target != "2000.00" || pb.Spent != "850.50" ||
 		pb.Remaining != "1149.50" || pb.Planned != "700.00" {
 		t.Fatalf("budget math wrong: %+v", pb)

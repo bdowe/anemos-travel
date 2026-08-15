@@ -23,7 +23,7 @@ SELECT * FROM trip_expenses WHERE id = $1 AND trip_id = $2;
 -- auto/source_kind/source_id: the booking-autopopulate link (00061). The
 -- handler sets auto=true iff a source link is present — never the client.
 -- `amount` is deliberately absent from the column list: set_expense_amount()
--- (00066) computes it as COALESCE(actual_amount, planned_amount). One
+-- (00067) computes it as COALESCE(actual_amount, planned_amount). One
 -- definition, in the database, on every write path.
 INSERT INTO trip_expenses (trip_id, category, label, planned_amount, actual_amount, position, auto, source_kind, source_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -41,13 +41,13 @@ WHERE trip_id = $1 AND source_kind = $2 AND source_id = $3;
 -- cleared to NULL (auto IS NOT NULL, so narg('auto') skips it when nil —
 -- the handler passes false on a user content edit: manual takeover).
 --
--- Three things to know since 00066:
+-- Three things to know since 00067:
 --
 --  1. planned_amount uses the PLAIN idiom on purpose. COALESCE can overwrite
 --     but never clear, and here that limitation IS the contract: a plan, once
 --     stated, is history. The feature's central invariant, expressed as the
 --     absence of a mechanism.
---  2. legacy_amount is the pre-00066 wire field, resolved to a column IN SQL so
+--  2. legacy_amount is the pre-00067 wire field, resolved to a column IN SQL so
 --     the read-modify-write is atomic and lives in exactly one statement: it
 --     writes back to whichever column the wire's `amount` was READ from
 --     (actual on a paid row, planned otherwise), so an old bundle's edit dialog
@@ -72,7 +72,7 @@ WHERE id = sqlc.arg('id') AND trip_id = sqlc.arg('trip_id')
 RETURNING *;
 
 -- name: PurchaseExpense :one
--- Records what a line ACTUALLY cost (00066). A NULL actual_amount arg means
+-- Records what a line ACTUALLY cost (00067). A NULL actual_amount arg means
 -- "bought it at the planned amount". The WHERE clause refuses the one
 -- combination that would leave a line with no money at all — no amount given
 -- AND no plan to fall back on — so the handler answers 404/409 instead of
@@ -103,7 +103,7 @@ WHERE id = $1 AND trip_id = $2 AND planned_amount IS NOT NULL
 RETURNING *;
 
 -- name: ClearExpenseActualAmount :execrows
--- The unbook half of the 00061 mirror contract, updated for 00066. An auto
+-- The unbook half of the 00061 mirror contract, updated for 00067. An auto
 -- expense with NO plan is a pure mirror of the purchase and is deleted with it
 -- (unchanged). One that CARRIES A PLAN is un-purchased instead: the plan is the
 -- traveler's and no booking-state change may destroy it. auto stays TRUE — the

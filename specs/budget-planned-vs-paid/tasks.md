@@ -1,11 +1,11 @@
 # Tasks: Planned vs paid expenses
 
 > Dependency-ordered. `[P]` = can run in parallel with its siblings.
-> Single lane (`budget-planned-vs-paid`), one PR. Migration **00066** reserved.
+> Single lane (`budget-planned-vs-paid`), one PR. Migration **00067** reserved.
 
 ## API (Go)
 
-- [ ] `migrations/00066_expense_planned_actual.sql` — two columns, backfill,
+- [ ] `migrations/00067_expense_planned_actual.sql` — two columns, backfill,
       three CHECKs, `set_expense_amount()` + trigger
 - [ ] `query/trip_budgets.sql` — `CreateExpense`, `UpdateExpense`, `GetExpense`,
       `PurchaseExpense`, `UnpurchaseExpense`, `ClearExpenseActualAmount`
@@ -54,7 +54,7 @@ Single lane; no fan-out.
 
 | Lane | Branch | Migration # | Registry tail? | ARB key prefix | trip_detail? | Depends on |
 |------|--------|-------------|----------------|----------------|--------------|------------|
-| — | `budget-planned-vs-paid` | 00066 | no | `budgetPlan` | **no** | PR #435 (UI half only) |
+| — | `budget-planned-vs-paid` | 00067 | no | `budgetPlan` | **no** | PR #435 (UI half only) |
 
 **Conflict manifest (existing files):** `query/trip_budgets.sql`,
 `query/trips.sql`, `store/**` (regen), `budget_handler.go`, `main.go`,

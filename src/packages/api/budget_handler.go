@@ -34,7 +34,7 @@ import (
 // the totals on BudgetResponse are a server-side convenience derived by
 // sumExpenses.
 //
-// PLANNED vs PAID (migration 00066, specs/budget-planned-vs-paid). An expense
+// PLANNED vs PAID (migration 00067, specs/budget-planned-vs-paid). An expense
 // carries up to two numbers — planned_amount (what the traveler meant to
 // spend) and actual_amount (what it cost) — and at least one is always
 // present. "Paid" is not stored: it is actual_amount != nil, behind the single
@@ -77,7 +77,7 @@ var allowedExpenseSourceKinds = map[string]bool{
 
 // BudgetResponse carries the single per-trip budget and its totals.
 //
-// Spent/Remaining keep their EXACT pre-00066 meaning — money actually spent,
+// Spent/Remaining keep their EXACT pre-00067 meaning — money actually spent,
 // and target minus that. Unchanged on purpose: checkBudget's over-budget
 // finding, the trips-list hero pill, the print packet and every shipped client
 // read those two words, and silently redefining a live field is the drift this
@@ -110,7 +110,7 @@ type ExpenseResponse struct {
 	Category string `json:"category"`
 	Label    string `json:"label"`
 	// Amount is the LEGACY headline figure, served straight from the
-	// trigger-maintained trip_expenses.amount column (00066) — never
+	// trigger-maintained trip_expenses.amount column (00067) — never
 	// re-derived here. Always present, never null: a cached Flutter bundle
 	// does `(json['amount'] as num).toDouble()` in models/expense.dart and a
 	// null takes the entire budget list down with it.
@@ -165,7 +165,7 @@ func normalizeExpenseCategory(raw string) (string, bool) {
 	return c, true
 }
 
-// expensePurchased is the ONE definition of "this line has been paid" (00066).
+// expensePurchased is the ONE definition of "this line has been paid" (00067).
 // The fact IS the nullness of the money column — mirroring optionChosen, and
 // for the same reason: a second representation of one fact is a drift vector.
 func expensePurchased(e store.TripExpense) bool { return e.ActualAmount != nil }
@@ -538,7 +538,7 @@ func patchExpenseHandler(w http.ResponseWriter, r *http.Request) {
 	// contract). Reordering isn't ownership, so a position-only PATCH
 	// leaves auto alone.
 	//
-	// Since 00066 the ownership of an auto row is SPLIT: the system owns
+	// Since 00067 the ownership of an auto row is SPLIT: the system owns
 	// category, label and actual_amount (they mirror the booking), the
 	// traveler owns planned_amount on every row — a plan is never
 	// system-generated and never system-clobbered. So writing in the field you
@@ -559,7 +559,7 @@ func patchExpenseHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toExpenseResponse(expense))
 }
 
-// --- the purchase verb pair (00066) ----------------------------------------
+// --- the purchase verb pair (00067) ----------------------------------------
 //
 // POST/DELETE /trips/{id}/budget/expenses/{expenseId}/purchase, mirroring
 // booking-options/{optionId}/choose. A verb pair rather than a nullable PATCH
@@ -722,7 +722,7 @@ var errExpenseLimitReached = errors.New("expense limit reached")
 
 // linkedExpense describes one "record this booking's price" write. The money is
 // two nullable fields rather than one number because an expense line carries
-// both a plan and a payment (00066) — but the booking paths only ever set
+// both a plan and a payment (00067) — but the booking paths only ever set
 // ActualAmount: a booked flip is a PAYMENT, and any plan the traveler put on
 // that line is theirs. Leaving PlannedAmount nil on the refresh path is the
 // whole preservation mechanism (UpdateExpense's COALESCE keeps what is there,

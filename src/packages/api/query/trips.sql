@@ -128,7 +128,7 @@ LEFT JOIN LATERAL (
 ) pk ON true
 LEFT JOIN trip_budgets tb ON tb.trip_id = latest.id
 LEFT JOIN LATERAL (
-  -- actual_amount, NOT amount: since 00066 `amount` is
+  -- actual_amount, NOT amount: since 00067 `amount` is
   -- COALESCE(actual, planned), so summing it here would quietly fold money the
   -- traveler has only PLANNED into a pill labelled "spent" — and the Budget tab
   -- would report a different number for the same trip, with no error anywhere.

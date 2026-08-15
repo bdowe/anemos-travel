@@ -258,7 +258,7 @@ func TestChooseRecordsMatchingCurrencyExpense(t *testing.T) {
 	if exp["source_kind"] != "booking_todo" {
 		t.Fatalf("expense must be sourced on the leg (it outlives the record): %v", exp)
 	}
-	// A booking is money SPENT (00066), and it carried no plan.
+	// A booking is money SPENT (00067), and it carried no plan.
 	if exp["purchased"] != true || exp["actual_amount"].(float64) != 354 ||
 		exp["planned_amount"] != nil {
 		t.Fatalf("choose must record a payment, not a plan: %v", exp)

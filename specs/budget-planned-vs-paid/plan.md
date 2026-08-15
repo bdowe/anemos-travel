@@ -30,7 +30,7 @@ add a 200 souvenir you never planned: the honest answer is "planned 1500, spent
 **`amount` is kept, not renamed**, and becomes derived — `COALESCE(actual,
 planned)`, maintained by a trigger. sqlc expands `SELECT *` / `RETURNING *` into
 explicit column lists at codegen (`store/trip_budgets.sql.go`), so *adding*
-columns is invisible to an older binary, but a rename 42703s every pre-00066
+columns is invisible to an older binary, but a rename 42703s every pre-00067
 image — and `query/trips.sql`'s `sum(e.amount)` lives inside
 `ListLatestTripsByOwner`, so that would break the **trips list, the home
 screen**, on exactly the rollback path `ci.yml`'s `workflow_dispatch` exists for.
@@ -60,7 +60,7 @@ accident.
 
 `src/packages/api/`:
 
-- **Migration:** `migrations/00066_expense_planned_actual.sql` — two columns,
+- **Migration:** `migrations/00067_expense_planned_actual.sql` — two columns,
   backfill, three CHECKs, `set_expense_amount()` + `trg_trip_expenses_amount`.
   (00058 stays burned; number re-derived with `ls migrations | tail -1`.)
 - **Queries** (`query/trip_budgets.sql`, then `make api-sqlc`): `CreateExpense`

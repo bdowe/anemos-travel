@@ -43,7 +43,7 @@ ALTER TABLE trip_expenses ADD CONSTRAINT trip_expenses_actual_nonneg
 -- It is NOT renamed. sqlc expands SELECT */RETURNING * into explicit column
 -- lists at codegen (see store/trip_budgets.sql.go), so ADDING columns is
 -- invisible to an older binary — which is why 00061 was harmless — but a
--- RENAME is a different class: every pre-00066 API image would fail 42703 on
+-- RENAME is a different class: every pre-00067 API image would fail 42703 on
 -- ListLatestTripsByOwner, i.e. the TRIPS LIST, the app's home screen, and on
 -- all six budget routes. That is the rollback path ci.yml's workflow_dispatch
 -- exists for, and it must stay read-safe.
@@ -62,7 +62,7 @@ ALTER TABLE trip_expenses ADD CONSTRAINT trip_expenses_actual_nonneg
 CREATE OR REPLACE FUNCTION set_expense_amount() RETURNS trigger AS $$
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        -- A writer that predates 00066 sets only `amount`, and that number has
+        -- A writer that predates 00067 sets only `amount`, and that number has
         -- always meant money spent. Adopt it as the purchase, so a rolled-back
         -- image can still CREATE expenses instead of tripping amount_present.
         IF NEW.planned_amount IS NULL AND NEW.actual_amount IS NULL THEN
@@ -77,7 +77,7 @@ BEGIN
         -- (docs/zen.md, the leg-dates arc). This is also the boundary that
         -- stops future Go code from re-introducing a second writer.
         RAISE EXCEPTION
-          'trip_expenses.amount is derived from planned_amount/actual_amount (migration 00066) and cannot be written directly';
+          'trip_expenses.amount is derived from planned_amount/actual_amount (migration 00067) and cannot be written directly';
     END IF;
     NEW.amount := COALESCE(NEW.actual_amount, NEW.planned_amount);
     RETURN NEW;

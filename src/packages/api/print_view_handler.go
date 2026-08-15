@@ -137,7 +137,7 @@ type printDaySection struct {
 
 type printBudgetRow struct {
 	Label string
-	// Planned/Amount are the two money columns (00066): what the traveler meant
+	// Planned/Amount are the two money columns (00067): what the traveler meant
 	// to spend, and what was actually paid. Either may be "" — a line planned
 	// but not yet paid, or a payment that was never planned — and the packet
 	// prints the blank rather than repeating the other number, because on paper
