@@ -12,6 +12,7 @@ import '../screens/admin_metrics_screen.dart';
 import '../screens/guides_screen.dart';
 import '../screens/import_trip_screen.dart';
 import '../screens/local_admin_screen.dart';
+import '../screens/log_trip_screen.dart';
 import '../screens/notification_center_screen.dart';
 import '../screens/preferences_screen.dart';
 import '../screens/trip_detail_screen.dart';
@@ -232,6 +233,7 @@ class UrlSyncController {
         BootUtility.adminMetrics => const AdminMetricsScreen(),
         BootUtility.adminLocal => const LocalAdminScreen(),
         BootUtility.importTrip => const ImportTripScreen(),
+        BootUtility.logTrip => const LogTripScreen(),
         BootUtility.guides => const GuidesScreen(),
         BootUtility.notifications => const NotificationCenterScreen(),
       };

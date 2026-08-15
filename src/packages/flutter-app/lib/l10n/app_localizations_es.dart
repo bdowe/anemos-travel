@@ -2064,6 +2064,47 @@ class AppLocalizationsEs extends AppLocalizations {
   String get importViewTrip => 'Ver viaje';
 
   @override
+  String get logTripTitle => 'Registrar un viaje pasado';
+
+  @override
+  String get logTripAction => 'Añadir viaje pasado';
+
+  @override
+  String get logTripExplainer =>
+      '¿Estuviste en un lugar que no planeamos aquí? Añádelo y contará en Tus viajes.';
+
+  @override
+  String get logTripDestinationsLabel => '¿Adónde fuiste?';
+
+  @override
+  String get logTripDestinationsHint => 'Busca una ciudad o un país';
+
+  @override
+  String logTripAddByName(String name) {
+    return 'Añadir \"$name\" por nombre';
+  }
+
+  @override
+  String get logTripNoCoordsNote =>
+      'Los destinos sin ubicación en el mapa siguen contando como ciudades, pero no tendrán un punto en tu mapa de viajes.';
+
+  @override
+  String get logTripDatesLabel => '¿Cuándo?';
+
+  @override
+  String get logTripPickDates => 'Elige las fechas del viaje';
+
+  @override
+  String get logTripDatesRequired =>
+      'Las fechas son obligatorias: son lo que hace que este viaje cuente como algo que ya viviste.';
+
+  @override
+  String get logTripNameLabel => 'Nombra este viaje (opcional)';
+
+  @override
+  String get logTripSave => 'Guardar viaje';
+
+  @override
   String get importPlanningPrompt =>
       'Ayúdame a planear un viaje. Pregúntame por el destino, las fechas, mis intereses, el ritmo y el presupuesto, y luego arma un itinerario día por día. Al terminar, cierra con una sección titulada TRIP SUMMARY que incluya: el o los destinos y las fechas exactas del viaje; cada día como \"Día N — Ciudad\" con entradas de Mañana / Tarde / Noche, cada una escrita como \"Nombre del lugar — Ciudad\" usando nombres reales que se puedan ubicar en el mapa; las excursiones marcadas como \"excursión desde [ciudad]\"; y cómo me traslado entre ciudades (avión, coche, tren, autobús o ferry).';
 

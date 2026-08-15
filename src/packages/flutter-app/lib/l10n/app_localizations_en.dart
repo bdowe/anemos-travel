@@ -2049,6 +2049,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importViewTrip => 'View trip';
 
   @override
+  String get logTripTitle => 'Log a past trip';
+
+  @override
+  String get logTripAction => 'Add past trip';
+
+  @override
+  String get logTripExplainer =>
+      'Been somewhere we didn\'t plan? Add it here and it counts in Your travels.';
+
+  @override
+  String get logTripDestinationsLabel => 'Where did you go?';
+
+  @override
+  String get logTripDestinationsHint => 'Search a city or country';
+
+  @override
+  String logTripAddByName(String name) {
+    return 'Add \"$name\" by name';
+  }
+
+  @override
+  String get logTripNoCoordsNote =>
+      'Destinations without a map location still count as cities, but they won\'t get a dot on your travel map.';
+
+  @override
+  String get logTripDatesLabel => 'When?';
+
+  @override
+  String get logTripPickDates => 'Pick your travel dates';
+
+  @override
+  String get logTripDatesRequired =>
+      'Dates are required — they\'re what counts this trip as travel you\'ve already taken.';
+
+  @override
+  String get logTripNameLabel => 'Name this trip (optional)';
+
+  @override
+  String get logTripSave => 'Save trip';
+
+  @override
   String get importPlanningPrompt =>
       'Help me plan a trip. Ask about my destination, dates, interests, pace, and budget, then build a day-by-day itinerary. When we\'re done, finish with a section titled TRIP SUMMARY that lists: the destination(s) and exact travel dates; each day as \"Day N — City\" with Morning / Afternoon / Evening entries, each written as \"Place Name — City\" using real, mappable place names; day trips marked as \"day trip from [city]\"; and how I\'m traveling between cities (flight, car, train, bus, or ferry).';
 

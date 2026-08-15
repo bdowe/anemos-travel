@@ -388,6 +388,44 @@ class TripsApiService {
       throw Exception('Failed to delete trip (${res.statusCode})');
     }
   }
+
+  /// Creates a trip the traveler described themselves — the manual, AI-free
+  /// creation path behind "Log a past trip" (specs/log-past-trip). Returns the
+  /// server's full view of the new trip (resolved title, stored items in
+  /// order), not an echo of the request.
+  ///
+  /// [destinations] entries carry `name` plus, when the traveler picked a real
+  /// place, `place_id` / `address` / `latitude` / `longitude`. Both dates are
+  /// required: the "Your travels" split buckets on a trip's first day, so an
+  /// undated trip could never count as travel already taken.
+  Future<Trip> createTrip({
+    required List<Map<String, dynamic>> destinations,
+    required String startDate,
+    required String endDate,
+    String? title,
+  }) async {
+    final res = await apiClient.httpClient.post(
+      Uri.parse('${apiClient.baseUrl}/trips'),
+      headers: apiClient.jsonHeaders(json: true),
+      body: jsonEncode({
+        'destinations': destinations,
+        'start_date': startDate,
+        'end_date': endDate,
+        if (title != null && title.isNotEmpty) 'title': title,
+      }),
+    );
+    if (res.statusCode == 201) {
+      return Trip.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    }
+    String message = '';
+    try {
+      final body = jsonDecode(res.body);
+      if (body is Map && body['message'] is String) {
+        message = body['message'] as String;
+      }
+    } catch (_) {}
+    throw CreateTripException(statusCode: res.statusCode, message: message);
+  }
 }
 
 /// Import failure with the server's localized message when one was provided.
@@ -401,4 +439,18 @@ class ImportTripException implements Exception {
 
   @override
   String toString() => 'ImportTripException($statusCode): $message';
+}
+
+/// Manual trip-creation failure (specs/log-past-trip). Only the 422 trip-cap
+/// message is written for end users; [message] is empty when the response
+/// carried none, and 400s here mean the client let through a body its own
+/// validation should have caught.
+class CreateTripException implements Exception {
+  final int statusCode;
+  final String message;
+
+  const CreateTripException({required this.statusCode, this.message = ''});
+
+  @override
+  String toString() => 'CreateTripException($statusCode): $message';
 }

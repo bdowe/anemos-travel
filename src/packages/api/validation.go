@@ -28,6 +28,13 @@ const (
 	// exists in the item handlers; this is the missing ceiling. 366 covers a
 	// year-plus trip with slack.
 	maxItineraryDay = 366
+
+	// maxLoggedDestinations bounds one manually logged trip (specs/log-past-trip).
+	// Every destination is typed or tapped by hand, so this sits far above any
+	// real entry — it exists only so a scripted client can't POST a 10k-element
+	// array. Deliberately tighter than importMaxLocations (80): that path
+	// transcribes a whole AI itinerary, this one records where someone went.
+	maxLoggedDestinations = 50
 )
 
 // validateCoords enforces valid WGS84 ranges when coordinates are provided.
