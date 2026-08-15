@@ -23,18 +23,19 @@ func TestPlanSessionToolsOrderStable(t *testing.T) {
 		session *planSession
 		want    []string
 	}{
-		// set_trip_dates, set_leg_dates and set_trip_origin are all
-		// authed-gated, so the anonymous tail intentionally stays
-		// find_parking — the anonymous tools array is byte-identical to before
-		// any of them existed, and anonymous sessions keep their cache line.
+		// set_trip_dates, set_leg_dates, set_trip_origin and
+		// set_leg_transport_mode are all authed-gated, so the anonymous tail
+		// intentionally stays find_parking — the anonymous tools array is
+		// byte-identical to before any of them existed, and anonymous sessions
+		// keep their cache line.
 		{"anonymous", &planSession{}, append(append([]string{}, base...), "create_itinerary", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking")},
 		{"authed", &planSession{authed: true},
 			append(append([]string{}, base...), "create_itinerary", "save_preferences", "get_trip",
-				"add_booking_todo", "update_booking_todo", "remove_booking_todo", "add_packing_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates", "set_trip_origin")},
+				"add_booking_todo", "update_booking_todo", "remove_booking_todo", "add_packing_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates", "set_trip_origin", "set_leg_transport_mode")},
 		{"authed trip-bound", &planSession{authed: true, boundTripID: &tid},
 			append(append([]string{}, base...), "update_itinerary_section", "save_preferences", "get_trip",
 				"add_booking_todo", "update_booking_todo", "remove_booking_todo", "add_packing_item", "review_trip",
-				"add_accommodation", "add_transport_segment", "move_itinerary_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates", "set_trip_origin")},
+				"add_accommodation", "add_transport_segment", "move_itinerary_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates", "set_trip_origin", "set_leg_transport_mode")},
 	}
 	for _, tc := range cases {
 		tools := planSessionTools(tc.session)

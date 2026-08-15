@@ -51,7 +51,14 @@ type BookingTodoResponse struct {
 	SearchURL  *string `json:"search_url,omitempty"`
 	DepartDate *string `json:"depart_date,omitempty"`
 	ReturnDate *string `json:"return_date,omitempty"`
-	Mode       *string `json:"mode,omitempty"`
+	// A choice somebody made (the row's mode menu, or the planner) — it always
+	// wins. DerivedMode is what the server worked out for the leg
+	// (leg_transport_mode.go): a bookable ferry pair, the trip's stated mode,
+	// or geography. Clients resolve `mode ?? derived_mode` and never invert it;
+	// emitting both is what lets the trip page show a train leg as a train
+	// while still knowing the traveler never picked it.
+	Mode        *string `json:"mode,omitempty"`
+	DerivedMode *string `json:"derived_mode,omitempty"`
 	// Which leg of the journey this row is: home_outbound | home_return |
 	// inter_city | stay (booking_todo_identity.go). The server computes it as
 	// identity; emitting it stops the client re-inferring "which row is the
@@ -70,18 +77,19 @@ func toBookingTodoResponse(t store.BookingTodo) BookingTodoResponse {
 		Kind: t.Kind,
 		// The endpoint-labelled key, not the storage key — see
 		// displayBookingTodoKey (booking_todo_identity.go).
-		TodoKey:    displayBookingTodoKey(t),
-		Title:      t.Title,
-		Subtitle:   t.Subtitle,
-		Provider:   t.Provider,
-		SearchURL:  t.SearchUrl,
-		DepartDate: dateToPtr(t.DepartDate),
-		ReturnDate: dateToPtr(t.ReturnDate),
-		Mode:       t.Mode,
-		Role:       strPtrOrNil(strPtrVal(t.Role)),
-		Booked:     t.Booked,
-		Auto:       t.Auto,
-		Position:   int(t.Position),
+		TodoKey:     displayBookingTodoKey(t),
+		Title:       t.Title,
+		Subtitle:    t.Subtitle,
+		Provider:    t.Provider,
+		SearchURL:   t.SearchUrl,
+		DepartDate:  dateToPtr(t.DepartDate),
+		ReturnDate:  dateToPtr(t.ReturnDate),
+		Mode:        t.Mode,
+		DerivedMode: t.DerivedMode,
+		Role:        strPtrOrNil(strPtrVal(t.Role)),
+		Booked:      t.Booked,
+		Auto:        t.Auto,
+		Position:    int(t.Position),
 	}
 }
 
@@ -228,6 +236,31 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Everything the leg-mode resolution needs, read once and only when a
+	// transport row is actually being synced. The coordinate index comes from
+	// computeTripLegs — the same derivation the page renders and the `legs`
+	// payload serializes — so "which point is Florence" has one answer.
+	var legCoords map[string]legEndpoint
+	overrides := map[string]string{}
+	if hasTransportRow(derived) {
+		items, itemsErr := q.GetItineraryItemsByTrip(r.Context(), tripID)
+		stays, staysErr := q.ListAccommodationsByTrip(r.Context(), tripID)
+		if itemsErr == nil && staysErr == nil {
+			legCoords = legCoordIndex(computeTripLegs(trip, items, stays))
+		}
+		// The traveler's per-leg override is the top rung of the ladder and
+		// lives on the row, so the link this sync writes has to be read back
+		// rather than taken from the posted provider. That is also what stops
+		// a stale client's sync from rewriting an overridden leg's link to the
+		// trip default — the trade-off recorded when 00055 shipped.
+		if existing, err := q.ListBookingTodosByTrip(r.Context(), tripID); err == nil {
+			for _, t := range existing {
+				if m := strings.TrimSpace(strPtrVal(t.Mode)); allowedLegModes[m] {
+					overrides[t.TodoKey] = m
+				}
+			}
+		}
+	}
 	keys := make([]string, 0, len(derived))
 	// One batch upsert instead of a round trip per row. The batch statement
 	// cannot touch the same (trip_id, todo_key) twice, so duplicate keys are
@@ -266,14 +299,25 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 			destination = arrivalLabel
 			title = strPtrVal(origin) + " → " + arrivalLabel
 		}
-		url, provider := bookingSearchURL(kind, destination, origin, d.DepartDate, d.ReturnDate, d.Guests, d.Passengers, d.Provider)
-		if kind == "transport" && strPtrVal(d.Provider) == "ferry" {
-			// pickProviderLink has no ferry candidate, so the fallback would
-			// store google_flights for a derived ferry leg; keep the ferry
-			// provider and its Ferryhopper deep link instead.
-			if u, p := transportModeLink("ferry", destination, origin, d.DepartDate, d.Passengers); u != "" {
-				url, provider = u, p
+		// A transport leg's mode is resolved HERE rather than taken from the
+		// posted `provider`, for the same reason the home legs' endpoints are:
+		// whoever syncs — a stale tab, an old cached bundle, a collaborator's
+		// device — must land on the SAME answer, and a client's own derivation
+		// is only its pre-sync bootstrap. It also gives `provider` a single
+		// author, which is what lets derived_mode say car/train/bus apart
+		// where the rome2rio provider string never could.
+		var url, provider, derivedMode string
+		if kind == "transport" {
+			derivedMode = resolveLegMode(trip,
+				legEndpointFrom(strPtrVal(origin), legCoords),
+				legEndpointFrom(destination, legCoords), nil)
+			effective := derivedMode
+			if m, ok := overrides[ident.key]; ok {
+				effective = m
 			}
+			url, provider = transportModeLink(effective, destination, origin, d.DepartDate, d.Passengers)
+		} else {
+			url, provider = bookingSearchURL(kind, destination, origin, d.DepartDate, d.ReturnDate, d.Guests, d.Passengers, d.Provider)
 		}
 		providerPtr := strPtrOrNil(provider)
 		if providerPtr == nil {
@@ -293,6 +337,7 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 			Role:             strPtrOrNil(ident.role),
 			OriginLabel:      strPtrOrNil(strPtrVal(origin)),
 			DestinationLabel: strPtrOrNil(destination),
+			DerivedMode:      strPtrOrNil(derivedMode),
 		}
 		if j, seen := rowIdx[ident.key]; seen {
 			rows[j] = row
@@ -331,6 +376,18 @@ func syncBookingTodosHandler(w http.ResponseWriter, r *http.Request) {
 	writeBookingTodos(w, r, tripID)
 }
 
+// hasTransportRow reports whether the posted set contains a transport leg —
+// the only case where the itinerary's coordinates and the stored per-leg
+// overrides are needed, so a stays-only sync costs no extra reads.
+func hasTransportRow(derived []DerivedBookingTodo) bool {
+	for _, d := range derived {
+		if strings.TrimSpace(d.Kind) == "transport" {
+			return true
+		}
+	}
+	return false
+}
+
 // hasHomeLeg reports whether any posted row was recognized as a journey
 // endpoint — the only case where the trip's endpoint labels are needed.
 func hasHomeLeg(idents []derivedIdentity) bool {
@@ -362,11 +419,13 @@ func upsertBookingTodosBatchParams(tripID uuid.UUID, rows []store.UpsertBookingT
 		DepartDates:    make([]pgtype.Date, len(rows)),
 		ReturnDates:    make([]pgtype.Date, len(rows)),
 		Positions:      make([]int32, len(rows)),
-		// role/origin_label/destination_label need no null mask: the statement
-		// NULLIFs the empty string, and a label has no meaningful empty value.
+		// role/origin_label/destination_label/derived_mode need no null mask:
+		// the statement NULLIFs the empty string, and none of them has a
+		// meaningful empty value.
 		Roles:             make([]string, len(rows)),
 		OriginLabels:      make([]string, len(rows)),
 		DestinationLabels: make([]string, len(rows)),
+		DerivedModes:      make([]string, len(rows)),
 	}
 	for i, r := range rows {
 		p.Kinds[i] = r.Kind
@@ -393,6 +452,7 @@ func upsertBookingTodosBatchParams(tripID uuid.UUID, rows []store.UpsertBookingT
 		p.Roles[i] = strPtrVal(r.Role)
 		p.OriginLabels[i] = strPtrVal(r.OriginLabel)
 		p.DestinationLabels[i] = strPtrVal(r.DestinationLabel)
+		p.DerivedModes[i] = strPtrVal(r.DerivedMode)
 	}
 	return p
 }

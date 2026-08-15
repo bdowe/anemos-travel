@@ -629,6 +629,11 @@ func checkTransit(locale string, d exportData) []Finding {
 		return nil
 	}
 	tripID := d.Trip.ID.String()
+	// Same coordinate index the booking-todo sync resolves modes from, so the
+	// gap Trip Health reports and the row the page shows agree about how the
+	// traveler crosses it — "Add train", not "Add flight", between Rome and
+	// Florence.
+	legCoords := legCoordIndex(computeTripLegs(d.Trip, d.Items, d.Accommodations))
 	var out []Finding
 	for i := 1; i < len(groups); i++ {
 		from, to := groups[i-1].Hub, groups[i].Hub
@@ -642,17 +647,14 @@ func checkTransit(locale string, d exportData) []Finding {
 			continue
 		}
 		origin, dest := from, to
-		greek := isGreekLocation(origin) || isGreekLocation(dest)
-		mode := "flight"
-		if greek {
-			// Island legs stay ferry regardless of the trip's travel mode —
-			// you can't drive between islands.
-			mode = "ferry"
-		} else if tm := d.Trip.TravelMode; tm != nil && allowedSegmentModes[*tm] {
-			// 'mixed' fails the allowedSegmentModes check and keeps the
-			// flight default — intended.
-			mode = *tm
-		}
+		// One resolution for the whole app (leg_transport_mode.go): a bookable
+		// ferry pair, then the trip's stated mode, then geography, then flight.
+		// It replaced this function's own ladder, whose Greek test was an OR —
+		// Athens → Rome came back a ferry — and whose floor was always flight.
+		// There is no per-leg override to pass: a review finding is about a leg
+		// with no booking at all.
+		mode := resolveLegMode(d.Trip,
+			legEndpointFrom(origin, legCoords), legEndpointFrom(dest, legCoords), nil)
 		fix := &FindingFix{
 			Action: "add_transport", Label: transportFixLabel(locale, mode),
 			Origin: &origin, Destination: &dest, Mode: &mode,

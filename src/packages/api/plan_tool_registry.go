@@ -165,6 +165,13 @@ var planToolRegistry = []planTool{
 	// rides on the session into create_itinerary, like set_travel_mode's.
 	// Tail-appended per the prompt-cache rule above.
 	{def: setTripOriginTool, enabled: authedOnly, run: runSetTripOriginTool},
+	// Correct ONE leg's transport mode when the app's own derivation
+	// (leg_transport_mode.go) is wrong for it — a sea crossing, an overnight
+	// train, a drive. Signed-in only, for the same stability reason as the
+	// tools above and to keep the anonymous tools array byte-identical.
+	// Target-trip resolution shares resolveDateShiftTrip. Tail-appended per the
+	// prompt-cache rule above.
+	{def: setLegTransportModeTool, enabled: authedOnly, run: runSetLegTransportModeTool},
 }
 
 // planToolByName dispatches tool_use blocks; derived from the registry so the
@@ -713,10 +720,12 @@ func runCreateItineraryTool(s *planSession, input json.RawMessage) (string, bool
 	// that was never wrong.
 	result := "Itinerary created successfully."
 	if s.tripID != nil {
-		if legs := tripLegsRender(s, *s.tripID); legs != "" {
+		legs, transport := tripLegsRender(s, *s.tripID)
+		if legs != "" {
 			result += " The page now renders these city legs:\n" + legs +
 				"Each leg renders from the previous city's departure through its own last day, and the final city through the trip's end date — so leaving the day home empty does not shorten it. If a range is wrong, use set_leg_dates (one city) or set_trip_dates (the whole trip) with calendar dates, never recomputed day numbers."
 		}
+		result += transportEchoText(transport)
 	}
 	return result, false
 }
@@ -760,33 +769,54 @@ func runUpdateItinerarySectionTool(s *planSession, input json.RawMessage) (strin
 	// same tool result. Best-effort: any read error degrades to the plain
 	// confirmation rather than failing a write that already committed.
 	result := "Section updated — the traveler's trip page has refreshed."
-	if legs := tripLegsRender(s, *s.boundTripID); legs != "" {
+	legs, transport := tripLegsRender(s, *s.boundTripID)
+	if legs != "" {
 		result += " The page now renders these city legs:\n" + legs +
 			"A city's LAST item day is its departure day; each leg renders from the previous city's departure through its own last day, and the FINAL city through the trip's end date — so leaving the day home empty does not shorten it. If these ranges don't match what the traveler asked for, do NOT resend the list with recomputed day numbers — use set_leg_dates (one city's dates) or set_trip_dates (the whole trip) with calendar dates."
 	}
+	result += transportEchoText(transport)
 	return result, false
 }
 
+// transportEchoText wraps legTransportSummary for an itinerary writer's
+// result. Both writers say the same thing about transport, and both say it
+// only when there is a crossing to speak about.
+func transportEchoText(transport string) string {
+	if transport == "" {
+		return ""
+	}
+	return " Between those legs the app has:\n" + transport +
+		"These are the checklist rows the traveler sees, and each one's booking link follows its mode. If one is wrong for how they should actually travel — a sea crossing, an overnight train, a drive — call set_leg_transport_mode for that leg instead of describing a different mode in your reply."
+}
+
 // tripLegsRender re-reads a trip an itinerary write just committed and returns
-// legsRenderSummary for it — "" when the trip has no start date, no dated legs,
-// or any read fails (the write already committed; visibility is best-effort).
-// Shared by create_itinerary and update_itinerary_section so both writers echo
-// the same post-state.
-func tripLegsRender(s *planSession, tripID uuid.UUID) string {
+// legsRenderSummary for it, plus legTransportSummary — how the traveler gets
+// between those legs. Both are "" when the trip has no start date, no dated
+// legs, or any read fails (the write already committed; visibility is
+// best-effort). Shared by create_itinerary and update_itinerary_section so both
+// writers echo the same post-state.
+func tripLegsRender(s *planSession, tripID uuid.UUID) (legs string, transport string) {
 	q := store.New(dbPool)
 	trip, err := q.GetEditableTripByID(s.ctx, store.GetEditableTripByIDParams{ID: tripID, UserID: s.uid})
 	if err != nil || !trip.StartDate.Valid {
-		return ""
+		return "", ""
 	}
 	items, err := q.GetItineraryItemsByTrip(s.ctx, tripID)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	stays, err := q.ListAccommodationsByTrip(s.ctx, tripID)
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	return legsRenderSummary(trip, items, stays)
+	// A chosen mode outranks the derivation, so the echo has to read the
+	// checklist back rather than re-derive from scratch — otherwise the result
+	// would tell the model "flight" on a leg the traveler set to train.
+	overrides := map[string]string{}
+	if todos, err := q.ListBookingTodosByTrip(s.ctx, tripID); err == nil {
+		overrides = legModeOverrides(todos)
+	}
+	return legsRenderSummary(trip, items, stays), legTransportSummary(trip, items, stays, overrides)
 }
 
 func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool) {

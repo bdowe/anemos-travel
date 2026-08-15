@@ -94,6 +94,7 @@ type BookingTodo struct {
 	Role             *string     `json:"role"`
 	OriginLabel      *string     `json:"origin_label"`
 	DestinationLabel *string     `json:"destination_label"`
+	DerivedMode      *string     `json:"derived_mode"`
 }
 
 type EmailToken struct {

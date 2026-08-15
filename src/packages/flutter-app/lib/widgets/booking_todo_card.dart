@@ -7,9 +7,11 @@ import 'booking_sheets.dart' show transportModeIcon, transportModeLabel;
 IconData _kindIcon(BookingTodo todo) {
   switch (todo.kind) {
     case 'transport':
-      // A per-leg mode override names the icon exactly; otherwise the
-      // provider the leg was derived with implies it.
-      if (todo.mode case final mode?) return transportModeIcon(mode);
+      // The resolved mode names the icon exactly — the override somebody
+      // chose, else what the server derived for the leg. The provider guess
+      // below survives only for rows last synced before 00068, where the mode
+      // was never stored and `rome2rio` cannot say car from train from bus.
+      if (todo.effectiveMode case final mode?) return transportModeIcon(mode);
       switch (todo.provider) {
         case 'ferry':
           return Icons.directions_boat;
@@ -141,8 +143,7 @@ class BookingTodoCard extends StatelessWidget {
                   value: todo.booked,
                   onChanged: (v) => onBookedChanged(v ?? false),
                 ),
-                Text(l10n.bookingCardBooked,
-                    style: theme.textTheme.bodyMedium),
+                Text(l10n.bookingCardBooked, style: theme.textTheme.bodyMedium),
                 const Spacer(),
                 FilledButton.tonalIcon(
                   onPressed: onOpen,
@@ -342,10 +343,11 @@ class BookingTodoRow extends StatelessWidget {
 /// a menu of the five leg modes, with the current mode checkmarked.
 ///
 /// "Current" is the same ladder the server walks in `transportSlotMode`
-/// (trip_next_step.go): an explicit per-leg override, else what the provider
-/// implies, else the trip's own ground mode. That last rung matters because
-/// 'rome2rio' is the link for driving, training and busing alike — without the
-/// trip to ask, a car trip's legs opened this menu with nothing checked.
+/// (trip_next_step.go): the override somebody chose, else the mode the server
+/// derived for the leg, else what the provider implies, else the trip's own
+/// ground mode. The last two rungs are for rows last synced before 00068 —
+/// 'rome2rio' is the link for driving, training and busing alike, so without
+/// the trip to ask, a car trip's legs opened this menu with nothing checked.
 class _ModeMenu extends StatelessWidget {
   static const _legModes = ['flight', 'car', 'train', 'bus', 'ferry'];
 
@@ -360,7 +362,7 @@ class _ModeMenu extends StatelessWidget {
   });
 
   String? get _currentMode =>
-      todo.mode ??
+      todo.effectiveMode ??
       switch (todo.provider) {
         'ferry' => 'ferry',
         'google_flights' => 'flight',
@@ -388,8 +390,7 @@ class _ModeMenu extends StatelessWidget {
                 Text(transportModeLabel(context.l10n, m)),
                 if (m == current) ...[
                   const SizedBox(width: 8),
-                  Icon(Icons.check,
-                      size: 18, color: theme.colorScheme.primary),
+                  Icon(Icons.check, size: 18, color: theme.colorScheme.primary),
                 ],
               ],
             ),

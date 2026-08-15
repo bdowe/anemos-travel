@@ -19,9 +19,26 @@ class BookingTodo {
   final String? returnDate;
 
   /// Per-leg transport-mode override (flight|car|train|bus|ferry) for
-  /// transport rows. Null = derived default; the server preserves it across
-  /// syncs like [booked].
+  /// transport rows: a choice SOMEBODY MADE, in the row's mode menu or in
+  /// chat. Null = nobody chose; the server preserves it across syncs like
+  /// [booked].
   final String? mode;
+
+  /// The mode the SERVER derived for this leg (leg_transport_mode.go, 00068):
+  /// a bookable ferry pair, the trip's stated travel mode, or geography — a
+  /// short hop inside a rail region is a train, which is why an Italy trip's
+  /// Rome → Florence row no longer offers a flight search.
+  ///
+  /// Resolve [effectiveMode], never one of these alone: [mode] outranks it,
+  /// and it is refreshed on every sync (unlike [mode]), so an improved rule
+  /// reaches trips that already exist.
+  @JsonKey(name: 'derived_mode')
+  final String? derivedMode;
+
+  /// How this leg travels, all sources considered. Null on a row the server
+  /// has not resolved yet — a stay, or a transport row last synced by a build
+  /// older than 00068.
+  String? get effectiveMode => mode ?? derivedMode;
 
   /// Which leg of the journey this row is, as the SERVER stores it:
   /// `home_outbound` | `home_return` | `inter_city` | `stay`
@@ -49,6 +66,7 @@ class BookingTodo {
     this.departDate,
     this.returnDate,
     this.mode,
+    this.derivedMode,
     this.role,
     this.booked = false,
     this.auto = true,
@@ -66,6 +84,7 @@ class BookingTodo {
         departDate: departDate,
         returnDate: returnDate,
         mode: mode,
+        derivedMode: derivedMode,
         role: role,
         booked: booked ?? this.booked,
         auto: auto,
