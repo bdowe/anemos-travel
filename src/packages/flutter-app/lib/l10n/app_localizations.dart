@@ -434,6 +434,18 @@ abstract class AppLocalizations {
   /// **'challenging — long and steep'**
   String get prefsOutdoorChallenging;
 
+  /// No description provided for @prefsBaggage.
+  ///
+  /// In en, this message translates to:
+  /// **'What you fly with'**
+  String get prefsBaggage;
+
+  /// No description provided for @prefsBaggageHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Flight prices are quoted with this bag included, so the cheapest option really is the cheapest.'**
+  String get prefsBaggageHelp;
+
   /// Trip pace option shown on a chip; the stored API value stays 'relaxed'.
   ///
   /// In en, this message translates to:
@@ -1327,6 +1339,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Where do you fly from?'**
   String get quizHomeAirportTitle;
+
+  /// No description provided for @quizBaggageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What do you fly with?'**
+  String get quizBaggageTitle;
+
+  /// No description provided for @quizBaggageSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'So the fares you\'re shown already include your bag fees.'**
+  String get quizBaggageSubtitle;
 
   /// No description provided for @quizTripsTitle.
   ///
@@ -5558,6 +5582,12 @@ abstract class AppLocalizations {
   /// **'Baggage'**
   String get flightSearchBaggageLabel;
 
+  /// Shown above results when the provider could price the cabin bag but not the checked bag (baggage_note code checked_not_priced).
+  ///
+  /// In en, this message translates to:
+  /// **'These prices include a carry-on fee but not a checked-bag fee — check that one with the airline.'**
+  String get flightSearchCheckedNotPriced;
+
   /// No description provided for @flightSearchOptimizeLabel.
   ///
   /// In en, this message translates to:
@@ -5629,6 +5659,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'incl. bag +{fee}'**
   String flightCardBagPaid(String fee);
+
+  /// Badge under a fare whose provider quoted a bag-inclusive price without itemizing the fee.
+  ///
+  /// In en, this message translates to:
+  /// **'bag fee included'**
+  String get flightCardBagInPrice;
 
   /// No description provided for @flightCardBagUnknown.
   ///
@@ -5725,6 +5761,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'+{fee} bag fee included in price'**
   String flightSheetBagFeeNote(String fee);
+
+  /// No description provided for @flightSheetBagInPriceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Bag fee already included in this price'**
+  String get flightSheetBagInPriceNote;
 
   /// No description provided for @flightSheetBagUnknownNote.
   ///

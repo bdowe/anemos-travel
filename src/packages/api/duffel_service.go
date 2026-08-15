@@ -129,31 +129,58 @@ var allowedCabinClasses = map[string]bool{
 
 // Baggage tiers describe the biggest bag the traveler needs. Duffel only
 // models carry_on and checked allowances; a personal item is always allowed,
-// so that tier is the no-op default matching pre-baggage behavior.
+// so that tier alone skips bag pricing entirely.
 const (
 	baggagePersonalItem = "personal_item"
 	baggageCarryOn      = "carry_on"
 	baggageChecked      = "checked"
 )
 
+// defaultBaggageTier is what a search is priced for when neither the caller nor
+// the traveler's profile says. It is carry_on, not personal_item: quoting a
+// bare fare as "cheapest" is how a traveler ends up paying a cabin-bag fee at
+// the airport that the ranking never saw (specs/traveler-baggage). Someone who
+// really flies with one small bag says so and gets bare fares back.
+const defaultBaggageTier = baggageCarryOn
+
 var allowedBaggageTiers = map[string]bool{
 	baggagePersonalItem: true, baggageCarryOn: true, baggageChecked: true,
 }
 
-// BaggageStatus values (set only on carry_on/checked searches).
+// BaggageStatus values (set only on carry_on/checked searches). All but
+// unknown mean "this total is what the traveler would pay"; they differ in how
+// the bag got covered, which is what the card and the model's prose report.
 const (
 	baggageStatusIncluded = "included" // fare already includes the bag
 	baggageStatusPaid     = "paid"     // bag priced via Duffel; EffectivePrice = Price + BagFee
-	baggageStatusUnknown  = "unknown"  // bag needed but not priceable via Duffel
+	baggageStatusInPrice  = "in_price" // provider quoted a bag-inclusive price; fee not itemized
+	baggageStatusUnknown  = "unknown"  // bag needed but not priceable
 )
 
-// normalizeBaggage returns a valid tier; empty defaults to personal_item.
+// normalizeBaggage returns a valid tier; empty defaults to defaultBaggageTier.
 func normalizeBaggage(s string) string {
 	key := strings.ToLower(strings.TrimSpace(s))
 	if key == "" {
-		return baggagePersonalItem
+		return defaultBaggageTier
 	}
 	return key
+}
+
+// resolveBaggageTier is the ONE place the fallback chain lives: what the caller
+// asked for, else what the traveler saved on their profile, else the default.
+// Anything unrecognized (a model inventing "suitcase", a stale client) falls
+// through rather than being passed on — before this, an unrecognized tier
+// reached the classifier and silently behaved as carry_on.
+func resolveBaggageTier(requested string, saved *string) string {
+	if tier := strings.ToLower(strings.TrimSpace(requested)); allowedBaggageTiers[tier] {
+		return tier
+	}
+	if saved != nil {
+		if tier := strings.ToLower(strings.TrimSpace(*saved)); allowedBaggageTiers[tier] {
+			return tier
+		}
+	}
+	return defaultBaggageTier
 }
 
 // maxOffers caps how many offers we keep from a Duffel search before ranking,

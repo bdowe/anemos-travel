@@ -46,9 +46,10 @@ String? savingsLabelFor(
 }
 
 /// A single ranked flight offer rendered as a card — airline(s), route, price,
-/// score, duration/stops, and a Book deep-link. Shared by the standalone
-/// FlightSearchScreen and the AI agent chat. Set [isBest] to highlight the top
-/// pick with a teal border and "BEST MATCH" badge.
+/// score, duration/stops, and a Book deep-link. Rendered by the standalone
+/// FlightSearchScreen (the agent chat shows a count chip, not cards). Set
+/// [isBest] to highlight the top pick with a teal border and "BEST MATCH"
+/// badge.
 class FlightOfferCard extends StatelessWidget {
   final FlightOffer offer;
   final bool isBest;
@@ -62,10 +63,14 @@ class FlightOfferCard extends StatelessWidget {
   /// Baggage badge under the price on baggage-aware searches; null otherwise.
   /// "paid" prices already fold the fee into [FlightOffer.displayPrice] — the
   /// badge explains where the number came from.
+  /// "in_price" is the provider quoting a bag-inclusive price without itemizing
+  /// the fee, so there is no amount to show — only the fact that the total
+  /// already covers the bag.
   String? _bagBadge(AppLocalizations l10n) => switch (offer.baggageStatus) {
         'included' => l10n.flightCardBagIncluded,
         'paid' =>
           l10n.flightCardBagPaid(formatMoney(offer.bagFee, offer.currency)),
+        'in_price' => l10n.flightCardBagInPrice,
         'unknown' => l10n.flightCardBagUnknown,
         _ => null,
       };

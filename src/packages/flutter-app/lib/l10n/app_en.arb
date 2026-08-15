@@ -131,6 +131,8 @@
   },
   "prefsOutdoorModerate": "moderate — half-day hikes",
   "prefsOutdoorChallenging": "challenging — long and steep",
+  "prefsBaggage": "What you fly with",
+  "prefsBaggageHelp": "Flight prices are quoted with this bag included, so the cheapest option really is the cheapest.",
   "prefsPaceRelaxed": "relaxed",
   "@prefsPaceRelaxed": {
     "description": "Trip pace option shown on a chip; the stored API value stays 'relaxed'."
@@ -286,6 +288,8 @@
   "quizCompanionFamily": "family with kids",
   "quizCompanionVaries": "it varies",
   "quizHomeAirportTitle": "Where do you fly from?",
+  "quizBaggageTitle": "What do you fly with?",
+  "quizBaggageSubtitle": "So the fares you're shown already include your bag fees.",
   "quizTripsTitle": "Any trips you're dreaming about?",
   "quizTripsSubtitle": "Places, seasons, occasions — the planner will keep them in mind.",
   "quizTripsHint": "e.g. Japan for cherry blossom season, a Greek island hop next summer…",
@@ -2154,6 +2158,10 @@
   },
   "flightSearchCabinLabel": "Cabin",
   "flightSearchBaggageLabel": "Baggage",
+  "flightSearchCheckedNotPriced": "These prices include a carry-on fee but not a checked-bag fee — check that one with the airline.",
+  "@flightSearchCheckedNotPriced": {
+    "description": "Shown above results when the provider could price the cabin bag but not the checked bag (baggage_note code checked_not_priced)."
+  },
   "flightSearchOptimizeLabel": "Rank results by",
   "flightSearchAdults": "Adults",
   "flightSearchChildren": "Children",
@@ -2194,6 +2202,10 @@
         "type": "String"
       }
     }
+  },
+  "flightCardBagInPrice": "bag fee included",
+  "@flightCardBagInPrice": {
+    "description": "Badge under a fare whose provider quoted a bag-inclusive price without itemizing the fee."
   },
   "flightCardBagUnknown": "Bag fee unknown",
   "flightCardOpenLinkError": "Could not open link",
@@ -2253,6 +2265,7 @@
       }
     }
   },
+  "flightSheetBagInPriceNote": "Bag fee already included in this price",
   "flightSheetBagUnknownNote": "Your bag is not included — check the fee with the airline",
   "flightSheetLayover": "Layover {airport}",
   "@flightSheetLayover": {

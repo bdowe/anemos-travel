@@ -189,6 +189,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsOutdoorChallenging => 'exigente: largo y con desnivel';
 
   @override
+  String get prefsBaggage => 'Con qué equipaje vuelas';
+
+  @override
+  String get prefsBaggageHelp =>
+      'Los precios de los vuelos se calculan con este equipaje incluido, para que la opción más barata lo sea de verdad.';
+
+  @override
   String get prefsPaceRelaxed => 'relajado';
 
   @override
@@ -660,6 +667,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get quizHomeAirportTitle => '¿Desde dónde vuelas?';
+
+  @override
+  String get quizBaggageTitle => '¿Con qué equipaje vuelas?';
+
+  @override
+  String get quizBaggageSubtitle =>
+      'Así las tarifas que te mostremos ya incluirán el coste de tu equipaje.';
 
   @override
   String get quizTripsTitle => '¿Sueñas con algún viaje?';
@@ -3335,6 +3349,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get flightSearchBaggageLabel => 'Equipaje';
 
   @override
+  String get flightSearchCheckedNotPriced =>
+      'Estos precios incluyen la tarifa de equipaje de mano, pero no la de maleta facturada: consúltala con la aerolínea.';
+
+  @override
   String get flightSearchOptimizeLabel => 'Ordenar resultados por';
 
   @override
@@ -3383,6 +3401,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String flightCardBagPaid(String fee) {
     return 'maleta incl. +$fee';
   }
+
+  @override
+  String get flightCardBagInPrice => 'tarifa de equipaje incluida';
 
   @override
   String get flightCardBagUnknown => 'Tarifa de maleta desconocida';
@@ -3455,6 +3476,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String flightSheetBagFeeNote(String fee) {
     return '+$fee de tarifa de maleta incluida en el precio';
   }
+
+  @override
+  String get flightSheetBagInPriceNote =>
+      'La tarifa del equipaje ya está incluida en este precio';
 
   @override
   String get flightSheetBagUnknownNote =>

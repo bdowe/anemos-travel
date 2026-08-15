@@ -40,6 +40,7 @@ class _OkPrefsApi implements PreferencesApiService {
     String? fitnessRoutine,
     String? outdoorIntensity,
     String? companions,
+    String? baggage,
   }) async =>
       const TravelerPreferences();
 }

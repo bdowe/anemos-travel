@@ -84,7 +84,7 @@ class OnboardingQuizScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
-  static const _stepCount = 7;
+  static const _stepCount = 8;
 
   final _pageController = PageController();
   int _step = 0;
@@ -98,6 +98,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
   String? _companions;
   String? _fitnessRoutine;
   String? _outdoorIntensity;
+  String? _baggage;
 
   @override
   void initState() {
@@ -131,6 +132,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
     _companions = prefs.companions;
     _fitnessRoutine = prefs.fitnessRoutine;
     _outdoorIntensity = prefs.outdoorIntensity;
+    _baggage = prefs.baggage;
     _interests.addAll(prefs.interests);
     final home = prefs.homeAirport;
     if (home != null && home.isNotEmpty) {
@@ -183,6 +185,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
           companions: _companions,
           fitnessRoutine: _fitnessRoutine,
           outdoorIntensity: _outdoorIntensity,
+          baggage: _baggage,
           interests: _interests.toList(),
           homeAirport: _homeAirport?.iataCode,
           // null keeps notes untouched (they're empty for a brand-new user).
@@ -378,6 +381,18 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
                     icon: Icons.home,
                     selected: _homeAirport,
                     onSelected: (a) => setState(() => _homeAirport = a),
+                  ),
+                ],
+              ),
+              _buildStep(
+                title: l10n.quizBaggageTitle,
+                subtitle: l10n.quizBaggageSubtitle,
+                children: [
+                  ChoiceChipRow(
+                    options: baggageOptions,
+                    selected: _baggage,
+                    onSelected: (v) => setState(() => _baggage = v),
+                    labelBuilder: (v) => baggageLabel(l10n, v),
                   ),
                 ],
               ),

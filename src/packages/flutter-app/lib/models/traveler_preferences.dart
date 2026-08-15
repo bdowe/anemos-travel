@@ -29,6 +29,12 @@ class TravelerPreferences {
   /// `solo` | `partner` | `friends` | `family_with_kids` | `varies`.
   final String? companions;
 
+  /// `personal_item` | `carry_on` | `checked` — the biggest bag this traveler
+  /// normally flies with. It is the default every flight search is priced for,
+  /// so fares include the bag fees they will actually pay. Null means never
+  /// said, which prices a cabin bag rather than assuming they carry nothing.
+  final String? baggage;
+
   const TravelerPreferences({
     this.budget,
     this.pace,
@@ -39,6 +45,7 @@ class TravelerPreferences {
     this.fitnessRoutine,
     this.outdoorIntensity,
     this.companions,
+    this.baggage,
   });
 
   factory TravelerPreferences.fromJson(Map<String, dynamic> json) =>

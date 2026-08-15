@@ -2,7 +2,7 @@
 SELECT * FROM traveler_preferences WHERE user_id = $1;
 
 -- name: UpsertPreferences :one
-INSERT INTO traveler_preferences (user_id, budget, pace, interests, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions)
+INSERT INTO traveler_preferences (user_id, budget, pace, interests, home_airport, profile_notes, work_style, fitness_routine, outdoor_intensity, companions, baggage)
 VALUES (
     sqlc.arg('user_id'),
     sqlc.narg('budget'),
@@ -13,7 +13,8 @@ VALUES (
     sqlc.narg('work_style'),
     sqlc.narg('fitness_routine'),
     sqlc.narg('outdoor_intensity'),
-    sqlc.narg('companions')
+    sqlc.narg('companions'),
+    sqlc.narg('baggage')
 )
 ON CONFLICT (user_id) DO UPDATE SET
     budget            = COALESCE(sqlc.narg('budget'), traveler_preferences.budget),
@@ -31,5 +32,6 @@ ON CONFLICT (user_id) DO UPDATE SET
     work_style        = COALESCE(sqlc.narg('work_style'), traveler_preferences.work_style),
     fitness_routine   = COALESCE(sqlc.narg('fitness_routine'), traveler_preferences.fitness_routine),
     outdoor_intensity = COALESCE(sqlc.narg('outdoor_intensity'), traveler_preferences.outdoor_intensity),
-    companions        = COALESCE(sqlc.narg('companions'), traveler_preferences.companions)
+    companions        = COALESCE(sqlc.narg('companions'), traveler_preferences.companions),
+    baggage           = COALESCE(sqlc.narg('baggage'), traveler_preferences.baggage)
 RETURNING *;

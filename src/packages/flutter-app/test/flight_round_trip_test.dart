@@ -7,12 +7,15 @@ import 'package:travel_route_planner/models/flight_leg.dart';
 import 'package:travel_route_planner/models/flight_offer.dart';
 import 'package:travel_route_planner/models/flight_search_request.dart';
 import 'package:travel_route_planner/models/flight_search_response.dart';
+import 'package:travel_route_planner/models/traveler_preferences.dart';
 import 'package:travel_route_planner/models/user.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/flights_provider.dart';
+import 'package:travel_route_planner/providers/preferences_provider.dart';
 import 'package:travel_route_planner/screens/flight_search_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/flights_api_service.dart';
+import 'package:travel_route_planner/services/preferences_api_service.dart';
 import 'package:travel_route_planner/widgets/flight_offer_card.dart';
 import 'package:travel_route_planner/l10n/l10n.dart';
 import 'package:travel_route_planner/utils/flight_labels.dart';
@@ -71,6 +74,11 @@ class _FakeFlightsApiService extends FlightsApiService {
       offers: [offer],
       bestOfferId: offer.id,
       optimizeFor: request.optimizeFor,
+      // Mirrors the server: the tier is echoed as RESOLVED, and a checked
+      // search comes back cabin-priced with the gap named.
+      baggage: request.baggage ?? 'carry_on',
+      baggageNote:
+          request.baggage == 'checked' ? 'checked_not_priced' : null,
       count: 1,
       status: 'success',
     );
@@ -78,6 +86,33 @@ class _FakeFlightsApiService extends FlightsApiService {
 
   @override
   Future<List<Airport>> searchAirports(String query) async => [];
+}
+
+/// Serves one saved profile so the flight screen's bag-tier seed has something
+/// to read; null means a traveler who has never said.
+class _FakeBaggagePrefsApi extends PreferencesApiService {
+  final String? baggage;
+  _FakeBaggagePrefsApi(this.baggage)
+      : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<TravelerPreferences> getPreferences() async =>
+      TravelerPreferences(baggage: baggage);
+
+  @override
+  Future<TravelerPreferences> savePreferences({
+    String? budget,
+    String? pace,
+    required List<String> interests,
+    String? homeAirport,
+    String? profileNotes,
+    String? workStyle,
+    String? fitnessRoutine,
+    String? outdoorIntensity,
+    String? companions,
+    String? baggage,
+  }) async =>
+      TravelerPreferences(baggage: baggage);
 }
 
 UserModel _user() => UserModel(
@@ -454,7 +489,9 @@ void main() {
   });
 
   group('baggage: FlightSearchRequest JSON', () {
-    test('omits baggage when unset (personal item default)', () {
+    // An unset tier stays off the wire, where it means "apply the server's
+    // default" — which is why the screen always sets one.
+    test('omits baggage when unset', () {
       const req = FlightSearchRequest(
           origin: 'JFK', destination: 'CDG', departDate: '2026-09-01');
       expect(req.toJson().containsKey('baggage'), isFalse);
@@ -563,6 +600,16 @@ void main() {
       expect(find.text('Bag fee unknown'), findsOneWidget);
     });
 
+    // The provider quoted a bag-inclusive price without itemizing the fee, so
+    // the badge states the fact and invents no amount.
+    testWidgets('in-price offer says the fee is already included',
+        (tester) async {
+      await pumpCard(tester,
+          bagOffer(status: 'in_price', effective: 100));
+      expect(find.text('\$100'), findsOneWidget);
+      expect(find.text('bag fee included'), findsOneWidget);
+    });
+
     testWidgets('personal-item searches render no badge', (tester) async {
       await pumpCard(tester, bagOffer());
       expect(find.text('\$100'), findsOneWidget);
@@ -572,7 +619,8 @@ void main() {
 
   group('baggage: FlightSearchScreen', () {
     Future<_FakeFlightsApiService> pumpScreen(
-        WidgetTester tester, String departDate) async {
+        WidgetTester tester, String departDate,
+        {String? savedBaggage, bool expandForm = true}) async {
       tester.view.physicalSize = const Size(1200, 2200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -582,6 +630,8 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           flightsApiServiceProvider.overrideWithValue(flights),
+          preferencesApiServiceProvider
+              .overrideWithValue(_FakeBaggagePrefsApi(savedBaggage)),
           authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
         ],
         child: MaterialApp(
@@ -596,8 +646,10 @@ void main() {
       await tester.pumpAndSettle();
       // polish/flights: expand the auto-collapsed form (see the round-trip
       // group's helper).
-      await tester.tap(find.text('Edit search'));
-      await tester.pumpAndSettle();
+      if (expandForm) {
+        await tester.tap(find.text('Edit search'));
+        await tester.pumpAndSettle();
+      }
       return flights;
     }
 
@@ -605,8 +657,9 @@ void main() {
       final depart = DateTime.now().add(const Duration(days: 30));
       final flights = await pumpScreen(tester, _fmt(depart));
 
-      // The prefill auto-search runs on the personal-item default.
-      expect(flights.requests.single.baggage, isNull);
+      // With no saved profile the auto-search runs on the same default the
+      // server would apply — and says so on the wire.
+      expect(flights.requests.single.baggage, 'carry_on');
 
       await tester.tap(find.text('Checked bag'));
       await tester.pumpAndSettle();
@@ -616,13 +669,42 @@ void main() {
       expect(flights.requests.last.baggage, 'checked');
     });
 
-    testWidgets('personal item sends no baggage field', (tester) async {
+    // An omitted tier means "apply the default" server-side, so a traveler
+    // who says they fly light has to be sent explicitly — absence is not an
+    // answer (specs/traveler-baggage).
+    testWidgets('personal item is sent explicitly', (tester) async {
       final depart = DateTime.now().add(const Duration(days: 30));
       final flights = await pumpScreen(tester, _fmt(depart));
 
+      await tester.tap(find.text('Personal item'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Search Flights'));
       await tester.pumpAndSettle();
-      expect(flights.requests.last.baggage, isNull);
+      expect(flights.requests.last.baggage, 'personal_item');
+    });
+
+    // The saved profile has to reach the chips BEFORE the prefill auto-search
+    // fires, or the first (and often only) search a traveler sees is priced
+    // for bags they don't carry.
+    testWidgets('saved profile seeds the tier before the auto-search',
+        (tester) async {
+      final depart = DateTime.now().add(const Duration(days: 30));
+      final flights = await pumpScreen(tester, _fmt(depart),
+          savedBaggage: 'checked', expandForm: false);
+
+      expect(flights.requests.single.baggage, 'checked');
+      // ...and the collapsed summary names it, so a tier that came from the
+      // profile rather than a tap is still visible.
+      expect(find.textContaining('Checked bag'), findsWidgets);
+    });
+
+    testWidgets('a checked-bag note the server sends is shown', (tester) async {
+      final depart = DateTime.now().add(const Duration(days: 30));
+      await pumpScreen(tester, _fmt(depart),
+          savedBaggage: 'checked', expandForm: false);
+      await tester.pumpAndSettle();
+      expect(
+          find.textContaining('not a checked-bag fee'), findsOneWidget);
     });
   });
 }

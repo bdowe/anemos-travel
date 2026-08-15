@@ -66,6 +66,12 @@ type planSession struct {
 	// owns the turn — specs/chat-quick-replies). Not s.tripID: that stays nil
 	// for anonymous create_itinerary, which still streams `done`.
 	itineraryEmitted bool
+	// bagPref is the traveler's saved baggage tier (nil when anonymous or
+	// never stated). search_flights resolves it server-side rather than
+	// trusting the model to carry it over from the system prompt: a fare the
+	// model quotes must cover the bags this traveler actually brings, and a
+	// default the model can forget is not a default (specs/traveler-baggage).
+	bagPref *string
 }
 
 // planTool is one registry entry.
@@ -277,7 +283,7 @@ var createItineraryTool = anthropic.ToolParam{
 
 var savePrefsTool = anthropic.ToolParam{
 	Name:        "save_preferences",
-	Description: anthropic.String("Save what you learn about the traveler so future trips are personalized. Call this when the user reveals a budget level, trip pace, interests, which airport they fly from, whether they work while traveling, whether they keep a fitness routine on the road, how demanding they like their outdoor days, who they travel with, or any other durable fact about how they travel. Only include fields you actually learned."),
+	Description: anthropic.String("Save what you learn about the traveler so future trips are personalized. Call this when the user reveals a budget level, trip pace, interests, which airport they fly from, whether they work while traveling, whether they keep a fitness routine on the road, how demanding they like their outdoor days, who they travel with, what luggage they fly with, or any other durable fact about how they travel. Only include fields you actually learned."),
 	InputSchema: anthropic.ToolInputSchemaParam{
 		Properties: map[string]any{
 			"budget": map[string]any{
@@ -322,6 +328,11 @@ var savePrefsTool = anthropic.ToolParam{
 				"type":        "string",
 				"enum":        []string{"solo", "partner", "friends", "family_with_kids", "varies"},
 				"description": "Who the traveler usually travels with. Save it when they say who they travel with in general — not who is on this one trip, which is a trip detail and not a profile fact.",
+			},
+			"baggage": map[string]any{
+				"type":        "string",
+				"enum":        []string{"personal_item", "carry_on", "checked"},
+				"description": "The biggest bag this traveler normally flies with — personal_item (one small under-seat bag), carry_on (a cabin bag), checked (a checked suitcase). Save it when they say how they pack in general ('I only ever fly carry-on', 'I always check a bag'). It becomes the default bags every flight search is priced for, so fares include the bag fees they will actually pay.",
 			},
 		},
 	},
@@ -406,7 +417,7 @@ var searchFlightsTool = anthropic.ToolParam{
 			"child_ages":   map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Optional ages of child travelers (one per child, 0-17) — include when the traveler mentions kids"},
 			"cabin_class":  map[string]any{"type": "string", "enum": []string{"economy", "premium_economy", "business", "first"}, "description": "Optional cabin, defaults to economy — set when the traveler asks for a specific class"},
 			"optimize_for": map[string]any{"type": "string", "enum": []string{"cost", "time", "balanced"}, "description": "Ranking emphasis"},
-			"baggage":      map[string]any{"type": "string", "enum": []string{"personal_item", "carry_on", "checked"}, "description": "Biggest bag the traveler needs; set carry_on or checked whenever they mention luggage — offers are then ranked by the effective total including that bag, not the bare fare"},
+			"baggage":      map[string]any{"type": "string", "enum": []string{"personal_item", "carry_on", "checked"}, "description": "Biggest bag the traveler needs ON THIS TRIP. OMIT it unless they have said — omitting uses their saved bag preference, and a cabin bag if they have none. Set it only when they state what they are bringing this time, including personal_item when they say they are travelling light. Prices then cover that bag rather than a bare fare, and the result says what they cover."},
 		},
 		Required: []string{"origin", "destination", "depart_date"},
 	},
@@ -789,6 +800,7 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 		FitnessRoutine   *string  `json:"fitness_routine"`
 		OutdoorIntensity *string  `json:"outdoor_intensity"`
 		Companions       *string  `json:"companions"`
+		Baggage          *string  `json:"baggage"`
 	}
 	json.Unmarshal(input, &in)
 
@@ -812,6 +824,7 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 	fitnessRoutine := keep(normalizeChoice(in.FitnessRoutine, allowedFitnessRoutines, "fitness_routine"))
 	outdoorIntensity := keep(normalizeChoice(in.OutdoorIntensity, allowedOutdoorIntensities, "outdoor_intensity"))
 	companions := keep(normalizeChoice(in.Companions, allowedCompanions, "companions"))
+	baggage := keep(normalizeChoice(in.Baggage, allowedBaggageTiers, "baggage"))
 
 	// The clear flag is deliberately dropped: like profile_notes below, only the
 	// user (PUT) can empty a home airport — an agent sending "" means it had
@@ -832,7 +845,7 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 	}
 	_, err := store.New(dbPool).UpsertPreferences(s.ctx, store.UpsertPreferencesParams{
 		UserID: s.uid, Budget: budget, Pace: pace, Interests: interestsArg, HomeAirport: homeAirport, ProfileNotes: notes, WorkStyle: workStyle,
-		FitnessRoutine: fitnessRoutine, OutdoorIntensity: outdoorIntensity, Companions: companions,
+		FitnessRoutine: fitnessRoutine, OutdoorIntensity: outdoorIntensity, Companions: companions, Baggage: baggage,
 	})
 	if err != nil {
 		return fmt.Sprintf("Could not save preferences: %v", err), true
@@ -864,6 +877,9 @@ func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool
 	}
 	if companions != nil {
 		changed = append(changed, "companions")
+	}
+	if baggage != nil {
+		changed = append(changed, "baggage")
 	}
 	if len(changed) > 0 {
 		sendSSE(s.w, "profile_updated", map[string]any{
@@ -1001,10 +1017,16 @@ func runSearchFlightsTool(s *planSession, input json.RawMessage) (string, bool) 
 	if adults < 1 {
 		adults = 1
 	}
+	// Resolve the tier HERE, before the request exists, so the one value flows
+	// to the provider, the SSE event, and summarizeOffers alike — the model is
+	// told what its prices cover, and can't be told something different from
+	// what was priced. Also the validation boundary: an unrecognized tier from
+	// the model used to reach the classifier and behave as carry_on.
 	req := FlightSearchRequest{
 		Origin: originIata, Destination: destIata, DepartDate: in.DepartDate,
 		ReturnDate: in.ReturnDate, Adults: adults, ChildAges: in.ChildAges,
-		CabinClass: in.CabinClass, OptimizeFor: in.OptimizeFor, Baggage: in.Baggage,
+		CabinClass: in.CabinClass, OptimizeFor: in.OptimizeFor,
+		Baggage: resolveBaggageTier(in.Baggage, s.bagPref),
 	}
 	bestN, err := searchFlightsWithBaggage(s.ctx, duffelService, req)
 	if err != nil {
@@ -1031,7 +1053,7 @@ func runSearchFlightsTool(s *planSession, input json.RawMessage) (string, bool) 
 		sendSSE(s.w, "flights", map[string]any{
 			"origin": originIata, "destination": destIata,
 			"depart_date": in.DepartDate, "optimize_for": normalizeOptimizeFor(in.OptimizeFor),
-			"baggage": normalizeBaggage(in.Baggage),
+			"baggage": req.Baggage,
 			"offers":  bestN,
 		})
 	}

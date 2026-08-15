@@ -100,6 +100,7 @@ func TestSerpapiSearchFlightOffersMapping(t *testing.T) {
 
 	offers, err := serpapiFlights.SearchFlightOffers(context.Background(), FlightSearchRequest{
 		Origin: "jfk", Destination: "ath", DepartDate: "2026-09-15", ReturnDate: "2026-09-22", Adults: 1,
+		Baggage: baggagePersonalItem,
 	})
 	if err != nil {
 		t.Fatalf("search: %v", err)
@@ -136,8 +137,8 @@ func TestSerpapiSearchFlightOffersMapping(t *testing.T) {
 	if len(o.ReturnSegments) != 0 || o.ReturnDurationMin != 0 {
 		t.Errorf("return fields must stay empty on phase-1 round trips")
 	}
-	if o.IncludedCarryOn != 0 || o.IncludedChecked != 0 || o.BaggageStatus != "" {
-		t.Errorf("baggage fields must stay zero: %+v", o)
+	if o.IncludedCarryOn != 0 || o.IncludedChecked != 0 || o.BaggageStatus != "" || o.EffectivePrice != 0 {
+		t.Errorf("bare-fare search must emit no baggage fields: %+v", o)
 	}
 	if offers[1].AirlineCode != "A3" || offers[1].Airlines[0] != "Aegean" {
 		t.Errorf("other_flights offer mapped wrong: %+v", offers[1])
@@ -157,7 +158,7 @@ func TestSerpapiSearchFlightOffersMapping(t *testing.T) {
 			t.Errorf("query[%s] = %q, want %q", k, query[k], v)
 		}
 	}
-	for _, absent := range []string{"children", "infants_on_lap", "travel_class", "sort_by"} {
+	for _, absent := range []string{"children", "infants_on_lap", "travel_class", "sort_by", "bags"} {
 		if _, ok := query[absent]; ok {
 			t.Errorf("query[%s] should be omitted", absent)
 		}
@@ -195,9 +196,9 @@ func TestSerpapiPassengerAndCabinParams(t *testing.T) {
 	}
 }
 
-// With the swap active, a checked-bag search must classify every offer
-// "unknown" WITHOUT touching Duffel: the tier-2 bag-fee lookups would 404
-// against synthetic SerpApi offer IDs.
+// With the swap active, a bag search is priced by Google (the bags parameter
+// folds the cabin-bag fee into the quote) and must NOT touch Duffel: the
+// tier-2 bag-fee lookups would 404 against synthetic SerpApi offer IDs.
 func TestSerpapiBaggageSearchSkipsDuffelBagFees(t *testing.T) {
 	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(serpapiBody([]string{
@@ -217,9 +218,105 @@ func TestSerpapiBaggageSearchSkipsDuffelBagFees(t *testing.T) {
 		t.Fatalf("want 2 offers, got %d", len(offers))
 	}
 	for _, o := range offers {
-		if o.BaggageStatus != baggageStatusUnknown {
-			t.Errorf("offer %s status = %q, want unknown", o.ID, o.BaggageStatus)
+		if o.BaggageStatus != baggageStatusInPrice {
+			t.Errorf("offer %s status = %q, want in_price", o.ID, o.BaggageStatus)
 		}
+		if o.EffectivePrice != o.Price {
+			t.Errorf("offer %s effective %v, want the quoted price %v", o.ID, o.EffectivePrice, o.Price)
+		}
+	}
+	// A checked search is only cabin-priced here, and the gap must be named
+	// rather than left for the traveler to discover at the airport.
+	if note := baggageNoteCode(baggageChecked, offers); note != baggageNoteCheckedNotPriced {
+		t.Errorf("note = %q, want %q", note, baggageNoteCheckedNotPriced)
+	}
+}
+
+// The bags parameter is what makes a carry-on search mean anything while the
+// swap is active: Google prices that many cabin bags into the quote. One per
+// traveler entitled to one — lap infants get no allowance, and SerpApi rejects
+// a count above that.
+func TestSerpapiBagsParam(t *testing.T) {
+	cases := []struct {
+		name string
+		req  FlightSearchRequest
+		want string // "" = parameter must be absent
+	}{
+		{"personal item is a bare fare", FlightSearchRequest{Baggage: baggagePersonalItem, Adults: 2}, ""},
+		{"omitted tier defaults to a cabin bag", FlightSearchRequest{Adults: 1}, "1"},
+		{"one per adult", FlightSearchRequest{Baggage: baggageCarryOn, Adults: 2}, "2"},
+		{"children count, lap infants do not", FlightSearchRequest{Baggage: baggageCarryOn, Adults: 2, ChildAges: []int{1, 5, 13}}, "4"},
+		{"checked still asks for the cabin bag", FlightSearchRequest{Baggage: baggageChecked, Adults: 1}, "1"},
+		{"connectivity probes stay baggage-unaware", FlightSearchRequest{Baggage: baggageCarryOn, Adults: 2, Indicative: true}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var query map[string]string
+			swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
+				query = map[string]string{}
+				for k, v := range r.URL.Query() {
+					query[k] = v[0]
+				}
+				w.Write([]byte(serpapiBody(nil, nil)))
+			})
+			req := tc.req
+			req.Origin, req.Destination, req.DepartDate = "AAA", "BBB", "2026-09-01"
+			if _, err := serpapiFlights.SearchFlightOffers(context.Background(), req); err != nil {
+				t.Fatalf("search: %v", err)
+			}
+			got, ok := query["bags"]
+			if tc.want == "" {
+				if ok {
+					t.Fatalf("bags = %q, want absent", got)
+				}
+				return
+			}
+			if got != tc.want {
+				t.Fatalf("bags = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// Prices now VARY by bag tier, so the offers cache must too. Without the bags
+// component in the key, a bare-fare search would serve its cheaper, bagless
+// prices to a carry-on search for the whole TTL — reintroducing the exact
+// mislead this feature removes, invisibly.
+func TestSerpapiOffersCacheSplitsByBagTier(t *testing.T) {
+	// Concurrency-safe because searchFlightsWithBaggage's fan-out shares this
+	// handler with -race (see the atomic.Int32 note in serpapi-flight-swap).
+	var hits atomic.Int32
+	swapSerpapiStub(t, func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Write([]byte(serpapiBody([]string{
+			serpapiItem(300, 120, [6]string{"AAA", "BBB", "TestAir", "TA 1", "2026-09-01 08:00", "2026-09-01 10:00"}),
+		}, nil)))
+	})
+
+	base := FlightSearchRequest{Origin: "AAA", Destination: "BBB", DepartDate: "2026-09-01", Adults: 1}
+	bare := base
+	bare.Baggage = baggagePersonalItem
+	if _, err := serpapiFlights.SearchFlightOffers(context.Background(), bare); err != nil {
+		t.Fatalf("bare search: %v", err)
+	}
+	withBag := base
+	withBag.Baggage = baggageCarryOn
+	offers, err := serpapiFlights.SearchFlightOffers(context.Background(), withBag)
+	if err != nil {
+		t.Fatalf("carry-on search: %v", err)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("upstream searches = %d, want 2 (the carry-on search must not reuse bare-fare prices)", got)
+	}
+	if len(offers) != 1 || offers[0].BaggageStatus != baggageStatusInPrice {
+		t.Fatalf("carry-on offers = %+v, want one in_price offer", offers)
+	}
+	// Same tier again IS a cache hit — the split must not cost quota.
+	if _, err := serpapiFlights.SearchFlightOffers(context.Background(), withBag); err != nil {
+		t.Fatalf("repeat search: %v", err)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("upstream searches = %d after a repeat, want 2", got)
 	}
 }
 

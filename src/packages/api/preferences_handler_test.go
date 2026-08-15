@@ -67,6 +67,9 @@ func TestNormalizeActiveProfileChoices(t *testing.T) {
 		{"fitness_routine", allowedFitnessRoutines, []string{"gym", "running", "both", "none"}, "lifting"},
 		{"outdoor_intensity", allowedOutdoorIntensities, []string{"easy", "moderate", "challenging"}, "extreme"},
 		{"companions", allowedCompanions, []string{"solo", "partner", "friends", "family_with_kids", "varies"}, "family with kids"},
+		// Shares its vocabulary with the flight-search tier (duffel_service.go)
+		// because it IS that field's default — two spellings would drift.
+		{"baggage", allowedBaggageTiers, []string{"personal_item", "carry_on", "checked"}, "carryon"},
 	}
 	for _, c := range cases {
 		t.Run(c.field, func(t *testing.T) {

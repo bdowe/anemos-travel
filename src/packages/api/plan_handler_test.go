@@ -196,6 +196,33 @@ func TestPersonalizedSystemPromptCompanions(t *testing.T) {
 	}
 }
 
+// The bag tier is the one preference the model never has to act on —
+// search_flights resolves it server-side — so its note exists to explain the
+// prices the tool hands back, and each value has to explain a different thing.
+func TestPersonalizedSystemPromptBaggage(t *testing.T) {
+	cases := map[string]struct{ partsLine, note string }{
+		baggagePersonalItem: {"packs: one personal item", "quoted as bare fares"},
+		baggageCarryOn:      {"packs: a carry-on", "already cover their cabin bag"},
+		baggageChecked:      {"packs: a checked bag", "is not the price they pay"},
+	}
+	for value, want := range cases {
+		t.Run(value, func(t *testing.T) {
+			got := personalizedSystemPrompt("base", &store.TravelerPreference{Baggage: strPtr(value)})
+			if !strings.Contains(got, want.partsLine) {
+				t.Fatalf("prompt missing parts line %q: %q", want.partsLine, got)
+			}
+			if !strings.Contains(got, want.note) {
+				t.Fatalf("prompt missing note %q: %q", want.note, got)
+			}
+		})
+	}
+	// An unset tier says nothing — the default lives in one place, and it is
+	// not the prompt.
+	if got := personalizedSystemPrompt("base", &store.TravelerPreference{}); strings.Contains(got, "packs:") {
+		t.Fatalf("unset baggage must add nothing: %q", got)
+	}
+}
+
 // Companions has a column now, so the standing notes rule must stop naming it —
 // otherwise the agent writes the same fact into profile_notes as well.
 func TestProfileNotesInstructionOmitsCompanions(t *testing.T) {

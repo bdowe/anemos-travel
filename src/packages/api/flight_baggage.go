@@ -33,17 +33,27 @@ var bagFeeTimeout = 15 * time.Second
 // always allows a personal item) it is exactly search + rank — zero extra
 // calls, no baggage fields emitted.
 func searchFlightsWithBaggage(ctx context.Context, d *DuffelService, req FlightSearchRequest) ([]FlightOffer, error) {
+	// Resolve before the provider call, not after: a provider that can price
+	// bags into its own quote (SerpApi's bags parameter) needs the tier on the
+	// request it sends, and every later step must read the same value.
+	tier := normalizeBaggage(req.Baggage)
+	req.Baggage = tier
 	offers, err := flightOffersSearch(ctx, d, req)
 	if err != nil {
 		return nil, err
 	}
-	tier := normalizeBaggage(req.Baggage)
 	if tier == baggagePersonalItem {
 		return RankFlightOffers(offers, req.OptimizeFor), nil
 	}
 
 	for i := range offers {
 		o := &offers[i]
+		// A provider that already priced the bag into its quote is the
+		// authority on that offer — re-classifying it against an allowance it
+		// never reported would demote a covered price to "unknown".
+		if o.BaggageStatus != "" {
+			continue
+		}
 		included := o.IncludedCarryOn
 		if tier == baggageChecked {
 			included = o.IncludedChecked
@@ -69,7 +79,9 @@ func searchFlightsWithBaggage(ctx context.Context, d *DuffelService, req FlightS
 		if len(lookup) >= bagFeeTopK {
 			break
 		}
-		if offers[i].BaggageStatus != baggageStatusIncluded {
+		// Only offers whose bag is still unpriced earn a lookup — every other
+		// status already means "this total covers the bag".
+		if offers[i].BaggageStatus == baggageStatusUnknown {
 			lookup = append(lookup, i)
 		}
 	}
@@ -119,4 +131,69 @@ func fetchBagFees(ctx context.Context, d *DuffelService, offers []FlightOffer, i
 		})
 	}
 	wg.Wait()
+}
+
+// baggageNoteCheckedNotPriced says the quoted prices cover the cabin bag but
+// not the checked bag the traveler asked for. It is a stable CODE, not prose:
+// the flight-search response carries it and the client localizes it (same
+// idiom as the uptime reason codes), while the model gets the same fact as
+// English from baggageBasisClause.
+const baggageNoteCheckedNotPriced = "checked_not_priced"
+
+// baggageNoteCode names what a search could NOT price, or "" when the quoted
+// prices cover the bags that were asked for. There is exactly one case today:
+// Google Flights folds a CARRY-ON fee into its quote on any route but includes
+// checked-bag fees on US domestic ones only, and SerpApi exposes no way to ask
+// for checked bags — so a checked search comes back cabin-priced. Naming that
+// gap is the whole point; inventing a checked-bag estimate is not an option
+// (docs/zen.md — refuse the temptation to guess).
+func baggageNoteCode(tier string, offers []FlightOffer) string {
+	if tier != baggageChecked {
+		return ""
+	}
+	sawInPrice := false
+	for _, o := range offers {
+		switch o.BaggageStatus {
+		case baggageStatusIncluded, baggageStatusPaid:
+			// A provider that priced the checked bag itself (Duffel) leaves
+			// nothing to warn about.
+			return ""
+		case baggageStatusInPrice:
+			sawInPrice = true
+		}
+	}
+	if sawInPrice {
+		return baggageNoteCheckedNotPriced
+	}
+	return ""
+}
+
+// baggageBasisClause states, in one clause, what the listed prices cover with
+// respect to bags — the fact the model repeats to the traveler, who sees only
+// a result count in the chat. Derived from what came BACK, not from what was
+// asked for: a bag the provider could not price must never be described as
+// priced.
+func baggageBasisClause(tier string, offers []FlightOffer, note string) string {
+	if tier == baggagePersonalItem {
+		return "these are bare fares covering a personal item only — on many carriers a cabin bag costs extra, so say so whenever you quote one"
+	}
+	bag := "a cabin bag"
+	if tier == baggageChecked {
+		bag = "a checked bag"
+	}
+	covered := false
+	for _, o := range offers {
+		switch o.BaggageStatus {
+		case baggageStatusIncluded, baggageStatusPaid, baggageStatusInPrice:
+			covered = true
+		}
+	}
+	switch {
+	case !covered:
+		return "these prices do NOT cover " + bag + " and the fee could not be priced — tell the traveler to check it with the airline"
+	case note == baggageNoteCheckedNotPriced:
+		return "prices include the cabin-bag fee but NOT the checked-bag fee, which could not be priced — tell the traveler to check the checked-bag fee with the airline"
+	default:
+		return "prices cover " + bag + ", including its fee where the airline charges one"
+	}
 }

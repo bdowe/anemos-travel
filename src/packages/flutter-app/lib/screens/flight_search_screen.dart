@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../constants/travel_profile_options.dart';
 import '../l10n/l10n.dart';
 import '../models/airport.dart';
 import '../models/flight_search_request.dart';
@@ -21,7 +22,6 @@ import '../widgets/section_header.dart';
 // NEVER translated — only their display labels are (specs/i18n-spanish).
 const _cabinClasses = ['economy', 'premium_economy', 'business', 'first'];
 const _presets = ['cost', 'time', 'balanced'];
-const _baggageValues = ['personal_item', 'carry_on', 'checked'];
 
 String _presetLabel(AppLocalizations l10n, String value) => switch (value) {
       'cost' => l10n.flightSearchPresetCheapest,
@@ -30,11 +30,11 @@ String _presetLabel(AppLocalizations l10n, String value) => switch (value) {
       _ => value,
     };
 
-String _baggageLabel(AppLocalizations l10n, String value) => switch (value) {
-      'personal_item' => l10n.flightSearchBaggagePersonalItem,
-      'carry_on' => l10n.flightSearchBaggageCarryOn,
-      'checked' => l10n.flightSearchBaggageChecked,
-      _ => value,
+/// Maps a server baggage_note code to a sentence. Unknown codes render
+/// nothing rather than a raw code — the vocabulary can grow server-side.
+String? _baggageNoteText(AppLocalizations l10n, String? code) => switch (code) {
+      'checked_not_priced' => l10n.flightSearchCheckedNotPriced,
+      _ => null,
     };
 
 /// Standalone flight search: pick origin/destination/date/passengers and a
@@ -117,9 +117,11 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
   static const _defaultChildAge = 8;
   String _optimizeFor = 'balanced';
 
-  /// Biggest bag needed. Beyond personal_item, results are ranked by the
-  /// effective total (fare + bag fee when the bag isn't included).
-  String _baggage = 'personal_item';
+  /// Biggest bag needed, seeded from the traveler's profile in [_seedInitial].
+  /// The initial value matches the SERVER's default (specs/traveler-baggage) so
+  /// an unset profile doesn't make the chips disagree with the prices: results
+  /// are ranked on the effective total including that bag.
+  String _baggage = 'carry_on';
 
   @override
   void initState() {
@@ -132,6 +134,13 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
   /// still editable.
   Future<void> _seedInitial() async {
     final w = widget;
+    // Start the bag-tier load now and await it BEFORE the auto-search at the
+    // end: the tier decides the prices, so a search must never run ahead of it.
+    // Started rather than awaited here so it overlaps the airport lookups —
+    // and started on EVERY path, since the home-airport seed that used to be
+    // the only preferences read is skipped when the caller prefills an origin
+    // (trip page -> Search flights).
+    final bagSeed = _seedBaggage();
     var date = w.prefillDepartDate == null
         ? null
         : DateTime.tryParse(w.prefillDepartDate!);
@@ -175,14 +184,29 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
 
     // Run the search as soon as it's runnable (both endpoints resolved + a date),
     // regardless of which inputs were prefilled vs. seeded — so the caller lands
-    // on results without tapping Search.
+    // on results without tapping Search. The bag tier has to be in place first
+    // (see above): the first search a traveler sees is often the only one.
+    await bagSeed;
     if (mounted && _canSearch) _search();
   }
 
   /// Falls back to the traveler's saved home airport when no explicit origin was
   /// prefilled. Returns null when none is set.
+  /// Seeds the bag tier from the traveler's saved profile. Leaves the default
+  /// in place when they have never said — the fallback lives on the server, and
+  /// this field already starts on the same value.
+  Future<void> _seedBaggage() async {
+    await ref.read(preferencesProvider.notifier).loadIfNeeded();
+    if (!mounted) return;
+    final saved = ref.read(preferencesProvider).prefs?.baggage;
+    if (saved == null || !baggageOptions.contains(saved)) return;
+    setState(() => _baggage = saved);
+  }
+
   Future<Airport?> _homeAirportSeed() async {
-    await ref.read(preferencesProvider.notifier).load();
+    // loadIfNeeded, not load: _seedBaggage already awaited the fetch, and a
+    // second forced load would re-request the same profile.
+    await ref.read(preferencesProvider.notifier).loadIfNeeded();
     final code = ref.read(preferencesProvider).prefs?.homeAirport;
     if (code == null || code.isEmpty) return null;
     return Airport(iataCode: code, name: code);
@@ -342,7 +366,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       adults: _adults,
       childAges: _childAges.isEmpty ? null : List.of(_childAges),
       cabinClass: _cabinClass == 'economy' ? null : _cabinClass,
-      baggage: _baggage == 'personal_item' ? null : _baggage,
+      // Always explicit: an omitted tier means "use the default" server-side,
+      // and the chips are the traveler's answer, not an absence.
+      baggage: _baggage,
       optimizeFor: _optimizeFor,
     );
     _lastRequest = request;
@@ -370,7 +396,11 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
         : '${flightDateLabel(l10n, w.departDate)} – ${flightDateLabel(l10n, w.returnDate!)}';
     final travelers = l10n.flightSearchSummaryTravelers(w.adults + w.children);
     final cabin = cabinClassLabel(l10n, w.cabinClass);
-    return '${w.origin} → ${w.destination} · $dates · $travelers · $cabin';
+    // The bag tier changes the PRICES, and it can come from the profile rather
+    // than a tap — so the collapsed row has to name it or the traveler cannot
+    // tell what these fares cover.
+    final bag = baggageLabel(l10n, w.baggage);
+    return '${w.origin} → ${w.destination} · $dates · $travelers · $cabin · $bag';
   }
 
   @override
@@ -570,9 +600,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
         SectionHeader(title: l10n.flightSearchBaggageLabel),
         const SizedBox(height: AppSpacing.sm),
         ChoiceChipRow(
-          options: _baggageValues,
+          options: baggageOptions,
           selected: _baggage,
-          labelBuilder: (v) => _baggageLabel(l10n, v),
+          labelBuilder: (v) => baggageLabel(l10n, v),
           onSelected: (v) => setState(() => _baggage = v ?? _baggage),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -668,6 +698,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
     }
 
     final savingsLabel = savingsLabelFor(l10n, state.offers, state.bestOfferId);
+    final noteText = _baggageNoteText(l10n, state.baggageNote);
     return [
       SliverPadding(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -678,13 +709,29 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                 return PageContainer(
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: SectionHeader(
-                      title: l10n.flightSearchResultsCount(state.offers.length),
-                      action: Text(
-                        _presetLabel(l10n, state.optimizeFor),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SectionHeader(
+                          title: l10n
+                              .flightSearchResultsCount(state.offers.length),
+                          action: Text(
+                            _presetLabel(l10n, state.optimizeFor),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant),
+                          ),
+                        ),
+                        // A fee the provider could not include is stated here,
+                        // once, rather than left for the airport.
+                        if (noteText != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            noteText,
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: theme.colorScheme.error),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 );

@@ -294,6 +294,7 @@ type TravelerPreference struct {
 	FitnessRoutine   *string   `json:"fitness_routine"`
 	OutdoorIntensity *string   `json:"outdoor_intensity"`
 	Companions       *string   `json:"companions"`
+	Baggage          *string   `json:"baggage"`
 }
 
 type Trip struct {

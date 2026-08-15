@@ -176,12 +176,17 @@ func (s *SerpapiFlightsService) SearchFlightOffers(ctx context.Context, req Flig
 	if req.Indicative {
 		depth = "shallow"
 	}
+	// The bags component is load-bearing: prices now VARY by how many cabin
+	// bags were requested, so without it a bare-fare probe would serve its
+	// cheaper, bagless prices to a carry-on search for the whole TTL — the
+	// exact mislead this feature exists to remove.
 	cacheKey := strings.Join([]string{
 		strings.ToUpper(req.Origin), strings.ToUpper(req.Destination),
 		req.DepartDate, req.ReturnDate,
 		fmt.Sprint(req.Adults), fmt.Sprint(req.ChildAges),
 		strings.ToLower(req.CabinClass),
 		depth,
+		"bags:" + fmt.Sprint(serpapiCarryOnBags(req)),
 	}, "|")
 	if cached, ok := s.offersCache.get(cacheKey); ok {
 		s.calls.cacheHits.Add(1)
@@ -254,27 +259,20 @@ func (s *SerpapiFlightsService) fetch(ctx context.Context, req FlightSearchReque
 	}
 	params.Set("currency", serpapiCurrency)
 
-	adults := req.Adults
-	if adults < 1 {
-		adults = 1
-	}
-	children, infants := 0, 0
-	for _, age := range req.ChildAges {
-		switch {
-		case age >= 12: // Google Flights counts 12+ as adults
-			adults++
-		case age >= 2:
-			children++
-		default:
-			infants++
-		}
-	}
+	adults, children, infants := serpapiPax(req)
 	params.Set("adults", fmt.Sprint(adults))
 	if children > 0 {
 		params.Set("children", fmt.Sprint(children))
 	}
 	if infants > 0 {
 		params.Set("infants_on_lap", fmt.Sprint(infants))
+	}
+	// Google Flights folds the carry-on fee into the prices it quotes for the
+	// number of cabin bags asked for — the ONLY way a bag gets priced while the
+	// swap is active, since Duffel's per-offer fee lookup can't run on synthetic
+	// offer ids (flight_baggage.go). Costs nothing extra: same one search.
+	if bags := serpapiCarryOnBags(req); bags > 0 {
+		params.Set("bags", fmt.Sprint(bags))
 	}
 	if class := serpapiTravelClass(req.CabinClass); class != "1" {
 		params.Set("travel_class", class)
@@ -314,6 +312,65 @@ func (s *SerpapiFlightsService) fetch(ctx context.Context, req FlightSearchReque
 	return body, resp.StatusCode, nil
 }
 
+// serpapiPax splits our passenger model into the three counts Google Flights
+// bills by. Extracted so the bags parameter and the cache key count the same
+// heads the search does.
+func serpapiPax(req FlightSearchRequest) (adults, children, infants int) {
+	adults = req.Adults
+	if adults < 1 {
+		adults = 1
+	}
+	for _, age := range req.ChildAges {
+		switch {
+		case age >= 12: // Google Flights counts 12+ as adults
+			adults++
+		case age >= 2:
+			children++
+		default:
+			infants++
+		}
+	}
+	return adults, children, infants
+}
+
+// serpapiCarryOnBags is how many CABIN bags to have Google price into its
+// quotes: one per traveler entitled to one (SerpApi caps the parameter at that
+// count, and infants on a lap get no allowance).
+//
+// Zero for a personal-item search — that tier means "quote me the bare fare" —
+// and zero for indicative connectivity probes, which compare routes rather
+// than shop fares and stay deliberately baggage-unaware (plan_connectivity.go).
+// A CHECKED search still asks for the cabin bag: SerpApi has no checked-bag
+// parameter and Google only folds checked fees in on US domestic routes, so
+// pricing what we can and naming what we can't (baggageNoteCode) beats quoting
+// a bare fare to someone who is checking a suitcase.
+func serpapiCarryOnBags(req FlightSearchRequest) int {
+	if req.Indicative || normalizeBaggage(req.Baggage) == baggagePersonalItem {
+		return 0
+	}
+	adults, children, _ := serpapiPax(req)
+	return adults + children
+}
+
+// serpapiBaggageStatus reports how the quoted price relates to the requested
+// bag: in_price when Google was asked to include cabin-bag fees, otherwise
+// unset so the normal classifier runs.
+func serpapiBaggageStatus(req FlightSearchRequest) string {
+	if serpapiCarryOnBags(req) > 0 {
+		return baggageStatusInPrice
+	}
+	return ""
+}
+
+// serpapiEffectivePrice is the total to rank on: the quoted price itself when
+// it already covers the bag, else unset (0) so ranking falls back to Price.
+func serpapiEffectivePrice(req FlightSearchRequest, price float64) float64 {
+	if serpapiCarryOnBags(req) > 0 {
+		return price
+	}
+	return 0
+}
+
 // serpapiTravelClass maps our cabin_class values onto SerpApi's 1-4 enum.
 func serpapiTravelClass(cabin string) string {
 	switch strings.ToLower(strings.TrimSpace(cabin)) {
@@ -329,9 +386,9 @@ func serpapiTravelClass(cabin string) string {
 }
 
 // serpapiOffer maps one SerpApi itinerary onto FlightOffer. Score fields stay
-// zero (RankFlightOffers fills them); baggage fields stay zero/empty — SerpApi
-// has no allowance or bag-fee data, so carry_on/checked searches classify
-// every offer "unknown" and summarizeOffers already warns the model.
+// zero (RankFlightOffers fills them). Allowance counts stay zero — SerpApi
+// reports none, and claiming the FARE includes a bag would be a different (and
+// unsupported) statement from "the quoted price covers it".
 func serpapiOffer(item serpapiFlightItem, req FlightSearchRequest, idx int) FlightOffer {
 	legs := make([]FlightLeg, 0, len(item.Flights))
 	airlines := make([]string, 0, 2)
@@ -359,6 +416,12 @@ func serpapiOffer(item serpapiFlightItem, req FlightSearchRequest, idx int) Flig
 		Price:    item.Price, // round-trip TOTAL on type=1 (phase-1 semantics)
 		Currency: serpapiCurrency,
 		Stops:    len(item.Flights) - 1,
+		// When bags were requested, Google already priced them INTO Price, so
+		// the effective total is the price itself and the fee is not itemized.
+		// Saying so is what stops searchFlightsWithBaggage re-classifying these
+		// as "unknown" against an allowance SerpApi never reports.
+		BaggageStatus:  serpapiBaggageStatus(req),
+		EffectivePrice: serpapiEffectivePrice(req, item.Price),
 		// Outbound-based, like Duffel round trips (duffel_service.go): SerpApi
 		// phase-1 total_duration covers the outbound slice only.
 		DurationMin: item.TotalDuration,

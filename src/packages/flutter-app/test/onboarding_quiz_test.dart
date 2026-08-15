@@ -86,6 +86,7 @@ class _FakePrefsService implements PreferencesApiService {
     String? fitnessRoutine,
     String? outdoorIntensity,
     String? companions,
+    String? baggage,
   }) async {
     savedWorkStyle = workStyle;
     savedCompanions = companions;
@@ -242,17 +243,17 @@ void main() {
       ));
       await tester.pump();
 
-      // The work question is step 2 of 7.
+      // The work question is step 2 of 8.
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
       expect(find.text('Do you work while you travel?'), findsOneWidget);
-      expect(find.text('Step 2 of 7'), findsOneWidget);
+      expect(find.text('Step 2 of 8'), findsOneWidget);
 
       await tester.tap(find.text('yes — I work as I travel'));
       await tester.pump();
 
       // Walk to the last step and finish.
-      for (var i = 0; i < 5; i++) {
+      for (var i = 0; i < 6; i++) {
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
       }
@@ -291,20 +292,20 @@ void main() {
       ));
       await tester.pump();
 
-      // Style -> work -> interests -> active (step 4 of 7).
+      // Style -> work -> interests -> active (step 4 of 8).
       for (var i = 0; i < 3; i++) {
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
       }
       expect(find.text('How active are your trips?'), findsOneWidget);
-      expect(find.text('Step 4 of 7'), findsOneWidget);
+      expect(find.text('Step 4 of 8'), findsOneWidget);
 
       await tester.tap(find.text('gym access'));
       await tester.pump();
       await tester.tap(find.text('challenging — long and steep'));
       await tester.pump();
 
-      for (var i = 0; i < 3; i++) {
+      for (var i = 0; i < 4; i++) {
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
       }
@@ -368,7 +369,7 @@ void main() {
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
       expect(find.text('Do you work while you travel?'), findsOneWidget);
-      expect(find.text('Step 2 of 7'), findsOneWidget);
+      expect(find.text('Step 2 of 8'), findsOneWidget);
 
       // System back: intercepted by PopScope -> back to step 1, quiz intact.
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
@@ -378,7 +379,7 @@ void main() {
 
       expect(find.byType(OnboardingQuizScreen), findsOneWidget);
       expect(find.text("What's your travel style?"), findsOneWidget);
-      expect(find.text('Step 1 of 7'), findsOneWidget);
+      expect(find.text('Step 1 of 8'), findsOneWidget);
     });
   });
 

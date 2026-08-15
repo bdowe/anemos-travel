@@ -98,6 +98,106 @@ func TestSummarizeOffersBaggageSuffixes(t *testing.T) {
 	}
 }
 
+// What the listed prices cover with respect to bags is the same for every
+// offer, so it is stated ONCE in the header — and it is derived from what came
+// back, never from what was asked for. Getting this wrong is how a fare that
+// excludes a EUR 53 cabin bag gets quoted as the cheapest option.
+func TestSummarizeOffersBagBasis(t *testing.T) {
+	inPrice := func() FlightOffer {
+		o := summarizeOfferFixture()
+		o.BaggageStatus = baggageStatusInPrice
+		o.EffectivePrice = o.Price
+		return o
+	}
+	unknown := func() FlightOffer {
+		o := summarizeOfferFixture()
+		o.BaggageStatus = baggageStatusUnknown
+		return o
+	}
+
+	cases := []struct {
+		name    string
+		tier    string
+		offers  []FlightOffer
+		want    string
+		unwant  string
+		wantSfx string
+	}{
+		{
+			name:   "personal item says the fare is bare",
+			tier:   baggagePersonalItem,
+			offers: []FlightOffer{summarizeOfferFixture()},
+			want:   "bare fares covering a personal item only",
+		},
+		{
+			name:    "carry-on says the fee is in the price",
+			tier:    baggageCarryOn,
+			offers:  []FlightOffer{inPrice()},
+			want:    "prices cover a cabin bag",
+			wantSfx: "(bag fee already in this price)",
+		},
+		{
+			name:   "checked names the fee it could not price",
+			tier:   baggageChecked,
+			offers: []FlightOffer{inPrice()},
+			want:   "include the cabin-bag fee but NOT the checked-bag fee",
+			unwant: "prices cover a checked bag",
+		},
+		{
+			name:   "nothing priced is stated as such, not as covered",
+			tier:   baggageCarryOn,
+			offers: []FlightOffer{unknown()},
+			want:   "do NOT cover a cabin bag",
+			unwant: "prices cover a cabin bag,",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			text := summarizeOffers(FlightSearchRequest{
+				Origin: "EWR", Destination: "PRG", DepartDate: "2026-08-24", Adults: 1, Baggage: tc.tier,
+			}, tc.offers)
+			if !strings.Contains(text, tc.want) {
+				t.Errorf("missing %q:\n%s", tc.want, text)
+			}
+			if tc.unwant != "" && strings.Contains(text, tc.unwant) {
+				t.Errorf("must not claim %q:\n%s", tc.unwant, text)
+			}
+			if tc.wantSfx != "" && !strings.Contains(text, tc.wantSfx) {
+				t.Errorf("missing per-offer suffix %q:\n%s", tc.wantSfx, text)
+			}
+			if !strings.Contains(text, "say what bags it covers") {
+				t.Errorf("closing instruction lost the bag clause:\n%s", text)
+			}
+		})
+	}
+}
+
+// A provider that priced the checked bag itself leaves nothing to warn about;
+// only the cabin-priced case earns the note.
+func TestBaggageNoteCode(t *testing.T) {
+	inPrice := FlightOffer{BaggageStatus: baggageStatusInPrice}
+	paid := FlightOffer{BaggageStatus: baggageStatusPaid}
+	cases := []struct {
+		name   string
+		tier   string
+		offers []FlightOffer
+		want   string
+	}{
+		{"checked priced only for the cabin", baggageChecked, []FlightOffer{inPrice}, baggageNoteCheckedNotPriced},
+		{"checked priced properly", baggageChecked, []FlightOffer{paid, inPrice}, ""},
+		{"carry-on never notes", baggageCarryOn, []FlightOffer{inPrice}, ""},
+		{"personal item never notes", baggagePersonalItem, []FlightOffer{inPrice}, ""},
+		{"nothing priced at all", baggageChecked, []FlightOffer{{BaggageStatus: baggageStatusUnknown}}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := baggageNoteCode(tc.tier, tc.offers); got != tc.want {
+				t.Errorf("note = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // Clock times: the model schedules the traveler's first and last day around
 // them, and a summary without them cannot tell a dawn departure from a
 // red-eye. Both providers have always filled DepartTime/ArriveTime; only this
