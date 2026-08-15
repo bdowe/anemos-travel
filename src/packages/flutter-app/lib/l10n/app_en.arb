@@ -456,6 +456,91 @@
   "budgetCategoryTransport": "Transport",
   "budgetCategoryShopping": "Shopping",
   "budgetCategoryGeneral": "General",
+  "budgetPlanStatePlanned": "Planned",
+  "budgetPlanStatePaid": "Paid",
+  "budgetPlanRowBothSemantics": "Planned {planned}, paid {paid}",
+  "@budgetPlanRowBothSemantics": {
+    "placeholders": {
+      "planned": {
+        "type": "String"
+      },
+      "paid": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPlanTotalPlanned": "Total planned",
+  "budgetPlanProjected": "Projected {amount}",
+  "@budgetPlanProjected": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPlanOverTargetBy": "{amount} over target",
+  "@budgetPlanOverTargetBy": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPlanVsPlan": "Vs plan",
+  "budgetPlanDeltaOver": "{amount} over",
+  "@budgetPlanDeltaOver": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPlanDeltaUnder": "{amount} under",
+  "@budgetPlanDeltaUnder": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPlanDeltaOnPlan": "On plan",
+  "budgetPlanMarkPaid": "Mark as paid",
+  "budgetPlanMarkPlanned": "Mark as planned",
+  "budgetPlanPaidAmountLabel": "Paid ({currency})",
+  "@budgetPlanPaidAmountLabel": {
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPlanPlannedAmountLabel": "Planned ({currency})",
+  "@budgetPlanPlannedAmountLabel": {
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPlanPlannedHelper": "Planned {amount}",
+  "@budgetPlanPlannedHelper": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPlanAmountsHelp": "Fill in what you plan to spend, what you paid, or both.",
+  "budgetPlanMovedBack": "{label} moved back to planned",
+  "@budgetPlanMovedBack": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetPlanGroupHasPlanned": "Includes planned amounts",
+  "budgetPlanAutoLocked": "From a booking — un-book it to remove",
   "checklistTitle": "Packing & prep",
   "checklistSummary": "{total, plural, =0{No items yet} other{{checked} of {total} packed}}",
   "@checklistSummary": {

@@ -1898,6 +1898,120 @@ abstract class AppLocalizations {
   /// **'General'**
   String get budgetCategoryGeneral;
 
+  /// No description provided for @budgetPlanStatePlanned.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned'**
+  String get budgetPlanStatePlanned;
+
+  /// No description provided for @budgetPlanStatePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get budgetPlanStatePaid;
+
+  /// No description provided for @budgetPlanRowBothSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned {planned}, paid {paid}'**
+  String budgetPlanRowBothSemantics(String planned, String paid);
+
+  /// No description provided for @budgetPlanTotalPlanned.
+  ///
+  /// In en, this message translates to:
+  /// **'Total planned'**
+  String get budgetPlanTotalPlanned;
+
+  /// No description provided for @budgetPlanProjected.
+  ///
+  /// In en, this message translates to:
+  /// **'Projected {amount}'**
+  String budgetPlanProjected(String amount);
+
+  /// No description provided for @budgetPlanOverTargetBy.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} over target'**
+  String budgetPlanOverTargetBy(String amount);
+
+  /// No description provided for @budgetPlanVsPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Vs plan'**
+  String get budgetPlanVsPlan;
+
+  /// No description provided for @budgetPlanDeltaOver.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} over'**
+  String budgetPlanDeltaOver(String amount);
+
+  /// No description provided for @budgetPlanDeltaUnder.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} under'**
+  String budgetPlanDeltaUnder(String amount);
+
+  /// No description provided for @budgetPlanDeltaOnPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'On plan'**
+  String get budgetPlanDeltaOnPlan;
+
+  /// No description provided for @budgetPlanMarkPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as paid'**
+  String get budgetPlanMarkPaid;
+
+  /// No description provided for @budgetPlanMarkPlanned.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as planned'**
+  String get budgetPlanMarkPlanned;
+
+  /// No description provided for @budgetPlanPaidAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid ({currency})'**
+  String budgetPlanPaidAmountLabel(String currency);
+
+  /// No description provided for @budgetPlanPlannedAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned ({currency})'**
+  String budgetPlanPlannedAmountLabel(String currency);
+
+  /// No description provided for @budgetPlanPlannedHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned {amount}'**
+  String budgetPlanPlannedHelper(String amount);
+
+  /// No description provided for @budgetPlanAmountsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in what you plan to spend, what you paid, or both.'**
+  String get budgetPlanAmountsHelp;
+
+  /// No description provided for @budgetPlanMovedBack.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} moved back to planned'**
+  String budgetPlanMovedBack(String label);
+
+  /// No description provided for @budgetPlanGroupHasPlanned.
+  ///
+  /// In en, this message translates to:
+  /// **'Includes planned amounts'**
+  String get budgetPlanGroupHasPlanned;
+
+  /// No description provided for @budgetPlanAutoLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'From a booking — un-book it to remove'**
+  String get budgetPlanAutoLocked;
+
   /// No description provided for @checklistTitle.
   ///
   /// In en, this message translates to:
