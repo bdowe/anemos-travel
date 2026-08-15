@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
+import 'app_typography.dart';
 import 'spacing.dart';
 
 /// Central app theme. Kept in one place (out of `main.dart`) so styling is
@@ -21,15 +22,38 @@ abstract final class AppTheme {
     final base = ThemeData(
       colorScheme: colorScheme,
       useMaterial3: true,
-      fontFamily: 'Inter',
+      fontFamily: AppFonts.ui,
     );
 
-    // Hierarchy through weight, not size: titles/headlines carry weight, body
-    // stays regular. (M3 ships titles at w400, which reads too light.)
+    // Two registers, split at the headline/title line. Headlines carry the
+    // display face (Marcellus) at one weight — the size step and the serif do
+    // the work a heavy sans used to. Below that line, hierarchy is still
+    // weight, not size: titles/labels carry weight, body stays regular. (M3
+    // ships titles at w400, which reads too light.)
+    //
+    // Marcellus has a smaller x-height than Inter (0.500 em vs 0.546), so each
+    // headline steps up 2px to land on the same optical size — headlineSmall
+    // at 26 measures within a hair of the Inter-bold 24 it replaces, in both
+    // x-height and set width.
     final textTheme = base.textTheme.copyWith(
-      headlineLarge: base.textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w600),
-      headlineMedium: base.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600),
-      headlineSmall: base.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
+      headlineLarge: base.textTheme.headlineLarge?.copyWith(
+        fontFamily: AppFonts.display,
+        fontWeight: FontWeight.w400,
+        fontSize: 34,
+        height: 1.2,
+      ),
+      headlineMedium: base.textTheme.headlineMedium?.copyWith(
+        fontFamily: AppFonts.display,
+        fontWeight: FontWeight.w400,
+        fontSize: 30,
+        height: 1.2,
+      ),
+      headlineSmall: base.textTheme.headlineSmall?.copyWith(
+        fontFamily: AppFonts.display,
+        fontWeight: FontWeight.w400,
+        fontSize: 26,
+        height: 1.2,
+      ),
       titleLarge: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
       titleMedium: base.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
       titleSmall: base.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/admin_insights.dart';
 import '../models/admin_metrics.dart';
 import '../providers/admin_metrics_provider.dart';
+import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
 import '../widgets/daily_count_chart.dart';
 import '../widgets/empty_state.dart';
@@ -462,7 +463,11 @@ class _TileGrid extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   t.value,
+                  // A measurement, not a heading: it borrows the headline size
+                  // for weight on the page but stays in the UI face, whose
+                  // figures are built to line up in a column of tiles.
                   style: theme.textTheme.headlineSmall?.copyWith(
+                    fontFamily: AppFonts.ui,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

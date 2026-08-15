@@ -258,7 +258,6 @@ class _LandingHero extends StatelessWidget {
                       l10n.landingHeroTagline,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         color: Colors.white,
-                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.sm),

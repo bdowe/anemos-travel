@@ -8,6 +8,7 @@ import '../models/ops_health.dart';
 import '../models/ops_metrics.dart';
 import '../models/ops_uptime.dart';
 import '../providers/ops_admin_provider.dart';
+import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
 import 'empty_state.dart';
 import 'page_container.dart';
@@ -639,7 +640,10 @@ class _TileGrid extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   t.value,
+                  // A measurement, not a heading — stays in the UI face
+                  // (see the same opt-out in admin_metrics_screen.dart).
                   style: theme.textTheme.headlineSmall?.copyWith(
+                    fontFamily: AppFonts.ui,
                     fontWeight: FontWeight.w700,
                     color: t.severity == 'critical'
                         ? theme.colorScheme.error

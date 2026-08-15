@@ -143,9 +143,7 @@ class _GuideBody extends StatelessWidget {
                 ],
                 Text(
                   title,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.headlineSmall,
                 ),
                 if (placeLine.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.xs),

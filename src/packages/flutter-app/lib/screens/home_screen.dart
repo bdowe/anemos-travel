@@ -311,9 +311,7 @@ class _GreetingHeader extends StatelessWidget {
           (firstName == null || firstName.isEmpty)
               ? greeting
               : l10n.homeGreetingNamed(greeting, firstName),
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: theme.textTheme.headlineSmall,
         ),
         const SizedBox(height: 2),
         Text(
@@ -388,7 +386,6 @@ class _AgentHeroCard extends StatelessWidget {
             l10n.homeHeroTitle,
             style: theme.textTheme.headlineSmall?.copyWith(
               color: Colors.white,
-              fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),

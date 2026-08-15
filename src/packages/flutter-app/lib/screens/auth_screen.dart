@@ -227,9 +227,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       _isLogin
                           ? l10n.authWelcomeBack
                           : l10n.authCreateAccountTitle,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: theme.textTheme.headlineSmall,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppSpacing.xl),
