@@ -3178,6 +3178,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get refineHint => 'Ask for changes...';
 
   @override
+  String get refineNewChat => 'New chat';
+
+  @override
+  String get refineNewChatConfirmTitle => 'Start a new chat?';
+
+  @override
+  String get refineNewChatConfirmBody =>
+      'This conversation will be cleared. Your trip is not affected.';
+
+  @override
+  String get refineResumeLoading => 'Restoring your conversation…';
+
+  @override
+  String get refineResumeGone => 'This conversation has expired.';
+
+  @override
+  String get refineResumeGoneDetail =>
+      'It was cleared or removed with its trip. You can start a new one.';
+
+  @override
+  String get refineResumeFailed => 'Couldn\'t reopen this conversation.';
+
+  @override
+  String get tripContinueChat => 'Continue chat';
+
+  @override
+  String tripContinueChatMeta(int count, String age) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count messages',
+      one: '1 message',
+    );
+    return '$_temp0 · $age';
+  }
+
+  @override
   String get chatDictationPermission =>
       'Microphone access was blocked. Check your browser settings.';
 

@@ -34,8 +34,8 @@ land on Home) start working.
       refreshing there reopens that screen inside the shell.
 - [ ] Once a plan conversation exists, the Plan tab's URL becomes
       `/plan/<chatId>`; refreshing there restores the conversation transcript.
-      If the conversation can't be restored (expired, trip-bound, someone
-      else's), the Plan tab opens fresh — no error dialog.
+      If the conversation can't be restored (expired, someone else's, or not a
+      freeform plan chat at all), the Plan tab opens fresh — no error dialog.
 - [ ] Going back (browser back button) and popping in-app screens keeps the URL
       in sync with what's on screen.
 - [ ] Signing out resets the URL to `/`.
@@ -73,7 +73,10 @@ None. No new persistence; the URL itself is the state.
 - A Google/Apple sign-in redirect leaves the page, so a deep-link target does
   not survive SSO — the user lands on Home. Known limitation.
 - Restoring `/plan/<chatId>` for a conversation with no stored transcript
-  (trip-bound, anonymous, graduated, or foreign) opens a fresh Plan tab.
+  (anonymous, graduated, or foreign) opens a fresh Plan tab. A trip's own
+  conversation has no chat id at all (specs/trip-refine-memory), so this URL
+  can never name one — and the open refine panel is deliberately not a
+  location either.
 - Screens that can't be reconstructed from a URL (full-screen trip map, guide
   detail, flight search with prefill) keep the URL of the page beneath them;
   refresh lands on that page.

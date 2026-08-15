@@ -89,7 +89,9 @@ travels with each request, like the rest of the transcript.
   current at send time.
 - The long refinement seed message eventually falls into the summary; trip-
   bound sessions re-read authoritative trip state via tools, so no special
-  casing.
+  casing. *(specs/trip-refine-memory made this true rather than assumed: the
+  bound system prompt now requires get_trip before any edit, and each new
+  section seed collapses the earlier ones' listings.)*
 - The summary itself can never exceed the per-message limit (the server caps
   and truncates its own output defensively).
 

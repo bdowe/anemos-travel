@@ -43,12 +43,12 @@ var getWeatherTool = anthropic.ToolParam{
 
 var getTripTool = anthropic.ToolParam{
 	Name:        "get_trip",
-	Description: anthropic.String("Read the traveler's saved trips. Without trip_id: list their trips (id, title, dates, cities). With trip_id: the full itinerary of that trip. Use it when they reference an existing trip ('my Lisbon trip', 'the trip we planned last week') so you can build on what's already saved instead of asking again."),
+	Description: anthropic.String("Read the traveler's saved trips, as they are right now. Without trip_id: in a trip refinement conversation, the full current itinerary of the trip being refined; otherwise a list of their trips (id, title, dates, cities). With trip_id: the full itinerary of that trip. Use it when they reference an existing trip ('my Lisbon trip', 'the trip we planned last week') so you can build on what's already saved instead of asking again, and to re-read a trip you are refining before you change it."),
 	InputSchema: anthropic.ToolInputSchemaParam{
 		Properties: map[string]any{
 			"trip_id": map[string]any{
 				"type":        "string",
-				"description": "A trip id from a previous get_trip listing; omit to list all trips",
+				"description": "A trip id from a previous get_trip listing; omit for the trip being refined, or to list all trips",
 			},
 		},
 	},
@@ -691,6 +691,15 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 	}
 	json.Unmarshal(input, &in)
 	q := store.New(dbPool)
+
+	// In a refinement conversation "the trip" is unambiguous, so answer with it
+	// rather than a list the model then has to index into
+	// (specs/trip-refine-memory). This also fixes the collaborator case: the
+	// listing below is strictly caller-OWNED, so for a co-planner it was their
+	// own other trips and never the trip being refined.
+	if strings.TrimSpace(in.TripID) == "" && boundTripID != nil {
+		in.TripID = boundTripID.String()
+	}
 
 	if strings.TrimSpace(in.TripID) == "" {
 		trips, err := q.ListLatestTripsByOwner(ctx, uid)

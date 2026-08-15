@@ -2135,6 +2135,25 @@
   },
   "refineAssistantHint": "Ask anything about this trip…",
   "refineHint": "Ask for changes...",
+  "refineNewChat": "New chat",
+  "refineNewChatConfirmTitle": "Start a new chat?",
+  "refineNewChatConfirmBody": "This conversation will be cleared. Your trip is not affected.",
+  "refineResumeLoading": "Restoring your conversation…",
+  "refineResumeGone": "This conversation has expired.",
+  "refineResumeGoneDetail": "It was cleared or removed with its trip. You can start a new one.",
+  "refineResumeFailed": "Couldn't reopen this conversation.",
+  "tripContinueChat": "Continue chat",
+  "tripContinueChatMeta": "{count, plural, =1{1 message} other{{count} messages}} · {age}",
+  "@tripContinueChatMeta": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "age": {
+        "type": "String"
+      }
+    }
+  },
   "chatDictationPermission": "Microphone access was blocked. Check your browser settings.",
   "chatDictationUnsupported": "Voice input isn't available in this browser.",
   "chatDictationUnavailable": "Voice input isn't available right now.",

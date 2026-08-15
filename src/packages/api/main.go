@@ -846,6 +846,12 @@ func buildRouter() *mux.Router {
 	api.Handle("/trips/{id}", authMiddleware(http.HandlerFunc(deleteTripHandler))).Methods("DELETE")
 	api.Handle("/trips/{id}/status", authMiddleware(http.HandlerFunc(tripStatusHandler))).Methods("GET")
 	api.Handle("/trips/{id}/refine", strict(authMiddleware(http.HandlerFunc(refineTripHandler)))).Methods("POST")
+	// The trip's own saved chat (specs/trip-refine-memory) — distinct from the
+	// legacy POST /trips/{id}/refine above, which hands back the OWNER's
+	// itinerary version-lineage chat id. This one is addressed by trip alone
+	// and is per-caller.
+	api.Handle("/trips/{id}/refine-chat", authMiddleware(http.HandlerFunc(getTripRefineChatHandler))).Methods("GET")
+	api.Handle("/trips/{id}/refine-chat", authMiddleware(http.HandlerFunc(deleteTripRefineChatHandler))).Methods("DELETE")
 	api.Handle("/trips/{id}/share", authMiddleware(http.HandlerFunc(createShareHandler))).Methods("POST")
 	api.Handle("/trips/{id}/share", authMiddleware(http.HandlerFunc(revokeShareHandler))).Methods("DELETE")
 	// Owner-private export: the authed owner/editor mints a short-lived signed
@@ -1032,6 +1038,7 @@ func startServer(router *mux.Router) {
 	log.Printf("  GET  /api/v1/trips              - List trips (auth)")
 	log.Printf("  GET  /api/v1/chats              - Resumable plan conversations (auth)")
 	log.Printf("  GET/DELETE /api/v1/chats/{chatId} - Resume / dismiss a conversation (auth)")
+	log.Printf("  GET/DELETE /api/v1/trips/{id}/refine-chat - Resume / clear a trip's own chat (auth)")
 	log.Printf("  GET/PATCH/DELETE /api/v1/trips/{id} - Trip detail (auth)")
 	log.Printf("  GET/PUT /api/v1/preferences      - Traveler preferences (auth)")
 	log.Printf("  GET  /api/v1/accommodation-links - Airbnb/Booking browse links")

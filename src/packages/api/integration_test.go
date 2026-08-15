@@ -70,7 +70,7 @@ func resetDB(t *testing.T) {
 			notifications, reminder_sends,
 			local_sources, local_recommendations, local_guides,
 			local_guide_recommendations, local_source_material,
-			plan_chat_sessions, oauth_clients, oauth_auth_codes,
+			plan_chat_sessions, trip_refine_sessions, oauth_clients, oauth_auth_codes,
 			oauth_grants, oauth_tokens, health_samples CASCADE`)
 		if err == nil {
 			return

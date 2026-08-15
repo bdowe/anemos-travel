@@ -799,8 +799,12 @@ class PlanNotifier extends StateNotifier<PlanState> {
   /// without sending anything: the transcript renders immediately and the next
   /// send carries the same chat_id plus [summary] (the server-side compaction
   /// summary) exactly as a never-closed session would.
+  ///
+  /// [chatId] is optional because a trip's own conversation has none
+  /// (specs/trip-refine-memory): it is keyed by (traveler, trip) server-side,
+  /// and the throwaway id the next send mints is ignored for a bound turn.
   void resumeConversation({
-    required String chatId,
+    String? chatId,
     required List<PlanMessage> messages,
     String? summary,
   }) {
@@ -823,15 +827,72 @@ class PlanNotifier extends StateNotifier<PlanState> {
     sendMessage(seedMessage);
   }
 
-  /// Start (or restart) an in-place section refinement on the bound trip:
-  /// clears any prior conversation and sends the seed describing the targeted
-  /// section. Requires [tripId]; the server patches that trip directly, so no
-  /// chat-group binding is needed.
-  void beginSectionRefinement(String seedMessage, {String? displayLabel}) {
-    reset();
-    sendMessage(seedMessage, displayLabel: displayLabel);
+  /// Point the trip's running conversation at another section
+  /// (specs/trip-refine-memory). A refine tap is a change of subject, not a new
+  /// chat — it appends a context chapter and discards nothing; only
+  /// [startOver] discards. Requires [tripId]; the server patches that trip
+  /// directly, so no chat-group binding is needed.
+  ///
+  /// Every EARLIER seed's itinerary listing is collapsed to a stub first. The
+  /// seed built by the trip screen dumps every item with coordinates and tags,
+  /// so without this a conversation would accumulate near-duplicate snapshots
+  /// and the agent could not tell which one is current — the failure class
+  /// behind the update_itinerary_section scope bugs. Costs the reader nothing:
+  /// a labeled message renders as a context chip and its content is never shown.
+  ///
+  /// Rewrites content **in place and never removes a message**: [compactedCount]
+  /// is a start-anchored index into [PlanState.messages], so dropping one would
+  /// misalign the wire history against the server's compaction summary.
+  void appendSectionRefinement(String seedMessage, {String? displayLabel}) {
+    var hadEarlierSeed = false;
+    final superseded = [
+      for (final m in state.messages)
+        if (m.role == MessageRole.user && m.displayLabel != null) ...[
+          if (m.content.startsWith(_supersededSeedPrefix))
+            m
+          else
+            PlanMessage(
+              role: m.role,
+              content: _supersededSeed(m.displayLabel!),
+              displayLabel: m.displayLabel,
+              attachments: m.attachments,
+            ),
+        ] else
+          m,
+    ];
+    for (final m in state.messages) {
+      if (m.role == MessageRole.user && m.displayLabel != null) {
+        hadEarlierSeed = true;
+        break;
+      }
+    }
+    state = state.copyWith(messages: superseded);
+    // Only when there is something to ignore. A first seed — especially a
+    // server-built Next Step prompt — reaches the model verbatim.
+    sendMessage(
+        hadEarlierSeed ? '$seedMessage\n\n$_ignoreStaleListings' : seedMessage,
+        displayLabel: displayLabel);
   }
+
+  /// Explicit "New chat" on a trip: drop the transcript and the chat id. The
+  /// caller is responsible for clearing the stored copy
+  /// (`DELETE /trips/{id}/refine-chat`) — otherwise the page would go on
+  /// advertising a conversation the traveler just dismissed.
+  void startOver() => reset();
 }
+
+/// Canonical **English**, like RefineTarget.label: these strings go on the wire
+/// to the agent, never to the reader (see [PlanNotifier.appendSectionRefinement]).
+const _supersededSeedPrefix = '(Earlier listing for ';
+
+String _supersededSeed(String label) =>
+    '$_supersededSeedPrefix$label — superseded; the itinerary as it stands is '
+    'described in the latest message below, and get_trip returns the '
+    'authoritative version.)';
+
+const _ignoreStaleListings =
+    'Ignore any earlier itinerary listings in this conversation; they are '
+    'stale. This one, and get_trip, are current.';
 
 /// Re-reads the traveler profile after the agent writes it. `load()`, not
 /// `loadIfNeeded()`: the cached copy is exactly what is wrong here.

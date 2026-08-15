@@ -376,6 +376,18 @@ type TripInvite struct {
 	CreatedAt  time.Time          `json:"created_at"`
 }
 
+type TripRefineSession struct {
+	ID           uuid.UUID `json:"id"`
+	UserID       uuid.UUID `json:"user_id"`
+	TripID       uuid.UUID `json:"trip_id"`
+	Preview      string    `json:"preview"`
+	Summary      string    `json:"summary"`
+	Messages     []byte    `json:"messages"`
+	MessageCount int32     `json:"message_count"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type TripSegment struct {
 	ID          uuid.UUID   `json:"id"`
 	TripID      uuid.UUID   `json:"trip_id"`

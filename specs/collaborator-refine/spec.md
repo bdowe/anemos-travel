@@ -37,7 +37,12 @@ itinerary.
 - [ ] Two simultaneous whole-itinerary writes (refine vs. refine, refine vs.
       reorder) serialize — last write wins cleanly, never a merged/duplicated
       item set.
-- [ ] A collaborator's refine session is ephemeral: it does not appear in
+- [ ] *(Amended by specs/trip-refine-memory: a collaborator's refine
+      conversation is no longer ephemeral — it is saved under their own account
+      for that trip, visible to no one else, deleted with the trip, and a
+      revoked collaborator loses access to it without it being destroyed. It
+      still appears in nobody's resumable chats.)*
+      A collaborator's refine session is ephemeral: it does not appear in
       anyone's resumable chats.
 - [ ] Refine usage is metered against the person pressing the button (their
       own free-tier session count, not the owner's).

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sliver_tools/sliver_tools.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -26,6 +27,7 @@ import '../providers/booking_todos_provider.dart';
 import '../providers/preferences_provider.dart';
 import '../providers/api_client_provider.dart';
 import '../providers/plan_provider.dart';
+import '../providers/plan_resume.dart';
 import '../providers/events_provider.dart';
 import '../providers/weather_provider.dart';
 import '../models/weather.dart';
@@ -154,9 +156,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // in this mode; a successful live load clears it.
   DateTime? _offlineSince;
   // In-page AI refinement panel (side dock on wide layouts, bottom sheet on
-  // narrow ones); null target while closed.
+  // narrow ones). This bool is ALL the panel's screen state: the header derives
+  // from the conversation itself, so back has exactly one thing to undo
+  // (specs/trip-refine-memory).
   bool _panelOpen = false;
-  RefineTarget? _refineTarget;
+
+  // Where the trip's saved conversation is in its restore. `_chatResumeTried`
+  // makes the fetch once-per-screen so a 404 doesn't refetch on every tap.
+  RefineChatPhase _chatPhase = RefineChatPhase.ready;
+  Object? _chatError;
+  bool _chatResumeTried = false;
 
   // Next Step CTA session state (specs/next-step-cta): the all_set
   // celebration shows only after this session actually watched a step resolve
@@ -1841,10 +1850,116 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
   }
 
-  /// Opens the in-page refinement panel on [target], seeding a fresh session
-  /// with the section's current contents. The session is bound to this trip
-  /// server-side, so changes patch the trip in place (no new versions).
-  void _openRefine(Trip trip, RefineTarget target) {
+  /// The trip page's visible proof that a conversation is waiting
+  /// (specs/trip-refine-memory). Without it, resuming would be an invisible
+  /// behavior of a button the traveler has to guess at — which is how the
+  /// conversation got lost in the first place.
+  ///
+  /// Hidden offline: reopening needs a fetch, and a dead row is worse than
+  /// none. Hidden while the panel is open — the conversation is right there.
+  Widget _continueChatRow(Trip trip, ThemeData theme, AppLocalizations l10n) {
+    final chat = trip.refineChat;
+    if (chat == null || _panelOpen || !trip.canEdit || _isOffline) {
+      return const SizedBox.shrink();
+    }
+    final updated = DateTime.tryParse(chat.updatedAt);
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ListTile(
+          leading: const Icon(Icons.forum_outlined),
+          title: Text(l10n.tripContinueChat,
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (chat.preview.isNotEmpty)
+                Text(chat.preview, maxLines: 2, overflow: TextOverflow.ellipsis),
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: Text(
+                  // relativeTime already exists (offline_banner.dart) — reuse
+                  // it rather than growing a second "how long ago" rule.
+                  updated == null
+                      ? l10n.tripContinueChatMeta(chat.messageCount, '')
+                      : l10n.tripContinueChatMeta(
+                          chat.messageCount, relativeTime(l10n, updated)),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            ],
+          ),
+          onTap: () => _openChat(trip),
+        ),
+      ),
+    );
+  }
+
+  /// Makes sure the trip's saved conversation is loaded before anything is
+  /// sent into it (specs/trip-refine-memory). Returns false when the caller
+  /// must NOT proceed.
+  ///
+  /// This gate is load-bearing, not politeness: the transcript is upserted
+  /// wholesale every turn, so sending a seed into a panel that failed to
+  /// restore would overwrite a fifty-message conversation with two messages.
+  ///
+  /// The empty-transcript precondition is what makes it safe to call
+  /// [PlanNotifier.resumeConversation] (which resets): a turn can never be in
+  /// flight with an empty transcript, because sendMessage appends the user's
+  /// message first.
+  Future<bool> _ensureRefineHydrated(Trip trip) async {
+    final notifier = ref.read(tripRefineProvider(widget.tripId).notifier);
+    // Memory beats server: an in-progress conversation is already the truth,
+    // and refetching would discard anything streaming.
+    if (ref.read(tripRefineProvider(widget.tripId)).messages.isNotEmpty) {
+      return true;
+    }
+    // Nothing stored: a fresh conversation can't overwrite anything.
+    if (trip.refineChat == null) return true;
+    if (_chatResumeTried) {
+      // Already answered once this screen session. "Expired" means there is
+      // nothing left to protect, so a fresh chat is fine; a FAILURE means a
+      // stored conversation may still be there, and sending into an empty
+      // panel would upsert over it.
+      return _chatPhase != RefineChatPhase.failed;
+    }
+    _chatResumeTried = true;
+    setState(() {
+      _panelOpen = true;
+      _chatPhase = RefineChatPhase.restoring;
+      _chatError = null;
+    });
+    // Captured while mounted: after the await, `ref` may be unreachable
+    // through a disposed element.
+    final trips = ref.read(tripsApiServiceProvider);
+    try {
+      await resumeTripRefineChat(
+          trips: trips, plan: notifier, tripId: widget.tripId);
+      if (!mounted) return false;
+      setState(() => _chatPhase = RefineChatPhase.ready);
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      final gone = e is ApiException && e.statusCode == 404;
+      setState(() {
+        _chatPhase =
+            gone ? RefineChatPhase.expired : RefineChatPhase.failed;
+        _chatError = e;
+      });
+      return false;
+    }
+  }
+
+  /// Points the trip's running conversation at [target], seeding it with that
+  /// section's current contents. The session is bound to this trip server-side,
+  /// so changes patch the trip in place (no new versions).
+  ///
+  /// Since specs/trip-refine-memory this APPENDS: a ✨ tap is a change of
+  /// subject, not a new chat. Only "New chat" discards one.
+  Future<void> _openRefine(Trip trip, RefineTarget target) async {
     // Chat/refine needs the network; also keeps the refine panel from ever
     // observing a cached (read-only) trip.
     if (_guardOffline()) return;
@@ -1857,19 +1972,21 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       _showSnack(l10n.tripAddPlacesBeforeRefine);
       return;
     }
+    if (!await _ensureRefineHydrated(trip)) return;
+    if (!mounted) return;
+    final continuing =
+        ref.read(tripRefineProvider(widget.tripId)).messages.isNotEmpty;
     ref
         .read(tripRefineProvider(widget.tripId).notifier)
-        .beginSectionRefinement(_buildSectionSeed(trip, target),
+        .appendSectionRefinement(
+            _buildSectionSeed(trip, target, continuing: continuing),
             // displayLabel is what the traveler reads in the panel header, so
             // it uses the localized form; the seed prompt above keeps the
             // canonical English label the agent expects (specs/i18n-spanish).
             displayLabel: target.assistant
                 ? l10n.tripAssistantLabel
                 : l10n.tripRefiningSection(target.displayLabel(l10n)));
-    setState(() {
-      _panelOpen = true;
-      _refineTarget = target;
-    });
+    setState(() => _panelOpen = true);
   }
 
   /// Next Step chat entry (specs/next-step-cta): the same offline + canEdit
@@ -1878,38 +1995,79 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// plan_itinerary step exists precisely for empty trips. [displayLabel] is
   /// the step's server-localized title; the seed stays canonical English
   /// (specs/i18n-spanish).
-  void _openSeededChat(Trip trip,
-      {required String seed, required String displayLabel}) {
+  Future<void> _openSeededChat(Trip trip,
+      {required String seed, required String displayLabel}) async {
     if (_guardOffline()) return;
     if (!trip.canEdit) return;
+    if (!await _ensureRefineHydrated(trip)) return;
+    if (!mounted) return;
     ref
         .read(tripRefineProvider(widget.tripId).notifier)
-        .beginSectionRefinement(seed, displayLabel: displayLabel);
-    setState(() {
-      _panelOpen = true;
-      _refineTarget = const RefineTarget.assistant();
-    });
+        .appendSectionRefinement(seed, displayLabel: displayLabel);
+    setState(() => _panelOpen = true);
   }
 
-  /// FAB entry point: resumes the panel conversation if one is in progress,
-  /// otherwise starts a fresh whole-trip assistant session.
-  void _openChat(Trip trip) {
+  /// FAB / "Continue chat" entry point: reopens the conversation in progress,
+  /// restores the saved one, or starts a fresh whole-trip assistant session.
+  Future<void> _openChat(Trip trip) async {
     if (_guardOffline()) return;
     // The FAB is hidden for read-only viewers; belt-and-braces like
     // _openRefine.
     if (!trip.canEdit) return;
+    if (ref.read(tripRefineProvider(widget.tripId)).messages.isNotEmpty) {
+      setState(() => _panelOpen = true);
+      return;
+    }
+    if (trip.refineChat != null && !_chatResumeTried) {
+      await _ensureRefineHydrated(trip);
+      return; // the panel is open either way — restored, expired, or failed
+    }
+    await _openRefine(trip, const RefineTarget.assistant());
+  }
+
+  /// Explicit "New chat": discard the conversation here and server-side, so the
+  /// page stops advertising one the traveler just dismissed. Confirms first —
+  /// with one running chat per trip, this really does throw the thread away.
+  Future<void> _newChat(Trip trip) async {
+    final l10n = context.l10n;
     final hasConversation =
         ref.read(tripRefineProvider(widget.tripId)).messages.isNotEmpty;
     if (hasConversation) {
-      setState(() {
-        _panelOpen = true;
-        // Restore a header if the screen was rebuilt and lost it; keep a
-        // surviving section-refine target so its header stays accurate.
-        _refineTarget ??= const RefineTarget.assistant();
-      });
-      return;
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(l10n.refineNewChatConfirmTitle),
+          content: Text(l10n.refineNewChatConfirmBody),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.commonCancel)),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(l10n.refineNewChat)),
+          ],
+        ),
+      );
+      if (confirm != true || !mounted) return;
     }
-    _openRefine(trip, const RefineTarget.assistant());
+    final trips = ref.read(tripsApiServiceProvider);
+    ref.read(tripRefineProvider(widget.tripId).notifier).startOver();
+    setState(() {
+      _chatPhase = RefineChatPhase.ready;
+      _chatError = null;
+      // A cleared conversation is not one we failed to restore: allow a fresh
+      // restore attempt if the traveler somehow gets a new one.
+      _chatResumeTried = false;
+    });
+    try {
+      // Idempotent server-side, so a conversation that never completed a turn
+      // is not an error here either.
+      await trips.deleteTripRefineChat(widget.tripId);
+    } catch (_) {
+      // Best-effort: the local conversation is already gone, and the next trip
+      // load re-reads whatever the server still holds.
+    }
+    if (mounted) await _refresh();
   }
 
   /// Whether an item falls inside the refinement target (client-side mirror of
@@ -1945,11 +2103,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// Builds the panel's seed message: trip context, the target section's items
   /// in full detail, and explicit instructions to patch only that section via
   /// update_itinerary_section.
-  String _buildSectionSeed(Trip trip, RefineTarget t) {
+  ///
+  /// [continuing] marks a seed appended to a conversation already under way
+  /// (specs/trip-refine-memory) — it opens as a change of subject and drops the
+  /// "start by asking" framing, so the assistant doesn't re-introduce itself
+  /// mid-thread. Canonical English throughout: this text goes to the agent.
+  String _buildSectionSeed(Trip trip, RefineTarget t,
+      {required bool continuing}) {
     final items = trip.items ?? [];
-    final b =
-        StringBuffer('I want to refine my saved trip "${_displayTitle(trip)}"');
-    if (trip.startDate != null && trip.endDate != null) {
+    final b = StringBuffer(continuing
+        ? "Let's turn to another part of the same trip"
+        : 'I want to refine my saved trip "${_displayTitle(trip)}"');
+    if (!continuing && trip.startDate != null && trip.endDate != null) {
       b.write(' (${trip.startDate} to ${trip.endDate})');
     }
     b.writeln('.');
@@ -1981,11 +2146,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
     b.write(' and the COMPLETE updated list for the section, keeping unchanged '
         'places exactly as listed above (same coordinates and tags). ');
-    b.write(t.assistant
-        ? 'I may also just ask questions about the trip (flights, bookings, '
-            'timing) — answer those directly without changing anything. '
-            'Start by asking how you can help.'
-        : 'Start by asking what I want to change.');
+    if (t.assistant) {
+      b.write('I may also just ask questions about the trip (flights, '
+          'bookings, timing) — answer those directly without changing '
+          'anything. ');
+    }
+    b.write(continuing
+        ? 'Wait for what I want to change before editing anything.'
+        : (t.assistant
+            ? 'Start by asking how you can help.'
+            : 'Start by asking what I want to change.'));
     return b.toString();
   }
 
@@ -5601,24 +5771,60 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       }
     });
 
+    // The trip-update listener lives HERE, not in TripRefinePanel: back closes
+    // the panel (see the PopScope below) and a turn keeps streaming after it,
+    // so a patch that lands once the panel is gone must still refresh the
+    // itinerary. Monotonic counter — see chat-panel-architecture.
+    ref.listen(
+        tripRefineProvider(widget.tripId).select((s) => s.tripUpdateCount),
+        (prev, next) {
+      if (mounted && next > (prev ?? 0)) _refresh();
+    });
+    // A turn still running behind a closed panel: the FAB says so, or an
+    // accidental back reads as "did that kill it?".
+    final chatStreaming = ref.watch(
+        tripRefineProvider(widget.tripId).select((s) => s.isStreaming));
+
     return LayoutBuilder(builder: (context, constraints) {
       // Same width the body LayoutBuilder sees (Scaffold adds no horizontal
       // chrome), so this always agrees with _mapPinned. Plain assignment:
       // we're in build, like _mapPinned's own write.
       _narrow = constraints.maxWidth < kRailBreakpoint;
-      return Scaffold(
+      return PopScope(
+        // Back closes the chat before it leaves the trip. The panel is drawn
+        // inside the screen rather than pushed as a route, and on narrow it
+        // looks like a sheet — so back is the obvious gesture for dismissing
+        // it, and used to throw away the whole page instead
+        // (specs/trip-refine-memory). Composes with AppShell's own
+        // PopScope(canPop: false), which forwards to this tab navigator's
+        // maybePop(); that consults the top route's PopScope, i.e. this one.
+        canPop: !_panelOpen,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _panelOpen) setState(() => _panelOpen = false);
+        },
+        child: Scaffold(
       // Always-reachable chat entry, mirroring the _openRefine guards so it's
       // never a dead button. Hidden while the panel is open: on wide layouts
       // the panel is docked (redundant), on narrow it would overlap the sheet.
+      //
+      // A saved conversation ALSO opens the gate: the zero-item plan_itinerary
+      // Next Step seeds a chat on an empty trip, so requiring items would make
+      // the saved chat unreachable on exactly the trips that most need it.
       floatingActionButton: (trip != null &&
               !_panelOpen &&
               trip.canEdit &&
               !_isOffline &&
-              (trip.items?.isNotEmpty ?? false))
+              ((trip.items?.isNotEmpty ?? false) || trip.refineChat != null))
           ? FloatingActionButton(
               tooltip: l10n.tripAskAI,
               onPressed: () => _openChat(trip),
-              child: const Icon(Icons.chat_bubble_outline),
+              child: chatStreaming
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.chat_bubble_outline),
             )
           : null,
       appBar: GradientAppBar(
@@ -5699,9 +5905,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       // builder): the docked panel + divider eat 401px of this
                       // width, so the gutter must be computed from what the
                       // scroll view actually gets.
-                      final panelDocked = _panelOpen &&
-                          _refineTarget != null &&
-                          constraints.maxWidth >= 900;
+                      final panelDocked =
+                          _panelOpen && constraints.maxWidth >= 900;
                       final bodyWidth = panelDocked
                           ? constraints.maxWidth - 401
                           : constraints.maxWidth;
@@ -5802,6 +6007,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                 children: [
                                   _buildHeaderCard(trip, theme),
                                   _nextStepArea(trip),
+                                  _continueChatRow(trip, theme, l10n),
                                   const SizedBox(height: AppSpacing.lg),
                                 ],
                               ),
@@ -6170,14 +6376,40 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                         );
                       }
 
-                      if (!_panelOpen || _refineTarget == null) {
+                      if (!_panelOpen) {
                         return refreshable;
                       }
-                      final panel = TripRefinePanel(
-                        tripId: widget.tripId,
-                        target: _refineTarget!,
-                        onClose: () => setState(() => _panelOpen = false),
-                        onTripUpdated: _refresh,
+                      // Escape is back's desktop twin: the panel is where focus
+                      // lives while chatting, so the binding rides it rather
+                      // than the whole screen (the map's own Escape layer is a
+                      // pushed route and never collides).
+                      final panel = CallbackShortcuts(
+                        bindings: {
+                          const SingleActivator(LogicalKeyboardKey.escape): () =>
+                              setState(() => _panelOpen = false),
+                        },
+                        // The binding only fires along the focus chain, and the
+                        // composer isn't focused until the traveler clicks it —
+                        // so the panel takes focus on open and every descendant
+                        // (composer included) still bubbles Escape up through
+                        // here. skipTraversal keeps it out of the tab order.
+                        child: Focus(
+                          autofocus: true,
+                          skipTraversal: true,
+                          child: TripRefinePanel(
+                            tripId: widget.tripId,
+                            phase: _chatPhase,
+                            error: _chatError,
+                            onClose: () => setState(() => _panelOpen = false),
+                            onNewChat: () => _newChat(trip),
+                            onRetry: _chatPhase == RefineChatPhase.failed
+                                ? () {
+                                    _chatResumeTried = false;
+                                    _ensureRefineHydrated(trip);
+                                  }
+                                : null,
+                          ),
+                        ),
                       );
                       if (panelDocked) {
                         // Wide: dock the chat beside the itinerary.
@@ -6239,6 +6471,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                         ],
                       );
                     }),
+        ),
       );
     });
   }

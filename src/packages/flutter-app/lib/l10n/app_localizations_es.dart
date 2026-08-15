@@ -3196,6 +3196,43 @@ class AppLocalizationsEs extends AppLocalizations {
   String get refineHint => 'Pide cambios...';
 
   @override
+  String get refineNewChat => 'Chat nuevo';
+
+  @override
+  String get refineNewChatConfirmTitle => '¿Empezar un chat nuevo?';
+
+  @override
+  String get refineNewChatConfirmBody =>
+      'Se borrará esta conversación. Tu viaje no se ve afectado.';
+
+  @override
+  String get refineResumeLoading => 'Restaurando tu conversación…';
+
+  @override
+  String get refineResumeGone => 'Esta conversación ha caducado.';
+
+  @override
+  String get refineResumeGoneDetail =>
+      'Se borró o se eliminó junto con su viaje. Puedes empezar una nueva.';
+
+  @override
+  String get refineResumeFailed => 'No se pudo reabrir esta conversación.';
+
+  @override
+  String get tripContinueChat => 'Continuar chat';
+
+  @override
+  String tripContinueChatMeta(int count, String age) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count mensajes',
+      one: '1 mensaje',
+    );
+    return '$_temp0 · $age';
+  }
+
+  @override
   String get chatDictationPermission =>
       'Se bloqueó el acceso al micrófono. Revisa la configuración de tu navegador.';
 

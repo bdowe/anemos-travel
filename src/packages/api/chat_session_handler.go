@@ -52,13 +52,17 @@ func truncateRunes(s string, max int) string {
 	return string(r)
 }
 
-// savePlanChatSession upserts the whole transcript for one plan conversation.
-// Best-effort by design: a failure is logged and the turn proceeds — session
-// persistence must never break the chat itself.
-func savePlanChatSession(ctx context.Context, uid uuid.UUID, chatID, summary string, msgs []PlanChatMessage) {
-	if dbPool == nil || len(msgs) == 0 {
-		return
-	}
+// planTranscriptFields derives the storable form of one conversation: the
+// JSONB payload with image bytes stripped to media-type markers, the title
+// (first user message, preferring its display label), and the preview (last
+// assistant message).
+//
+// The ONE derivation, consumed by savePlanChatSession here and by
+// saveTripRefineSession (trip_refine_handler.go), so the two transcript tables
+// can never disagree about what a stored conversation looks like — pinned by
+// TestTranscriptFieldsParity. The refine saver has no title column and ignores
+// that return.
+func planTranscriptFields(msgs []PlanChatMessage) (payload []byte, title, preview string, err error) {
 	// Persist images as markers only: the transcript is upserted wholesale
 	// twice per turn, so inlined base64 would rewrite megabytes to the JSONB
 	// column every message. MediaType survives so a resumed client can render
@@ -75,16 +79,15 @@ func savePlanChatSession(ctx context.Context, uid uuid.UUID, chatID, summary str
 		}
 		persistable[i].Images = stripped
 	}
-	payload, err := json.Marshal(persistable)
+	payload, err = json.Marshal(persistable)
 	if err != nil {
-		log.Printf("failed to marshal chat session %s: %v", chatID, err)
-		return
+		return nil, "", "", err
 	}
-	var title, preview string
 	for _, m := range msgs {
 		if m.Role == "user" {
-			// Machine-built seed messages (near-me coordinates) carry a
-			// human-friendly display label — title from that, never the raw text.
+			// Machine-built seed messages (near-me coordinates, refine section
+			// seeds) carry a human-friendly display label — title from that,
+			// never the raw text.
 			src := m.Content
 			if strings.TrimSpace(m.DisplayLabel) != "" {
 				src = m.DisplayLabel
@@ -98,6 +101,21 @@ func savePlanChatSession(ctx context.Context, uid uuid.UUID, chatID, summary str
 			preview = truncateRunes(msgs[i].Content, chatPreviewMaxRunes)
 			break
 		}
+	}
+	return payload, title, preview, nil
+}
+
+// savePlanChatSession upserts the whole transcript for one plan conversation.
+// Best-effort by design: a failure is logged and the turn proceeds — session
+// persistence must never break the chat itself.
+func savePlanChatSession(ctx context.Context, uid uuid.UUID, chatID, summary string, msgs []PlanChatMessage) {
+	if dbPool == nil || len(msgs) == 0 {
+		return
+	}
+	payload, title, preview, err := planTranscriptFields(msgs)
+	if err != nil {
+		log.Printf("failed to marshal chat session %s: %v", chatID, err)
+		return
 	}
 	err = store.New(dbPool).UpsertPlanChatSession(ctx, store.UpsertPlanChatSessionParams{
 		UserID:       uid,

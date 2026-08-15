@@ -36,10 +36,31 @@ WHERE updated_at < now() - interval '60 days'
 `
 
 // Opportunistic prune (called from the list handler): a conversation idle for
-// two months is abandoned, not "in progress".
+// two months is abandoned, not "in progress". Deliberately does NOT reach
+// trip_refine_sessions: a trip planned in August for next March must still
+// have its chat in November, so those are retained for the trip's lifetime and
+// collected by the FK cascade instead (specs/trip-refine-memory).
 func (q *Queries) DeleteStalePlanChatSessions(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteStalePlanChatSessions)
 	return err
+}
+
+const deleteTripRefineSession = `-- name: DeleteTripRefineSession :execrows
+DELETE FROM trip_refine_sessions
+WHERE user_id = $1 AND trip_id = $2
+`
+
+type DeleteTripRefineSessionParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+func (q *Queries) DeleteTripRefineSession(ctx context.Context, arg DeleteTripRefineSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteTripRefineSession, arg.UserID, arg.TripID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getPlanChatSessionByChatID = `-- name: GetPlanChatSessionByChatID :one
@@ -67,6 +88,60 @@ func (q *Queries) GetPlanChatSessionByChatID(ctx context.Context, arg GetPlanCha
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getTripRefineSession = `-- name: GetTripRefineSession :one
+SELECT id, user_id, trip_id, preview, summary, messages, message_count, created_at, updated_at FROM trip_refine_sessions
+WHERE user_id = $1 AND trip_id = $2
+`
+
+type GetTripRefineSessionParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+func (q *Queries) GetTripRefineSession(ctx context.Context, arg GetTripRefineSessionParams) (TripRefineSession, error) {
+	row := q.db.QueryRow(ctx, getTripRefineSession, arg.UserID, arg.TripID)
+	var i TripRefineSession
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TripID,
+		&i.Preview,
+		&i.Summary,
+		&i.Messages,
+		&i.MessageCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTripRefineSessionSummary = `-- name: GetTripRefineSessionSummary :one
+SELECT preview, message_count, updated_at FROM trip_refine_sessions
+WHERE user_id = $1 AND trip_id = $2
+`
+
+type GetTripRefineSessionSummaryParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+type GetTripRefineSessionSummaryRow struct {
+	Preview      string    `json:"preview"`
+	MessageCount int32     `json:"message_count"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// Presence + freshness for GET /trips/{id} (the refine_chat object). Summary
+// columns only: the transcript can run to hundreds of KB and is fetched on
+// demand from GET /trips/{id}/refine-chat, never on every trip page load —
+// the same list/detail split as /chats.
+func (q *Queries) GetTripRefineSessionSummary(ctx context.Context, arg GetTripRefineSessionSummaryParams) (GetTripRefineSessionSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getTripRefineSessionSummary, arg.UserID, arg.TripID)
+	var i GetTripRefineSessionSummaryRow
+	err := row.Scan(&i.Preview, &i.MessageCount, &i.UpdatedAt)
 	return i, err
 }
 
@@ -153,6 +228,44 @@ func (q *Queries) UpsertPlanChatSession(ctx context.Context, arg UpsertPlanChatS
 		arg.UserID,
 		arg.ChatID,
 		arg.Title,
+		arg.Preview,
+		arg.Summary,
+		arg.Messages,
+		arg.MessageCount,
+	)
+	return err
+}
+
+const upsertTripRefineSession = `-- name: UpsertTripRefineSession :exec
+INSERT INTO trip_refine_sessions (
+    user_id, trip_id, preview, summary, messages, message_count
+) VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (user_id, trip_id) DO UPDATE SET
+    preview = EXCLUDED.preview,
+    summary = EXCLUDED.summary,
+    messages = EXCLUDED.messages,
+    message_count = EXCLUDED.message_count,
+    updated_at = now()
+`
+
+type UpsertTripRefineSessionParams struct {
+	UserID       uuid.UUID `json:"user_id"`
+	TripID       uuid.UUID `json:"trip_id"`
+	Preview      string    `json:"preview"`
+	Summary      string    `json:"summary"`
+	Messages     []byte    `json:"messages"`
+	MessageCount int32     `json:"message_count"`
+}
+
+// Whole-transcript upsert, twice per trip-bound /plan turn (start + deferred
+// end), under the same start→final ordering contract as
+// UpsertPlanChatSession. Keyed by (user, trip): the client's per-panel chat_id
+// is meaningless here and is deliberately not stored, which is what makes a
+// refine transcript unaddressable by chat id (specs/trip-refine-memory).
+func (q *Queries) UpsertTripRefineSession(ctx context.Context, arg UpsertTripRefineSessionParams) error {
+	_, err := q.db.Exec(ctx, upsertTripRefineSession,
+		arg.UserID,
+		arg.TripID,
 		arg.Preview,
 		arg.Summary,
 		arg.Messages,
