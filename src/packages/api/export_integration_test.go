@@ -218,7 +218,8 @@ func TestExportPrintView_DayPacket(t *testing.T) {
 		{"food", "Tavernas", 150},
 	} {
 		if _, err := q.CreateExpense(ctx, store.CreateExpenseParams{
-			TripID: trip.ID, Category: e.cat, Label: e.label, Amount: e.amount, Position: int32(i),
+			TripID: trip.ID, Category: e.cat, Label: e.label,
+			ActualAmount: ptrTo(e.amount), Position: int32(i),
 		}); err != nil {
 			t.Fatalf("create expense: %v", err)
 		}

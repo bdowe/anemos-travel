@@ -136,7 +136,13 @@ type printDaySection struct {
 }
 
 type printBudgetRow struct {
-	Label    string
+	Label string
+	// Planned/Amount are the two money columns (00067): what the traveler meant
+	// to spend, and what was actually paid. Either may be "" — a line planned
+	// but not yet paid, or a payment that was never planned — and the packet
+	// prints the blank rather than repeating the other number, because on paper
+	// there is no way to un-say "you spent this".
+	Planned  string
 	Amount   string
 	Subtotal bool // category subtotal row (rendered bold)
 }
@@ -144,6 +150,7 @@ type printBudgetRow struct {
 type printBudget struct {
 	Currency  string
 	Target    string // "" when no target set
+	Planned   string
 	Spent     string
 	Remaining string // "" when no target set
 	Rows      []printBudgetRow
@@ -181,6 +188,7 @@ type printLabels struct {
 	OtherTransport   string
 	Budget           string
 	Target           string
+	Planned          string
 	TotalSpent       string
 	Remaining        string
 	BookingChecklist string
@@ -201,6 +209,7 @@ func newPrintLabels(locale string) printLabels {
 		OtherTransport:   tr(locale, "print.otherTransport"),
 		Budget:           tr(locale, "print.budget"),
 		Target:           tr(locale, "print.target"),
+		Planned:          tr(locale, "print.planned"),
 		TotalSpent:       tr(locale, "print.totalSpent"),
 		Remaining:        tr(locale, "print.remaining"),
 		BookingChecklist: tr(locale, "print.bookingChecklist"),
@@ -294,6 +303,7 @@ var printViewTmpl = template.Must(template.New("print-view").Parse(`<!DOCTYPE ht
     table.budget td.amt { text-align: right; }
     table.budget tr.subtotal td { font-weight: 600; color: #004D40; padding-top: 8px; }
     table.budget td.exp { padding-left: 14px; color: #546E7A; }
+    table.budget tr.head td { font-size: 0.8rem; color: #78909C; text-transform: uppercase; letter-spacing: 0.04em; }
     .budget-line { margin: 10px 0 0; font-weight: 600; }
     footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid #CFD8DC; font-size: 0.85rem; color: #607D8B; }
     .empty { color: #607D8B; font-style: italic; }
@@ -400,12 +410,13 @@ var printViewTmpl = template.Must(template.New("print-view").Parse(`<!DOCTYPE ht
     {{if .Target}}<p class="budget-line">{{$.T.Target}} {{.Target}}</p>{{end}}
     {{if .Rows}}
     <table class="budget">
+      <tr class="head"><td></td><td class="amt">{{$.T.Planned}}</td><td class="amt">{{$.T.TotalSpent}}</td></tr>
       {{range .Rows}}
-      <tr{{if .Subtotal}} class="subtotal"{{end}}><td{{if not .Subtotal}} class="exp"{{end}}>{{.Label}}</td><td class="amt">{{.Amount}}</td></tr>
+      <tr{{if .Subtotal}} class="subtotal"{{end}}><td{{if not .Subtotal}} class="exp"{{end}}>{{.Label}}</td><td class="amt">{{.Planned}}</td><td class="amt">{{.Amount}}</td></tr>
       {{end}}
     </table>
     {{end}}
-    <p class="budget-line">{{$.T.TotalSpent}} {{.Spent}}{{if .Remaining}} · {{$.T.Remaining}} {{.Remaining}}{{end}}</p>
+    <p class="budget-line">{{if .Planned}}{{$.T.Planned}} {{.Planned}} · {{end}}{{$.T.TotalSpent}} {{.Spent}}{{if .Remaining}} · {{$.T.Remaining}} {{.Remaining}}{{end}}</p>
     {{end}}
 
     {{if .Todos}}
@@ -833,11 +844,9 @@ func buildPrintBudget(b *store.TripBudget, expenses []store.TripExpense) *printB
 	type catGroup struct {
 		name     string
 		expenses []store.TripExpense
-		total    float64
 	}
 	var groups []*catGroup
 	idx := map[string]*catGroup{}
-	spent := 0.0
 	for _, e := range expenses {
 		g, ok := idx[e.Category]
 		if !ok {
@@ -846,20 +855,44 @@ func buildPrintBudget(b *store.TripBudget, expenses []store.TripExpense) *printB
 			groups = append(groups, g)
 		}
 		g.expenses = append(g.expenses, e)
-		g.total += e.Amount
-		spent += e.Amount
 	}
 	for _, g := range groups {
-		pb.Rows = append(pb.Rows, printBudgetRow{Label: capitalize(g.name), Amount: formatMoneyAmount(g.total), Subtotal: true})
+		// Subtotals come from the same summing function as the totals, so a
+		// column that doesn't foot is a test failure and not a rounding story.
+		sub := sumExpenses(g.expenses)
+		pb.Rows = append(pb.Rows, printBudgetRow{
+			Label:    capitalize(g.name),
+			Planned:  formatOptionalMoneyAmount(&sub.Planned, sub.Planned > 0),
+			Amount:   formatOptionalMoneyAmount(&sub.Spent, sub.Spent > 0),
+			Subtotal: true,
+		})
 		for _, e := range g.expenses {
-			pb.Rows = append(pb.Rows, printBudgetRow{Label: e.Label, Amount: formatMoneyAmount(e.Amount)})
+			pb.Rows = append(pb.Rows, printBudgetRow{
+				Label:   e.Label,
+				Planned: formatOptionalMoneyAmount(e.PlannedAmount, e.PlannedAmount != nil),
+				Amount:  formatOptionalMoneyAmount(e.ActualAmount, e.ActualAmount != nil),
+			})
 		}
 	}
-	pb.Spent = formatMoneyAmount(spent)
+	totals := sumExpenses(expenses)
+	pb.Spent = formatMoneyAmount(totals.Spent)
+	if totals.Planned > 0 {
+		pb.Planned = formatMoneyAmount(totals.Planned)
+	}
 	if b != nil && b.TargetAmount != nil {
-		pb.Remaining = formatMoneyAmount(*b.TargetAmount - spent)
+		pb.Remaining = formatMoneyAmount(*b.TargetAmount - totals.Spent)
 	}
 	return pb
+}
+
+// formatOptionalMoneyAmount renders v only when present; an absent number
+// prints as a blank cell, never as 0.00 (a zero a traveler did not write down
+// is a claim the packet has no way to retract on paper).
+func formatOptionalMoneyAmount(v *float64, present bool) string {
+	if v == nil || !present {
+		return ""
+	}
+	return formatMoneyAmount(*v)
 }
 
 func formatMoneyAmount(v float64) string {

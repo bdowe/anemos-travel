@@ -966,6 +966,82 @@ class AppLocalizationsEn extends AppLocalizations {
   String get budgetCategoryGeneral => 'General';
 
   @override
+  String get budgetPlanStatePlanned => 'Planned';
+
+  @override
+  String get budgetPlanStatePaid => 'Paid';
+
+  @override
+  String budgetPlanRowBothSemantics(String planned, String paid) {
+    return 'Planned $planned, paid $paid';
+  }
+
+  @override
+  String get budgetPlanTotalPlanned => 'Total planned';
+
+  @override
+  String budgetPlanProjected(String amount) {
+    return 'Projected $amount';
+  }
+
+  @override
+  String budgetPlanOverTargetBy(String amount) {
+    return '$amount over target';
+  }
+
+  @override
+  String get budgetPlanVsPlan => 'Vs plan';
+
+  @override
+  String budgetPlanDeltaOver(String amount) {
+    return '$amount over';
+  }
+
+  @override
+  String budgetPlanDeltaUnder(String amount) {
+    return '$amount under';
+  }
+
+  @override
+  String get budgetPlanDeltaOnPlan => 'On plan';
+
+  @override
+  String get budgetPlanMarkPaid => 'Mark as paid';
+
+  @override
+  String get budgetPlanMarkPlanned => 'Mark as planned';
+
+  @override
+  String budgetPlanPaidAmountLabel(String currency) {
+    return 'Paid ($currency)';
+  }
+
+  @override
+  String budgetPlanPlannedAmountLabel(String currency) {
+    return 'Planned ($currency)';
+  }
+
+  @override
+  String budgetPlanPlannedHelper(String amount) {
+    return 'Planned $amount';
+  }
+
+  @override
+  String get budgetPlanAmountsHelp =>
+      'Fill in what you plan to spend, what you paid, or both.';
+
+  @override
+  String budgetPlanMovedBack(String label) {
+    return '$label moved back to planned';
+  }
+
+  @override
+  String get budgetPlanGroupHasPlanned => 'Includes planned amounts';
+
+  @override
+  String get budgetPlanAutoLocked => 'From a booking — un-book it to remove';
+
+  @override
   String get checklistTitle => 'Packing & prep';
 
   @override

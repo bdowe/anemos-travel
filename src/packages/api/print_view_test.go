@@ -297,26 +297,33 @@ func TestBuildPrintBudget(t *testing.T) {
 
 	target := 2000.0
 	b := &store.TripBudget{TargetAmount: &target, Currency: "EUR"}
+	// One line planned and paid at a different price, one paid with no plan,
+	// one still only planned — the three shapes 00067 allows, which is also the
+	// fixture the Budget tab and the list-row parity test use.
 	expenses := []store.TripExpense{
-		{Category: "lodging", Label: "Hotel Grande", Amount: 600},
-		{Category: "food", Label: "Tavernas", Amount: 250.5},
-		{Category: "lodging", Label: "Airbnb Delphi", Amount: 150},
+		{Category: "lodging", Label: "Hotel Grande", PlannedAmount: ptrTo(550.0), ActualAmount: ptrTo(600.0)},
+		{Category: "food", Label: "Tavernas", ActualAmount: ptrTo(250.5)},
+		{Category: "lodging", Label: "Airbnb Delphi", PlannedAmount: ptrTo(150.0)},
 	}
 	pb := buildPrintBudget(b, expenses)
 	if pb == nil {
 		t.Fatal("expected a budget")
 	}
-	if pb.Currency != "EUR" || pb.Target != "2000.00" || pb.Spent != "1000.50" || pb.Remaining != "999.50" {
+	// Spent counts only what was paid; Remaining is target − spent, unchanged
+	// since before 00067. Planned is the plan and does not shrink.
+	if pb.Currency != "EUR" || pb.Target != "2000.00" || pb.Spent != "850.50" ||
+		pb.Remaining != "1149.50" || pb.Planned != "700.00" {
 		t.Fatalf("budget math wrong: %+v", pb)
 	}
 	// Rows: lodging subtotal, its 2 expenses, food subtotal, its expense —
-	// grouped in first-appearance order.
+	// grouped in first-appearance order. A blank cell means "no such number",
+	// never 0.00.
 	wantRows := []printBudgetRow{
-		{Label: "Lodging", Amount: "750.00", Subtotal: true},
-		{Label: "Hotel Grande", Amount: "600.00"},
-		{Label: "Airbnb Delphi", Amount: "150.00"},
-		{Label: "Food", Amount: "250.50", Subtotal: true},
-		{Label: "Tavernas", Amount: "250.50"},
+		{Label: "Lodging", Planned: "700.00", Amount: "600.00", Subtotal: true},
+		{Label: "Hotel Grande", Planned: "550.00", Amount: "600.00"},
+		{Label: "Airbnb Delphi", Planned: "150.00", Amount: ""},
+		{Label: "Food", Planned: "", Amount: "250.50", Subtotal: true},
+		{Label: "Tavernas", Planned: "", Amount: "250.50"},
 	}
 	if len(pb.Rows) != len(wantRows) {
 		t.Fatalf("rows = %+v", pb.Rows)
@@ -328,9 +335,17 @@ func TestBuildPrintBudget(t *testing.T) {
 	}
 
 	// Expenses without a budget row: USD default, no target/remaining.
-	pb = buildPrintBudget(nil, expenses[:1])
-	if pb == nil || pb.Currency != "USD" || pb.Target != "" || pb.Remaining != "" || pb.Spent != "600.00" {
+	pb = buildPrintBudget(nil, expenses[1:2])
+	if pb == nil || pb.Currency != "USD" || pb.Target != "" || pb.Remaining != "" ||
+		pb.Spent != "250.50" || pb.Planned != "" {
 		t.Fatalf("expenses-only budget wrong: %+v", pb)
+	}
+
+	// A trip that has only PLANNED money still prints: spent is honestly 0.00
+	// and the plan carries the page.
+	pb = buildPrintBudget(nil, expenses[2:])
+	if pb == nil || pb.Spent != "0.00" || pb.Planned != "150.00" {
+		t.Fatalf("planned-only budget wrong: %+v", pb)
 	}
 }
 

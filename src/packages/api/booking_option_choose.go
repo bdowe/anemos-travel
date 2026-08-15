@@ -255,8 +255,17 @@ func chooseBookingOptionHandler(w http.ResponseWriter, r *http.Request) {
 		skip = "currency_mismatch"
 	}
 	if skip == "" {
-		expense, _, err := upsertLinkedExpense(ctx, q, trip.ID, category, opt.Title, *opt.Price,
-			ptrTo("booking_todo"), pgtype.UUID{Bytes: expenseSourceID, Valid: true})
+		// ActualAmount, not a plan: choosing a winner books it, and a booking is
+		// money spent. Any planned_amount already on that line is the
+		// traveler's and rides through untouched (00067).
+		expense, _, err := upsertLinkedExpense(ctx, q, linkedExpense{
+			TripID:       trip.ID,
+			Category:     category,
+			Label:        opt.Title,
+			ActualAmount: opt.Price,
+			SourceKind:   ptrTo("booking_todo"),
+			SourceID:     pgtype.UUID{Bytes: expenseSourceID, Valid: true},
+		})
 		if err != nil {
 			// The booking itself is the point; a full budget or a racing write
 			// must not lose the traveler their choice.
@@ -371,11 +380,22 @@ func unchooseBookingOptionHandler(w http.ResponseWriter, r *http.Request) {
 	// Mirror the unbook contract from 00061: an AUTO expense is a mirror of the
 	// booked state and goes with it; a manual takeover (auto=false) is the
 	// traveler's own line item and stays.
+	//
+	// 00067 splits that by column rather than by row: the PAYMENT is the
+	// mirror, the PLAN is the traveler's. So a linked line that carries a plan
+	// is un-paid instead of deleted — it stays auto, still the leg's mirror,
+	// and re-booking re-pays it through upsertLinkedExpense's refresh path. No
+	// booking-state change may destroy a plan.
 	if existing, err := q.GetExpenseBySource(ctx, store.GetExpenseBySourceParams{
 		TripID: trip.ID, SourceKind: ptrTo("booking_todo"),
 		SourceID: pgtype.UUID{Bytes: todo.ID, Valid: true},
 	}); err == nil && existing.Auto {
-		_, _ = q.DeleteExpense(ctx, store.DeleteExpenseParams{ID: existing.ID, TripID: trip.ID})
+		if existing.PlannedAmount != nil {
+			_, _ = q.ClearExpenseActualAmount(ctx,
+				store.ClearExpenseActualAmountParams{ID: existing.ID, TripID: trip.ID})
+		} else {
+			_, _ = q.DeleteExpense(ctx, store.DeleteExpenseParams{ID: existing.ID, TripID: trip.ID})
+		}
 	}
 
 	reverted, err := q.GetBookingOption(ctx, store.GetBookingOptionParams{ID: optID, TripID: trip.ID})

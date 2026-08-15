@@ -12,31 +12,60 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearExpenseActualAmount = `-- name: ClearExpenseActualAmount :execrows
+UPDATE trip_expenses SET actual_amount = NULL
+WHERE id = $1 AND trip_id = $2 AND planned_amount IS NOT NULL
+`
+
+type ClearExpenseActualAmountParams struct {
+	ID     uuid.UUID `json:"id"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+// The unbook half of the 00061 mirror contract, updated for 00067. An auto
+// expense with NO plan is a pure mirror of the purchase and is deleted with it
+// (unchanged). One that CARRIES A PLAN is un-purchased instead: the plan is the
+// traveler's and no booking-state change may destroy it. auto stays TRUE — the
+// row is still the leg's mirror, and re-booking re-purchases it through
+// upsertLinkedExpense's refresh path.
+func (q *Queries) ClearExpenseActualAmount(ctx context.Context, arg ClearExpenseActualAmountParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearExpenseActualAmount, arg.ID, arg.TripID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createExpense = `-- name: CreateExpense :one
-INSERT INTO trip_expenses (trip_id, category, label, amount, position, auto, source_kind, source_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id
+INSERT INTO trip_expenses (trip_id, category, label, planned_amount, actual_amount, position, auto, source_kind, source_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount
 `
 
 type CreateExpenseParams struct {
-	TripID     uuid.UUID   `json:"trip_id"`
-	Category   string      `json:"category"`
-	Label      string      `json:"label"`
-	Amount     float64     `json:"amount"`
-	Position   int32       `json:"position"`
-	Auto       bool        `json:"auto"`
-	SourceKind *string     `json:"source_kind"`
-	SourceID   pgtype.UUID `json:"source_id"`
+	TripID        uuid.UUID   `json:"trip_id"`
+	Category      string      `json:"category"`
+	Label         string      `json:"label"`
+	PlannedAmount *float64    `json:"planned_amount"`
+	ActualAmount  *float64    `json:"actual_amount"`
+	Position      int32       `json:"position"`
+	Auto          bool        `json:"auto"`
+	SourceKind    *string     `json:"source_kind"`
+	SourceID      pgtype.UUID `json:"source_id"`
 }
 
 // auto/source_kind/source_id: the booking-autopopulate link (00061). The
 // handler sets auto=true iff a source link is present — never the client.
+// `amount` is deliberately absent from the column list: set_expense_amount()
+// (00067) computes it as COALESCE(actual_amount, planned_amount). One
+// definition, in the database, on every write path.
 func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (TripExpense, error) {
 	row := q.db.QueryRow(ctx, createExpense,
 		arg.TripID,
 		arg.Category,
 		arg.Label,
-		arg.Amount,
+		arg.PlannedAmount,
+		arg.ActualAmount,
 		arg.Position,
 		arg.Auto,
 		arg.SourceKind,
@@ -55,6 +84,8 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (T
 		&i.UpdatedAt,
 		&i.SourceKind,
 		&i.SourceID,
+		&i.PlannedAmount,
+		&i.ActualAmount,
 	)
 	return i, err
 }
@@ -94,8 +125,38 @@ func (q *Queries) GetBudgetByTrip(ctx context.Context, tripID uuid.UUID) (TripBu
 	return i, err
 }
 
+const getExpense = `-- name: GetExpense :one
+SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount FROM trip_expenses WHERE id = $1 AND trip_id = $2
+`
+
+type GetExpenseParams struct {
+	ID     uuid.UUID `json:"id"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+func (q *Queries) GetExpense(ctx context.Context, arg GetExpenseParams) (TripExpense, error) {
+	row := q.db.QueryRow(ctx, getExpense, arg.ID, arg.TripID)
+	var i TripExpense
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Category,
+		&i.Label,
+		&i.Amount,
+		&i.Position,
+		&i.Auto,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SourceKind,
+		&i.SourceID,
+		&i.PlannedAmount,
+		&i.ActualAmount,
+	)
+	return i, err
+}
+
 const getExpenseBySource = `-- name: GetExpenseBySource :one
-SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id FROM trip_expenses
+SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount FROM trip_expenses
 WHERE trip_id = $1 AND source_kind = $2 AND source_id = $3
 `
 
@@ -122,12 +183,14 @@ func (q *Queries) GetExpenseBySource(ctx context.Context, arg GetExpenseBySource
 		&i.UpdatedAt,
 		&i.SourceKind,
 		&i.SourceID,
+		&i.PlannedAmount,
+		&i.ActualAmount,
 	)
 	return i, err
 }
 
 const listExpensesByTrip = `-- name: ListExpensesByTrip :many
-SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id FROM trip_expenses
+SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount FROM trip_expenses
 WHERE trip_id = $1
 ORDER BY position ASC, created_at ASC
 `
@@ -153,6 +216,8 @@ func (q *Queries) ListExpensesByTrip(ctx context.Context, tripID uuid.UUID) ([]T
 			&i.UpdatedAt,
 			&i.SourceKind,
 			&i.SourceID,
+			&i.PlannedAmount,
+			&i.ActualAmount,
 		); err != nil {
 			return nil, err
 		}
@@ -164,36 +229,148 @@ func (q *Queries) ListExpensesByTrip(ctx context.Context, tripID uuid.UUID) ([]T
 	return items, nil
 }
 
+const purchaseExpense = `-- name: PurchaseExpense :one
+UPDATE trip_expenses
+SET actual_amount = COALESCE($1::float8, planned_amount),
+    auto = false
+WHERE id = $2 AND trip_id = $3
+  AND ($1::float8 IS NOT NULL OR planned_amount IS NOT NULL)
+RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount
+`
+
+type PurchaseExpenseParams struct {
+	ActualAmount *float64  `json:"actual_amount"`
+	ID           uuid.UUID `json:"id"`
+	TripID       uuid.UUID `json:"trip_id"`
+}
+
+// Records what a line ACTUALLY cost (00067). A NULL actual_amount arg means
+// "bought it at the planned amount". The WHERE clause refuses the one
+// combination that would leave a line with no money at all — no amount given
+// AND no plan to fall back on — so the handler answers 404/409 instead of
+// letting trip_expenses_amount_present 500.
+//
+// auto = false unconditionally: a traveler naming what something cost is a
+// manual takeover, the same rule a content PATCH follows (00061). The
+// booked-flip path does NOT come through here — it uses upsertLinkedExpense,
+// which keeps auto true.
+func (q *Queries) PurchaseExpense(ctx context.Context, arg PurchaseExpenseParams) (TripExpense, error) {
+	row := q.db.QueryRow(ctx, purchaseExpense, arg.ActualAmount, arg.ID, arg.TripID)
+	var i TripExpense
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Category,
+		&i.Label,
+		&i.Amount,
+		&i.Position,
+		&i.Auto,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SourceKind,
+		&i.SourceID,
+		&i.PlannedAmount,
+		&i.ActualAmount,
+	)
+	return i, err
+}
+
+const unpurchaseExpense = `-- name: UnpurchaseExpense :one
+UPDATE trip_expenses
+SET actual_amount = NULL, auto = false
+WHERE id = $1 AND trip_id = $2 AND planned_amount IS NOT NULL
+RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount
+`
+
+type UnpurchaseExpenseParams struct {
+	ID     uuid.UUID `json:"id"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+// "I haven't actually paid this." Clears the actual, keeps the plan. Returns no
+// row when the line has no plan — un-purchasing it would erase it entirely, and
+// deleting a line on the traveler's behalf is a guess; the handler 409s and
+// says to delete it instead.
+//
+// auto = false: same takeover rule as PurchaseExpense. The SYSTEM's un-purchase
+// (unbook) is a different statement, ClearExpenseActualAmount, which keeps auto.
+func (q *Queries) UnpurchaseExpense(ctx context.Context, arg UnpurchaseExpenseParams) (TripExpense, error) {
+	row := q.db.QueryRow(ctx, unpurchaseExpense, arg.ID, arg.TripID)
+	var i TripExpense
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Category,
+		&i.Label,
+		&i.Amount,
+		&i.Position,
+		&i.Auto,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SourceKind,
+		&i.SourceID,
+		&i.PlannedAmount,
+		&i.ActualAmount,
+	)
+	return i, err
+}
+
 const updateExpense = `-- name: UpdateExpense :one
 UPDATE trip_expenses
 SET category = COALESCE($1, category),
     label    = COALESCE($2, label),
-    amount   = COALESCE($3, amount),
-    position = COALESCE($4, position),
-    auto     = COALESCE($5, auto)
-WHERE id = $6 AND trip_id = $7
-RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id
+    planned_amount = CASE
+        WHEN $3::float8 IS NOT NULL AND actual_amount IS NULL
+            THEN $3::float8
+        ELSE COALESCE($4, planned_amount) END,
+    actual_amount = CASE
+        WHEN $3::float8 IS NOT NULL AND actual_amount IS NOT NULL
+            THEN $3::float8
+        ELSE COALESCE($5, actual_amount) END,
+    position = COALESCE($6, position),
+    auto     = COALESCE($7, auto)
+WHERE id = $8 AND trip_id = $9
+RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount
 `
 
 type UpdateExpenseParams struct {
-	Category *string   `json:"category"`
-	Label    *string   `json:"label"`
-	Amount   *float64  `json:"amount"`
-	Position *int32    `json:"position"`
-	Auto     *bool     `json:"auto"`
-	ID       uuid.UUID `json:"id"`
-	TripID   uuid.UUID `json:"trip_id"`
+	Category      *string   `json:"category"`
+	Label         *string   `json:"label"`
+	LegacyAmount  *float64  `json:"legacy_amount"`
+	PlannedAmount *float64  `json:"planned_amount"`
+	ActualAmount  *float64  `json:"actual_amount"`
+	Position      *int32    `json:"position"`
+	Auto          *bool     `json:"auto"`
+	ID            uuid.UUID `json:"id"`
+	TripID        uuid.UUID `json:"trip_id"`
 }
 
 // Partial update (COALESCE sqlc.narg idiom, see query/trip_checklist_items.sql
 // UpdateChecklistItem). COALESCE means a field can be overwritten but not
 // cleared to NULL (auto IS NOT NULL, so narg('auto') skips it when nil —
 // the handler passes false on a user content edit: manual takeover).
+//
+// Three things to know since 00067:
+//
+//  1. planned_amount uses the PLAIN idiom on purpose. COALESCE can overwrite
+//     but never clear, and here that limitation IS the contract: a plan, once
+//     stated, is history. The feature's central invariant, expressed as the
+//     absence of a mechanism.
+//  2. legacy_amount is the pre-00067 wire field, resolved to a column IN SQL so
+//     the read-modify-write is atomic and lives in exactly one statement: it
+//     writes back to whichever column the wire's `amount` was READ from
+//     (actual on a paid row, planned otherwise), so an old bundle's edit dialog
+//     round-trips the number the user was looking at instead of silently
+//     re-classifying the line.
+//  3. `amount` is never listed. The trigger recomputes it; writing it by hand
+//     raises.
 func (q *Queries) UpdateExpense(ctx context.Context, arg UpdateExpenseParams) (TripExpense, error) {
 	row := q.db.QueryRow(ctx, updateExpense,
 		arg.Category,
 		arg.Label,
-		arg.Amount,
+		arg.LegacyAmount,
+		arg.PlannedAmount,
+		arg.ActualAmount,
 		arg.Position,
 		arg.Auto,
 		arg.ID,
@@ -212,6 +389,8 @@ func (q *Queries) UpdateExpense(ctx context.Context, arg UpdateExpenseParams) (T
 		&i.UpdatedAt,
 		&i.SourceKind,
 		&i.SourceID,
+		&i.PlannedAmount,
+		&i.ActualAmount,
 	)
 	return i, err
 }

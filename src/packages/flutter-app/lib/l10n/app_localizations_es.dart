@@ -975,6 +975,82 @@ class AppLocalizationsEs extends AppLocalizations {
   String get budgetCategoryGeneral => 'General';
 
   @override
+  String get budgetPlanStatePlanned => 'Previsto';
+
+  @override
+  String get budgetPlanStatePaid => 'Pagado';
+
+  @override
+  String budgetPlanRowBothSemantics(String planned, String paid) {
+    return 'Previsto $planned, pagado $paid';
+  }
+
+  @override
+  String get budgetPlanTotalPlanned => 'Total previsto';
+
+  @override
+  String budgetPlanProjected(String amount) {
+    return 'Proyectado $amount';
+  }
+
+  @override
+  String budgetPlanOverTargetBy(String amount) {
+    return '$amount por encima del objetivo';
+  }
+
+  @override
+  String get budgetPlanVsPlan => 'Frente al plan';
+
+  @override
+  String budgetPlanDeltaOver(String amount) {
+    return '$amount de más';
+  }
+
+  @override
+  String budgetPlanDeltaUnder(String amount) {
+    return '$amount de menos';
+  }
+
+  @override
+  String get budgetPlanDeltaOnPlan => 'Según lo previsto';
+
+  @override
+  String get budgetPlanMarkPaid => 'Marcar como pagado';
+
+  @override
+  String get budgetPlanMarkPlanned => 'Marcar como previsto';
+
+  @override
+  String budgetPlanPaidAmountLabel(String currency) {
+    return 'Pagado ($currency)';
+  }
+
+  @override
+  String budgetPlanPlannedAmountLabel(String currency) {
+    return 'Previsto ($currency)';
+  }
+
+  @override
+  String budgetPlanPlannedHelper(String amount) {
+    return 'Previsto $amount';
+  }
+
+  @override
+  String get budgetPlanAmountsHelp =>
+      'Indica lo que piensas gastar, lo que pagaste o ambos.';
+
+  @override
+  String budgetPlanMovedBack(String label) {
+    return '$label vuelve a previsto';
+  }
+
+  @override
+  String get budgetPlanGroupHasPlanned => 'Incluye importes previstos';
+
+  @override
+  String get budgetPlanAutoLocked => 'De una reserva: desmárcala para quitarla';
+
+  @override
   String get checklistTitle => 'Equipaje y preparativos';
 
   @override
