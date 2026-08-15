@@ -240,6 +240,11 @@ class AddSegmentSheet extends StatefulWidget {
   final String? initialMode;
   final String? initialDepartDate;
 
+  /// Optional prefill for the arrival date — set for a leg that lands on a
+  /// later calendar day than it leaves (an overnight flight, red-eye, night
+  /// train or overnight ferry). Ignored when [initial] is set.
+  final String? initialArriveDate;
+
   /// True when this sheet is filling in the details of a leg the itinerary
   /// already derives, so its endpoints are not this form's to change.
   ///
@@ -262,6 +267,7 @@ class AddSegmentSheet extends StatefulWidget {
     this.initialDestination,
     this.initialMode,
     this.initialDepartDate,
+    this.initialArriveDate,
     this.endpointsLocked = false,
     this.onChangeAirport,
   });
@@ -279,6 +285,7 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
   final _priceNote = TextEditingController();
   String _mode = 'flight';
   DateTime? _departDate;
+  DateTime? _arriveDate;
 
   @override
   void initState() {
@@ -294,6 +301,11 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
       _mode = s.mode;
       _departDate =
           s.departDate == null ? null : DateTime.tryParse(s.departDate!);
+      // Round-trip the arrival: the sheet is also the EDIT path, and omitting
+      // the field would leave UpdateSegment's COALESCE holding a stored arrival
+      // the traveler can no longer see while they move the departure past it.
+      _arriveDate =
+          s.arriveDate == null ? null : DateTime.tryParse(s.arriveDate!);
     } else {
       if (widget.initialOrigin != null) _origin.text = widget.initialOrigin!;
       if (widget.initialDestination != null) {
@@ -303,6 +315,9 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
       _departDate = widget.initialDepartDate == null
           ? null
           : DateTime.tryParse(widget.initialDepartDate!);
+      _arriveDate = widget.initialArriveDate == null
+          ? null
+          : DateTime.tryParse(widget.initialArriveDate!);
     }
   }
 
@@ -331,7 +346,30 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
       firstDate: now.subtract(const Duration(days: 365)),
       lastDate: now.add(const Duration(days: 365 * 2)),
     );
-    if (picked != null) setState(() => _departDate = picked);
+    if (picked == null) return;
+    setState(() {
+      _departDate = picked;
+      // An arrival can never precede its departure — the server refuses the
+      // pair (segment_handler.go) and the trip page would render a backwards
+      // span. Drop a now-impossible arrival rather than submit-and-fail.
+      if (_arriveDate != null && _arriveDate!.isBefore(picked)) {
+        _arriveDate = null;
+      }
+    });
+  }
+
+  /// The arrival picker cannot open before the chosen departure, so a backwards
+  /// pair is structurally unpickable rather than rejected after the fact.
+  Future<void> _pickArriveDate() async {
+    final now = DateTime.now();
+    final first = _departDate ?? now.subtract(const Duration(days: 365));
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _arriveDate ?? first,
+      firstDate: first,
+      lastDate: now.add(const Duration(days: 365 * 2)),
+    );
+    if (picked != null) setState(() => _arriveDate = picked);
   }
 
   void _save() {
@@ -343,6 +381,7 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
       'origin': origin,
       'destination': destination,
       if (_departDate != null) 'depart_date': _fmt(_departDate!),
+      if (_arriveDate != null) 'arrive_date': _fmt(_arriveDate!),
       if (_provider.text.trim().isNotEmpty) 'provider': _provider.text.trim(),
       if (_url.text.trim().isNotEmpty) 'url': _url.text.trim(),
       if (_notes.text.trim().isNotEmpty) 'notes': _notes.text.trim(),
@@ -439,14 +478,29 @@ class _AddSegmentSheetState extends State<AddSegmentSheet> {
               ),
             ],
             const SizedBox(height: AppSpacing.md),
-            OutlinedButton.icon(
-              onPressed: _pickDate,
-              icon: const Icon(Icons.today, size: 18),
-              label: Text(
-                _departDate != null
-                    ? _fmt(_departDate!)
-                    : l10n.bookingsDepartureDate,
-              ),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _pickDate,
+                  icon: const Icon(Icons.today, size: 18),
+                  label: Text(
+                    _departDate != null
+                        ? _fmt(_departDate!)
+                        : l10n.bookingsDepartureDate,
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _pickArriveDate,
+                  icon: const Icon(Icons.event_available, size: 18),
+                  label: Text(
+                    _arriveDate != null
+                        ? _fmt(_arriveDate!)
+                        : l10n.bookingsArrivalDate,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.md),
             TextField(

@@ -5,6 +5,74 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-15 — the flight that leaves the day before it lands
+
+- **[app] Friction:** the Amsterdam leg read `Aug 24 – Aug 26 · 2 nights` and the
+  flight row under it read **`EWR → Amsterdam / Aug 24`** — but that flight
+  departs Newark on the **23rd**. The day Brian actually leaves home appeared
+  nowhere in the app, and the date shown was the day he lands, stored in a
+  column called `depart_date`.
+- **[app] The asymmetry is the bug.** For an inter-city leg (`ranges[i].end`)
+  and the return leg (`ranges.last.end`), `depart_date` genuinely *is* a
+  departure — you leave a city on its last day. Only the **outbound home leg**
+  holds an arrival there, because there is no leg before the first city to
+  supply one, so `_deriveTodos` dated it on `ranges.first.start`. The comment
+  above it said so out loud and nobody read it as a lie.
+- **[app] One wrong date, four wrong places.** It reached the row's text; the
+  **"Find flights" link — in-app prefill *and* the server-built `search_url`,
+  so the external Google Flights page opened on the wrong day**; the
+  "Add details…" prefill, which handed the traveler that wrong day to confirm;
+  and the Trips-list nudge *"Book transport — first leg departs Aug 24"*, which
+  reads `MIN(booking_todos.depart_date)`. All four are downstream of the one
+  posted value, so all four fell to fixing it at the source.
+- **[app] The schema has modelled this since migration 00007 — nothing could
+  write it.** `trip_segments` carries `depart_date` AND `arrive_date`, the only
+  such pair in the schema, and six consumers already read it: the `.ics` export
+  spans depart→arrive, the print packet prints both *and* files a
+  before-the-trip departure onto its arrival day, `get_trip` tells the model
+  "departs X, arrives Y", Trip Health counts both as planned days. But
+  `add_transport_segment` had no `arrive_date` parameter and `AddSegmentSheet`
+  had no field, so the column was reachable only by raw REST. **Same shape as
+  the last-day bug the day before: the app already believed it; only the
+  writers were missing.**
+- **[app] The `+1` existed four times and reached nothing.** Go's `flightWindow`
+  renders `out 21:55→11:30+1` into every offer line the model reads; two Flutter
+  widgets draw a red `+1` on flight-search cards; `FlightOffer.arrivalDayOffset`
+  is a fifth copy with zero callers. The planner was reading "+1" out loud and
+  had nowhere to put it.
+- **[app] Fix: the segment is the truth.** The overnight fact belongs to the
+  *flight*, not the trip, so it stays on `trip_segments` and the derived row
+  defers to its matched confirmed segment — the rule the screen already applies
+  to a row's transport mode (*"that row's mode truth is the segment"*). That
+  generalizes for free to night trains and overnight ferries, which a
+  trip-level departure column would not. Row reads `Aug 23 → Aug 24` when both
+  are known, **`Arrives Aug 24` when only the landing day is** — honest with
+  today's data instead of asserting a departure it never had. Trip dates,
+  nights, day sections and the countdown are deliberately untouched:
+  `trips.start_date` is the origin every itinerary `day` counts from.
+- **[app] No second matcher, no migration.** `_computeGroupedBookings` already
+  claims a confirmed segment per leg, claim-once, and its slots are 1:1 with
+  `visibleLegRanges` by construction — so `_deriveTodos` now reads that same
+  claim result instead of growing a rival matcher. The posted payload and the
+  rendered rows therefore cannot disagree. (00065 stayed free; the
+  booking-shortlist lane took it.)
+- **[dev] A pre-existing hole the fix would have made visible.**
+  `UpdateSegment` COALESCEs each date and the PATCH handler validated only what
+  the *request* carried — both present — so `PATCH {"arrive_date":"08-22"}` onto
+  a row departing 08-23 was accepted and stored backwards. Harmless while
+  nothing rendered it; a nonsense span once the row does. The handler now
+  validates the **post-state**, reading the stored row when only one side is
+  supplied. Found by writing the test, not by reading the code.
+- **[dev] Two `pumpWidget` calls in one test reuse the same `State`.** The
+  "Add details… disappears" test looked like a product bug for twenty minutes:
+  the second pump never re-ran `_load`, so it was silently inspecting the first
+  case's screen. Split into two tests. Also: a widget test that depends on the
+  async preferences load resolving before first render is a coin flip — give
+  the fixture trip its own `origin_airport` instead.
+- **[dev] Mutation-checked, because a passing new test proves nothing.** Both
+  new behaviours were reverted in place and confirmed to fail the suite: the
+  arrival labelling, and the segment-wins resolver.
+
 ## 2026-08-15 — the one affordance was doing someone else's job
 
 - **[app] Friction → fixed (specs/trip-endpoint-airports, wave 2):** "I can't

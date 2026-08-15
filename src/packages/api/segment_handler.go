@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -68,6 +69,22 @@ type AddSegmentRequest struct {
 	// PATCH-only: the "Booked" checkbox on confirmed rows. Ignored on add —
 	// new segments start unbooked.
 	Booked *bool `json:"booked"`
+}
+
+// findTripSegment returns one segment of a trip by id. Used by the PATCH path
+// to check a partial date edit against the row's CURRENT state — there is no
+// single-row query, and the per-trip list is small and already indexed.
+func findTripSegment(ctx context.Context, tripID, segID uuid.UUID) (store.TripSegment, error) {
+	segs, err := store.New(dbPool).ListSegmentsByTrip(ctx, tripID)
+	if err != nil {
+		return store.TripSegment{}, err
+	}
+	for _, s := range segs {
+		if s.ID == segID {
+			return s, nil
+		}
+	}
+	return store.TripSegment{}, fmt.Errorf("segment %s not found on trip %s", segID, tripID)
 }
 
 func toSegmentResponse(s store.TripSegment) SegmentResponse {
@@ -208,6 +225,21 @@ func updateSegmentHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "arrive_date must be YYYY-MM-DD")
 		return
+	}
+	// Validate the POST-STATE, not the request. UpdateSegment COALESCEs each
+	// date, so a PATCH carrying only one of the pair silently keeps the other —
+	// and a request-only check (which needs BOTH present) waves through
+	// "arrive 08-22" onto a row that departs 08-23. The trip page renders a
+	// known pair as a two-date span, so a backwards pair is not cosmetic.
+	if depart.Valid != arrive.Valid {
+		if cur, err := findTripSegment(r.Context(), tripID, segID); err == nil {
+			if !depart.Valid {
+				depart = cur.DepartDate
+			}
+			if !arrive.Valid {
+				arrive = cur.ArriveDate
+			}
+		}
 	}
 	if depart.Valid && arrive.Valid && arrive.Time.Before(depart.Time) {
 		writeJSONError(w, http.StatusBadRequest, "arrive_date must not be before depart_date")

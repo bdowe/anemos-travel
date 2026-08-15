@@ -114,6 +114,16 @@ func TestSystemPromptEnglishUnchanged(t *testing.T) {
 		if !strings.Contains(prompt, "Fill the real days first") {
 			t.Errorf("Accept-Language %q: prompt lost the empty-middle-day instruction", header)
 		}
+		// The OTHER end of the trip: an overnight outbound leaves the calendar
+		// day before it lands, so the departure day is not the trip's first
+		// day. The absolute (say nothing you don't know) comes first on
+		// purpose — buried behind the detail, the model averages the two.
+		if !strings.Contains(prompt, "never state a date the traveler leaves home unless you actually know it") {
+			t.Errorf("Accept-Language %q: prompt lost the unknown-departure rule", header)
+		}
+		if !strings.Contains(prompt, "the CALENDAR DAY BEFORE it lands") {
+			t.Errorf("Accept-Language %q: prompt lost the overnight-outbound instruction", header)
+		}
 		// These requests are anonymous and not trip-bound, so the prompt is
 		// exactly basePrompt — it must still end on basePrompt's final
 		// sentence, proving nothing was appended.

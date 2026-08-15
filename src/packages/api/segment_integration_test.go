@@ -110,6 +110,16 @@ func TestSegmentValidation(t *testing.T) {
 		t.Fatalf("bad mode = %d, want 400", rec.Code)
 	}
 
+	// An arrival before its departure → 400 on create AND on edit. This is the
+	// guard the agent's add_transport_segment mirrors; the two must agree, or
+	// a pair the traveler's own sheet refuses could still arrive via chat.
+	if rec := doJSON(t, "POST", base+"/segments", token, map[string]any{
+		"mode": "flight", "origin": "EWR", "destination": "Amsterdam",
+		"depart_date": "2026-08-24", "arrive_date": "2026-08-23",
+	}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("backwards arrive_date = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+
 	// Oversized notes (5 MB) → rejected, nothing persisted. notes is the biggest
 	// sink. A body this large is stopped by the 256 KiB body-limit middleware
 	// (413) before reaching the handler; a smaller-but-still-over-cap notes
@@ -152,5 +162,54 @@ func TestSegmentValidation(t *testing.T) {
 	}
 	if len(segs) != 0 {
 		t.Fatalf("rejected segments persisted: %d", len(segs))
+	}
+}
+
+// An overnight leg — depart Aug 23, arrive Aug 24 — is the whole point of
+// trip_segments carrying two dates. It round-trips, and a partial PATCH cannot
+// leave the pair backwards: UpdateSegment COALESCEs each date, so validating
+// only what the REQUEST carries would let "arrive 08-22" land on a row that
+// departs 08-23. The trip page renders a known pair as a span, so that is a
+// nonsense row on screen, not a cosmetic one.
+func TestSegmentOvernightPairRoundTripsAndStaysOrdered(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "owner@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	base := "/api/v1/trips/" + trip.ID.String()
+
+	rec := doJSON(t, "POST", base+"/segments", token, map[string]any{
+		"mode": "flight", "origin": "EWR", "destination": "Amsterdam",
+		"depart_date": "2026-08-23", "arrive_date": "2026-08-24",
+	})
+	if rec.Code != http.StatusCreated && rec.Code != http.StatusOK {
+		t.Fatalf("overnight segment = %d: %s", rec.Code, rec.Body.String())
+	}
+	created := decode(t, rec)
+	if created["depart_date"] != "2026-08-23" || created["arrive_date"] != "2026-08-24" {
+		t.Fatalf("overnight pair not echoed: %s", rec.Body.String())
+	}
+	segID, _ := created["id"].(string)
+
+	// Arrival alone, moved before the STORED departure → 400.
+	if rec := doJSON(t, "PATCH", base+"/segments/"+segID, token, map[string]any{
+		"arrive_date": "2026-08-22",
+	}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("backwards arrive_date on PATCH = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	// Departure alone, moved after the STORED arrival → 400, the mirror case.
+	if rec := doJSON(t, "PATCH", base+"/segments/"+segID, token, map[string]any{
+		"depart_date": "2026-08-26",
+	}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("depart_date past stored arrival = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	// A legitimate partial edit still works, and keeps the other date.
+	rec = doJSON(t, "PATCH", base+"/segments/"+segID, token, map[string]any{
+		"depart_date": "2026-08-22",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("valid partial edit = %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := decode(t, rec); got["arrive_date"] != "2026-08-24" {
+		t.Fatalf("partial edit dropped the arrival: %s", rec.Body.String())
 	}
 }

@@ -1496,6 +1496,18 @@ abstract class AppLocalizations {
   /// **'Change transport mode'**
   String get bookingRowModeTooltip;
 
+  /// Date line for a transport leg that lands on a later calendar day than it leaves — an overnight flight, red-eye, night train or overnight ferry. Both values are already-formatted short dates.
+  ///
+  /// In en, this message translates to:
+  /// **'{depart} → {arrive}'**
+  String bookingRowDepartArrive(String depart, String arrive);
+
+  /// Date line for a transport leg whose departure day is not known — the app knows only the day the traveler lands, so it says that rather than implying a departure date.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrives {date}'**
+  String bookingRowArrivesOn(String date);
+
   /// No description provided for @bookingsOpenListing.
   ///
   /// In en, this message translates to:
@@ -1597,6 +1609,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Departure date'**
   String get bookingsDepartureDate;
+
+  /// Optional arrival-date picker on the transport sheet. Only worth filling in for a leg that lands on a later calendar day than it leaves.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrival date (if it lands the next day)'**
+  String get bookingsArrivalDate;
 
   /// No description provided for @bookingsSegmentProviderLabel.
   ///
