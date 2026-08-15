@@ -123,6 +123,112 @@ func TestMCPListsThreeTools(t *testing.T) {
 	}
 }
 
+// Both connector directories reject tools with missing or wrong annotations, so
+// they are part of the contract, not decoration. The trap this guards: the SDK's
+// DestructiveHint and OpenWorldHint are *bool with omitempty and a documented
+// default of TRUE, so a nil is not "no opinion" — it ships absent and the client
+// reads the dangerous meaning. These assertions run against what the CLIENT
+// received, so an omitted hint arrives as nil and fails here.
+func TestMCPToolsCarryDirectoryAnnotations(t *testing.T) {
+	resetDB(t)
+	mcpTestEnv(t)
+	mcpCallLimiter.resetAll()
+	base := mcpTestServer(t)
+	_, token := linkedConnector(t, "annotations@example.com")
+
+	session := mcpSession(t, base, token)
+	res, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("tools/list: %v", err)
+	}
+
+	want := map[string]struct {
+		title       string
+		readOnly    bool
+		destructive bool
+		openWorld   bool
+	}{
+		"create_trip":                  {"Save trip to Anemos", false, false, false},
+		"search_local_recommendations": {"Search local recommendations", true, false, false},
+		"list_trips":                   {"List saved trips", true, false, false},
+	}
+
+	seen := 0
+	for _, tool := range res.Tools {
+		exp, ok := want[tool.Name]
+		if !ok {
+			t.Errorf("unexpected tool %q — add its annotations to this test before shipping it", tool.Name)
+			continue
+		}
+		seen++
+		if tool.Title != exp.title {
+			t.Errorf("%s: title = %q, want %q", tool.Name, tool.Title, exp.title)
+		}
+		a := tool.Annotations
+		if a == nil {
+			t.Errorf("%s: no annotations at all", tool.Name)
+			continue
+		}
+		if a.Title != exp.title {
+			t.Errorf("%s: annotations.title = %q, want %q", tool.Name, a.Title, exp.title)
+		}
+		if a.ReadOnlyHint != exp.readOnly {
+			t.Errorf("%s: readOnlyHint = %v, want %v", tool.Name, a.ReadOnlyHint, exp.readOnly)
+		}
+		if a.DestructiveHint == nil {
+			t.Errorf("%s: destructiveHint absent from the wire — a nil hint reads as TRUE", tool.Name)
+		} else if *a.DestructiveHint != exp.destructive {
+			t.Errorf("%s: destructiveHint = %v, want %v", tool.Name, *a.DestructiveHint, exp.destructive)
+		}
+		if a.OpenWorldHint == nil {
+			t.Errorf("%s: openWorldHint absent from the wire — a nil hint reads as TRUE", tool.Name)
+		} else if *a.OpenWorldHint != exp.openWorld {
+			t.Errorf("%s: openWorldHint = %v, want %v", tool.Name, *a.OpenWorldHint, exp.openWorld)
+		}
+	}
+	if seen != len(want) {
+		t.Errorf("annotated %d tools, want %d", seen, len(want))
+	}
+}
+
+// initialize is the first thing a directory reviewer's client sees. An empty
+// version or absent instructions reads as an unfinished server.
+func TestMCPInitializeAdvertisesIdentityAndInstructions(t *testing.T) {
+	resetDB(t)
+	mcpTestEnv(t)
+	mcpCallLimiter.resetAll()
+	base := mcpTestServer(t)
+	_, token := linkedConnector(t, "initialize@example.com")
+
+	init := mcpSession(t, base, token).InitializeResult()
+	if init == nil {
+		t.Fatal("no InitializeResult")
+	}
+	// The instructions steer every conversation on the connector; naming the
+	// tools keeps this honest if one is ever renamed.
+	for _, want := range []string{"search_local_recommendations", "create_trip", "list_trips"} {
+		if !strings.Contains(init.Instructions, want) {
+			t.Errorf("instructions never mention %q: %q", want, init.Instructions)
+		}
+	}
+	info := init.ServerInfo
+	if info == nil {
+		t.Fatal("no ServerInfo")
+	}
+	if info.Version == "" {
+		t.Error("ServerInfo.Version is empty — SENTRY_RELEASE is unset here, so the fallback should apply")
+	}
+	if info.Description == "" {
+		t.Error("ServerInfo.Description is empty")
+	}
+	if info.WebsiteURL == "" {
+		t.Error("ServerInfo.WebsiteURL is empty")
+	}
+	if len(info.Icons) == 0 {
+		t.Error("ServerInfo.Icons is empty")
+	}
+}
+
 // The load-bearing test for the stateless design: a tool call must run as the
 // user whose token authenticated THIS request, with no cross-talk.
 func TestMCPCreateTripRunsAsTokenOwner(t *testing.T) {

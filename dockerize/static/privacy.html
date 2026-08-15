@@ -217,6 +217,7 @@
           <tr><td>Resend</td><td>Your email address and message content</td><td>Delivering the emails described above</td></tr>
           <tr><td>Cloudflare</td><td>IP address and request traffic</td><td>Edge network, TLS, and attack protection</td></tr>
           <tr><td>Sentry</td><td>Technical error reports (error message and request metadata such as a request ID — not your account profile)</td><td>Error monitoring</td></tr>
+          <tr><td>OpenAI or Anthropic — <em>only if you connect an AI assistant</em></td><td>The trips and local recommendations returned by connector tool calls that assistant makes on your behalf (see Section 6)</td><td>Planning and saving trips from inside ChatGPT or Claude</td></tr>
         </tbody>
       </table>
     </div>
@@ -249,7 +250,7 @@
       details.
     </p>
 
-    <h2>6. Sharing, invites, and export links</h2>
+    <h2>6. Sharing, invites, exports, and AI assistant connections</h2>
     <ul>
       <li><strong>Share links:</strong> anyone with a share link can view the
         latest version of that trip until you revoke the link (you can revoke it
@@ -260,7 +261,27 @@
       <li><strong>Export and calendar links:</strong> signed links that expire
         after one hour; anyone with the link can access the export while it is
         valid.</li>
+      <li><strong>AI assistant connections:</strong> you can connect an AI
+        assistant such as ChatGPT or Claude to your account (see
+        <a href="/connectors">our connector page</a>). Nothing is connected
+        unless you sign in and approve it.</li>
     </ul>
+    <p>
+      A connected assistant can do exactly three things, and only on your own
+      account: list your saved trips, search our published local
+      recommendations, and save a new trip. It cannot edit or delete an existing
+      trip, cannot read your in-app planning conversations, and cannot see your
+      password or payment details. When it calls one of those tools, the data
+      involved travels to that assistant's provider (OpenAI or Anthropic), where
+      their own privacy policy and your settings with them apply.
+    </p>
+    <p>
+      We store the grant itself — which app you connected, the permissions you
+      granted, and when it was last used — so you can review it. Access and
+      refresh tokens are stored only as hashes, never in readable form. You can
+      revoke a connection at any time in <strong>Settings &rsaquo; Connected
+      apps</strong>; revoking invalidates that app's tokens immediately.
+    </p>
 
     <h2>7. Cookies and local storage</h2>
     <p>
