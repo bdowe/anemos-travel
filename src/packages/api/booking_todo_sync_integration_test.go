@@ -115,3 +115,57 @@ func TestSyncBookingTodosDuplicateKeyLastWins(t *testing.T) {
 		t.Fatalf("last occurrence did not win: %v", list[0])
 	}
 }
+
+// The client, not the server, owns a derived transport row's dates. The server
+// canonicalizes identity, role, labels and search_url — but it copies
+// depart_date through verbatim, and that is deliberate: the row's visible date
+// line is a client-formatted `subtitle`, so overriding one without rewriting
+// the other would produce a row whose text and whose link disagree, which is
+// worse than today's consistently-wrong pair. Finding the matching segment
+// server-side would also mean a second copy of the claim-once matcher that
+// lives in trip_detail_derivation.dart — the exact duplication docs/zen.md
+// forbids, in the exact place (leg identity) this repo has already paid for it.
+//
+// This test pins that decision so a future server-side override lands
+// deliberately, with the subtitle question answered, rather than by accident.
+// It is the design note for the specs/server-booking-todos flip.
+func TestSyncBookingTodosKeepsThePostedDepartDate(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "owner@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	tripID := trip.ID.String()
+
+	// A confirmed segment that disagrees with the posted row: the real flight
+	// leaves Aug 23, the itinerary-derived row says Aug 24.
+	if rec := doJSON(t, "POST", "/api/v1/trips/"+tripID+"/segments", token, map[string]any{
+		"mode": "flight", "origin": "EWR", "destination": "Amsterdam",
+		"depart_date": "2026-08-23", "arrive_date": "2026-08-24",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("segment create = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec := doJSON(t, "PUT", "/api/v1/trips/"+tripID+"/booking-todos", token, []map[string]any{
+		{"kind": "transport", "todo_key": "transport:ewr>>amsterdam",
+			"title": "EWR → Amsterdam", "subtitle": "Aug 23 → Aug 24",
+			"destination": "Amsterdam", "origin": "EWR", "position": 0,
+			"depart_date": "2026-08-23", "passengers": 1},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("sync = %d: %s", rec.Code, rec.Body.String())
+	}
+	rows := decodeTodoList(t, rec)
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1: %s", len(rows), rec.Body.String())
+	}
+	if rows[0]["depart_date"] != "2026-08-23" {
+		t.Fatalf("server rewrote the posted depart_date: %v", rows[0]["depart_date"])
+	}
+	if rows[0]["subtitle"] != "Aug 23 → Aug 24" {
+		t.Fatalf("server rewrote the client-formatted subtitle: %v", rows[0]["subtitle"])
+	}
+	// The link the server DOES own is rebuilt from that date — which is why
+	// posting the real departure fixes "Find flights" with no server change.
+	if u, _ := rows[0]["search_url"].(string); u == "" {
+		t.Fatalf("transport search_url not built: %v", rows[0])
+	}
+}

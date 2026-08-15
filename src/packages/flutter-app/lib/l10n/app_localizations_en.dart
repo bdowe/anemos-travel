@@ -748,6 +748,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookingRowModeTooltip => 'Change transport mode';
 
   @override
+  String bookingRowDepartArrive(String depart, String arrive) {
+    return '$depart → $arrive';
+  }
+
+  @override
+  String bookingRowArrivesOn(String date) {
+    return 'Arrives $date';
+  }
+
+  @override
   String get bookingsOpenListing => 'Open listing';
 
   @override
@@ -797,6 +807,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookingsDepartureDate => 'Departure date';
+
+  @override
+  String get bookingsArrivalDate => 'Arrival date (if it lands the next day)';
 
   @override
   String get bookingsSegmentProviderLabel => 'Provider / carrier';

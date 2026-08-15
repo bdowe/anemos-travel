@@ -195,7 +195,8 @@ var addTransportSegmentTool = anthropic.ToolParam{
 			"mode":        map[string]any{"type": "string", "enum": []string{"flight", "train", "bus", "car", "ferry", "other"}, "description": "How the traveler moves between the two places"},
 			"origin":      map[string]any{"type": "string", "description": "Departure place, e.g. 'Athens' or 'Santorini'"},
 			"destination": map[string]any{"type": "string", "description": "Arrival place, e.g. 'Naxos'"},
-			"depart_date": map[string]any{"type": "string", "description": "Optional YYYY-MM-DD departure date"},
+			"depart_date": map[string]any{"type": "string", "description": "Optional YYYY-MM-DD date the leg DEPARTS. For an overnight leg this is the day BEFORE it lands, not the day the traveler arrives."},
+			"arrive_date": map[string]any{"type": "string", "description": "Optional YYYY-MM-DD arrival date. Set it ONLY when the leg lands on a different calendar day than it leaves — an overnight flight, red-eye, night train or overnight ferry (a flight search shows this as a '+1'). Omit it for a same-day leg; never guess it."},
 			"provider":    map[string]any{"type": "string", "description": "Optional operator/carrier, e.g. 'Blue Star Ferries'"},
 			"url":         map[string]any{"type": "string", "description": "Optional booking URL"},
 		},
@@ -535,12 +536,34 @@ func runAddAccommodationTool(s *planSession, input json.RawMessage) (string, boo
 	return fmt.Sprintf("Added the stay %q to the trip. It starts unbooked — the traveler can confirm it on the trip page. Mention it briefly.", acc.Name), false
 }
 
+// segmentSummaryLine renders a transport segment the ONE way the agent ever
+// sees one — shared by get_trip's Transport section and add_transport_segment's
+// result echo, so a write result and the next read are the same sentence and a
+// wrong mental model cannot survive the round trip.
+func segmentSummaryLine(sg store.TripSegment) string {
+	line := fmt.Sprintf("%s %s -> %s", sg.Mode, strPtrVal(sg.Origin), strPtrVal(sg.Destination))
+	if d := dateString(sg.DepartDate); d != "" {
+		line += ", departs " + d
+	}
+	if d := dateString(sg.ArriveDate); d != "" {
+		line += ", arrives " + d
+	}
+	return line
+}
+
+// segmentIsOvernight reports whether a segment lands on a later calendar day
+// than it leaves — the fact the trip page renders as "Aug 23 → Aug 24".
+func segmentIsOvernight(sg store.TripSegment) bool {
+	return sg.DepartDate.Valid && sg.ArriveDate.Valid && sg.ArriveDate.Time.After(sg.DepartDate.Time)
+}
+
 func runAddTransportSegmentTool(s *planSession, input json.RawMessage) (string, bool) {
 	var in struct {
 		Mode        string  `json:"mode"`
 		Origin      *string `json:"origin"`
 		Destination *string `json:"destination"`
 		DepartDate  *string `json:"depart_date"`
+		ArriveDate  *string `json:"arrive_date"`
 		Provider    *string `json:"provider"`
 		URL         *string `json:"url"`
 	}
@@ -558,6 +581,15 @@ func runAddTransportSegmentTool(s *planSession, input json.RawMessage) (string, 
 	if err != nil {
 		return "depart_date must be YYYY-MM-DD.", true
 	}
+	arrive, err := parseDateParam(in.ArriveDate)
+	if err != nil {
+		return "arrive_date must be YYYY-MM-DD.", true
+	}
+	// Mirrors the REST guard (segment_handler.go) so the agent path cannot
+	// write a pair the traveler's own sheet would be refused for.
+	if depart.Valid && arrive.Valid && arrive.Time.Before(depart.Time) {
+		return "arrive_date must not be before depart_date.", true
+	}
 
 	seg, err := store.New(dbPool).CreateSegment(s.ctx, store.CreateSegmentParams{
 		TripID:      tid,
@@ -565,6 +597,7 @@ func runAddTransportSegmentTool(s *planSession, input json.RawMessage) (string, 
 		Origin:      in.Origin,
 		Destination: in.Destination,
 		DepartDate:  depart,
+		ArriveDate:  arrive,
 		Provider:    in.Provider,
 		Url:         in.URL,
 	})
@@ -574,11 +607,16 @@ func runAddTransportSegmentTool(s *planSession, input json.RawMessage) (string, 
 	touchTripAs(s.ctx, tid, s.uid)
 	sendSSE(s.w, "trip_updated", map[string]string{"trip_id": tid.String()})
 	safeGo("recordEvent", func() { recordEvent(s.uid, "agent_segment_added", &tid, map[string]any{"mode": seg.Mode}) })
-	leg := seg.Mode
-	if seg.Origin != nil && seg.Destination != nil {
-		leg = fmt.Sprintf("%s %s → %s", seg.Mode, *seg.Origin, *seg.Destination)
+	// The echo states the post-state in the SAME words get_trip will use on the
+	// next read (segmentSummaryLine), and — for an overnight leg — names the one
+	// wrong inference this tool invites: "the trip must start on the departure
+	// date". It must not. Moving trips.start_date back a day would rewrite the
+	// first city's header to an extra night the traveler never books.
+	echo := "Added to the trip: " + segmentSummaryLine(seg) + "."
+	if segmentIsOvernight(seg) {
+		echo += " That leg lands the day AFTER it leaves, so the trip page shows it as a two-date span. The trip's day 1 is still the ARRIVAL day — do not change the trip's start date to the departure date, and no itinerary day moved."
 	}
-	return fmt.Sprintf("Added the %s leg to the trip. It starts unbooked — the traveler can confirm it on the trip page. Mention it briefly.", leg), false
+	return echo + " It starts unbooked — the traveler can confirm it on the trip page. Mention it briefly, naming both dates when they differ.", false
 }
 
 func runMoveItineraryItemTool(s *planSession, input json.RawMessage) (string, bool) {
@@ -774,14 +812,7 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 			if sg.Auto {
 				continue
 			}
-			line := fmt.Sprintf("- %s %s -> %s", sg.Mode, strPtrVal(sg.Origin), strPtrVal(sg.Destination))
-			if d := dateString(sg.DepartDate); d != "" {
-				line += ", departs " + d
-			}
-			if d := dateString(sg.ArriveDate); d != "" {
-				line += ", arrives " + d
-			}
-			lines = append(lines, line+"\n")
+			lines = append(lines, "- "+segmentSummaryLine(sg)+"\n")
 		}
 		if len(lines) > 0 {
 			b.WriteString("Transport:\n" + strings.Join(lines, ""))

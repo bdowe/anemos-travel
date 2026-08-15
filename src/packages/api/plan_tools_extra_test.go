@@ -468,8 +468,14 @@ func TestAddTransportSegmentToolWritesBoundTrip(t *testing.T) {
 
 	msg, isErr := runAddTransportSegmentTool(s,
 		json.RawMessage(`{"mode":"ferry","origin":"Athens","destination":"Naxos","depart_date":"2026-08-04"}`))
-	if isErr || !strings.Contains(msg, "Athens → Naxos") {
+	// The echo is phrased by segmentSummaryLine — the SAME sentence get_trip
+	// prints on the next read, so the model can verify its own write.
+	if isErr || !strings.Contains(msg, "ferry Athens -> Naxos, departs 2026-08-04") {
 		t.Fatalf("add = %q (err=%v)", msg, isErr)
+	}
+	// A same-day leg must NOT carry the overnight clause.
+	if strings.Contains(msg, "lands the day AFTER") {
+		t.Fatalf("same-day leg described as overnight: %q", msg)
 	}
 	if !strings.Contains(rec.Body.String(), "trip_updated") {
 		t.Fatal("add_transport_segment did not emit trip_updated")
@@ -482,6 +488,80 @@ func TestAddTransportSegmentToolWritesBoundTrip(t *testing.T) {
 	// Bad mode rejected, no write.
 	if _, isErr := runAddTransportSegmentTool(s, json.RawMessage(`{"mode":"teleport"}`)); !isErr {
 		t.Fatal("invalid mode accepted")
+	}
+}
+
+// TestAddTransportSegmentToolRecordsOvernightArrival is the agent half of
+// specs-less overnight-arrival work: the model reads "21:55→11:30+1" out of
+// summarizeOffers and, before this, had nowhere to put the +1. Both dates must
+// persist, and the echo must state the post-state INCLUDING the non-change —
+// that day 1 is still the arrival day — because "move the trip's start date
+// back" is the one wrong inference recording a departure invites.
+func TestAddTransportSegmentToolRecordsOvernightArrival(t *testing.T) {
+	resetDB(t)
+	owner, ownerToken := createTestUser(t, "agent@example.com")
+	trip := createTestTrip(t, owner.ID, 1)
+	s, _ := boundPlanSession(owner.ID, trip.ID)
+
+	msg, isErr := runAddTransportSegmentTool(s, json.RawMessage(
+		`{"mode":"flight","origin":"EWR","destination":"Amsterdam","depart_date":"2026-08-23","arrive_date":"2026-08-24"}`))
+	if isErr {
+		t.Fatalf("overnight leg rejected: %q", msg)
+	}
+	if !strings.Contains(msg, "departs 2026-08-23") || !strings.Contains(msg, "arrives 2026-08-24") {
+		t.Fatalf("echo dropped a date: %q", msg)
+	}
+	if !strings.Contains(msg, "day 1 is still the ARRIVAL day") {
+		t.Fatalf("echo did not pin the non-change: %q", msg)
+	}
+
+	// Both dates round-trip onto the trip.
+	get := doJSON(t, "GET", "/api/v1/trips/"+trip.ID.String(), ownerToken, nil)
+	if get.Code != http.StatusOK {
+		t.Fatalf("get trip: %d", get.Code)
+	}
+	if !strings.Contains(get.Body.String(), `"arrive_date":"2026-08-24"`) ||
+		!strings.Contains(get.Body.String(), `"depart_date":"2026-08-23"`) {
+		t.Fatalf("segment dates not persisted: %s", get.Body.String())
+	}
+
+	// get_trip speaks the same sentence the echo did — one helper, so a write
+	// result and the next read can never drift apart.
+	view, _ := runGetTripTool(s.ctx, true, owner.ID, &trip.ID,
+		json.RawMessage(`{"trip_id":"`+trip.ID.String()+`"}`))
+	if !strings.Contains(view, "departs 2026-08-23, arrives 2026-08-24") {
+		t.Fatalf("get_trip disagrees with the write echo: %q", view)
+	}
+}
+
+// TestAddTransportSegmentToolRejectsBackwardsArrival mirrors the REST guard so
+// the agent path cannot write a pair the traveler's own sheet is refused for.
+// Asserts NO write, not merely an error.
+func TestAddTransportSegmentToolRejectsBackwardsArrival(t *testing.T) {
+	resetDB(t)
+	owner, ownerToken := createTestUser(t, "agent@example.com")
+	trip := createTestTrip(t, owner.ID, 1)
+	s, _ := boundPlanSession(owner.ID, trip.ID)
+
+	for _, bad := range []string{
+		`{"mode":"flight","origin":"EWR","destination":"Amsterdam","depart_date":"2026-08-24","arrive_date":"2026-08-23"}`,
+		`{"mode":"flight","origin":"EWR","destination":"Amsterdam","arrive_date":"next tuesday"}`,
+	} {
+		if msg, isErr := runAddTransportSegmentTool(s, json.RawMessage(bad)); !isErr {
+			t.Fatalf("accepted %s => %q", bad, msg)
+		}
+	}
+	get := doJSON(t, "GET", "/api/v1/trips/"+trip.ID.String(), ownerToken, nil)
+	if strings.Contains(get.Body.String(), "Amsterdam") {
+		t.Fatalf("rejected input still wrote a segment: %s", get.Body.String())
+	}
+}
+
+// TestAddTransportSegmentSchemaAdvertisesArriveDate — a dispatcher reading a
+// parameter the schema never advertises is dead code that looks alive.
+func TestAddTransportSegmentSchemaAdvertisesArriveDate(t *testing.T) {
+	if _, ok := addTransportSegmentTool.InputSchema.Properties.(map[string]any)["arrive_date"]; !ok {
+		t.Fatal("add_transport_segment does not advertise arrive_date")
 	}
 }
 

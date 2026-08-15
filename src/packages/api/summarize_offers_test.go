@@ -133,6 +133,13 @@ func TestSummarizeOffersMarksNextDayArrival(t *testing.T) {
 	if !strings.Contains(text, "22:50→06:10+1") {
 		t.Errorf("next-day arrival not marked:\n%s", text)
 	}
+	// Marking it is only half the job: the +1 had existed here for months with
+	// nowhere to go. The closing line must tell the model what to DO with it,
+	// or the fact dies with the turn and the trip page keeps showing the
+	// landing day as if it were the departure.
+	if !strings.Contains(text, "add_transport_segment's depart_date and arrive_date") {
+		t.Errorf("closing line does not tell the model to record the +1:\n%s", text)
+	}
 }
 
 // On a round trip the top-level times describe the OUTBOUND slice, so the

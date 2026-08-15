@@ -339,6 +339,21 @@
   "bookingRowAddDetails": "Add details…",
   "bookingRowOptions": "Booking options",
   "bookingRowModeTooltip": "Change transport mode",
+  "bookingRowDepartArrive": "{depart} → {arrive}",
+  "@bookingRowDepartArrive": {
+    "description": "Date line for a transport leg that lands on a later calendar day than it leaves — an overnight flight, red-eye, night train or overnight ferry. Both values are already-formatted short dates.",
+    "placeholders": {
+      "depart": { "type": "String", "example": "Aug 23" },
+      "arrive": { "type": "String", "example": "Aug 24" }
+    }
+  },
+  "bookingRowArrivesOn": "Arrives {date}",
+  "@bookingRowArrivesOn": {
+    "description": "Date line for a transport leg whose departure day is not known — the app knows only the day the traveler lands, so it says that rather than implying a departure date.",
+    "placeholders": {
+      "date": { "type": "String", "example": "Aug 24" }
+    }
+  },
   "bookingsOpenListing": "Open listing",
   "bookingsEditStay": "Edit stay",
   "bookingsRemoveStay": "Remove stay",
@@ -359,6 +374,10 @@
     "description": "Under the read-only From/To of a leg the itinerary derives: its endpoints come from the trip's airports or its cities, not from this form."
   },
   "bookingsDepartureDate": "Departure date",
+  "bookingsArrivalDate": "Arrival date (if it lands the next day)",
+  "@bookingsArrivalDate": {
+    "description": "Optional arrival-date picker on the transport sheet. Only worth filling in for a leg that lands on a later calendar day than it leaves."
+  },
   "bookingsSegmentProviderLabel": "Provider / carrier",
   "bookingsSegmentUrlLabel": "Booking URL",
   "bookingsNotesLabel": "Notes",

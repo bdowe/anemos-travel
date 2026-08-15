@@ -147,7 +147,12 @@ class BookingDetailRow extends StatelessWidget {
       title = [s.origin, s.destination].whereType<String>().join(' → ');
       subtitle = [
         transportModeLabel(l10n, s.mode),
-        if (shortDateLabel(s.departDate) case final date?) date,
+        // The same line the derived row above prints — an overnight leg reads
+        // "Aug 23 → Aug 24" in both places, so the checklist row and the
+        // confirmed record beneath it can never show different dates.
+        if (transportDateLine(l10n, s.departDate, s.arriveDate)
+            case final dates?)
+          dates,
         if (s.provider != null && s.provider!.isNotEmpty) s.provider,
         if (s.notes != null && s.notes!.isNotEmpty) s.notes,
       ].whereType<String>().join(' · ');

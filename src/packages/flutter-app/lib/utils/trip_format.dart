@@ -7,6 +7,7 @@
 // flutter_localizations loads the date symbols for the active locale before
 // first paint; outside a Flutter app (unit tests) intl falls back to en_US.
 
+import '../l10n/l10n.dart';
 import 'date_formats.dart';
 
 /// "Mon d" from an already-parsed date — [shortDateLabel]'s shape for callers
@@ -28,6 +29,41 @@ String? shortDateLabel(String? iso) {
   final d = DateTime.tryParse(iso ?? '');
   return d == null ? null : shortDateOf(d);
 }
+
+/// The ONE date line for a transport leg. A leg occupies two calendar days
+/// whenever it lands after the day it left — an overnight flight, a red-eye, a
+/// night train, an overnight ferry — and the app has to be able to say so:
+///
+///   * both dates, different   -> "Aug 23 → Aug 24"
+///   * departure known         -> "Aug 23"
+///   * only the arrival known  -> "Arrives Aug 24"
+///   * neither                 -> null
+///
+/// The last case is the honest one that used to be missing. A bare "Aug 24"
+/// under "EWR → Amsterdam" has exactly one reading — this is the day you fly —
+/// and for a transatlantic red-eye that reading is false. Labelling it as an
+/// arrival asserts only what the itinerary actually knows: the day the traveler
+/// is first in Amsterdam.
+///
+/// Shared by the derived checklist row (trip_detail_screen `_deriveTodos`) and
+/// the confirmed-segment row beneath it (BookingDetailRow) so the two can never
+/// print different dates for the same leg.
+String? transportDateLineOf(
+    AppLocalizations l10n, DateTime? depart, DateTime? arrive) {
+  if (depart != null && arrive != null && arrive != depart) {
+    return l10n.bookingRowDepartArrive(
+        shortDateOf(depart), shortDateOf(arrive));
+  }
+  if (depart != null) return shortDateOf(depart);
+  if (arrive != null) return l10n.bookingRowArrivesOn(shortDateOf(arrive));
+  return null;
+}
+
+/// [transportDateLineOf] from ISO strings, for callers holding wire values.
+String? transportDateLine(
+        AppLocalizations l10n, String? departIso, String? arriveIso) =>
+    transportDateLineOf(l10n, DateTime.tryParse(departIso ?? ''),
+        DateTime.tryParse(arriveIso ?? ''));
 
 /// A stored title is "long" when it's really the AI summary (multi-line or
 /// lengthy); such trips show a cities-derived display title instead. Shared by

@@ -95,6 +95,20 @@ import '../utils/snack.dart';
 /// bookable airport when the place name has no IATA match.
 typedef _Coord = ({double lat, double lng});
 
+/// The dates a derived transport leg actually knows, and — crucially — which of
+/// them may be presented as a DEPARTURE.
+///
+///  * A leg with a confirmed segment carries whatever that segment says. A
+///    transatlantic red-eye departs the calendar day BEFORE the trip starts.
+///  * An inter-city or return leg without one carries a departure: the
+///    itinerary's own model is that you leave a city on its last day.
+///  * The OUTBOUND home leg without one carries only an arrival. There is no
+///    leg before the first city, so the itinerary knows the day the traveler
+///    lands and nothing about the day they left home — and saying "Aug 24"
+///    under "EWR → Amsterdam" asserts a departure that, for an overnight
+///    flight, is simply false.
+typedef _LegDates = ({DateTime? depart, DateTime? arrive});
+
 /// Canonical group key for items whose locality can't be resolved. It keys the
 /// collapse/header registries and gates refine/events/local sections, so it is
 /// NEVER translated — only its display label is (specs/i18n-spanish). Now
@@ -255,6 +269,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // Ferryhopper search for that route instead of a flight.
   Map<String, ({String origin, String destination, String? date})> _ferryLegs =
       {};
+  // todo_key -> the leg's known dates, for EVERY transport row (flight, ferry
+  // and ground alike, unlike the two maps above). Read by "Add details…" so the
+  // sheet prefills what the app actually knows: on a leg with no recorded
+  // flight the departure field opens BLANK rather than pre-filled with the
+  // arrival day, which is the wrong day to hand a traveler for confirmation.
+  Map<String, _LegDates> _legDates = {};
   // Per-leg travel timings keyed by the source item's position (the leg leaving
   // that item, to the next item in itinerary order). Empty until computed and on
   // any failure — travel times are an enhancement and never block the itinerary.
@@ -957,8 +977,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// dates, and the header chips all agree — including squeezed legs, which
   /// read as a zero-night stop at their arrival.
   List<Map<String, dynamic>> _deriveTodos(Trip trip) {
-    final ranges = _derive(trip).visibleRanges;
+    final l10n = context.l10n;
+    final derived = _derive(trip);
+    final ranges = derived.visibleRanges;
+    // The ONE segment matcher, reused rather than reimplemented: the grouped
+    // booking slots already claim a confirmed segment per leg (claim-once, so
+    // two legs can never take the same one), and they are 1:1 with [ranges] by
+    // construction — _computeGroupedBookings is fed the raw leg labels and
+    // visibleLegRanges maps those 1:1. Because the posted payload and the
+    // rendered rows now read the SAME claim result, they cannot disagree.
+    final slots = derived.groupedBookings.slots;
     final todos = <Map<String, dynamic>>[];
+    final legDatesByKey = <String, _LegDates>{};
     final legs = <String,
         ({
           String origin,
@@ -1011,19 +1041,53 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       return modeByKey[key] ?? def;
     }
 
+    // A leg's dates, with the confirmed segment winning when there is one —
+    // the same rule this screen already applies to a row's transport MODE
+    // ("that row's mode truth is the segment"). The itinerary only ever knows
+    // ONE date per leg, so [itineraryDateIsArrival] says which end of the
+    // journey that date describes.
+    _LegDates legDates(TripSegment? seg, DateTime? itineraryDate,
+        {required bool itineraryDateIsArrival}) {
+      final segDepart = DateTime.tryParse(seg?.departDate ?? '');
+      if (segDepart != null) {
+        return (
+          depart: segDepart,
+          arrive: DateTime.tryParse(seg?.arriveDate ?? '')
+        );
+      }
+      return itineraryDateIsArrival
+          ? (depart: null, arrive: itineraryDate)
+          : (depart: itineraryDate, arrive: null);
+    }
+
+    // The ONE place a derived transport row's date line is written.
+    String? legSubtitle(_LegDates d) =>
+        transportDateLineOf(l10n, d.depart, d.arrive);
+
+    // What rides the wire as depart_date. The server rebuilds search_url from
+    // it and the in-app flight search is seeded from it, so a real departure
+    // fixes both. Falling back to the arrival keeps a date on the link for a
+    // leg we know nothing else about: a SEARCH date is a query the results page
+    // corrects, not an assertion about the traveler's trip — the assertion
+    // lives in the subtitle, which now says "Arrives" instead of guessing.
+    String? legSeed(_LegDates d) {
+      final seed = d.depart ?? d.arrive;
+      return seed == null ? null : _fmt(seed);
+    }
+
     // Adds a transport (flight) todo and records its leg so the booking item can
     // open Find Flights prefilled. Coords (when known) resolve an endpoint to its
     // nearest airport if the city label itself has no IATA match.
-    void addFlight(String origin, String destination, DateTime? when,
+    void addFlight(String origin, String destination, _LegDates when,
         {_Coord? originCoord, _Coord? destCoord}) {
-      final date = when == null ? null : _fmt(when);
+      final date = legSeed(when);
       final key =
           'transport:${origin.toLowerCase()}>>${destination.toLowerCase()}';
       todos.add({
         'kind': 'transport',
         'todo_key': key,
         'title': '$origin → $destination',
-        if (when != null) 'subtitle': _fmtShortDt(when),
+        if (legSubtitle(when) case final line?) 'subtitle': line,
         'provider': 'google_flights',
         'position': pos++,
         'origin': origin,
@@ -1042,15 +1106,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
     // Adds a transport (ferry) todo for a Greek port<->port leg and records it so
     // the booking item opens the Ferryhopper search for that route.
-    void addFerry(String origin, String destination, DateTime? when) {
-      final date = when == null ? null : _fmt(when);
+    void addFerry(String origin, String destination, _LegDates when) {
+      final date = legSeed(when);
       final key =
           'transport:${origin.toLowerCase()}>>${destination.toLowerCase()}';
       todos.add({
         'kind': 'transport',
         'todo_key': key,
         'title': '$origin → $destination',
-        if (when != null) 'subtitle': _fmtShortDt(when),
+        if (legSubtitle(when) case final line?) 'subtitle': line,
         'provider': 'ferry',
         'position': pos++,
         'origin': origin,
@@ -1064,15 +1128,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // Adds a ground transport todo (car/train/bus trip) that opens a Rome2Rio
     // route search. Deliberately NOT registered in [legs]/[ferryLegs]: the card
     // then opens the server-built search_url with no "Find flights" override.
-    void addGround(String origin, String destination, DateTime? when) {
-      final date = when == null ? null : _fmt(when);
+    void addGround(String origin, String destination, _LegDates when) {
+      final date = legSeed(when);
       final key =
           'transport:${origin.toLowerCase()}>>${destination.toLowerCase()}';
       todos.add({
         'kind': 'transport',
         'todo_key': key,
         'title': '$origin → $destination',
-        if (when != null) 'subtitle': _fmtShortDt(when),
+        if (legSubtitle(when) case final line?) 'subtitle': line,
         'provider': 'rome2rio',
         'position': pos++,
         'origin': origin,
@@ -1085,8 +1149,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // Dispatches one leg by a concrete mode (a per-leg override or a derived
     // default): ferry and flight register their leg for the in-app search
     // override; car/train/bus ride the server-built Rome2Rio link.
-    void addLegAs(String mode, String origin, String destination, DateTime? when,
+    void addLegAs(String mode, String origin, String destination, _LegDates when,
         {_Coord? originCoord, _Coord? destCoord}) {
+      legDatesByKey['transport:${origin.toLowerCase()}>>'
+          '${destination.toLowerCase()}'] = when;
       switch (mode) {
         case 'ferry':
           addFerry(origin, destination, when);
@@ -1102,7 +1168,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // ferry; a stated ground travel mode makes every other leg ground;
     // otherwise the long-haul default is a flight. A per-leg override beats
     // all of it.
-    void addLeg(String origin, String destination, DateTime? when,
+    void addLeg(String origin, String destination, _LegDates when,
         {_Coord? originCoord, _Coord? destCoord}) {
       final greek = _isGreekIsland(origin) && _isGreekIsland(destination);
       final def = greek ? 'ferry' : (ground ?? 'flight');
@@ -1110,12 +1176,23 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           when, originCoord: originCoord, destCoord: destCoord);
     }
 
-    // Outbound: departure airport -> first city, on the first group's start
-    // (the trip's start date via the first-leg anchor, unless a confirmed stay
-    // overrides it). Home legs never get the Greek-ferry default.
+    // Outbound: departure airport -> first city. The itinerary's date here is
+    // the first group's START — the trip's start date via the first-leg anchor
+    // — which is the day the traveler LANDS, not the day they left home. There
+    // is no leg before the first city to supply a departure, so unless a
+    // confirmed segment carries one this row says "Arrives <date>" rather than
+    // implying the traveler flies out on the day they arrive. That single
+    // wrong date used to reach the row, the Find-flights link (in-app and
+    // external), the Add-details prefill, and the Trips-list "first leg
+    // departs" nudge. Home legs never get the Greek-ferry default.
     if (hasDeparture) {
-      addLegAs(effectiveMode(departure, ranges.first.label, ground ?? 'flight'),
-          departure, ranges.first.label, ranges.first.start,
+      addLegAs(
+          effectiveMode(departure, ranges.first.label, ground ?? 'flight'),
+          departure,
+          ranges.first.label,
+          legDates(slots.isEmpty ? null : slots.first.arrivalMatch,
+              ranges.first.start,
+              itineraryDateIsArrival: true),
           destCoord: ranges.first.coord);
     }
 
@@ -1139,8 +1216,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         'guests': 1,
       });
       if (i < ranges.length - 1) {
-        addLeg(label, ranges[i + 1].label, r.end,
-            originCoord: r.coord, destCoord: ranges[i + 1].coord);
+        addLeg(
+            label,
+            ranges[i + 1].label,
+            legDates(i + 1 < slots.length ? slots[i + 1].arrivalMatch : null,
+                r.end,
+                itineraryDateIsArrival: false),
+            originCoord: r.coord,
+            destCoord: ranges[i + 1].coord);
       }
     }
 
@@ -1148,13 +1231,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // its OWN ladder rung, so a trip that comes home into a different airport
     // than it left from says so.
     if (hasArrival) {
-      addLegAs(effectiveMode(ranges.last.label, arrival, ground ?? 'flight'),
-          ranges.last.label, arrival, ranges.last.end,
+      addLegAs(
+          effectiveMode(ranges.last.label, arrival, ground ?? 'flight'),
+          ranges.last.label,
+          arrival,
+          legDates(slots.isEmpty ? null : slots.last.departureMatch,
+              ranges.last.end,
+              itineraryDateIsArrival: false),
           originCoord: ranges.last.coord);
     }
 
     _flightLegs = legs;
     _ferryLegs = ferryLegs;
+    _legDates = legDatesByKey;
     return todos;
   }
 
@@ -1463,6 +1552,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // sheet opens after the await rather than from the callback, so the two
     // modals never overlap.
     var changeAirport = false;
+    // Prefill what the app actually KNOWS, not the wire's best-effort search
+    // seed. On a leg with no recorded flight the departure opens BLANK rather
+    // than pre-filled with the arrival day, so the sheet never asks the
+    // traveler to confirm a departure date the app invented. A row with no
+    // entry here (a custom or agent-added one) keeps the stored value.
+    final known = _legDates[todo.todoKey];
     final body = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -1475,7 +1570,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               'rome2rio' => trip == null ? null : _groundModeOf(trip),
               _ => 'flight',
             },
-        initialDepartDate: todo.departDate,
+        initialDepartDate: known == null
+            ? todo.departDate
+            : (known.depart == null ? null : _fmt(known.depart!)),
+        initialArriveDate: known?.arrive == null ? null : _fmt(known!.arrive!),
         // A derived leg's endpoints are the trip's (its airports) or the
         // itinerary's (its cities) — this form's job is the booking detail.
         // Typing over them here used to post a second row that contradicted
@@ -2963,10 +3061,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                         ? l10n.tripFindFlightsShort
                         : l10n.tripFindFlights)
                     : null,
-            onAddDetails:
-                (_readOnly || _isOffline || todo.kind == 'other')
-                    ? null
-                    : () => _addDetailsFromTodo(todo),
+            // No "Add details…" once a confirmed segment fills the slot —
+            // the same rule as the mode picker below: that row's truth is the
+            // segment, edited via its own sheet. Without this the sheet would
+            // open pre-filled with the segment's own dates and Save would
+            // create a SECOND segment for the same leg. (Locking the sheet's
+            // endpoints stops a segment that CONTRADICTS the row; this stops a
+            // duplicate of it — the two guards cover different halves.)
+            onAddDetails: (_readOnly ||
+                    _isOffline ||
+                    todo.kind == 'other' ||
+                    e.segment != null)
+                ? null
+                : () => _addDetailsFromTodo(todo),
             // Only the two journey endpoints: those are the rows the trip's
             // own airports title, so they are the only ones this moves. The
             // role comes from the server, which stores it as identity —
@@ -4590,10 +4697,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // utils/leg_ranges.dart (specs/trip-dates-truth stage 0a) — one testable
   // definition shared with the booking-todo derivation and the Go twin
   // behind the server legs payload.
-
-  /// "Jul 15" in English, "15 jul" in Spanish — the cached DateFormat reads
-  /// Intl.defaultLocale, which the locale provider sets (specs/i18n-spanish).
-  String _fmtShortDt(DateTime d) => mmmd().format(d);
 
   /// Coarse relative timestamp for the "Updated by X" line.
   String _relativeTime(String iso) {
