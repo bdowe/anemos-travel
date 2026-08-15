@@ -3536,6 +3536,78 @@ abstract class AppLocalizations {
   /// **'View trip'**
   String get importViewTrip;
 
+  /// No description provided for @logTripTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Log a past trip'**
+  String get logTripTitle;
+
+  /// No description provided for @logTripAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add past trip'**
+  String get logTripAction;
+
+  /// No description provided for @logTripExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Been somewhere we didn\'t plan? Add it here and it counts in Your travels.'**
+  String get logTripExplainer;
+
+  /// No description provided for @logTripDestinationsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Where did you go?'**
+  String get logTripDestinationsLabel;
+
+  /// No description provided for @logTripDestinationsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search a city or country'**
+  String get logTripDestinationsHint;
+
+  /// No description provided for @logTripAddByName.
+  ///
+  /// In en, this message translates to:
+  /// **'Add \"{name}\" by name'**
+  String logTripAddByName(String name);
+
+  /// No description provided for @logTripNoCoordsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Destinations without a map location still count as cities, but they won\'t get a dot on your travel map.'**
+  String get logTripNoCoordsNote;
+
+  /// No description provided for @logTripDatesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'When?'**
+  String get logTripDatesLabel;
+
+  /// No description provided for @logTripPickDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick your travel dates'**
+  String get logTripPickDates;
+
+  /// No description provided for @logTripDatesRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Dates are required — they\'re what counts this trip as travel you\'ve already taken.'**
+  String get logTripDatesRequired;
+
+  /// No description provided for @logTripNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name this trip (optional)'**
+  String get logTripNameLabel;
+
+  /// No description provided for @logTripSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save trip'**
+  String get logTripSave;
+
   /// No description provided for @importPlanningPrompt.
   ///
   /// In en, this message translates to:

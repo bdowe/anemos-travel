@@ -32,6 +32,15 @@ import '../providers/shared_with_me_provider.dart';
 import '../providers/trips_provider.dart';
 import 'trip_detail_screen.dart';
 
+/// Handles for the three "Log a past trip" entry points (specs/log-past-trip).
+/// Locale-free on purpose, the kTraveledStatsKey convention: they all carry the
+/// same label, so a test asking by text couldn't tell them apart — and couldn't
+/// answer the question that matters, which is that every account size has at
+/// least one way in.
+const kLogTripSectionActionKey = ValueKey('logTrip.entry.section');
+const kLogTripAppBarKey = ValueKey('logTrip.entry.appBar');
+const kLogTripEmptyStateKey = ValueKey('logTrip.entry.emptyState');
+
 class TripsListScreen extends ConsumerStatefulWidget {
   const TripsListScreen({super.key});
 
@@ -117,6 +126,15 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             onPressed: () => openImportOnTripsTab(ref),
             icon: const Icon(Icons.content_paste_go, size: 18),
             label: Text(l10n.importFromAi),
+          ),
+          // Already travelled, just never here (specs/log-past-trip). The
+          // empty state is this entry point's only home for an account with
+          // no trips — "Your travels", where it otherwise lives, needs two.
+          OutlinedButton.icon(
+            key: kLogTripEmptyStateKey,
+            onPressed: () => openLogTripOnTripsTab(ref),
+            icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+            label: Text(l10n.logTripAction),
           ),
         ],
       );
@@ -240,7 +258,21 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(
                           AppSpacing.xs, AppSpacing.xl, 0, AppSpacing.sm),
-                      child: SectionHeader(title: l10n.tripsListYourTravels),
+                      child: SectionHeader(
+                        title: l10n.tripsListYourTravels,
+                        // The band's own gap-filler (specs/log-past-trip): the
+                        // section reads as "everywhere you've been" while
+                        // knowing only what this app planned, so the way to
+                        // correct it belongs in its header. It can't be the
+                        // ONLY way in — the header is gated at 2+ owned trips
+                        // — hence the app-bar and empty-state twins.
+                        action: TextButton.icon(
+                          key: kLogTripSectionActionKey,
+                          onPressed: () => openLogTripOnTripsTab(ref),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: Text(l10n.logTripAction),
+                        ),
+                      ),
                     ),
                     TravelFootprintCard(
                       pins: pins,
@@ -319,6 +351,16 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       appBar: GradientAppBar(
         title: Text(l10n.tripsListTitle),
         actions: [
+          // The entry point that covers the gap the other two leave: an
+          // account with exactly one trip sees neither the empty state nor
+          // "Your travels" (gated at 2+), and is precisely the account whose
+          // history is missing.
+          IconButton(
+            key: kLogTripAppBarKey,
+            tooltip: l10n.logTripAction,
+            icon: const Icon(Icons.edit_calendar_outlined),
+            onPressed: () => openLogTripOnTripsTab(ref),
+          ),
           IconButton(
             tooltip: l10n.importFromAi,
             icon: const Icon(Icons.content_paste_go),

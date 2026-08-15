@@ -1361,6 +1361,25 @@
   "importProgressLocating": "Finding places on the map…",
   "importWarningsTitle": "Some places need attention",
   "importViewTrip": "View trip",
+  "logTripTitle": "Log a past trip",
+  "logTripAction": "Add past trip",
+  "logTripExplainer": "Been somewhere we didn't plan? Add it here and it counts in Your travels.",
+  "logTripDestinationsLabel": "Where did you go?",
+  "logTripDestinationsHint": "Search a city or country",
+  "logTripAddByName": "Add \"{name}\" by name",
+  "@logTripAddByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "logTripNoCoordsNote": "Destinations without a map location still count as cities, but they won't get a dot on your travel map.",
+  "logTripDatesLabel": "When?",
+  "logTripPickDates": "Pick your travel dates",
+  "logTripDatesRequired": "Dates are required — they're what counts this trip as travel you've already taken.",
+  "logTripNameLabel": "Name this trip (optional)",
+  "logTripSave": "Save trip",
   "importPlanningPrompt": "Help me plan a trip. Ask about my destination, dates, interests, pace, and budget, then build a day-by-day itinerary. When we're done, finish with a section titled TRIP SUMMARY that lists: the destination(s) and exact travel dates; each day as \"Day N — City\" with Morning / Afternoon / Evening entries, each written as \"Place Name — City\" using real, mappable place names; day trips marked as \"day trip from [city]\"; and how I'm traveling between cities (flight, car, train, bus, or ferry).",
   "homeGreetingMorning": "Good morning",
   "homeGreetingAfternoon": "Good afternoon",

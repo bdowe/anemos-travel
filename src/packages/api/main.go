@@ -790,6 +790,11 @@ func buildRouter() *mux.Router {
 	// admin composes the auth + admin gate; used for curation and version-history routes.
 	admin := func(h http.HandlerFunc) http.Handler { return authMiddleware(adminMiddleware(h)) }
 	api.Handle("/trips", authMiddleware(http.HandlerFunc(listTripsHandler))).Methods("GET")
+	// Manual trip creation (specs/log-past-trip): no model call, no provider
+	// call, one transaction — so the plain auth tier, not importTier. The
+	// per-user ceiling that matters here is maxTripsPerUser(), which
+	// persistTrip already enforces inside its transaction.
+	api.Handle("/trips", authMiddleware(http.HandlerFunc(createTripHandler))).Methods("POST")
 	api.Handle("/trips/versions", admin(listTripVersionsHandler)).Methods("GET")
 	// Literal routes must precede /trips/{id} or mux binds them as an id.
 	// Import runs one Claude call + up to 50 Places lookups per request — same

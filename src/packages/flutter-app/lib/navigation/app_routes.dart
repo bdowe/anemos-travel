@@ -17,6 +17,7 @@ enum BootUtility {
   adminMetrics,
   adminLocal,
   importTrip,
+  logTrip,
   guides,
   notifications,
 }
@@ -61,15 +62,16 @@ String utilityLocation(BootUtility utility) => switch (utility) {
       BootUtility.adminMetrics => '/admin/metrics',
       BootUtility.adminLocal => '/admin/local',
       BootUtility.importTrip => '/import',
+      BootUtility.logTrip => '/log-trip',
       BootUtility.guides => '/guides',
       BootUtility.notifications => '/notifications',
     };
 
-/// The tab a utility screen is restored onto. Import lives in the trips flow;
-/// everything else hangs off Home (the account menu is reachable from any tab,
-/// so restore needs one deterministic choice).
+/// The tab a utility screen is restored onto. Import and log-a-past-trip both
+/// live in the trips flow; everything else hangs off Home (the account menu is
+/// reachable from any tab, so restore needs one deterministic choice).
 AppTab utilityTab(BootUtility utility) => switch (utility) {
-      BootUtility.importTrip => AppTab.trips,
+      BootUtility.importTrip || BootUtility.logTrip => AppTab.trips,
       _ => AppTab.home,
     };
 
@@ -112,6 +114,7 @@ BootTarget? parseBootTarget(Uri uri) {
           'preferences' => BootUtility.preferences,
           'account' => BootUtility.account,
           'import' => BootUtility.importTrip,
+          'log-trip' => BootUtility.logTrip,
           'guides' => BootUtility.guides,
           'notifications' => BootUtility.notifications,
           _ => null,

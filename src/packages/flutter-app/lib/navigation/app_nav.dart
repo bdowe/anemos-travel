@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../screens/import_trip_screen.dart';
+import '../screens/log_trip_screen.dart';
 import '../screens/trip_detail_screen.dart';
 import 'app_routes.dart';
 
@@ -122,6 +123,21 @@ void openImportOnTripsTab(WidgetRef ref) {
     navKeys[AppTab.trips.index].currentState?.popUntil((r) => r.isFirst);
     return locatedRoute(
         const ImportTripScreen(), utilityLocation(BootUtility.importTrip));
+  });
+}
+
+/// Open the log-a-past-trip screen on the Trips tab (specs/log-past-trip). The
+/// import twin above, and for the same reasons: the screen's success
+/// replace-navigates to the new trip's detail, which has to land on the
+/// stack-keeping Trips tab rather than whichever tab the entry point sat on —
+/// and this one has three entry points, so funnelling them is not optional.
+void openLogTripOnTripsTab(WidgetRef ref) {
+  ref.read(navIndexProvider.notifier).state = AppTab.trips.index;
+  final navKeys = ref.read(tabNavKeysProvider);
+  pushOnTabWhenReady(navKeys, AppTab.trips, () {
+    navKeys[AppTab.trips.index].currentState?.popUntil((r) => r.isFirst);
+    return locatedRoute(
+        const LogTripScreen(), utilityLocation(BootUtility.logTrip));
   });
 }
 

@@ -184,6 +184,35 @@ type PatchTripRequest struct {
 	TravelMode *string `json:"travel_mode"`
 }
 
+// CreateTripRequest is the manual (non-AI) trip-creation body
+// (specs/log-past-trip) — the traveler describes the trip themselves instead
+// of an agent extracting it. Dates are REQUIRED here, unlike everywhere else
+// they are optional: the client's "Your travels" split buckets a trip as
+// travelled from its first day (tripHasStarted), so an undated trip could
+// never count as travel already taken — the whole point of logging one.
+//
+// The endpoint stays general ("create a trip"); *past* is the framing the
+// client puts on it with its date picker, not a rule in the contract.
+type CreateTripRequest struct {
+	Title        *string                 `json:"title"`
+	StartDate    string                  `json:"start_date"`
+	EndDate      string                  `json:"end_date"`
+	Destinations []CreateTripDestination `json:"destinations"`
+}
+
+// CreateTripDestination is one place the traveler went. Coordinates are
+// pointers so "not provided" stays distinguishable from 0 (the Location rule):
+// a destination typed by name alone is stored at the (0,0) no-location
+// sentinel, which lists it among the trip's cities and keeps it off the travel
+// map. Coordinates are never guessed from the name.
+type CreateTripDestination struct {
+	Name      string   `json:"name"`
+	PlaceID   *string  `json:"place_id"`
+	Address   *string  `json:"address"`
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
+}
+
 // allowedTravelModes are the trip-level travel_mode values: the segment modes
 // (minus 'other') plus 'mixed' for genuinely multi-mode trips. NULL/unset
 // keeps the legacy flight-default behavior in drafts, todos, and Trip Health.
@@ -432,6 +461,175 @@ func tripIDFromPath(r *http.Request) (uuid.UUID, bool) {
 }
 
 // --- handlers (all behind authMiddleware) ---
+
+// createTripHandler is POST /trips: the manual trip-creation path
+// (specs/log-past-trip), and the first one that doesn't run through an AI. The
+// traveler names their destinations and dates; nothing is extracted, resolved
+// or guessed here.
+//
+// A logged trip is an ORDINARY trip — one itinerary item per destination, in
+// the order given, each carrying the destination's own name as its city. That
+// one mapping is what makes the ListLatestTripsByOwner city lateral emit
+// `cities` and `city_pins` for it, so the travel-footprint map, the "Your
+// travels" totals and the Past-trips grouping all pick it up with no change to
+// any derivation. Do not "improve" it into a bespoke shape.
+//
+// Deliberately NOT set:
+//   - `day` — a logged trip records where someone went, not a day-by-day plan;
+//     synthesizing day numbers would be fabricated data.
+//   - `chat_id` — there was no conversation. persistTrip treats a chat-less
+//     save as a new lineage, and refineTripHandler assigns a chat id lazily if
+//     the traveler later refines the trip in chat, so nothing is foreclosed.
+func createTripHandler(w http.ResponseWriter, r *http.Request) {
+	user, ok := userFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req CreateTripRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	if len(req.Destinations) == 0 {
+		writeJSONError(w, http.StatusBadRequest, "at least one destination is required")
+		return
+	}
+	if len(req.Destinations) > maxLoggedDestinations {
+		writeJSONError(w, http.StatusBadRequest,
+			fmt.Sprintf("too many destinations (max %d)", maxLoggedDestinations))
+		return
+	}
+
+	var title string
+	if req.Title != nil {
+		t, err := boundedString("title", *req.Title, maxNameLen)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		title = t
+	}
+
+	// Both dates required — see the CreateTripRequest doc comment. parseDateParam
+	// tolerates empty, so the emptiness check has to come first.
+	start := strings.TrimSpace(req.StartDate)
+	end := strings.TrimSpace(req.EndDate)
+	if start == "" || end == "" {
+		writeJSONError(w, http.StatusBadRequest, "start_date and end_date are required")
+		return
+	}
+	startD, err := parseDateParam(&start)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "start_date must be YYYY-MM-DD")
+		return
+	}
+	endD, err := parseDateParam(&end)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "end_date must be YYYY-MM-DD")
+		return
+	}
+	if endD.Time.Before(startD.Time) {
+		writeJSONError(w, http.StatusBadRequest, "end_date must not be before start_date")
+		return
+	}
+
+	locations := make([]map[string]any, 0, len(req.Destinations))
+	for i, d := range req.Destinations {
+		name := strings.TrimSpace(d.Name)
+		if name == "" {
+			writeJSONError(w, http.StatusBadRequest,
+				fmt.Sprintf("destination %d: name is required", i+1))
+			return
+		}
+		if _, err := boundedString("name", name, maxNameLen); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := boundedOptional("place_id", d.PlaceID, maxNameLen); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := boundedOptional("address", d.Address, maxAddressLen); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := validateCoords(d.Latitude, d.Longitude); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		// The destination IS the hub city: the form asks "where did you go?",
+		// so what the traveler picked is what the city lateral should group on.
+		loc := map[string]any{"name": name, "city": name}
+		// Only a complete pair counts as located — half a coordinate is no
+		// coordinate, and omitting both leaves itemParamsFromLocation at the
+		// (0,0) no-location sentinel: a city in the totals, no dot on the map.
+		if d.Latitude != nil && d.Longitude != nil {
+			loc["latitude"], loc["longitude"] = *d.Latitude, *d.Longitude
+		}
+		if d.PlaceID != nil {
+			if p := strings.TrimSpace(*d.PlaceID); p != "" {
+				loc["place_id"] = p
+			}
+		}
+		if d.Address != nil {
+			if a := strings.TrimSpace(*d.Address); a != "" {
+				loc["address"] = a
+			}
+		}
+		locations = append(locations, loc)
+	}
+
+	tripID, newLineage, err := persistTrip(r.Context(), user.ID, "", title, "", start, end, "", "", locations)
+	if err != nil {
+		// persistTrip's cap message is written for people — pass it through,
+		// as the import handler does.
+		if strings.Contains(err.Error(), "trip limit reached") {
+			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		ctxLog(r.Context()).Error("create trip: persist failed", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "could not save trip")
+		return
+	}
+
+	parsedID, err := uuid.Parse(tripID)
+	if err != nil {
+		ctxLog(r.Context()).Error("create trip: bad trip id", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "could not save trip")
+		return
+	}
+
+	safeGo("recordEvent", func() {
+		recordEvent(user.ID, "trip_created", &parsedID, map[string]any{
+			"item_count": len(locations),
+			"source":     "manual",
+		})
+	})
+	if newLineage {
+		safeGo("recordActiveTripsCapSignal", func() { recordActiveTripsCapSignal(user.ID, parsedID) })
+	}
+
+	// Read back rather than echoing the request: the response states the
+	// post-state the client will observe (docs/zen.md) — the resolved title,
+	// the stored sentinel coordinates, the item ids and their positions.
+	q := store.New(dbPool)
+	trip, err := q.GetTripByIDAndOwner(r.Context(), store.GetTripByIDAndOwnerParams{ID: parsedID, UserID: user.ID})
+	if err != nil {
+		ctxLog(r.Context()).Error("create trip: reload failed", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "could not load trip")
+		return
+	}
+	items, err := q.GetItineraryItemsByTrip(r.Context(), parsedID)
+	if err != nil {
+		ctxLog(r.Context()).Error("create trip: reload itinerary failed", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "could not load itinerary")
+		return
+	}
+	writeJSON(w, http.StatusCreated, toTripResponse(trip, items, nil, nil, nil))
+}
 
 // listTripsHandler returns one trip per chat group (the latest version), each
 // carrying version_count so admins can surface the older versions.

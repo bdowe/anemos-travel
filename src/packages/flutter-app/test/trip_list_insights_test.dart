@@ -61,6 +61,39 @@ void main() {
       expect(s.planned, (trips: 0, travelDays: 0, cities: 0));
     });
 
+    // A logged past trip (specs/log-past-trip) is an ORDINARY trip with past
+    // dates and hub cities, so it must need no special handling here — that is
+    // the whole reason the feature saves a real trip rather than keeping a
+    // separate visited-places store. Pinned because a change to the bucketing
+    // rule would otherwise strand every logged trip on the wrong side silently.
+    test('a logged past trip counts as traveled, pins and all', () {
+      const pins = [
+        CityPin(city: 'Kyoto', lat: 35.0116, lng: 135.7681),
+        CityPin(city: 'Osaka', lat: 34.6937, lng: 135.5023),
+      ];
+      final trips = [
+        // Server order is newest-created-first, so the logged trip — created
+        // today, travelled years ago — lands FIRST, ahead of the upcoming one.
+        _trip('logged',
+            start: '2019-03-03',
+            end: '2019-03-17', // 15 days
+            cities: const ['Kyoto', 'Osaka', "Grandma's village"],
+            pins: pins,
+            created: '2026-08-06T00:00:00Z'),
+        _trip('upcoming',
+            start: '2026-09-01', end: '2026-09-03', cities: const ['Madrid']),
+      ];
+      final s = travelStats(trips, _today);
+      // The name-only destination carries no coordinates but is still a city.
+      expect(s.traveled, (trips: 1, travelDays: 15, cities: 3));
+      expect(s.planned, (trips: 1, travelDays: 3, cities: 1));
+
+      final footprint = footprintPins(trips, _today);
+      expect(footprint.map((p) => p.city), ['Kyoto', 'Osaka']);
+      expect(footprint.every((p) => p.visited), isTrue,
+          reason: 'a logged past trip earns filled dots, not hollow ones');
+    });
+
     test('a trip starting today has started (1 day travelled)', () {
       final s = travelStats(
           [_trip('t', start: '2026-08-06', end: '2026-08-08')], _today);
