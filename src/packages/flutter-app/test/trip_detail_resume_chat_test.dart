@@ -25,6 +25,12 @@ import 'support/l10n_test_app.dart';
 
 class _FakeTripsApiService extends TripsApiService {
   final Trip trip;
+
+  /// What `GET /trips/{id}` answers once the conversation has been cleared.
+  /// The server drops `refine_chat` on DELETE, and the row going away is the
+  /// page's only confirmation — a fake that kept serving the summary would
+  /// make that assertion vacuous.
+  final Trip? clearedTrip;
   final TripRefineChatDetail? detail;
   final Object? failWith;
 
@@ -34,11 +40,13 @@ class _FakeTripsApiService extends TripsApiService {
   int getChatCalls = 0;
   int deleteCalls = 0;
 
-  _FakeTripsApiService(this.trip, {this.detail, this.failWith, this.gate})
+  _FakeTripsApiService(this.trip,
+      {this.detail, this.failWith, this.gate, this.clearedTrip})
       : super(ApiClient(baseUrl: 'http://test'));
 
   @override
-  Future<Trip> getTrip(String id) async => trip;
+  Future<Trip> getTrip(String id) async =>
+      deleteCalls > 0 ? (clearedTrip ?? trip) : trip;
 
   @override
   Future<TripRefineChatDetail> getTripRefineChat(String tripId) async {
@@ -298,7 +306,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(_refineState(tester).messages, hasLength(2));
 
-    await tester.tap(find.byTooltip('New chat'));
+    // Tapped by its label, which is the point: it shipped icon-only behind a
+    // tooltip nobody on a touchscreen can see. `find.text` rather than
+    // widgetWithText — TextButton.icon builds a private subtype.
+    expect(find.text('New chat'), findsOneWidget);
+    await tester.tap(find.text('New chat'));
     await tester.pumpAndSettle();
     expect(find.text('Start a new chat?'), findsOneWidget);
 
@@ -307,12 +319,69 @@ void main() {
     expect(_refineState(tester).messages, hasLength(2));
     expect(api.deleteCalls, 0);
 
-    await tester.tap(find.byTooltip('New chat'));
+    await tester.tap(find.text('New chat'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'New chat'));
     await tester.pumpAndSettle();
 
     expect(_refineState(tester).messages, isEmpty);
     expect(api.deleteCalls, 1);
+    // Nothing left to discard.
+    expect(find.text('New chat'), findsNothing);
+  });
+
+  testWidgets('New chat from the Continue chat row asks first, then clears',
+      (WidgetTester tester) async {
+    // This path clears WITHOUT opening the panel, so no transcript is ever
+    // hydrated here — a confirm gated on the in-memory message list would wave
+    // it straight through on exactly the long conversation it protects.
+    final api = _FakeTripsApiService(_trip(chat: _summary()),
+        detail: _detail(), clearedTrip: _trip());
+    await tester.pumpWidget(_app(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(_rowMenu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New chat'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start a new chat?'), findsOneWidget);
+    expect(api.deleteCalls, 0);
+    expect(api.getChatCalls, 0,
+        reason: 'discarding a conversation never restores it first');
+
+    await tester.tap(find.widgetWithText(FilledButton, 'New chat'));
+    await tester.pumpAndSettle();
+
+    expect(api.deleteCalls, 1);
+    // The row going away is the confirmation.
+    expect(find.text('Continue chat'), findsNothing);
+    expect(find.byType(ChatPanel), findsNothing,
+        reason: 'clearing a conversation is not opening one');
+  });
+
+  testWidgets('cancelling from the row leaves the conversation alone',
+      (WidgetTester tester) async {
+    final api = _FakeTripsApiService(_trip(chat: _summary()),
+        detail: _detail(), clearedTrip: _trip());
+    await tester.pumpWidget(_app(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(_rowMenu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New chat'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(api.deleteCalls, 0);
+    expect(find.text('Continue chat'), findsOneWidget);
   });
 }
+
+/// The Continue-chat row's own ⋮ — the screen has several
+/// `PopupMenuButton<String>`s, so this is scoped to the row.
+final Finder _rowMenu = find.descendant(
+  of: find.widgetWithText(ListTile, 'Continue chat'),
+  matching: find.byType(PopupMenuButton<String>),
+);

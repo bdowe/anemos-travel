@@ -150,11 +150,16 @@ class TripRefinePanel extends ConsumerWidget {
                 ),
               ),
               // The only thing that discards a trip's conversation, now that no
-              // ✨ tap does.
+              // ✨ tap does — so it carries its label. Shipped icon-only and
+              // the person who specified it went looking and couldn't find it:
+              // a tooltip is invisible on touch, and beside the ✕ an unlabeled
+              // glyph reads as chrome. The title above is Expanded and
+              // ellipsizes, so a long chapter yields to this rather than
+              // pushing it off the header.
               if (phase == RefineChatPhase.ready && hasConversation)
-                IconButton(
-                  icon: const Icon(Icons.add_comment_outlined),
-                  tooltip: l10n.refineNewChat,
+                TextButton.icon(
+                  icon: const Icon(Icons.add_comment_outlined, size: 18),
+                  label: Text(l10n.refineNewChat),
                   onPressed: onNewChat,
                 ),
               IconButton(
