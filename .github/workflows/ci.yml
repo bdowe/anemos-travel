@@ -451,6 +451,28 @@ jobs:
           echo "::error::deployed release never became ${IMAGE_TAG}"
           exit 1
 
+      # The step above proves the new build is LIVE. It cannot prove a browser
+      # will RECEIVE it: it appends ?deploy=${IMAGE_TAG}, and a query string is
+      # always a cache miss at the edge, so it asks for exactly the URLs
+      # Cloudflare is not answering. /app/assets/** is the opposite case —
+      # stable URLs whose bytes change on every deploy, since flutter build web
+      # does not content-hash asset filenames — which is why nginx serves that
+      # tree `no-cache`. If anything re-pins it, the edge keeps serving
+      # pre-change bytes while every other signal stays green. That is not
+      # hypothetical: 2026-08-14..16, Cloudflare held a stale icon font under a
+      # one-year TTL and three icons rendered blank in production for two days
+      # and ~15 deploys, through a fix that had already shipped.
+      #
+      # Re-checked once before failing: right after a deploy the edge may still
+      # be filling, and a single dropped fetch should not redden a good deploy.
+      - name: Verify edge serves what origin serves
+        if: steps.gate.outputs.configured == 'true'
+        run: |
+          ./scripts/verify-edge-parity.sh https://anemos.travel && exit 0
+          echo "re-checking in 20s (the edge may still be filling)"
+          sleep 20
+          ./scripts/verify-edge-parity.sh https://anemos.travel
+
       # When verify fails, the detached up's output on the host is the first
       # place to look — and by this point the tunnel is usually back even if
       # the deploy recreated cloudflared. Best-effort: if the tunnel is still

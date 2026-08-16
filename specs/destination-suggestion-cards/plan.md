@@ -15,8 +15,11 @@ Three decisions carry the design:
    emitted (`knownPhotoRefs`), so an empty state would have to run — and pay
    for — a Places search before it could show anything. Bundled WebP costs one
    cached request per shown card and works offline. Cost: ~460 KB of assets, of
-   which a web visit fetches only the three drawn (~40 KB each); nginx already
-   serves `/app/assets/` `immutable` for a year.
+   which a web visit fetches only the three drawn (~40 KB each), and the service
+   worker cache is what makes repeat visits free. (This originally read "nginx
+   already serves `/app/assets/` `immutable` for a year" — that header was
+   removed on 2026-08-15, because Flutter does not content-hash asset filenames,
+   so those URLs are stable while the bytes change.)
 2. **Photo and prompt in one record.** See "Divergences" below.
 3. **A dedicated card widget, not a fifth `PlaceCardData` factory.** See
    "Divergences" below.
