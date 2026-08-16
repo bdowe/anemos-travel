@@ -6319,6 +6319,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Beyond the 16-day forecast, ranges show typical weather for these dates.'**
   String get wearHistoricalFootnote;
+
+  /// Caption on the Konami-code easter egg. Not translated — it is a song title.
+  ///
+  /// In en, this message translates to:
+  /// **'Never gonna give you up'**
+  String get rickRollCaption;
+
+  /// Hint under the easter-egg caption telling the user how to close it.
+  ///
+  /// In en, this message translates to:
+  /// **'press esc to escape'**
+  String get rickRollDismissHint;
 }
 
 class _AppLocalizationsDelegate

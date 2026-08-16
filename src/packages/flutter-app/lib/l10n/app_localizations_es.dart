@@ -3835,4 +3835,10 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get wearHistoricalFootnote =>
       'Más allá del pronóstico de 16 días, los rangos muestran el tiempo habitual en estas fechas.';
+
+  @override
+  String get rickRollCaption => 'Never gonna give you up';
+
+  @override
+  String get rickRollDismissHint => 'pulsa esc para salir';
 }

@@ -3809,4 +3809,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get wearHistoricalFootnote =>
       'Beyond the 16-day forecast, ranges show typical weather for these dates.';
+
+  @override
+  String get rickRollCaption => 'Never gonna give you up';
+
+  @override
+  String get rickRollDismissHint => 'press esc to escape';
 }
