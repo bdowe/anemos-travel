@@ -250,6 +250,23 @@ func searchHotels(ctx context.Context, req HotelSearchRequest) (HotelSearchResul
 			res.RatesNote = "unavailable"
 			break
 		}
+		// An EMPTY rates result is a miss, not an answer. Every city has
+		// hotels, so zero priced properties means a city string the provider
+		// didn't recognise, a response whose rows all lacked a rate, or an
+		// upstream hiccup — none of which is "we checked and there is nothing
+		// to stay in". Returning it as a live-rates answer produced exactly
+		// that lie in prod: `rates_live: true` with `stays: []`, which the
+		// summarizer then reported as "No stays found in Athens."
+		//
+		// This is the same reasoning the cache already uses to refuse to store
+		// an empty result (see SearchStays); the tier decision has to agree
+		// with it, or the two halves of this file disagree about what empty
+		// means.
+		if len(stays) == 0 {
+			fmt.Printf("hotel rates lookup returned no priced stays for %q, falling back to lodging discovery\n", req.City)
+			res.RatesNote = "unavailable"
+			break
+		}
 		res.Stays = stays
 		res.RatesLive = true
 		return res, nil
@@ -393,6 +410,13 @@ func (s *SerpapiHotelsService) SearchStays(ctx context.Context, req HotelSearchR
 	}
 	if status < 200 || status >= 300 {
 		return nil, fmt.Errorf("SerpApi hotels error (%d): %s", status, truncateForLog(body))
+	}
+	// The provider normally signals failure with a 4xx, but the error field is
+	// parsed here and must actually be READ: an error delivered alongside a
+	// 2xx would otherwise fall through as "zero properties" and be reported as
+	// a successful search. Errors should never pass silently (docs/zen.md).
+	if strings.TrimSpace(parsed.Error) != "" {
+		return nil, fmt.Errorf("SerpApi hotels error: %s", parsed.Error)
 	}
 
 	stays := make([]HotelStay, 0, len(parsed.Properties))

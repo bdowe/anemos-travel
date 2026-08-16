@@ -507,3 +507,72 @@ func TestHotelDailyCapZeroMeansZero(t *testing.T) {
 		}()
 	}
 }
+
+// Prod shipped `{"rates_live":true,"stays":[]}` for Athens — an empty LIVE
+// RATES answer, which the summarizer then reported as "No stays found in
+// Athens." Every city has hotels, so zero priced properties is a miss (bad
+// city string, rows without rates, upstream hiccup), never a finding. The
+// cache already refused to store an empty result for exactly this reason; the
+// tier decision has to agree with it.
+func TestHotelEmptyRatesResultFallsBackInsteadOfClaimingLiveRates(t *testing.T) {
+	swapHotelStub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"properties":[]}`))
+	})
+	swapLodgingStub(t, athensLodgingJSON)
+
+	res, err := searchHotels(context.Background(), datedReq())
+	if err != nil {
+		t.Fatalf("searchHotels: %v", err)
+	}
+	if res.RatesLive {
+		t.Error("an empty rates result must never be reported as live rates")
+	}
+	if res.RatesNote != "unavailable" {
+		t.Errorf("rates_note = %q, want unavailable", res.RatesNote)
+	}
+	if len(res.Stays) == 0 {
+		t.Fatal("must fall back to discovery rather than answering with nothing")
+	}
+	if res.Stays[0].RatePerNight != nil {
+		t.Error("fallback stays must carry no price")
+	}
+}
+
+// Same trap one layer down: a response whose rows all lack a rate is not a
+// list of free hotels.
+func TestHotelAllRowsUnpricedFallsBack(t *testing.T) {
+	swapHotelStub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"properties":[
+			{"name":"No Price Inn","type":"hotel","overall_rating":4.1},
+			{"name":"Also No Price","type":"hotel","overall_rating":4.4}
+		]}`))
+	})
+	swapLodgingStub(t, athensLodgingJSON)
+
+	res, _ := searchHotels(context.Background(), datedReq())
+	if res.RatesLive {
+		t.Error("rows without rates must not produce a live-rates answer")
+	}
+	if len(res.Stays) == 0 {
+		t.Error("expected the discovery fallback to answer")
+	}
+}
+
+// A provider error delivered with a 2xx must not read as "zero properties".
+func TestHotelErrorFieldOn200IsAnError(t *testing.T) {
+	swapHotelStub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"error":"Your account has run out of searches.","properties":[]}`))
+	})
+	swapLodgingStub(t, athensLodgingJSON)
+
+	res, err := searchHotels(context.Background(), datedReq())
+	if err != nil {
+		t.Fatalf("should degrade, not error: %v", err)
+	}
+	if res.RatesLive {
+		t.Error("a 2xx carrying an error field must not claim live rates")
+	}
+	if len(res.Stays) == 0 {
+		t.Error("expected the discovery fallback to answer")
+	}
+}
