@@ -10,6 +10,7 @@ import 'providers/auth_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/theme_mode_provider.dart';
 import 'theme/app_theme.dart';
+import 'widgets/konami_listener.dart';
 import 'screens/connect_app_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/app_shell.dart';
@@ -139,6 +140,11 @@ class TravelRoutePlannerApp extends ConsumerWidget {
       // URL persistence write half: re-asserts the synced location after
       // root-navigator events (specs/url-page-persistence).
       navigatorObservers: [ref.watch(rootUrlObserverProvider)],
+      // Wraps the root Navigator, so the Konami code is heard on every screen
+      // — including the nine that render outside AppShell — and its overlay
+      // draws above every route and dialog. The listener passes `child`
+      // straight through untouched; see konami_listener.dart.
+      builder: (context, child) => KonamiListener(child: child!),
     );
   }
 }

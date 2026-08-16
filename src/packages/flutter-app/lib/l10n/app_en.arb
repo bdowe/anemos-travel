@@ -2544,5 +2544,13 @@
   "wearExtremeHeat": "very hot days, extra sun protection",
   "wearFreezingNights": "freezing nights, warm layers",
   "wearSummaryRain": "rain likely",
-  "wearHistoricalFootnote": "Beyond the 16-day forecast, ranges show typical weather for these dates."
+  "wearHistoricalFootnote": "Beyond the 16-day forecast, ranges show typical weather for these dates.",
+  "rickRollCaption": "Never gonna give you up",
+  "@rickRollCaption": {
+    "description": "Caption on the Konami-code easter egg. Not translated — it is a song title."
+  },
+  "rickRollDismissHint": "press esc to escape",
+  "@rickRollDismissHint": {
+    "description": "Hint under the easter-egg caption telling the user how to close it."
+  }
 }
