@@ -101,12 +101,14 @@ class _FakeBudgetApiService extends BudgetApiService {
       {required String category,
       required String label,
       required double amount,
+      bool planned = false,
       String? sourceKind,
       String? sourceId}) async {
     addCalls.add({
       'category': category,
       'label': label,
       'amount': amount,
+      'planned': planned,
       'source_kind': sourceKind,
       'source_id': sourceId,
     });
@@ -115,6 +117,10 @@ class _FakeBudgetApiService extends BudgetApiService {
         category: category,
         label: label,
         amount: amount,
+        // A booked flip records a PAYMENT (00067) — the prompt never plans.
+        actualAmount: planned ? null : amount,
+        plannedAmount: planned ? amount : null,
+        purchased: !planned,
         auto: sourceKind != null,
         sourceKind: sourceKind,
         sourceId: sourceId);
@@ -226,6 +232,9 @@ void main() {
       'category': 'lodging',
       'label': 'Hotel Lutetia',
       'amount': 150.0,
+      // A booked flip records a PAYMENT, never a plan (00067) — the server's
+      // linked path refuses a plan-only add outright.
+      'planned': false,
       // The link rides the most durable row: the confirmed stay, not the todo.
       'source_kind': 'accommodation',
       'source_id': 'acc1',

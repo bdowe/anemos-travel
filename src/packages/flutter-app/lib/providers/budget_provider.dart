@@ -54,17 +54,35 @@ class ExpenseDraft {
   /// label. `general` is the server's default and the row's opening pick.
   final String category;
 
+  /// Whether the row will add a PLAN or a PAYMENT (00067).
+  ///
+  /// Defaults to planned, and lives here for the same reason [category] does:
+  /// it is a *choice*, and resetting it on the next remount would silently
+  /// re-file the following expense. Planned is the safer default because the
+  /// two mistakes are not symmetric — a wrongly-planned row is visible (it
+  /// shows a hollow mark and "Total spent" doesn't move) and is two taps to
+  /// fix, while a wrongly-paid one inflates spend quietly and can fire a false
+  /// over-budget warning.
+  final bool planned;
+
   const ExpenseDraft({
     this.label = '',
     this.amountText = '',
     this.category = 'general',
+    this.planned = true,
   });
 
-  ExpenseDraft copyWith({String? label, String? amountText, String? category}) =>
+  ExpenseDraft copyWith({
+    String? label,
+    String? amountText,
+    String? category,
+    bool? planned,
+  }) =>
       ExpenseDraft(
         label: label ?? this.label,
         amountText: amountText ?? this.amountText,
         category: category ?? this.category,
+        planned: planned ?? this.planned,
       );
 }
 
@@ -83,9 +101,15 @@ class ExpenseDraftNotifier extends StateNotifier<ExpenseDraft> {
     state = state.copyWith(category: category);
   }
 
-  /// After a successful save. Deliberately keeps the category: the row already
-  /// behaves that way within a session, and consecutive expenses tend to share
-  /// one.
+  void setPlanned(bool planned) {
+    if (planned == state.planned) return;
+    state = state.copyWith(planned: planned);
+  }
+
+  /// After a successful save. Deliberately keeps the category AND the
+  /// planned/paid pick: both are choices, and a traveler entering eight
+  /// estimates before a trip — or logging five purchases during one — should
+  /// state it once, not once per line.
   void clearText() => setText(label: '', amountText: '');
 }
 
