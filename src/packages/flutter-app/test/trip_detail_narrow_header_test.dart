@@ -171,6 +171,59 @@ void main() {
     expect(find.text('0/1'), findsNothing);
     expect(find.text('Add place'), findsNothing);
     expect(find.byTooltip('Add place'), findsOneWidget);
+    // The fold-all control is wide-only for this exact reason — it lives in
+    // the app-bar overflow at phone widths (trip_detail_collapse_all_test).
+    expect(find.byIcon(Icons.unfold_less), findsNothing);
+  });
+
+  // The row's real budget is not 390px — it is the docked-refine-panel
+  // width. `_narrow` is read from the WINDOW, but the body loses 401px to
+  // the panel, so a 1000px window on the wide path lays this row out in
+  // ~567px. 800 is the floor of that band and the width at which the fold
+  // control has to share the row with a labeled Add place, a Today chip and
+  // the Spanish tab trio.
+  testWidgets('wide floor: the tab row still fits with the fold control',
+      (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 0.5;
+    addTearDown(tester.platformDispatcher.clearAllTestValues);
+    // Dated around today so the Today chip is present — the worst case.
+    final now = DateTime.now();
+    String iso(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-'
+        '${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}';
+    final live = Trip(
+      id: 't1',
+      title: 'Sevilla week',
+      createdAt: '2026-06-01',
+      updatedAt: '2026-06-01',
+      startDate: iso(now.subtract(const Duration(days: 1))),
+      endDate: iso(now.add(const Duration(days: 1))),
+      items: [
+        ItineraryItem(
+          id: 'i0',
+          position: 0,
+          name: 'Real Alcázar',
+          latitude: 0,
+          longitude: 0,
+          category: 'attraction',
+          day: 1,
+          city: 'Sevilla',
+        ),
+      ],
+      bookingTodos: oneTodo,
+    );
+    await _pump(tester, live,
+        surface: const Size(800, 900), locale: const Locale('es'));
+
+    // Premise first: without this the test would pass with the control
+    // deleted, which is the failure mode it exists to catch.
+    expect(find.byTooltip('Contraer todo'), findsOneWidget);
+    expect(find.widgetWithText(ActionChip, 'Hoy'), findsOneWidget);
+    for (final label in ['Itinerario', 'Reservas', 'Presupuesto']) {
+      expectNoTruncation(tester, label, minScale: 0.95);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('narrow Spanish: tabs render whole too', (tester) async {

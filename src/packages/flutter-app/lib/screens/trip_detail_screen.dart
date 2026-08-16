@@ -860,9 +860,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// already-focused target) changes no state at all — on a quiescent UI no
   /// frame would ever come and the scroll would silently stall until
   /// unrelated activity. ensureVisualUpdate guarantees the frame.
-  void _revealCityHeader(String groupKey) {
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _scrollToCityHeader(groupKey));
+  ///
+  /// [animate] false lands the header in one jump instead of the 350ms glide.
+  /// The fold-all control passes false because it changes the whole list's
+  /// extent at once: collapsing everything can leave the current offset far
+  /// past the new maxScrollExtent, and gliding from an out-of-range offset
+  /// paints blank while it travels.
+  void _revealCityHeader(String groupKey, {bool animate = true}) {
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollToCityHeader(groupKey, animate: animate));
     WidgetsBinding.instance.ensureVisualUpdate();
   }
 
@@ -870,7 +876,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// chrome — [_scrollToDayHeader] minus the city-header term (this header
   /// IS the target; the chrome rests via getOffsetToReveal's own
   /// obstruction handling, see there). Same one-correction contract.
-  Future<void> _scrollToCityHeader(String cityKey) async {
+  ///
+  /// [animate] false jumps instead — see [_revealCityHeader].
+  Future<void> _scrollToCityHeader(String cityKey,
+      {bool animate = true}) async {
     final trip = _trip;
     if (!mounted || trip == null || !_scroll.hasClients) return;
     final target =
@@ -880,9 +889,17 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     if (viewport == null) return;
     final reveal = viewport.getOffsetToReveal(target, 0).offset;
     final offset = reveal.clamp(0.0, _scroll.position.maxScrollExtent);
-    await _scroll.animateTo(offset,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOutCubic);
+    if (animate) {
+      await _scroll.animateTo(offset,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic);
+    } else {
+      _scroll.jumpTo(offset);
+      // Unlike the awaited animateTo, jumpTo does not relayout before it
+      // returns: the correction pass below would measure the offset we just
+      // left and then "correct" by that stale delta. Wait for the frame.
+      await WidgetsBinding.instance.endOfFrame;
+    }
     if (!mounted || !_scroll.hasClients) return;
     final box = _cityHeaderKeys[cityKey]?.currentContext?.findRenderObject();
     if (box is! RenderBox || !box.attached) return;
@@ -894,6 +911,119 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       _scroll.jumpTo((_scroll.offset + delta)
           .clamp(0.0, _scroll.position.maxScrollExtent));
     }
+  }
+
+  // ── Fold all / unfold all ─────────────────────────────────────────────
+  // One control, two directions, kept next to the reveal machinery it
+  // reuses. Both flags are DERIVED from the live derivation every build and
+  // never stored — the view-tabs doctrine (PR #335): a stored "is everything
+  // collapsed?" bit drifts the moment a refresh adds or drops a destination,
+  // and the two placements (wide header button, narrow overflow entry) would
+  // then disagree about what one tap means.
+
+  /// Whether the fold control has anything to act on. The Bookings and
+  /// Budget views swap the city groups out for flat lists — there is no
+  /// accordion there to fold — and an items-empty trip renders the
+  /// EmptyState branch with no groups behind it.
+  bool _foldControlShown(TripDerivation d) =>
+      !_inBookingsView && !_inBudgetView && d.groups.isNotEmpty;
+
+  /// True only when EVERY live group is collapsed — the one state in which
+  /// the control flips to "Expand all". `<empty>.every(...)` is true in
+  /// Dart, so the isNotEmpty guard is what keeps this predicate honest on
+  /// its own terms; no live caller reaches it with an empty list, since
+  /// they all gate on [_foldControlShown] first.
+  bool _allGroupsCollapsed(TripDerivation d) =>
+      d.groups.isNotEmpty &&
+      d.groups.every((g) => _collapsedGroups.contains(g.key));
+
+  /// THE fold action, shared by the wide header button and the narrow
+  /// overflow entry so the two can never disagree. Re-derives at ACTION
+  /// time rather than trusting a captured flag: the overflow entry is built
+  /// when the menu opens and selected a beat later.
+  ///
+  /// Pure LIST work, exactly like a header tap: it never writes map focus
+  /// ([_setMapFocus] stays the only writer), never moves the camera, and
+  /// never exits a lens.
+  ///
+  /// Deliberately asymmetric. Collapsing touches GROUPS only — a collapsed
+  /// city's day headers aren't rendered, so [_collapsedDays] is invisible
+  /// either way, and preserving it means re-opening one city by its own
+  /// chevron restores the day state the traveler left. Expanding clears
+  /// BOTH: an "expand all" that leaves a day shut is a liar, and a day
+  /// folded three cities ago is not something anyone will think to go
+  /// looking for. Consequence to know: fold→unfold is NOT an identity
+  /// round-trip.
+  void _toggleAllGroups(Trip trip) {
+    final d = _derive(trip);
+    if (!_foldControlShown(d)) return; // stale entry: no-op, never a crash
+    final collapsed = _allGroupsCollapsed(d);
+    // Measured BEFORE the mutation — it reads the CURRENT layout.
+    final anchor = _anchorGroupKey(trip, d);
+    setState(() {
+      if (collapsed) {
+        _collapsedGroups.clear();
+        _collapsedDays.clear();
+      } else {
+        // clear-then-addAll, not a bare addAll: the resulting visible state
+        // is identical (every live group collapses either way), but the
+        // rebuild drops run keys staled by an edit. That matters here and
+        // nowhere else — with one or two hand-picked keys a stale one
+        // fails safe by missing contains(), but a set holding EVERY key
+        // makes the positional `#2` suffixes collide: delete the first
+        // Paris visit and the bare `Paris` key now names what used to be
+        // `Paris#2`, so a group the traveler never folded would render
+        // folded.
+        _collapsedGroups
+          ..clear()
+          ..addAll(d.groups.map((g) => g.key));
+      }
+    });
+    // Keep the traveler where they were. No _mapPinned guard (unlike
+    // _setFocusedLeg, which skips this on phones so the list can't scroll
+    // the just-tapped map chip out of view): no map focus is in play here,
+    // and keeping your place matters more on a phone, not less.
+    if (anchor != null) _revealCityHeader(anchor, animate: false);
+  }
+
+  /// The destination group the traveler is currently reading: the one whose
+  /// header sits LOWEST while still at or above its resting slot under the
+  /// pinned chrome. While a group's body scrolls, its header is pinned
+  /// exactly at that slot, the previous group's has been pushed clear above
+  /// and the next is still in flow below. With everything folded nothing
+  /// pins, and the same rule picks the topmost row still on screen — the
+  /// right visual anchor either way.
+  ///
+  /// Null means "leave the scroll alone": the traveler is above the first
+  /// group (still in the header card), where a fold changes nothing above
+  /// them and there is nothing to re-rest.
+  ///
+  /// Reads [TripDerivation.groups], never the never-pruned [_cityHeaderKeys]
+  /// map, so a key staled by an edit cannot vote for a group that no longer
+  /// renders. Every city header is laid out at every offset — folded ones
+  /// are SliverToBoxAdapters, open ones SliverPinnedHeaders, and neither is
+  /// lazy (only the item lists INSIDE a group are) — so this needs no
+  /// scroll-range heuristics and the guards below are belt-and-braces.
+  String? _anchorGroupKey(Trip trip, TripDerivation d) {
+    if (!_scroll.hasClients || _scroll.offset <= 0) return null;
+    final rest = _pinnedChrome(trip) + 1; // slot + float epsilon
+    String? anchor;
+    var best = double.negativeInfinity;
+    for (final group in d.groups) {
+      final box =
+          _cityHeaderKeys[group.key]?.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached || !box.hasSize) continue;
+      final vp = RenderAbstractViewport.maybeOf(box);
+      if (vp == null) continue;
+      // Same coordinate space as _scrollToCityHeader's correction pass, so
+      // the anchor and its resting slot are never measured differently.
+      final dy = box.localToGlobal(Offset.zero, ancestor: vp).dy;
+      if (dy <= rest && dy > best) {
+        best = dy;
+        anchor = group.key;
+      }
+    }
+    return anchor;
   }
 
   /// Pushes the itinerary-derived booking checklist to the server, which upserts
@@ -5255,9 +5385,33 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         final absorbsShare = _narrow && trip.isOwner && !_isOffline;
         // Offline hides the mutating exits; the read-only sheets stay.
         final canExit = !_isOffline;
+        // Fold all / unfold all, narrow only (wide keeps it in the itinerary
+        // header row). The one entry here with NO gate at all — folding is
+        // view work, so viewers and offline-served copies get it, which is
+        // also why it leads: the destructive exits own the bottom. It does
+        // mean a narrow viewer reading offline now sees a `⋮` where every
+        // entry used to be gated away and the button collapsed to nothing —
+        // correct, since it finally has something they can do.
+        final d = _derive(trip);
+        final foldShown = _narrow && _foldControlShown(d);
+        final foldCollapsed = foldShown && _allGroupsCollapsed(d);
 
         final entries = <PopupMenuEntry<String>>[
-          if (wear.available)
+          if (foldShown)
+            PopupMenuItem(
+              value: 'foldall',
+              child: ListTile(
+                leading: Icon(foldCollapsed
+                    ? Icons.unfold_more
+                    : Icons.unfold_less),
+                title: Text(foldCollapsed
+                    ? l10n.tripExpandAll
+                    : l10n.tripCollapseAll),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          if (wear.available) ...[
+            if (foldShown) const PopupMenuDivider(),
             PopupMenuItem(
               value: 'wear',
               child: ListTile(
@@ -5266,14 +5420,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 contentPadding: EdgeInsets.zero,
               ),
             ),
+          ],
           if (absorbsShare) ...[
-            if (wear.available) const PopupMenuDivider(),
+            if (foldShown || wear.available) const PopupMenuDivider(),
             ..._shareMenuItems(l10n),
           ],
           // Reachable even on a trip with no cities yet, where there are no
           // derived legs to carry the row-level entry.
           if (!_isOffline && !_readOnly) ...[
-            if (wear.available || absorbsShare) const PopupMenuDivider(),
+            if (foldShown || wear.available || absorbsShare)
+              const PopupMenuDivider(),
             PopupMenuItem(
               value: 'airports',
               child: ListTile(
@@ -5284,7 +5440,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             ),
           ],
           if (canExit) ...[
-            if (wear.available || absorbsShare || !_readOnly)
+            if (foldShown || wear.available || absorbsShare || !_readOnly)
               const PopupMenuDivider(),
             if (trip.isOwner)
               PopupMenuItem(
@@ -5318,7 +5474,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           icon: const Icon(Icons.more_vert),
           tooltip: l10n.tripMoreActions,
           onSelected: (v) {
+            // Every value needs its own case: the default arm forwards to
+            // the share handler, whose own switch has no default — so a
+            // missing case compiles clean, runs clean, and does nothing.
             switch (v) {
+              case 'foldall':
+                _toggleAllGroups(trip);
               case 'wear':
                 _openWearSheet(trip, wear.regions);
               case 'airports':
@@ -5994,6 +6155,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       final hasTodayTarget = todayDay != null &&
                           (trip.items ?? const <ItineraryItem>[])
                               .any((i) => i.day != null);
+                      // Fold-all control: WIDE only. On narrow it moves into
+                      // the app-bar overflow (the wear & pack / share
+                      // precedent) — the phone row's three tabs, Today chip
+                      // and add button are already the FittedBox budget that
+                      // cost the Bookings count pill its place.
+                      final foldShown =
+                          !_narrow && _foldControlShown(derivation);
+                      final foldCollapsed =
+                          foldShown && _allGroupsCollapsed(derivation);
                       // Tonight caption (specs/happening-now): day numbers
                       // repeat across city groups (keys are '$groupKey#$day'),
                       // so resolve the FIRST group containing today's day
@@ -6120,6 +6290,37 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                         ),
                                         const SizedBox(width: 4),
                                       ],
+                                      // Fold or unfold every destination in
+                                      // one tap. PURE VIEW WORK, so — like
+                                      // the view tabs and the Today chip
+                                      // above — it is NOT gated on offline,
+                                      // canEdit or the refine panel: viewers
+                                      // and offline-served copies fold too,
+                                      // and a long itinerary you can only
+                                      // read is exactly where this helps
+                                      // most. Do not copy the add CTAs'
+                                      // gates below.
+                                      //
+                                      // Compact density is load-bearing: the
+                                      // row is a hard 44px SizedBox feeding
+                                      // _listHeaderHeight (56) and the
+                                      // Today-scroll chrome math, and a
+                                      // default-density IconButton is 48.
+                                      if (foldShown)
+                                        IconButton(
+                                          onPressed: () =>
+                                              _toggleAllGroups(trip),
+                                          tooltip: foldCollapsed
+                                              ? l10n.tripExpandAll
+                                              : l10n.tripCollapseAll,
+                                          visualDensity:
+                                              VisualDensity.compact,
+                                          icon: Icon(
+                                              foldCollapsed
+                                                  ? Icons.unfold_more
+                                                  : Icons.unfold_less,
+                                              size: 20),
+                                        ),
                                       // One add CTA per view: Add place on
                                       // the itinerary, the Add-booking menu
                                       // in the Bookings view (a swap, not an

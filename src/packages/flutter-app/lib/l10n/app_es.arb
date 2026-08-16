@@ -471,6 +471,8 @@
   "tripItinerary": "Itinerario",
   "tripToday": "Hoy",
   "tripAddPlace": "Añadir lugar",
+  "tripCollapseAll": "Contraer todo",
+  "tripExpandAll": "Expandir todo",
   "tripFilterUnbooked": "Sin reservar",
   "tripFilterAllBooked": "Todo reservado",
   "tripFilterAllBookedMessage": "No queda nada por reservar en este viaje — todo listo.",
