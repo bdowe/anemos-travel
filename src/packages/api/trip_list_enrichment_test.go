@@ -427,8 +427,15 @@ func TestSharedWithMeInsightAbsence(t *testing.T) {
 	editorToken := join("editor@example.com", "editor")
 	viewerToken := join("viewer@example.com", "viewer")
 
+	// `summary` was on this list and has been removed (specs/trip-description).
+	// It is not an insight — it is the trip's own description, and it was never
+	// withheld anywhere it mattered: GET /trips/{id} hands it to editors AND
+	// viewers unredacted, and the PUBLIC share page renders it to anyone with the
+	// link. Absent here it only meant a co-planner's cards showed no blurb where
+	// the owner's did. The genuine insights below stay absent: those really are
+	// the owner's private planning state.
 	insightKeys := []string{
-		"summary", "stay_total", "stay_booked", "packing_total", "packing_done",
+		"stay_total", "stay_booked", "packing_total", "packing_done",
 		"budget_target", "budget_spent", "budget_currency",
 		"next_transport_depart", "city_pins",
 	}
@@ -440,6 +447,11 @@ func TestSharedWithMeInsightAbsence(t *testing.T) {
 			if v, present := row[key]; present {
 				t.Fatalf("%s row carries %s = %v, want absent", tc.name, key, v)
 			}
+		}
+		// The other half of the same boundary: the description IS carried, so a
+		// shared card reads like the owner's.
+		if got, _ := row["summary"].(string); got != "Owner-only blurb" {
+			t.Fatalf("%s row summary = %q, want the trip's description", tc.name, got)
 		}
 	}
 	// The owner's own list still carries them — the boundary is the shared

@@ -94,16 +94,26 @@ class TripsApiService {
     await apiClient.send('DELETE', '/trips/$tripId/refine-chat');
   }
 
+  /// Patches a trip's scalar fields. Every parameter is null-means-omitted, so
+  /// only what the caller names is written.
+  ///
+  /// [summary] is the trip's description (specs/trip-description) and is the one
+  /// field where an EMPTY string is meaningful: it clears the description, which
+  /// is why the check below is `!= null` rather than a non-empty test. The
+  /// server routes it through applyTripSummary instead of UpdateTrip's COALESCE
+  /// set precisely so that clear can land.
   Future<Trip> patchTrip(
     String id, {
     String? title,
     String? startDate,
     String? endDate,
+    String? summary,
   }) async {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
     if (startDate != null) body['start_date'] = startDate;
     if (endDate != null) body['end_date'] = endDate;
+    if (summary != null) body['summary'] = summary;
 
     final res = await apiClient.httpClient.patch(
       Uri.parse('${apiClient.baseUrl}/trips/$id'),

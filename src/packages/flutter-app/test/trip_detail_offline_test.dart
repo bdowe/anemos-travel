@@ -143,11 +143,14 @@ void main() {
     expect(refine.onPressed, isNull, reason: 'chat/refine needs the network');
     final addPlace = _labeledButton<TextButton>(tester, 'Add place');
     expect(addPlace.onPressed, isNull);
-    final rename = tester.widget<IconButton>(find.ancestor(
-      of: find.byTooltip('Rename'),
+    // The header pencil now edits the name AND the description
+    // (specs/trip-description); either way it writes, so offline it is disabled
+    // rather than hidden.
+    final editDetails = tester.widget<IconButton>(find.ancestor(
+      of: find.byTooltip('Edit trip details'),
       matching: find.byType(IconButton),
     ));
-    expect(rename.onPressed, isNull);
+    expect(editDetails.onPressed, isNull);
     expect(find.byTooltip('Share trip'), findsNothing);
     // Delete/leave live behind the overflow menu, which mutates and is
     // therefore hidden entirely while offline-serving. (This is a WIDE

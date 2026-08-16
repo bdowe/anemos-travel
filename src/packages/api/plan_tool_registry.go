@@ -183,6 +183,16 @@ var planToolRegistry = []planTool{
 	// it would invalidate the prompt-cache prefix for no gain.
 	// Tail-appended per the prompt-cache rule above.
 	{def: searchHotelsTool, run: runSearchHotelsTool},
+
+	// Change a saved trip's DESCRIPTION — the prose overview under its title
+	// (specs/trip-description). It was write-once until now: create_itinerary set
+	// it and is then gated off for the rest of the trip's life, so a blurb
+	// describing three cities outlived the trip growing to five. Signed-in only,
+	// for the same stability reason as the set_* tools above and to keep the
+	// anonymous tools array byte-identical. Target-trip resolution shares
+	// resolveDateShiftTrip; the write is applyTripSummary, the same one the trip
+	// page's PATCH calls. Tail-appended per the prompt-cache rule above.
+	{def: setTripDescriptionTool, enabled: authedOnly, run: runSetTripDescriptionTool},
 }
 
 // planToolByName dispatches tool_use blocks; derived from the registry so the
@@ -786,6 +796,7 @@ func runUpdateItinerarySectionTool(s *planSession, input json.RawMessage) (strin
 			"A city's LAST item day is its departure day; each leg renders from the previous city's departure through its own last day, and the FINAL city through the trip's end date — so leaving the day home empty does not shorten it. If these ranges don't match what the traveler asked for, do NOT resend the list with recomputed day numbers — use set_leg_dates (one city's dates) or set_trip_dates (the whole trip) with calendar dates."
 	}
 	result += transportEchoText(transport)
+	result += tripDescriptionEcho(s, *s.boundTripID)
 	return result, false
 }
 

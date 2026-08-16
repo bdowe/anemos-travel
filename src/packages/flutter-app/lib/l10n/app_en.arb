@@ -894,7 +894,12 @@
   "tripOpenLinkFailed": "Could not open link",
   "tripFerrySearchFailed": "Could not open ferry search",
   "tripLoadFailed": "Could not load this trip",
-  "tripEditTitle": "Edit title",
+  "tripEditDetails": "Edit trip details",
+  "tripDetailsNameLabel": "Name",
+  "tripDetailsNameRequired": "A trip needs a name",
+  "tripDetailsDescriptionLabel": "Description",
+  "tripDetailsDescriptionHint": "Ten days circling Sicily — Palermo's markets, the temples at Agrigento, then Catania.",
+  "tripDetailsDescriptionHelp": "Shown under the title on this trip. Leave it empty to remove it.",
   "tripDeleteTitle": "Delete trip?",
   "tripDeleteBody": "This cannot be undone.",
   "tripLeaveTitle": "Remove from my trips?",
@@ -1244,7 +1249,6 @@
       }
     }
   },
-  "tripRename": "Rename",
   "tripAddDates": "Add dates",
   "tripCoPlanningWith": "Co-planning with {name} — your changes save for everyone.",
   "@tripCoPlanningWith": {
