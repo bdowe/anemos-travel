@@ -26,6 +26,9 @@ class _FakeBudgetApiService extends BudgetApiService {
 
   final List<Map<String, dynamic>> patches = [];
   final List<Map<String, dynamic>> puts = [];
+  final List<Map<String, dynamic>> adds = [];
+  final List<Map<String, dynamic>> purchases = [];
+  final List<String> unpurchases = [];
   int addCount = 0;
   int deleteCount = 0;
 
@@ -36,7 +39,27 @@ class _FakeBudgetApiService extends BudgetApiService {
   _FakeBudgetApiService(this.expenses, {this.targetAmount, this.currency = 'USD'})
       : super(ApiClient(baseUrl: 'http://test'));
 
-  double get _spent => expenses.fold<double>(0, (s, e) => s + e.amount);
+  // Mirrors the server's sumExpenses (budget_handler.go) off the raw columns,
+  // not off the widget's helpers — that is the whole point of the fake.
+  double get _spent =>
+      expenses.fold<double>(0, (s, e) => s + (e.actualAmount ?? 0));
+  double get _planned =>
+      expenses.fold<double>(0, (s, e) => s + (e.plannedAmount ?? 0));
+  double get _projected => expenses.fold<double>(
+      0, (s, e) => s + (e.actualAmount ?? e.plannedAmount ?? 0));
+
+  /// Scoped to lines carrying BOTH numbers; null when none do.
+  double? get _variance {
+    double sum = 0;
+    var compared = false;
+    for (final e in expenses) {
+      if (e.actualAmount != null && e.plannedAmount != null) {
+        sum += e.actualAmount! - e.plannedAmount!;
+        compared = true;
+      }
+    }
+    return compared ? sum : null;
+  }
 
   @override
   Future<Budget> getBudget(String tripId) async => Budget(
@@ -44,6 +67,9 @@ class _FakeBudgetApiService extends BudgetApiService {
         currency: currency,
         spent: _spent,
         remaining: targetAmount == null ? null : targetAmount! - _spent,
+        planned: _planned,
+        projected: _projected,
+        planVariance: _variance,
       );
 
   @override
@@ -64,20 +90,55 @@ class _FakeBudgetApiService extends BudgetApiService {
       {required String category,
       required String label,
       required double amount,
+      bool planned = false,
       String? sourceKind,
       String? sourceId}) async {
     if (addGate != null) await addGate!.future;
     addCount++;
+    adds.add({'label': label, 'category': category, 'amount': amount, 'planned': planned});
     final e = Expense(
         id: 'new-$addCount',
         category: category,
         label: label,
-        amount: amount,
+        amount: amount, // the derived column: one number either way
+        plannedAmount: planned ? amount : null,
+        actualAmount: planned ? null : amount,
+        purchased: !planned,
         auto: sourceKind != null, // server rule mirrored
         sourceKind: sourceKind,
         sourceId: sourceId);
     expenses.add(e);
     return e;
+  }
+
+  /// The purchase verb pair (00067). `amount` omitted means "paid the planned
+  /// amount"; the server 409s without a plan, which the widget never asks for.
+  @override
+  Future<Expense> purchaseExpense(String tripId, String expenseId,
+      {double? amount}) async {
+    purchases.add({'id': expenseId, 'amount': amount});
+    return _replace(expenseId, (e) {
+      final paid = amount ?? e.plannedAmount!;
+      return e.copyWith(actualAmount: paid, purchased: true, amount: paid);
+    });
+  }
+
+  @override
+  Future<Expense> unpurchaseExpense(String tripId, String expenseId) async {
+    unpurchases.add(expenseId);
+    return _replace(expenseId, (e) {
+      // Keeps the plan and restores it as the headline — the trigger's
+      // COALESCE(actual, planned), mirrored.
+      final plan = e.plannedAmount!;
+      return e.copyWith(clearActual: true, purchased: false, amount: plan);
+    });
+  }
+
+  Expense _replace(String expenseId, Expense Function(Expense) f) {
+    final idx = expenses.indexWhere((e) => e.id == expenseId);
+    if (idx < 0) throw Exception('not found');
+    expenses[idx] = f(expenses[idx]);
+    return expenses[idx];
   }
 
   @override
@@ -86,10 +147,19 @@ class _FakeBudgetApiService extends BudgetApiService {
     patches.add({'id': expenseId, ...body});
     final idx = expenses.indexWhere((e) => e.id == expenseId);
     if (idx >= 0) {
-      expenses[idx] = expenses[idx].copyWith(
+      final before = expenses[idx];
+      final plan = (body['planned_amount'] as num?)?.toDouble();
+      // The legacy `amount` writes back to whichever column it was read from,
+      // exactly as UpdateExpense resolves it in SQL.
+      final legacy = (body['amount'] as num?)?.toDouble();
+      final planned = plan ?? (legacy != null && !before.purchased ? legacy : null);
+      final paid = legacy != null && before.purchased ? legacy : null;
+      expenses[idx] = before.copyWith(
         category: body['category'] as String?,
         label: body['label'] as String?,
-        amount: (body['amount'] as num?)?.toDouble(),
+        plannedAmount: planned,
+        actualAmount: paid,
+        amount: paid ?? planned ?? before.amount,
       );
       return expenses[idx];
     }
@@ -103,8 +173,39 @@ class _FakeBudgetApiService extends BudgetApiService {
   }
 }
 
+/// A PAID line — what every expense was before the planned/paid split, so
+/// every assertion written against these fixtures keeps its meaning.
 Expense _exp(String id, String category, String label, double amount) =>
-    Expense(id: id, category: category, label: label, amount: amount);
+    Expense(
+        id: id,
+        category: category,
+        label: label,
+        amount: amount,
+        actualAmount: amount,
+        purchased: true);
+
+/// A line that is only planned: no payment, so it counts toward `planned` and
+/// `projected` but never toward `spent`.
+Expense _planned(String id, String category, String label, double amount) =>
+    Expense(
+        id: id,
+        category: category,
+        label: label,
+        amount: amount,
+        plannedAmount: amount,
+        purchased: false);
+
+/// A line planned at one price and paid at another.
+Expense _both(String id, String category, String label,
+        {required double planned, required double paid}) =>
+    Expense(
+        id: id,
+        category: category,
+        label: label,
+        amount: paid,
+        plannedAmount: planned,
+        actualAmount: paid,
+        purchased: true);
 
 Future<_FakeBudgetApiService> _pump(
   WidgetTester tester,
@@ -113,6 +214,7 @@ Future<_FakeBudgetApiService> _pump(
   String currency = 'USD',
   bool canEdit = true,
   bool isOffline = false,
+  Locale? locale,
 }) async {
   final fake = _FakeBudgetApiService(expenses,
       targetAmount: targetAmount, currency: currency);
@@ -125,6 +227,8 @@ Future<_FakeBudgetApiService> _pump(
       // unthemed harness is exactly how the truncated-hint bug escaped.
       child: MaterialApp(
       theme: AppTheme.light,
+      locale: locale,
+      supportedLocales: const [Locale('en'), Locale('es')],
       localizationsDelegates: testLocalizationsDelegates,
         home: Scaffold(
           body: SingleChildScrollView(
@@ -572,4 +676,297 @@ void main() {
           'build() re-renders every expense row on every keystroke',
     );
   });
+
+  // --- planned vs paid (00067) -------------------------------------------
+  //
+  // The totals are the server's; what these assert is which of them reach the
+  // screen, and how one line reads.
+
+  group('planned vs paid', () {
+    testWidgets('pre-trip: nothing is spent and the plan carries the summary',
+        (tester) async {
+      await _pump(tester, [
+        _planned('a', 'flights', 'Flights', 1100),
+        _planned('b', 'lodging', 'Hotel', 750),
+        _planned('c', 'food', 'Dinners', 200),
+      ], targetAmount: 2000);
+
+      expect(find.text('\$0 / \$2,000'), findsOneWidget);
+      // Two segments: money gone (none) behind money still committed.
+      expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+                find.byKey(const ValueKey('budgetBarProjected')))
+            .value,
+        1.0,
+        reason: 'the plan already fills the target',
+      );
+      expect(find.text('Projected \$2,050 · \$50 over target'), findsOneWidget);
+      expect(find.text('Total planned'), findsOneWidget);
+      // Nothing has been paid, so there is nothing to compare — and the row
+      // says nothing rather than saying zero.
+      expect(find.text('Vs plan'), findsNothing);
+    });
+
+    testWidgets('mid-trip: a pair row, the group marker, and the comparison',
+        (tester) async {
+      await _pump(tester, [
+        _both('a', 'flights', 'JFK → CDG', planned: 1100, paid: 1150),
+        _planned('b', 'food', 'Dinners', 200),
+        _exp('c', 'food', 'Lunch at Nikkei', 34),
+      ], targetAmount: 2000);
+
+      // A line that came in at a different price shows both numbers; the two
+      // settled ones show one.
+      expect(find.text('\$1,100→\$1,150'), findsOneWidget);
+      expect(find.text('\$200'), findsOneWidget);
+      expect(find.text('\$34'), findsOneWidget);
+
+      // The marker rides the group that still contains unpaid money, and only
+      // that one.
+      expect(find.byTooltip('Includes planned amounts'), findsOneWidget);
+
+      expect(find.text('Total planned'), findsOneWidget);
+      expect(find.text('Vs plan'), findsOneWidget);
+      expect(find.text('\$50 over'), findsOneWidget);
+    });
+
+    testWidgets('end of trip: one bar, and the plan is still there to compare',
+        (tester) async {
+      await _pump(tester, [
+        _both('a', 'flights', 'Flights', planned: 400, paid: 437),
+        _both('b', 'lodging', 'Hotel', planned: 750, paid: 750),
+        _both('c', 'food', 'Food', planned: 350, paid: 291),
+      ], targetAmount: 2000);
+
+      // Everything is bought, so there is no committed-but-unspent segment.
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.textContaining('Projected'), findsNothing);
+      expect(find.byTooltip('Includes planned amounts'), findsNothing);
+      // THE feature: the plan did not collapse to zero when the trip ended.
+      expect(find.text('Total planned'), findsOneWidget);
+      expect(find.text('\$1,500'), findsOneWidget);
+      expect(find.text('\$1,478'), findsOneWidget);
+      expect(find.text('\$22 under'), findsOneWidget);
+    });
+
+    testWidgets('a payload from before the split renders exactly as today',
+        (tester) async {
+      // An old server, or a bundle cached before 00067: no planned/projected,
+      // rows carrying only `amount`.
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            budgetApiServiceProvider.overrideWithValue(
+                _LegacyBudgetApiService([
+              const Expense(
+                  id: 'a', category: 'food', label: 'Lunch', amount: 20),
+            ])),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light,
+            localizationsDelegates: testLocalizationsDelegates,
+            home: const Scaffold(
+              body: SingleChildScrollView(
+                child: BudgetSection(
+                    tripId: 't1', canEdit: true, isOffline: false),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('\$20 / \$100'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.textContaining('Projected'), findsNothing);
+      expect(find.text('Total planned'), findsNothing);
+      expect(find.text('Vs plan'), findsNothing);
+      // The line counted as spend before the split, so it still reads as paid.
+      expect(find.byTooltip('Mark as planned'), findsOneWidget);
+    });
+
+    testWidgets('marking a line paid prefills the plan and posts the price',
+        (tester) async {
+      final fake = await _pump(
+          tester, [_planned('a', 'lodging', 'Hotel Nacional', 750)],
+          targetAmount: 2000);
+
+      await tester.tap(find.byTooltip('Mark as paid'));
+      await tester.pumpAndSettle();
+
+      final field = find.descendant(
+          of: find.byType(AlertDialog), matching: find.byType(TextField));
+      expect(tester.widget<TextField>(field).controller!.text, '750',
+          reason: 'paying exactly what you planned should be one tap');
+
+      await tester.enterText(field, '812');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(fake.purchases, [
+        {'id': 'a', 'amount': 812.0}
+      ]);
+      // The row now carries both numbers, and the totals follow.
+      expect(find.text('\$750→\$812'), findsOneWidget);
+      expect(find.text('\$62 over'), findsOneWidget);
+    });
+
+    testWidgets('un-paying keeps the plan and offers Undo', (tester) async {
+      final fake = await _pump(
+          tester, [_both('a', 'flights', 'Flights', planned: 400, paid: 372)],
+          targetAmount: 2000);
+
+      await tester.tap(find.byTooltip('Mark as planned'));
+      await tester.pumpAndSettle();
+
+      expect(fake.unpurchases, ['a']);
+      expect(find.text('Flights moved back to planned'), findsOneWidget);
+      // The plan survived: the line is offering to be paid again, and the
+      // headline it shows is the plan rather than the payment it lost.
+      expect(find.byTooltip('Mark as paid'), findsOneWidget);
+      expect(find.text('\$372'), findsNothing);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect(fake.purchases, [
+        {'id': 'a', 'amount': 372.0}
+      ]);
+    });
+
+    testWidgets('a line with no plan converts instead of failing',
+        (tester) async {
+      // The server cannot un-pay a line with no plan — it would be left with
+      // no amount at all — so the client states the plan first.
+      final fake = await _pump(tester, [_exp('a', 'food', 'Gelato', 6)],
+          targetAmount: 2000);
+
+      await tester.tap(find.byTooltip('Mark as planned'));
+      await tester.pumpAndSettle();
+
+      expect(fake.patches, [
+        {'id': 'a', 'planned_amount': 6.0}
+      ]);
+      expect(fake.unpurchases, ['a']);
+    });
+
+    testWidgets('a booking-created line cannot be un-paid from here',
+        (tester) async {
+      final fake = await _pump(tester, [
+        const Expense(
+            id: 'a',
+            category: 'lodging',
+            label: 'Hotel',
+            amount: 300,
+            actualAmount: 300,
+            purchased: true,
+            auto: true,
+            sourceKind: 'accommodation',
+            sourceId: 'acc1'),
+      ], targetAmount: 2000);
+
+      // Its payment mirrors the booking, so it is un-paid by un-booking.
+      expect(find.byTooltip('From a booking — un-book it to remove'),
+          findsOneWidget);
+      expect(find.byTooltip('Mark as planned'), findsNothing);
+
+      // .first is the ROW's menu; the add row's category picker is also a
+      // PopupMenuButton<String> and sits after it.
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Mark as planned'), findsNothing);
+      expect(find.text('Edit'), findsOneWidget);
+      expect(fake.unpurchases, isEmpty);
+    });
+
+    testWidgets('the add row defaults to planned and remembers the pick',
+        (tester) async {
+      final fake = await _pump(tester, [_exp('a', 'food', 'Lunch', 20)],
+          targetAmount: 2000);
+
+      await tester.enterText(find.byType(TextField).first, 'Museum pass');
+      await tester.enterText(find.byType(TextField).last, '42');
+      await tester.tap(find.byTooltip('Add expense'));
+      await tester.pumpAndSettle();
+      expect(fake.adds.single['planned'], isTrue,
+          reason: 'a wrongly-planned row is visible; a wrongly-paid one is not');
+
+      // Flip once, and it stays flipped for the rest of the session.
+      await tester.tap(find.text('Paid'));
+      await tester.pumpAndSettle();
+      for (final label in ['Taxi', 'Coffee']) {
+        await tester.enterText(find.byType(TextField).first, label);
+        await tester.enterText(find.byType(TextField).last, '9');
+        await tester.tap(find.byTooltip('Add expense'));
+        await tester.pumpAndSettle();
+      }
+      expect(fake.adds.skip(1).every((a) => a['planned'] == false), isTrue);
+    });
+
+    testWidgets('offline cannot flip the mode or a line', (tester) async {
+      final fake = await _pump(
+          tester, [_planned('a', 'lodging', 'Hotel', 750)],
+          targetAmount: 2000, isOffline: true);
+
+      expect(
+          tester
+              .widget<SegmentedButton<bool>>(find.byType(SegmentedButton<bool>))
+              .onSelectionChanged,
+          isNull);
+      await tester.tap(find.byTooltip('Mark as paid'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining("You're offline"), findsOneWidget);
+      expect(fake.purchases, isEmpty);
+    });
+
+    testWidgets('a viewer sees the state marks but cannot flip them',
+        (tester) async {
+      await _pump(tester, [
+        _planned('a', 'lodging', 'Hotel', 750),
+        _exp('b', 'food', 'Lunch', 20),
+      ], targetAmount: 2000, canEdit: false);
+
+      // Sharing a budget means sharing the whole story, read-only.
+      expect(find.text('Total planned'), findsOneWidget);
+      expect(find.byTooltip('Mark as paid'), findsNothing);
+      expect(find.byTooltip('Mark as planned'), findsNothing);
+      expect(find.byType(SegmentedButton<bool>), findsNothing);
+    });
+
+    testWidgets('Spanish keeps Previsto for money and fits at 360px',
+        (tester) async {
+      tester.view.physicalSize = const Size(360, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await _pump(tester, [_planned('a', 'lodging', 'Hotel', 750)],
+          targetAmount: 2000, locale: const Locale('es'));
+
+      // "Planeado" is the trips-list travel-stats word for a whole trip; money
+      // uses Previsto.
+      expect(find.text('Previsto'), findsOneWidget);
+      expect(find.text('Pagado'), findsOneWidget);
+      expect(find.text('Total previsto'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+}
+
+/// A server that predates the split: no `planned`/`projected` totals, and rows
+/// carrying only the legacy `amount`.
+class _LegacyBudgetApiService extends BudgetApiService {
+  final List<Expense> expenses;
+  _LegacyBudgetApiService(this.expenses)
+      : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<Budget> getBudget(String tripId) async => Budget(
+        targetAmount: 100,
+        currency: 'USD',
+        spent: expenses.fold<double>(0, (s, e) => s + e.amount),
+        remaining: 100 - expenses.fold<double>(0, (s, e) => s + e.amount),
+      );
+
+  @override
+  Future<List<Expense>> listExpenses(String tripId) async => List.of(expenses);
 }
