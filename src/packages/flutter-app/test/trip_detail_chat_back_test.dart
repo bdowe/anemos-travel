@@ -159,6 +159,54 @@ void main() {
     expect(_refineState(tester).messages.length, seeded);
   });
 
+  // Closing the panel is the same gesture that used to discard whatever was
+  // half-typed in it: the body's slot changes runtime type, so the subtree —
+  // composer included — is re-inflated. The transcript already survived this;
+  // the question being written did not.
+  testWidgets('closing and reopening keeps the half-typed question',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(_app(_FakeTripsApiService(_trip())));
+    await tester.pumpAndSettle();
+    await _openTripAndChat(tester);
+
+    await tester.enterText(find.byType(TextField), 'why not Utrecht instead?');
+    expect(await _back(tester), isTrue);
+    await tester.pumpAndSettle();
+    expect(find.byType(TripRefinePanel), findsNothing);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'why not Utrecht instead?',
+    );
+  });
+
+  // Same re-inflation, no gesture at all: the panel crosses 900px and the body
+  // swaps Stack for Row underneath it.
+  testWidgets('resizing across the docked width keeps it too',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(700, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_app(_FakeTripsApiService(_trip())));
+    await tester.pumpAndSettle();
+    await _openTripAndChat(tester);
+    expect(find.byType(VerticalDivider), findsNothing); // sheet, not docked
+
+    await tester.enterText(find.byType(TextField), 'and the ferry times?');
+    tester.view.physicalSize = const Size(1400, 1000);
+    await tester.pumpAndSettle();
+    expect(find.byType(VerticalDivider), findsOneWidget); // now docked
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'and the ferry times?',
+    );
+  });
+
   testWidgets('a second back leaves the trip, conversation intact',
       (WidgetTester tester) async {
     await tester.pumpWidget(_app(_FakeTripsApiService(_trip())));

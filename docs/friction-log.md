@@ -5,6 +5,45 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-15 — the second half of the composer bug
+
+- **[app] Same defect, second surface.** The Budget row fix (#435) named the
+  cause: trip detail's body returns a bare `RefreshIndicator` when the chat
+  panel is closed and a `Row`/`Stack` when it's open, so `Widget.canUpdate`
+  fails at that slot and the whole subtree is re-inflated. `ChatPanel` lives
+  *inside* that subtree — so the half-written question died on the same
+  gesture, plus one the budget row never sees: **crossing 900px re-parents
+  `Stack` → `Row` and wipes the composer mid-typing, with no gesture at all.**
+- **[app] Closing the panel is the common case, not an edge one.** #441 gave
+  the panel three ways to close (✕, Escape, back) and made all of them keep the
+  transcript. What it did not do — because it never touched `chat_panel.dart` —
+  is keep the sentence you were in the middle of writing. So "back doesn't lose
+  my chat" shipped while back still lost the thing actually being typed.
+- **[app] The attachments ride along, deliberately.** Re-picking four photos is
+  worse than retyping a sentence. The cost is honest: their bytes now outlive
+  the panel, bounded by the 4-per-message cap, one draft per chat, and the
+  clear on send. `_processingCount` is *not* kept — the `await` it counts
+  cannot outlive the State, so an image still downscaling when the panel closes
+  is genuinely gone, and that's now written down rather than assumed.
+- **[dev] The key had to be the conversation's identity, not a second one.**
+  The obvious move was a `draftKey` prop each host passes. But `PlanNotifier`
+  already carries `tripId` — null on the Agent tab, the trip in the refine
+  panel — so a prop would have been a *second* name for one thing, and a host
+  that got it wrong would put one chat's words in another's composer with
+  nothing to catch it. Deriving it (`chatDraftKeyFor`) also left all **14**
+  `chat_panel_*_test.dart` harnesses untouched: they build `PlanNotifier`
+  directly, get `tripId == null`, and land in the `agent` bucket for free.
+  Explicit does not always mean "add a parameter" — sometimes it means naming
+  the identity that already exists.
+- **[dev] Three of eight new tests were vacuous until mutation testing said
+  so.** With the restore neutered, only 4 of 8 failed. Two more were fine
+  (they guard clear-on-send and write-back-on-remove; each fails against *its*
+  mutation). But **"two trips do not share one draft" passed with the key
+  hardcoded to a constant** — because both panels were mounted, and a mounted
+  panel never re-reads the draft, so a shared key was invisible. The test only
+  bites if you remount the *other* panel. A test asserting isolation between
+  two live widgets proves nothing about a key.
+
 ## 2026-08-15 — chat dogfooding (hotels)
 
 - **[app] Friction → fixed: "Chat can't lookup hotel data — doesn't have it in
