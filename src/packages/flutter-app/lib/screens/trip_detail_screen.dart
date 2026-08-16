@@ -1892,6 +1892,24 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               ),
             ],
           ),
+          // A menu, not a bare icon: this sits a thumb's width from the row's
+          // own onTap, which OPENS the conversation, and discarding one must
+          // never be the near miss of resuming it. It is also the only way to
+          // be rid of a saved chat without first opening it and waiting out a
+          // full restore just to throw the transcript away.
+          trailing: PopupMenuButton<String>(
+            onSelected: (_) => _newChat(trip),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'new',
+                child: ListTile(
+                  leading: const Icon(Icons.add_comment_outlined),
+                  title: Text(l10n.refineNewChat),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
           onTap: () => _openChat(trip),
         ),
       ),
@@ -2030,8 +2048,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// with one running chat per trip, this really does throw the thread away.
   Future<void> _newChat(Trip trip) async {
     final l10n = context.l10n;
+    // "Is there a conversation?" is answered from wherever one can exist, not
+    // from whichever copy this path happens to hold: the Continue-chat row
+    // clears without ever opening the panel, so the transcript is NOT
+    // hydrated there and an in-memory-only test would skip the confirm on
+    // exactly the fifty-message chat it exists to protect.
     final hasConversation =
-        ref.read(tripRefineProvider(widget.tripId)).messages.isNotEmpty;
+        ref.read(tripRefineProvider(widget.tripId)).messages.isNotEmpty ||
+            trip.refineChat != null;
     if (hasConversation) {
       final confirm = await showDialog<bool>(
         context: context,

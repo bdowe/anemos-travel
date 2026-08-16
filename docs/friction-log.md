@@ -5,6 +5,28 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-16 — the New chat button nobody could find
+
+- **[app] It shipped, and I went looking for it anyway.** #441 put "New chat"
+  in the refine panel header as an icon-only button with a tooltip. On a
+  touchscreen a tooltip does not exist, `add_comment_outlined` reads as "add a
+  comment", and beside the ✕ an unlabeled glyph reads as chrome. It was live in
+  prod, working, for a day — and the person who wrote the spec asked for the
+  feature to be built. An action whose only name is a tooltip is an
+  undocumented action. Now it carries its label.
+- **[app] It was also in the wrong place.** The page advertises the saved
+  conversation on the Continue-chat card, so that is where you go to be rid of
+  it — but the only route was to open the chat and wait out a full transcript
+  restore just to throw it away. The card now carries the action itself.
+- **[dev] The confirm was reading the wrong copy of the truth.** `_newChat`
+  skipped its dialog when the *in-memory* transcript was empty — which is true
+  on every card-path tap, because that path deliberately never hydrates. Adding
+  the entry point without fixing the gate would have made one tap destroy a
+  fifty-message conversation with no dialog at all. "Is there a conversation?"
+  has to be answered from wherever one can exist (memory *or* the trip's
+  `refine_chat` summary), never from whichever copy this code path happens to
+  hold. Mutation-checked: the new test fails with the gate reverted.
+
 ## 2026-08-15 — the second half of the composer bug
 
 - **[app] Same defect, second surface.** The Budget row fix (#435) named the
