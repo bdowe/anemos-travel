@@ -113,8 +113,13 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
   final List<PlanAttachment> _pending = [];
 
   /// Images currently going through the downscale pipeline (spinner chips);
-  /// sending is deferred until this reaches zero.
+  /// sending is deferred until this reaches zero. Deliberately NOT part of the
+  /// kept draft: the `await` it counts cannot outlive this State, so an image
+  /// still being downscaled when the panel closes is genuinely gone.
   int _processingCount = 0;
+
+  /// Which kept draft is ours — see [chatDraftKeyFor].
+  late final String _draftKey;
 
   /// Whether a drag hovers over the panel — drives the drop overlay.
   bool _dragging = false;
@@ -124,6 +129,10 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
   @override
   void initState() {
     super.initState();
+    // Fixed for this panel's life: a notifier's tripId is final, and neither
+    // host ever swaps the notifier it passes.
+    _draftKey = chatDraftKeyFor(ref.read(widget.notifier).tripId);
+    _restoreDraft();
     _dictation = ref.read(dictationControllerFactoryProvider)(_controller);
     _dictation.addListener(_onDictationChanged);
     // Paste-from-clipboard (web only): focus-gated so exactly one mounted
@@ -135,6 +144,41 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
       },
     );
   }
+
+  /// Puts back whatever was composed and not sent before this panel was last
+  /// torn down. Called from `initState` only — never from `build`, where it
+  /// would clobber the character just typed.
+  ///
+  /// `read`, never `watch`: the draft is written on every keystroke, so
+  /// watching it would rebuild the whole transcript per character.
+  void _restoreDraft() {
+    final draft = ref.read(chatDraftProvider(_draftKey));
+    // Never assign `controller.text` — that setter parks the selection at
+    // offset -1, which the engine normalizes to 0, so the next keystroke lands
+    // in *front* of the restored text (see airport_field.dart).
+    _controller.value = TextEditingValue(
+      text: draft.text,
+      selection: TextSelection.collapsed(offset: draft.text.length),
+    );
+    _pending.addAll(draft.attachments);
+    // After the seed, so restoring cannot echo back into the draft it read.
+    _controller.addListener(_saveDraft);
+  }
+
+  /// Records the composer as it stands. Called on every change rather than on
+  /// the way out: this panel is unmounted without warning — closing it, and
+  /// the trip body re-inflating when it opens or crosses the docked width —
+  /// and by the time `dispose` runs the element is already unmounted, so `ref`
+  /// throws there.
+  void _saveDraft() => ref
+      .read(chatDraftProvider(_draftKey).notifier)
+      .setText(_controller.text);
+
+  /// The attachment half. Separate from [_saveDraft] because the two are
+  /// edited by different gestures and the list write copies.
+  void _saveDraftAttachments() => ref
+      .read(chatDraftProvider(_draftKey).notifier)
+      .setAttachments(_pending);
 
   void _onDictationChanged() {
     final error = _dictation.consumeError();
@@ -199,6 +243,9 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
     final attachments = List<PlanAttachment>.of(_pending);
     _controller.clear();
     setState(_pending.clear);
+    // One call for both halves — and the only thing that frees the kept
+    // attachment bytes.
+    ref.read(chatDraftProvider(_draftKey).notifier).clear();
     ref.read(widget.notifier).sendMessage(text, attachments: attachments);
     _stickToBottom = true;
     _scrollToBottom();
@@ -229,6 +276,7 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
         _processingCount--;
         if (attachment != null) _pending.add(attachment);
       });
+      if (attachment != null) _saveDraftAttachments();
       if (attachment == null) {
         _notify(l10n.chatImageUnreadable);
       }
@@ -367,7 +415,10 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
             _PendingAttachmentsRow(
               pending: _pending,
               processingCount: _processingCount,
-              onRemove: (i) => setState(() => _pending.removeAt(i)),
+              onRemove: (i) {
+                setState(() => _pending.removeAt(i));
+                _saveDraftAttachments();
+              },
             ),
           _InputBar(
             controller: _controller,

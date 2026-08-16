@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/plan_message.dart';
 import '../models/agent_place.dart';
@@ -999,3 +1000,71 @@ final tripRefineProvider = StateNotifierProvider.family<PlanNotifier, PlanState,
       tripId: tripId,
       onProfileFieldsChanged: (f) => _refetchProfileFields(ref, f));
 });
+
+/// What someone has composed in a chat but not sent yet — the message text and
+/// any images they attached.
+///
+/// Held here rather than in `ChatPanel`'s State because the panel is taken
+/// away from under them: closing the trip's refine panel disposes it outright,
+/// and opening it — or crossing the docked/undocked width — re-parents the
+/// whole trip body, which re-inflates everything beneath it. The transcript
+/// already survives all of that ([tripRefineProvider] is keepAlive for exactly
+/// this reason), so a half-written question was the one thing still being
+/// thrown away by the same gesture.
+///
+/// The attachments ride along deliberately: re-picking four photos is worse
+/// than retyping a sentence. The cost is that their bytes now outlive the
+/// panel — bounded by the 4-per-message cap, one draft per key, and the clear
+/// on send.
+@immutable
+class ChatDraft {
+  final String text;
+
+  /// Attached but unsent. Never the resumed-transcript placeholders (those
+  /// have null `bytes` and belong to a message that was already sent).
+  final List<PlanAttachment> attachments;
+
+  const ChatDraft({this.text = '', this.attachments = const []});
+
+  bool get isEmpty => text.isEmpty && attachments.isEmpty;
+}
+
+class ChatDraftNotifier extends StateNotifier<ChatDraft> {
+  ChatDraftNotifier() : super(const ChatDraft());
+
+  void setText(String text) {
+    if (text == state.text) return;
+    state = ChatDraft(text: text, attachments: state.attachments);
+  }
+
+  /// Copied, not aliased: the caller's list is the composer's own mutable
+  /// `_pending`, and sharing it would let a later `add` mutate state that has
+  /// already been published.
+  void setAttachments(List<PlanAttachment> attachments) {
+    state = ChatDraft(text: state.text, attachments: List.of(attachments));
+  }
+
+  /// After a send. Also the only path that frees attachment bytes.
+  void clear() {
+    if (state.isEmpty) return;
+    state = const ChatDraft();
+  }
+}
+
+/// The [chatDraftProvider] key for a conversation, derived from the ONE
+/// identity a chat already has: [PlanNotifier.tripId], null on the Agent tab
+/// and the trip's id in the refine panel. A draft key handed down as its own
+/// prop would be a second identity for the same thing, and a host that got it
+/// wrong would silently put one chat's words in another's composer.
+///
+/// (A trip id is a uuid, so it can never collide with the unbound bucket; the
+/// prefix is for whoever reads the key in a debugger.)
+String chatDraftKeyFor(String? tripId) =>
+    tripId == null ? 'agent' : 'trip:$tripId';
+
+/// One composer draft per chat surface. The Agent tab and a trip's refine
+/// panel can be mounted at the same time, so they must not share one — and a
+/// trip's draft has to outlive its panel, which is the whole point.
+final chatDraftProvider =
+    StateNotifierProvider.family<ChatDraftNotifier, ChatDraft, String>(
+        (ref, draftKey) => ChatDraftNotifier());
