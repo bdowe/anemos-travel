@@ -99,10 +99,20 @@ RUN sed -i 's/origin\.length + 1/origin.length + 5/g' build/web/flutter_service_
 # poisoned content cache exactly once per bump. Renaming CACHE_NAME instead
 # would orphan that whole multi-MB cache in storage forever; this leaks only
 # the ~4 KB old manifest cache. Idempotent on later deploys: the manifest
-# exists under the new name, so the normal diff path resumes. Bump the suffix
-# again only if this class ever recurs.
-RUN sed -i "s/'flutter-app-manifest'/'flutter-app-manifest-v2'/" build/web/flutter_service_worker.js \
-    && grep -q "const MANIFEST = 'flutter-app-manifest-v2';" build/web/flutter_service_worker.js \
+# exists under the new name, so the normal diff path resumes.
+#
+# A BUMP IS ONLY VALID ONCE THE EDGE IS VERIFIED CLEAN. It fires exactly once
+# per client and cannot be re-fired, so it spends its single shot refilling the
+# cache from whatever the CDN is serving at that moment. v2 shipped with #426
+# while Cloudflare still held the pre-#419 icon font under a one-year TTL —
+# correcting the header here did not evict it, because a stored object keeps
+# the freshness lifetime it was stored with. So v2 wiped every client's content
+# cache and refilled it from the stale edge: users who had been fine were healed
+# into breakage, and the one-shot lever was spent. v3 is the replacement shot,
+# fired after the purge. Before ever bumping again: purge the CDN, run
+# scripts/verify-edge-parity.sh until it passes, and only then raise the suffix.
+RUN sed -i "s/'flutter-app-manifest'/'flutter-app-manifest-v3'/" build/web/flutter_service_worker.js \
+    && grep -q "const MANIFEST = 'flutter-app-manifest-v3';" build/web/flutter_service_worker.js \
     && ! grep -q "'flutter-app-manifest'" build/web/flutter_service_worker.js
 
 # Send every service-worker cache MISS to the network instead of to the

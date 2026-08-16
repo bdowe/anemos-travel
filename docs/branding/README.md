@@ -83,3 +83,10 @@ mechanism, and are still worth bumping for anything a browser may have cached
 from before 2026-08-15. (The `immutable` header was removed because Flutter
 does not content-hash these filenames; see
 `dockerize/deployment/nginx/snippets/app-locations.conf`.)
+
+"Propagates on the next load without help" holds only for objects the CDN
+stored **after** 2026-08-15. A stored response keeps the freshness lifetime it
+was stored with, so anything Cloudflare cached under the old `immutable` header
+sits there until 2027 whatever the origin now sends — correcting a header never
+evicts. `scripts/verify-edge-parity.sh` is what catches that; a purge is what
+fixes it (runbook in `dockerize/production/README.md`).

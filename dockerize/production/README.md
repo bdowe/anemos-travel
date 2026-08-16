@@ -223,3 +223,44 @@ Green means the traveler journey works end to end; the run also prints a
 **MANUAL CHECKS REMAINING** block for the things a script can't assert on its own
 (real Cloudflare real-IP rate limiting, Slack/Facebook link-preview unfurl, SMTP
 inbox round-trips, legal-page DRAFT-banner sign-off).
+
+## Edge cache — when icons or assets go stale
+
+Symptom: the app is on the current release (`/app/version.json` is right,
+`main.dart.js` is current, the deploy was green) but a few Material icons render
+blank, or an image looks two deploys old. That is the CDN, not the build.
+
+Why it happens: `flutter build web` does not content-hash asset filenames, so
+`/app/assets/**` URLs are stable while the bytes change on every deploy —
+`--release` re-tree-shakes `MaterialIcons-Regular.otf` to exactly the codepoints
+the code references, so any icon swap rewrites it. nginx serves that tree
+`no-cache` for precisely this reason. But if an object was ever stored under a
+long-lived header, **it keeps the freshness lifetime it was stored with**:
+correcting the origin header does not evict it, and the edge will not revalidate
+until the original TTL expires. On 2026-08-14 that TTL was a year.
+
+Check — this also runs automatically in the deploy job:
+
+```bash
+scripts/verify-edge-parity.sh https://anemos.travel
+```
+
+Repair. **The order is the whole point:**
+
+1. **Purge Cloudflare** → Caching → Configuration → **Purge Everything**.
+   (Purge-by-prefix is Enterprise-only; per-URL works on any plan but leaves the
+   siblings pinned.)
+2. **Re-run `scripts/verify-edge-parity.sh` until it passes.** Do not proceed
+   while it is red.
+3. **Only then** bump the service-worker manifest suffix
+   (`flutter-app-manifest-vN` in `dockerize/deployment/Dockerfile`) and deploy.
+   That is the one-shot eviction for clients whose service worker already filed
+   stale bytes under the correct hash — it fires **once per client and can never
+   be re-fired**, so firing it while the edge is still stale refills every client
+   *from* the stale edge and burns the lever. That is exactly what `v2` did on
+   2026-08-15.
+
+One already-broken browser (yours) is repaired out of band: DevTools →
+Application → Storage → **Clear site data**, then reload. A hard reload alone
+repaints correctly for a single load and then reverts, because it bypasses the
+service worker without repairing its cache.
