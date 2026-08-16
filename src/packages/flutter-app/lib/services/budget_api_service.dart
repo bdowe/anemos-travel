@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../models/budget.dart';
+import '../models/daily_spend.dart';
 import '../models/expense.dart';
 import 'api_client.dart';
 
@@ -59,13 +60,20 @@ class BudgetApiService {
   /// the booked-flip prompt on the trip screen keeps both compiling and its
   /// semantics. A linked add must stay a payment: the server 400s a plan-only
   /// one rather than guessing.
+  ///
+  /// [legKey] binds the line to one city leg (00070) — the daily food & drink
+  /// "Add to plan". That makes the POST an upsert-by-leg: a second tap returns
+  /// the row that already exists (200) instead of filing a duplicate. It is
+  /// mutually exclusive with [sourceKind]; the server 400s a request naming
+  /// both, and 400s a key that is not one of the trip's current legs.
   Future<Expense> addExpense(String tripId,
       {required String category,
       required String label,
       required double amount,
       bool planned = false,
       String? sourceKind,
-      String? sourceId}) async {
+      String? sourceId,
+      String? legKey}) async {
     final res = await apiClient.httpClient.post(
       Uri.parse('${apiClient.baseUrl}/trips/$tripId/budget/expenses'),
       headers: apiClient.jsonHeaders(json: true),
@@ -75,6 +83,7 @@ class BudgetApiService {
         if (planned) 'planned_amount': amount else 'actual_amount': amount,
         if (sourceKind != null) 'source_kind': sourceKind,
         if (sourceId != null) 'source_id': sourceId,
+        if (legKey != null) 'leg_key': legKey,
       }),
     );
     if (res.statusCode == 201 || res.statusCode == 200) {
@@ -138,6 +147,30 @@ class BudgetApiService {
       return Expense.fromJson(jsonDecode(res.body));
     }
     throw Exception('Failed to update expense (${res.statusCode})');
+  }
+
+  /// The suggested per-person daily food & drink spend for each city on the
+  /// trip (specs/daily-spend-guide). [tier] overrides the traveler's saved
+  /// budget level for this read; omit it to let the server resolve one.
+  ///
+  /// Best-effort by design: the endpoint answers 200 with an empty city list
+  /// and a reason code when it cannot produce an estimate, so the only throw
+  /// here is a genuine transport/auth failure — which the provider then folds
+  /// into an empty guide.
+  Future<DailySpendGuide> getDailySpend(String tripId, {String? tier}) async {
+    final uri = Uri.parse('${apiClient.baseUrl}/trips/$tripId/budget/daily-spend')
+        .replace(queryParameters: tier == null ? null : {'tier': tier});
+    final res = await apiClient.httpClient.get(
+      uri,
+      headers: apiClient.jsonHeaders(),
+    );
+    if (res.statusCode == 200) {
+      return DailySpendGuide.fromJson(jsonDecode(res.body));
+    }
+    throw ApiException(
+        statusCode: res.statusCode,
+        message: res.body,
+        endpoint: 'budget/daily-spend');
   }
 
   Future<void> deleteExpense(String tripId, String expenseId) async {

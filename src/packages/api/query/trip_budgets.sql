@@ -22,11 +22,14 @@ SELECT * FROM trip_expenses WHERE id = $1 AND trip_id = $2;
 -- name: CreateExpense :one
 -- auto/source_kind/source_id: the booking-autopopulate link (00061). The
 -- handler sets auto=true iff a source link is present — never the client.
+-- leg_key: the city leg this line plans for (00070); NULL on every other path.
+-- It is deliberately NOT part of the auto contract — a leg-keyed row is the
+-- traveler's own plan, not a mirror of a booking.
 -- `amount` is deliberately absent from the column list: set_expense_amount()
 -- (00067) computes it as COALESCE(actual_amount, planned_amount). One
 -- definition, in the database, on every write path.
-INSERT INTO trip_expenses (trip_id, category, label, planned_amount, actual_amount, position, auto, source_kind, source_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO trip_expenses (trip_id, category, label, planned_amount, actual_amount, position, auto, source_kind, source_id, leg_key)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: GetExpenseBySource :one
@@ -34,6 +37,13 @@ RETURNING *;
 -- unique index idx_trip_expenses_source).
 SELECT * FROM trip_expenses
 WHERE trip_id = $1 AND source_kind = $2 AND source_id = $3;
+
+-- name: GetExpenseByLegKey :one
+-- The leg-keyed lookup (00070): at most one plan per city per category
+-- (partial unique index idx_trip_expenses_leg). Category is in the key because
+-- a city may carry more than one kind of per-day plan; food is the first.
+SELECT * FROM trip_expenses
+WHERE trip_id = $1 AND leg_key = $2 AND category = $3;
 
 -- name: UpdateExpense :one
 -- Partial update (COALESCE sqlc.narg idiom, see query/trip_checklist_items.sql
@@ -55,6 +65,10 @@ WHERE trip_id = $1 AND source_kind = $2 AND source_id = $3;
 --     re-classifying the line.
 --  3. `amount` is never listed. The trigger recomputes it; writing it by hand
 --     raises.
+--  4. `leg_key` is never listed either (00070). Which city a plan belongs to is
+--     fixed at creation and canonicalized against the trip's real legs by the
+--     one writer; an edit that could re-point it would let a stale client move
+--     a line onto a leg the server never agreed to.
 UPDATE trip_expenses
 SET category = COALESCE(sqlc.narg('category'), category),
     label    = COALESCE(sqlc.narg('label'), label),

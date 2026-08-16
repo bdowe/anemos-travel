@@ -2012,6 +2012,102 @@ abstract class AppLocalizations {
   /// **'From a booking — un-book it to remove'**
   String get budgetPlanAutoLocked;
 
+  /// No description provided for @budgetDailyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily food & drink'**
+  String get budgetDailyTitle;
+
+  /// No description provided for @budgetDailySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Typical local prices, per person — an estimate, not a quote.'**
+  String get budgetDailySubtitle;
+
+  /// No description provided for @budgetDailyRate.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount}/person/day'**
+  String budgetDailyRate(String amount);
+
+  /// No description provided for @budgetDailyNights.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 night} other{{count} nights}}'**
+  String budgetDailyNights(int count);
+
+  /// No description provided for @budgetDailyAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to plan'**
+  String get budgetDailyAdd;
+
+  /// No description provided for @budgetDailyInPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'In your plan · {amount}'**
+  String budgetDailyInPlan(String amount);
+
+  /// No description provided for @budgetDailyAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'{city} food & drink added to your plan'**
+  String budgetDailyAdded(String city);
+
+  /// No description provided for @budgetDailyExpenseLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Food & drink · {city}'**
+  String budgetDailyExpenseLabel(String city);
+
+  /// No description provided for @budgetDailyTravelers.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 traveler} other{{count} travelers}}'**
+  String budgetDailyTravelers(int count);
+
+  /// No description provided for @budgetDailyTravelersAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'One more traveler'**
+  String get budgetDailyTravelersAdd;
+
+  /// No description provided for @budgetDailyTravelersRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'One fewer traveler'**
+  String get budgetDailyTravelersRemove;
+
+  /// No description provided for @budgetDailyTierLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Spending level'**
+  String get budgetDailyTierLabel;
+
+  /// No description provided for @budgetDailyTierBudget.
+  ///
+  /// In en, this message translates to:
+  /// **'Budget'**
+  String get budgetDailyTierBudget;
+
+  /// No description provided for @budgetDailyTierMid.
+  ///
+  /// In en, this message translates to:
+  /// **'Mid-range'**
+  String get budgetDailyTierMid;
+
+  /// No description provided for @budgetDailyTierLuxury.
+  ///
+  /// In en, this message translates to:
+  /// **'Splurge'**
+  String get budgetDailyTierLuxury;
+
+  /// No description provided for @budgetDailyTierFromProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'From your saved budget level'**
+  String get budgetDailyTierFromProfile;
+
   /// No description provided for @checklistTitle.
   ///
   /// In en, this message translates to:

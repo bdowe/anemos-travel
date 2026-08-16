@@ -360,6 +360,7 @@ type TripExpense struct {
 	SourceID      pgtype.UUID `json:"source_id"`
 	PlannedAmount *float64    `json:"planned_amount"`
 	ActualAmount  *float64    `json:"actual_amount"`
+	LegKey        *string     `json:"leg_key"`
 }
 
 type TripInvite struct {

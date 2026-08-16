@@ -962,6 +962,10 @@ func buildRouter() *mux.Router {
 	// what something actually cost; PATCH never touches actual_amount.
 	api.Handle("/trips/{id}/budget/expenses/{expenseId}/purchase", authMiddleware(http.HandlerFunc(purchaseExpenseHandler))).Methods("POST")
 	api.Handle("/trips/{id}/budget/expenses/{expenseId}/purchase", authMiddleware(http.HandlerFunc(unpurchaseExpenseHandler))).Methods("DELETE")
+	// Suggested per-person daily food & drink spend, one entry per city leg
+	// (specs/daily-spend-guide). editableTrip inside — it costs a model call and
+	// only an editor can act on the answer.
+	api.Handle("/trips/{id}/budget/daily-spend", authMiddleware(http.HandlerFunc(dailySpendHandler))).Methods("GET")
 	api.Handle("/trips/{id}/review", authMiddleware(http.HandlerFunc(getTripReviewHandler))).Methods("GET")
 
 	// Local-source content — curation is admin-only (authMiddleware + adminMiddleware).

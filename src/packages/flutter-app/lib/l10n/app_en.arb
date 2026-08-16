@@ -541,6 +541,64 @@
   },
   "budgetPlanGroupHasPlanned": "Includes planned amounts",
   "budgetPlanAutoLocked": "From a booking — un-book it to remove",
+  "budgetDailyTitle": "Daily food & drink",
+  "budgetDailySubtitle": "Typical local prices, per person — an estimate, not a quote.",
+  "budgetDailyRate": "{amount}/person/day",
+  "@budgetDailyRate": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetDailyNights": "{count, plural, one{1 night} other{{count} nights}}",
+  "@budgetDailyNights": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "budgetDailyAdd": "Add to plan",
+  "budgetDailyInPlan": "In your plan · {amount}",
+  "@budgetDailyInPlan": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetDailyAdded": "{city} food & drink added to your plan",
+  "@budgetDailyAdded": {
+    "placeholders": {
+      "city": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetDailyExpenseLabel": "Food & drink · {city}",
+  "@budgetDailyExpenseLabel": {
+    "placeholders": {
+      "city": {
+        "type": "String"
+      }
+    }
+  },
+  "budgetDailyTravelers": "{count, plural, one{1 traveler} other{{count} travelers}}",
+  "@budgetDailyTravelers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "budgetDailyTravelersAdd": "One more traveler",
+  "budgetDailyTravelersRemove": "One fewer traveler",
+  "budgetDailyTierLabel": "Spending level",
+  "budgetDailyTierBudget": "Budget",
+  "budgetDailyTierMid": "Mid-range",
+  "budgetDailyTierLuxury": "Splurge",
+  "budgetDailyTierFromProfile": "From your saved budget level",
   "checklistTitle": "Packing & prep",
   "checklistSummary": "{total, plural, =0{No items yet} other{{checked} of {total} packed}}",
   "@checklistSummary": {

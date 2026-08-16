@@ -103,7 +103,8 @@ class _FakeBudgetApiService extends BudgetApiService {
       required double amount,
       bool planned = false,
       String? sourceKind,
-      String? sourceId}) async {
+      String? sourceId,
+      String? legKey}) async {
     addCalls.add({
       'category': category,
       'label': label,

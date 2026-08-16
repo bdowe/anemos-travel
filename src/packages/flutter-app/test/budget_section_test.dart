@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:travel_route_planner/models/budget.dart';
+import 'package:travel_route_planner/models/daily_spend.dart';
 import 'package:travel_route_planner/models/expense.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/budget_api_service.dart';
@@ -92,10 +93,25 @@ class _FakeBudgetApiService extends BudgetApiService {
       required double amount,
       bool planned = false,
       String? sourceKind,
-      String? sourceId}) async {
+      String? sourceId,
+      String? legKey}) async {
     if (addGate != null) await addGate!.future;
     addCount++;
-    adds.add({'label': label, 'category': category, 'amount': amount, 'planned': planned});
+    adds.add({
+      'label': label,
+      'category': category,
+      'amount': amount,
+      'planned': planned,
+      if (legKey != null) 'leg_key': legKey,
+    });
+    // Upsert-by-leg, mirrored from the server (00070): a second add for a city
+    // already in the plan returns the existing row untouched. Mirroring it here
+    // is what makes "a double tap can't duplicate" a real widget assertion.
+    if (legKey != null) {
+      final existing = expenses.indexWhere(
+          (e) => e.legKey == legKey && e.category == category);
+      if (existing >= 0) return expenses[existing];
+    }
     final e = Expense(
         id: 'new-$addCount',
         category: category,
@@ -106,9 +122,21 @@ class _FakeBudgetApiService extends BudgetApiService {
         purchased: !planned,
         auto: sourceKind != null, // server rule mirrored
         sourceKind: sourceKind,
-        sourceId: sourceId);
+        sourceId: sourceId,
+        legKey: legKey);
     expenses.add(e);
     return e;
+  }
+
+  /// The daily food & drink suggestion. Defaults to none, so every pre-existing
+  /// test in this file renders exactly the tab it rendered before.
+  DailySpendGuide dailySpend = const DailySpendGuide(cities: []);
+  final List<String?> dailySpendTiers = [];
+
+  @override
+  Future<DailySpendGuide> getDailySpend(String tripId, {String? tier}) async {
+    dailySpendTiers.add(tier);
+    return dailySpend;
   }
 
   /// The purchase verb pair (00067). `amount` omitted means "paid the planned
@@ -215,9 +243,13 @@ Future<_FakeBudgetApiService> _pump(
   bool canEdit = true,
   bool isOffline = false,
   Locale? locale,
+  DailySpendGuide? dailySpend,
 }) async {
   final fake = _FakeBudgetApiService(expenses,
       targetAmount: targetAmount, currency: currency);
+  // Set before the first build: the section fetches on mount, and every case
+  // that doesn't pass one keeps the no-suggestions tab it always rendered.
+  if (dailySpend != null) fake.dailySpend = dailySpend;
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -947,6 +979,224 @@ void main() {
       expect(find.text('Previsto'), findsOneWidget);
       expect(find.text('Pagado'), findsOneWidget);
       expect(find.text('Total previsto'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('daily food & drink', () {
+    // Lisbon Sep 1-5 and Porto Sep 5-8: 4 + 3 nights, sharing Sep 5.
+    const guide = DailySpendGuide(
+      currency: 'USD',
+      tier: 'mid',
+      tierSource: 'profile',
+      basis: 'estimate',
+      cities: [
+        DailySpendCity(
+            legKey: 'Lisbon',
+            label: 'Lisbon',
+            nights: 4,
+            dailyAmount: 50,
+            includes: 'Coffee, a casual lunch, dinner with wine.'),
+        DailySpendCity(
+            legKey: 'Porto', label: 'Porto', nights: 3, dailyAmount: 45),
+      ],
+    );
+
+    testWidgets('lists a row per city with its nights and rate', (tester) async {
+      await _pump(tester, [], targetAmount: 2000, dailySpend: guide);
+
+      expect(find.text('Daily food & drink'), findsOneWidget);
+      // The number is an estimate and the section says so on every render.
+      expect(
+          find.text(
+              'Typical local prices, per person — an estimate, not a quote.'),
+          findsOneWidget);
+      expect(find.text('Lisbon · 4 nights'), findsOneWidget);
+      expect(find.text('Porto · 3 nights'), findsOneWidget);
+      expect(find.text('\$50/person/day'), findsOneWidget);
+      // One traveler by default: 50 × 4.
+      expect(find.text('\$200'), findsOneWidget);
+      expect(find.text('\$135'), findsOneWidget);
+      // The saved preference is credited only because it actually resolved
+      // this tier.
+      expect(find.text('From your saved budget level'), findsOneWidget);
+    });
+
+    // What the amount covers is a property of the tier, not the city, so the
+    // model returns the same phrase for every row in practice. Printing it
+    // under each one is the repetition summarizeHotels avoids by stating the
+    // bag basis once.
+    testWidgets('one shared "includes" phrase is stated once, not per row',
+        (tester) async {
+      const shared = DailySpendGuide(
+        currency: 'USD',
+        tier: 'mid',
+        tierSource: 'default',
+        cities: [
+          DailySpendCity(
+              legKey: 'Lisbon',
+              label: 'Lisbon',
+              nights: 3,
+              dailyAmount: 35,
+              includes: 'Breakfast, lunch, dinner, coffee and drinks'),
+          DailySpendCity(
+              legKey: 'Porto',
+              label: 'Porto',
+              nights: 4,
+              dailyAmount: 32,
+              includes: 'Breakfast, lunch, dinner, coffee and drinks'),
+        ],
+      );
+      await _pump(tester, [], targetAmount: 2000, dailySpend: shared);
+
+      expect(find.text('Breakfast, lunch, dinner, coffee and drinks'),
+          findsOneWidget);
+    });
+
+    testWidgets('genuinely different phrases stay on their own rows',
+        (tester) async {
+      // `guide` gives Lisbon a phrase and Porto none — they do not agree, so
+      // neither may be hoisted into a heading that would speak for both.
+      await _pump(tester, [], targetAmount: 2000, dailySpend: guide);
+      expect(find.text('Coffee, a casual lunch, dinner with wine.'),
+          findsOneWidget);
+    });
+
+    testWidgets('the section is absent when there is nothing to suggest',
+        (tester) async {
+      await _pump(tester, [_exp('e1', 'food', 'Lunch', 20)], targetAmount: 500);
+      expect(find.text('Daily food & drink'), findsNothing);
+    });
+
+    testWidgets('viewers and offline never see it', (tester) async {
+      await _pump(tester, [], targetAmount: 2000, dailySpend: guide,
+          canEdit: false);
+      expect(find.text('Daily food & drink'), findsNothing);
+
+      await _pump(tester, [], targetAmount: 2000, dailySpend: guide,
+          isOffline: true);
+      expect(find.text('Daily food & drink'), findsNothing);
+    });
+
+    testWidgets('the travelers stepper multiplies every city', (tester) async {
+      await _pump(tester, [], targetAmount: 2000, dailySpend: guide);
+
+      await tester.tap(find.byKey(const ValueKey('dailySpendTravelersAdd')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2 travelers'), findsOneWidget);
+      expect(find.text('\$400'), findsOneWidget); // 50 × 4 × 2
+      expect(find.text('\$270'), findsOneWidget); // 45 × 3 × 2
+
+      // It cannot go below one person.
+      await tester.tap(find.byKey(const ValueKey('dailySpendTravelersRemove')));
+      await tester.pumpAndSettle();
+      expect(find.text('1 traveler'), findsOneWidget);
+      final remove = tester.widget<IconButton>(
+          find.byKey(const ValueKey('dailySpendTravelersRemove')));
+      expect(remove.onPressed, isNull);
+    });
+
+    testWidgets('changing the tier re-asks at that level', (tester) async {
+      final fake =
+          await _pump(tester, [], targetAmount: 2000, dailySpend: guide);
+      expect(fake.dailySpendTiers, [null]); // let the server resolve it
+
+      await tester.tap(find.byKey(const ValueKey('dailySpendTier')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Splurge').last);
+      await tester.pumpAndSettle();
+
+      expect(fake.dailySpendTiers.last, 'luxury');
+    });
+
+    testWidgets('accepting one files a PLANNED food line for that leg',
+        (tester) async {
+      final fake =
+          await _pump(tester, [], targetAmount: 2000, dailySpend: guide);
+
+      await tester.tap(find.byKey(const ValueKey('dailySpendAdd_Lisbon')));
+      await tester.pumpAndSettle();
+
+      expect(fake.adds.single, {
+        'label': 'Food & drink · Lisbon',
+        'category': 'food',
+        'amount': 200.0,
+        'planned': true,
+        'leg_key': 'Lisbon',
+      });
+      // Planned, not paid: the money hasn't left yet, so "Total spent" must not
+      // move while "Total planned" does.
+      final filed = fake.expenses.single;
+      expect(filed.plannedFor, 200);
+      expect(filed.paidAmount, isNull);
+      expect(filed.auto, isFalse);
+      expect(find.text('Total planned'), findsOneWidget);
+    });
+
+    testWidgets('a city already in the plan shows the plan, not the button',
+        (tester) async {
+      final planned = Expense(
+        id: 'e1',
+        category: 'food',
+        label: 'Food & drink · Lisbon',
+        amount: 260,
+        plannedAmount: 260, // the traveler edited it up from 200
+        purchased: false,
+        legKey: 'Lisbon',
+      );
+      await _pump(tester, [planned], targetAmount: 2000, dailySpend: guide);
+
+      // THEIR number, not the suggestion's — the line is the traveler's from
+      // the moment it exists.
+      expect(find.byKey(const ValueKey('dailySpendInPlan_Lisbon')),
+          findsOneWidget);
+      expect(find.text('In your plan · \$260'), findsOneWidget);
+      expect(find.byKey(const ValueKey('dailySpendAdd_Lisbon')), findsNothing);
+      // The other city is untouched and still offers its button.
+      expect(find.byKey(const ValueKey('dailySpendAdd_Porto')), findsOneWidget);
+    });
+
+    testWidgets('accepting swaps the button for the filed plan', (tester) async {
+      final fake =
+          await _pump(tester, [], targetAmount: 2000, dailySpend: guide);
+
+      await tester.tap(find.byKey(const ValueKey('dailySpendAdd_Lisbon')));
+      await tester.pumpAndSettle();
+
+      // The section reconciles off the refetched expense list, so the row that
+      // was just filed can no longer offer to file it again. (The upsert that
+      // holds when a stale tab taps anyway is pinned server-side, in
+      // TestLegKeyedExpenseIsUpsertNotDuplicate.)
+      expect(find.byKey(const ValueKey('dailySpendAdd_Lisbon')), findsNothing);
+      expect(find.text('In your plan · \$200'), findsOneWidget);
+      expect(fake.addCount, 1);
+      // Porto is untouched by Lisbon's write.
+      expect(find.byKey(const ValueKey('dailySpendAdd_Porto')), findsOneWidget);
+    });
+
+    testWidgets('a food line with no leg key belongs to no city',
+        (tester) async {
+      // Matching on the LABEL would claim this row for Lisbon and hide the
+      // button; identity is the leg key the server stamped, nothing else.
+      final lookalike = _planned('e1', 'food', 'Food & drink · Lisbon', 260);
+      await _pump(tester, [lookalike], targetAmount: 2000, dailySpend: guide);
+
+      expect(find.byKey(const ValueKey('dailySpendAdd_Lisbon')), findsOneWidget);
+      expect(find.byKey(const ValueKey('dailySpendInPlan_Lisbon')), findsNothing);
+    });
+
+    testWidgets('fits a 360px phone in Spanish', (tester) async {
+      tester.view.physicalSize = const Size(360, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, [], targetAmount: 2000, dailySpend: guide,
+          locale: const Locale('es'));
+
+      expect(find.text('Comida y bebida al día'), findsOneWidget);
+      expect(find.text('Lisbon · 4 noches'), findsOneWidget);
+      expect(find.text('Añadir al plan'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
     });
   });
