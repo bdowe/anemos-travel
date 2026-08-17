@@ -498,7 +498,6 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
             isOffline: widget.isOffline,
             onAdd: _addDailySpend,
           ),
-          const SizedBox(height: AppSpacing.sm),
           _buildModeControl(theme),
           _buildAddRow(theme),
         ],
@@ -940,6 +939,15 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
   /// rather than reversing it — putting it back in the row would only make the
   /// row stack at wider and wider windows.
   ///
+  /// It carries a visible "Add as" label because the pick has **no immediate
+  /// on-screen consequence** — tapping it changes nothing but itself, and the
+  /// result only appears one action later, on the line you then add. An
+  /// unlabelled pill sitting between the daily-spend card and the add row was
+  /// read as belonging to the card, or as a filter over the list above, and so
+  /// as a control that did nothing. The label is what ties it to the row it
+  /// arms; the [AppSpacing.md] above and [AppSpacing.xs] below are the rest of
+  /// that tie.
+  ///
   /// The pick is read from the draft, so it survives the remount that changing
   /// header tab or opening the chat panel causes — a choice, like the category
   /// beside it.
@@ -948,33 +956,55 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
       final planned = ref
           .watch(expenseDraftProvider(widget.tripId).select((d) => d.planned));
       final l10n = context.l10n;
-      return Align(
-        alignment: Alignment.centerRight,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-          child: SegmentedButton<bool>(
-            showSelectedIcon: false,
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              textStyle: WidgetStatePropertyAll(theme.textTheme.labelMedium),
+      return Padding(
+        // The top gap lives here rather than in a sibling SizedBox because
+        // DailySpendSection collapses to nothing when offline or empty — a
+        // sibling would dangle above the add row in the common case.
+        padding:
+            const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.xs),
+        // Wrap, not Row: the label and the pill sit side by side when they
+        // fit and the pill drops to its own line when they don't, which is
+        // what Spanish does at 360px ("Añadir como" wants more than the
+        // leftover beside a two-segment pill). A Row would have to choose
+        // between ellipsizing the label and wrapping it mid-phrase, and both
+        // fail silently — the add row's hints already taught this file that
+        // "nothing threw" proves nothing. Wrap needs no measurement, so it is
+        // right in every language and at every text scale by construction.
+        child: Wrap(
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            Text(
+              l10n.budgetPlanAddAs,
+              style: theme.textTheme.labelMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
-            segments: [
-              ButtonSegment(
-                value: true,
-                label: Text(l10n.budgetPlanStatePlanned),
+            SegmentedButton<bool>(
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                textStyle: WidgetStatePropertyAll(theme.textTheme.labelMedium),
               ),
-              ButtonSegment(
-                value: false,
-                label: Text(l10n.budgetPlanStatePaid),
-              ),
-            ],
-            selected: {planned},
-            onSelectionChanged: widget.isOffline
-                ? null
-                : (picked) => ref
-                    .read(expenseDraftProvider(widget.tripId).notifier)
-                    .setPlanned(picked.first),
-          ),
+              segments: [
+                ButtonSegment(
+                  value: true,
+                  label: Text(l10n.budgetPlanStatePlanned),
+                ),
+                ButtonSegment(
+                  value: false,
+                  label: Text(l10n.budgetPlanStatePaid),
+                ),
+              ],
+              selected: {planned},
+              onSelectionChanged: widget.isOffline
+                  ? null
+                  : (picked) => ref
+                      .read(expenseDraftProvider(widget.tripId).notifier)
+                      .setPlanned(picked.first),
+            ),
+          ],
         ),
       );
     });

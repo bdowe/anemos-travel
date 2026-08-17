@@ -966,6 +966,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get budgetCategoryGeneral => 'General';
 
   @override
+  String get budgetPlanAddAs => 'Add as';
+
+  @override
   String get budgetPlanStatePlanned => 'Planned';
 
   @override

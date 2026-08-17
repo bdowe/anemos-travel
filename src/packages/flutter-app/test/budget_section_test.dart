@@ -1051,6 +1051,10 @@ void main() {
       final fake = await _pump(tester, [_exp('a', 'food', 'Lunch', 20)],
           targetAmount: 2000);
 
+      // The pick has no immediate on-screen effect, so the label is the only
+      // thing saying what the pill arms. Without it the control reads as dead.
+      expect(find.text('Add as'), findsOneWidget);
+
       await tester.enterText(find.byType(TextField).first, 'Museum pass');
       await tester.enterText(find.byType(TextField).last, '42');
       await tester.tap(find.byTooltip('Add expense'));
@@ -1098,6 +1102,9 @@ void main() {
       expect(find.byTooltip('Mark as paid'), findsNothing);
       expect(find.byTooltip('Mark as planned'), findsNothing);
       expect(find.byType(SegmentedButton<bool>), findsNothing);
+      // The label and the pill share one `canEdit` guard; assert both so they
+      // cannot drift into a label naming a control that isn't there.
+      expect(find.text('Add as'), findsNothing);
     });
 
     testWidgets('Spanish keeps Previsto for money and fits at 360px',
@@ -1113,7 +1120,12 @@ void main() {
       expect(find.text('Previsto'), findsOneWidget);
       expect(find.text('Pagado'), findsOneWidget);
       expect(find.text('Total previsto'), findsOneWidget);
-      expect(tester.takeException(), isNull);
+      // The widest form of the new label, on the narrowest phone. Asserted
+      // through expectHintsWhole rather than by finding it: the label shares
+      // its row with a natural-width pill, and "it is on screen and nothing
+      // threw" is exactly the vacuous check the add-row hints taught us to
+      // distrust — a Text that does not fit shrinks quietly instead.
+      expectHintsWhole(tester, ['Añadir como'], 'in the mode control at 360px');
     });
   });
 
