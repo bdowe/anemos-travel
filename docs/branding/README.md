@@ -20,10 +20,22 @@ lockup.svg as a plain `<img>`.
 splash): cardinal points recolored white/`#B2DFDB` (teal-100), gold
 intercardinals and the hub unchanged. It duplicates mark.svg's point geometry
 — a geometry change in one must be mirrored in the other (both headers say
-so). Plate policy after the splash redesign: the **splash floats the bare
-light mark** on the teal gradient — no white plate; **gradient app bars still
-plate the dark mark** on a light `BrandBadge` (see
-`lib/widgets/brand_logo.dart`).
+so).
+
+**Plate policy (v3): the rose always floats bare.** No plate is drawn anywhere
+in the app. The only question a surface asks is which cut it needs: neutral
+page surfaces and scrimmed imagery take the dark `mark`; the teal
+`brandGradient` fields — the splash **and the gradient app bar** — take
+`mark-light`, where the dark artwork would be teal-on-teal. v2 kept a white
+plate on gradient app bars; it was retired because that gradient does not
+change with theme, so the plate stayed white in dark mode and became the
+brightest object on the screen. The policy is stated in
+`lib/widgets/brand_logo.dart` — re-litigate it there.
+
+Two artifacts outside the app keep a baked-in plate on purpose: `web/og-card.png`
+(lands on arbitrary social backgrounds) and `web/icons/Icon-maskable-512.png`
+(the maskable spec requires an opaque field). The print packet's header keeps
+one too — see `print_view_handler.go`.
 
 ## Type
 

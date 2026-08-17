@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../constants/app_info.dart';
-import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 
 /// Anemos brand mark: an 8-point wind rose (άνεμος = wind) — teal cardinal
@@ -15,15 +14,22 @@ import '../theme/spacing.dart';
 /// - [BrandLogo.mark] — the rose icon only, for tight spots (nav rail,
 ///   landing hero).
 /// - [BrandLogo.markLight] — the reversed rose (white/teal-100 cardinals),
-///   for teal fields (the boot splash).
+///   for teal fields (the boot splash, the gradient app bar).
 ///
 /// The word itself is [BrandWordmark], not part of this class — see there.
 ///
-/// The dark artwork is teal + gold on a transparent background. It floats
-/// bare on page surfaces and scrimmed imagery (auth screen, nav rail, landing
-/// hero); on gradient app bars it still needs a light plate behind it — wrap
-/// in [BrandBadge] there. The splash field carries no plate: the bare
-/// [BrandLogo.markLight] floats directly on the teal gradient.
+/// **Plate policy, v3: the rose always floats bare.** No plate is drawn
+/// anywhere in the app; the only question a surface asks is which cut of the
+/// rose it needs. Page surfaces and scrimmed imagery (auth screen, nav rail,
+/// landing hero) take the dark [BrandLogo.mark]; the teal
+/// `AppColors.brandGradient` fields (the splash, the gradient app bar) take
+/// [BrandLogo.markLight], because the dark artwork is teal-on-teal there.
+///
+/// v2 kept a white `BrandBadge` plate on gradient app bars. v3 retired it: the
+/// gradient behind it never changes with theme, so the plate was white in dark
+/// mode too, where it was the brightest object on the screen — and the splash
+/// had already shown (PR #390) that the reversed rose reads on this exact
+/// gradient unaided. Re-litigate the policy here, not at a call site.
 class BrandLogo extends StatelessWidget {
   static const String _lockupAsset = 'assets/images/anemos_logo.png';
   static const String _markAsset = 'assets/images/anemos_mark.png';
@@ -48,8 +54,8 @@ class BrandLogo extends StatelessWidget {
         _isLockup = false,
         _isLight = false;
 
-  /// Reversed wind-rose mark (white/teal-100 cardinals) for teal fields,
-  /// rendered as a [size]×[size] square.
+  /// Reversed wind-rose mark (white/teal-100 cardinals) for teal fields — the
+  /// splash and the gradient app bar — rendered as a [size]×[size] square.
   const BrandLogo.markLight({super.key, double size = 28})
       : _asset = _markLightAsset,
         _height = size,
@@ -180,8 +186,9 @@ class BrandWordmark extends StatelessWidget {
 /// "A" monogram stand-in for the wind-rose mark when the image asset is
 /// unavailable. Fills the same [size]×[size] square the icon glyph did, so
 /// layout is identical either way. The dark form's black87 tile keeps it
-/// readable on any page surface; the [light] form inverts to a white tile
-/// with a dark glyph so it still reads on the splash's teal field.
+/// readable on any page surface; the [light] form is a bare white glyph — it
+/// stands on a teal field, where white reads unaided and a tile would be the
+/// plate the policy above retired.
 class _MonogramFallback extends StatelessWidget {
   final double size;
   final bool light;
@@ -193,10 +200,12 @@ class _MonogramFallback extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: light ? Colors.white.withValues(alpha: 0.92) : Colors.black87,
-        borderRadius: AppRadius.smAll,
-      ),
+      decoration: light
+          ? null
+          : const BoxDecoration(
+              color: Colors.black87,
+              borderRadius: AppRadius.smAll,
+            ),
       child: Text(
         'A',
         style: TextStyle(
@@ -204,7 +213,7 @@ class _MonogramFallback extends StatelessWidget {
           fontWeight: FontWeight.w600,
           fontSize: size * 0.42,
           height: 1,
-          color: light ? AppColors.brandDark : Colors.white,
+          color: Colors.white,
           letterSpacing: 0.5,
         ),
       ),
@@ -230,55 +239,6 @@ class _WordmarkFallback extends StatelessWidget {
           color: Colors.black87,
         ),
       ],
-    );
-  }
-}
-
-/// A light rounded surface that lets the teal/gold [BrandLogo] read on flat
-/// teal chrome (gradient app bars, the splash field).
-class BrandBadge extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final BorderRadius borderRadius;
-  final bool circle;
-  final VoidCallback? onTap;
-
-  const BrandBadge({
-    super.key,
-    required this.child,
-    this.padding = const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-    this.borderRadius = AppRadius.mdAll,
-    this.circle = false,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final badge = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        shape: circle ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: circle ? null : borderRadius,
-      ),
-      child: child,
-    );
-    if (onTap == null) return badge;
-    // The badge surface is opaque, so the ripple mostly hides behind it —
-    // the InkWell is here for the tap target, web pointer cursor, and focus
-    // handling rather than the splash.
-    return Semantics(
-      button: true,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: circle ? const CircleBorder() : null,
-          borderRadius: circle ? null : borderRadius,
-          child: badge,
-        ),
-      ),
     );
   }
 }

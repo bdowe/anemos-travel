@@ -18,7 +18,7 @@ import 'support/l10n_test_app.dart';
 
 /// Home polish regressions (UI polish wave 2, PR 9):
 /// - the app bar's brand ladder: the wordmark is always on screen, and it is
-///   the plated MARK that yields when the title slot narrows (the priority
+///   the MARK that yields when the title slot narrows (the priority
 ///   used to be the other way round, back when only Home carried the brand);
 /// - the compact plan strip's tagline wraps to two lines instead of
 ///   truncating ("Plan less. Trav…").
@@ -113,7 +113,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets(
-      'narrow app bar fits the short wordmark next to the badge — '
+      'narrow app bar fits the short wordmark next to the mark — '
       'no ellipsis', (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(360, 690));
 
@@ -141,7 +141,7 @@ void main() {
     expect(find.byType(BrandLogo), findsNothing);
   });
 
-  testWidgets('mid width (no rail) keeps badge and wordmark together',
+  testWidgets('mid width (no rail) keeps mark and wordmark together',
       (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(700, 800));
 
@@ -160,7 +160,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  // Logo-links-home for the WORDMARK, not just the plated mark: at rail
+  // Logo-links-home for the WORDMARK, not just the mark: at rail
   // widths the wordmark is the only brand in the app bar, and it used to be
   // inert (no InkWell at all). These two pin the goHome WIRING at the widths
   // that render each shape — in the real shell Home's app bar only ever shows
@@ -186,7 +186,7 @@ void main() {
     expect(container.read(navIndexProvider), AppTab.home.index);
   });
 
-  testWidgets('mid width: the wordmark beside the badge is the same target',
+  testWidgets('mid width: the wordmark beside the mark is the same target',
       (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(700, 800));
 
@@ -194,7 +194,7 @@ void main() {
         ProviderScope.containerOf(tester.element(find.byType(HomeScreen)));
     container.read(navIndexProvider.notifier).state = AppTab.plan.index;
 
-    // The wordmark text, NOT the badge — the half of the lockup that used to
+    // The wordmark text, NOT the mark — the half of the lockup that used to
     // be dead space.
     await tester.tap(find.text(AppInfo.name));
     await tester.pump();
@@ -202,12 +202,12 @@ void main() {
     expect(container.read(navIndexProvider), AppTab.home.index);
   });
 
-  testWidgets('the lockup is ONE tap target, not a badge nested in a target',
+  testWidgets('the lockup is ONE tap target, not a mark nested in a target',
       (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(700, 800));
 
-    // Mutation pin against re-adding BrandBadge's own onTap: a second,
-    // nested InkWell would hit-test and ripple twice over the same brand.
+    // Mutation pin against giving the mark its own onTap: a second, nested
+    // InkWell would hit-test and ripple twice over the same brand.
     expect(
       find.ancestor(of: find.byType(BrandLogo), matching: find.byType(InkWell)),
       findsOneWidget,
