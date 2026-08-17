@@ -134,7 +134,15 @@ func TestLegRunsAndMatching(t *testing.T) {
 
 // legsRenderSummary is the model-facing render truth: first-leg anchor,
 // arrival rule, and the zero-night collapse for an inverted leg all flow
-// through, one line per dated leg.
+// through, one line per dated leg — each now carrying its NIGHT COUNT and how
+// its span was decided (specs/shape-before-schedule). A spine dates a city from
+// two rows, so "2026-09-02 to 2026-09-02" beside a neighbour's real range is
+// something the model has to be TOLD is zero nights rather than left to work
+// out from the dates.
+//
+// Berlin lands zero-night here and raises no warning on purpose: it renders
+// LAST, and the last leg legitimately ends on the day the traveler flies home.
+// TestLegsRenderWarning covers the case that does warn.
 func TestLegsRenderSummary(t *testing.T) {
 	items := []store.ItineraryItem{
 		legItem(0, "Prague", "", 4),  // first leg, anchored to trip start
@@ -142,9 +150,9 @@ func TestLegsRenderSummary(t *testing.T) {
 		legItem(2, "Berlin", "", 9),  // Sep 1 — INVERTED, collapses to Sep 2
 	}
 	got := legsRenderSummary(rlTrip("2026-08-24", ""), items, nil)
-	want := "- Prague: 2026-08-24 to 2026-08-27\n" +
-		"- Kraków: 2026-08-27 to 2026-09-02\n" +
-		"- Berlin: 2026-09-02 to 2026-09-02\n"
+	want := "- Prague: 2026-08-24 to 2026-08-27 (3 nights, dated by its places)\n" +
+		"- Kraków: 2026-08-27 to 2026-09-02 (6 nights, dated by its places)\n" +
+		"- Berlin: 2026-09-02 to 2026-09-02 (0 nights, dated by its places)\n"
 	if got != want {
 		t.Fatalf("legsRenderSummary =\n%s\nwant\n%s", got, want)
 	}
@@ -846,7 +854,10 @@ func TestPlanSetLegDatesFreshChatNextTurnLineage(t *testing.T) {
 	// The fake keys turn selection off tool_result count, so a second /plan
 	// request would replay turn 0 — script each request with its own fake.
 	newFakeAnthropic(t,
-		toolTurn("create_itinerary", `{"title":"Greek Hop","start_date":"2026-06-01","locations":[{"name":"Acropolis","latitude":37.97,"longitude":23.72,"day":1,"city":"Athens"},{"name":"Oia","latitude":36.46,"longitude":25.37,"day":2,"city":"Santorini"},{"name":"Red Beach","latitude":36.35,"longitude":25.39,"day":3,"city":"Santorini"}]}`),
+		// Explicit end_date: create_itinerary now refuses a one-sided date pair
+		// (plan_spine.go). 2026-06-03 is what the old day-span derivation gave
+		// this itinerary, so the leg day numbers asserted below are unchanged.
+		toolTurn("create_itinerary", `{"title":"Greek Hop","start_date":"2026-06-01","end_date":"2026-06-03","locations":[{"name":"Acropolis","latitude":37.97,"longitude":23.72,"day":1,"city":"Athens"},{"name":"Oia","latitude":36.46,"longitude":25.37,"day":2,"city":"Santorini"},{"name":"Red Beach","latitude":36.35,"longitude":25.39,"day":3,"city":"Santorini"}]}`),
 		textTurn("Saved!"))
 
 	user, token := createTestUser(t, "leglineage@example.com")
@@ -905,5 +916,49 @@ func TestPlanSetLegDatesFreshChatNextTurnLineage(t *testing.T) {
 	}
 	if trips != 1 {
 		t.Fatalf("trips = %d, want 1 (set_leg_dates must never create a version)", trips)
+	}
+}
+
+// The two ways a spine's dates go wrong, named ABOVE the leg list so the model
+// meets them before the ranges they describe.
+func TestLegsRenderWarning(t *testing.T) {
+	// Arrival anchors only: Lisbon renders zero nights and Porto absorbs them.
+	// Lisbon is NOT the last leg, so this must warn.
+	collapsed := legsRenderSummary(rlTrip("2026-09-01", "2026-09-08"), []store.ItineraryItem{
+		rlItem(0, "Time Out Market", rlCity("Lisbon"), 1),
+		rlItem(1, "Livraria Lello", rlCity("Porto"), 4),
+	}, nil)
+	if !strings.HasPrefix(collapsed, "WARNING") {
+		t.Fatalf("a zero-night interior leg did not lead with a warning:\n%s", collapsed)
+	}
+	for _, want := range []string{"Lisbon renders ZERO nights", "the next city has absorbed those nights", "set_leg_dates"} {
+		if !strings.Contains(collapsed, want) {
+			t.Fatalf("warning missing %q:\n%s", want, collapsed)
+		}
+	}
+
+	// Undated places: the span is the weighted split of the trip, not a choice.
+	guessed := legsRenderSummary(rlTrip("2026-06-01", "2026-06-08"), []store.ItineraryItem{
+		rlItem(0, "Louvre", rlCity("Paris"), 0),
+		rlItem(1, "Colosseum", rlCity("Rome"), 0),
+	}, nil)
+	if !strings.Contains(guessed, "its range is a guess") {
+		t.Fatalf("an auto-dated leg did not warn:\n%s", guessed)
+	}
+	if !strings.Contains(guessed, "dates GUESSED") {
+		t.Fatalf("an auto-dated leg's line did not state its provenance:\n%s", guessed)
+	}
+
+	// A healthy spine says nothing extra — the warning must not become noise
+	// every itinerary write carries.
+	clean := legsRenderSummary(rlTrip("2026-09-01", "2026-09-08"), []store.ItineraryItem{
+		rlItem(0, "Time Out Market", rlCity("Lisbon"), 1),
+		rlItem(1, "Pastéis de Belém", rlCity("Lisbon"), 4),
+		rlItem(2, "Livraria Lello", rlCity("Porto"), 4),
+		rlItem(3, "Cais da Ribeira", rlCity("Porto"), 6),
+		rlItem(4, "Museo del Prado", rlCity("Madrid"), 6),
+	}, nil)
+	if strings.Contains(clean, "WARNING") {
+		t.Fatalf("a well-formed spine warned:\n%s", clean)
 	}
 }

@@ -68,7 +68,28 @@ typedef CityGroup = ({
   String label,
   String? qualifier,
   LegDateChip? dateRange,
-  List<ItineraryItem> items
+  List<ItineraryItem> items,
+
+  /// Trip-day numbers inside this leg's rendered span that carry no visible
+  /// item — the days a spine itinerary deliberately leaves for the traveler to
+  /// fill later (specs/shape-before-schedule). Ascending, and disjoint from the
+  /// days this group draws headers for: both come from one planned-day set in
+  /// [TripDerivation.compute], so they cannot disagree.
+  ///
+  /// Built from the VISIBLE range — the span the header chip promises, and the
+  /// rule that anything speaking about the dates on screen derives from the
+  /// dates on screen — minus the two days that span knowingly borrows:
+  ///
+  ///  - the ARRIVAL day, when the previous leg's visible end is the same date.
+  ///    That day belongs to the city being left (it is that leg's departure),
+  ///    and counting it here would draw the same calendar day as unplanned
+  ///    under two cities at once.
+  ///  - the trip's FINAL day, the journey home, which the server also drops
+  ///    outright (walkDayCoverage: "there is nothing to plan on it").
+  ///
+  /// Empty for a leg whose items carry no day numbers at all: that leg renders
+  /// flat, with no day headers, so it has no gaps to point at.
+  List<int> emptyDays,
 });
 
 /// One city's embedded booking rows: the flight that arrives at the city, its
@@ -524,7 +545,50 @@ class TripDerivation {
     // here (all follow the one tripLegs order).
     final legChips = mapLegChipEntries(l10n, legs, visibleRanges);
 
-    // Groups mirror [legs] one-to-one, index-aligned throughout.
+    // Day numbers each leg RENDERS a row for: the screen's own rule from
+    // _buildGroupItemSlivers — items carrying a day tag, city fillers dropped
+    // (their tile is suppressed, so a filler-only day is blank on screen, and
+    // the server's walkDayCoverage discounts them for the same reason). ONE set
+    // per leg, feeding both the empty-day lists below and [liveDayKeys], so the
+    // two can never disagree about which days are planned.
+    final plannedDays = [
+      for (final leg in legs)
+        <int>{
+          for (final it in leg.items)
+            if (!isCityFiller(it) && it.day != null) it.day!,
+        },
+    ];
+
+    // The gaps: every trip day inside a leg's rendered span that plans nothing.
+    // See [CityGroup.emptyDays] for why the arrival day and the trip's last day
+    // are excluded rather than counted.
+    final tripLastDay = tripDayOn(trip.startDate, trip.endDate,
+        DateTime.tryParse(trip.endDate ?? '') ?? DateTime(1900));
+    final emptyDays = <List<int>>[];
+    for (var gi = 0; gi < legs.length; gi++) {
+      final start = visibleRanges[gi].start;
+      final end = visibleRanges[gi].end;
+      if (plannedDays[gi].isEmpty || start == null || end == null) {
+        emptyDays.add(const <int>[]);
+        continue;
+      }
+      final borrowedArrival = gi > 0 && visibleRanges[gi - 1].end == start;
+      final days = <int>[];
+      for (var d = DateTime(start.year, start.month, start.day);
+          !d.isAfter(end);
+          d = DateTime(d.year, d.month, d.day + 1)) {
+        if (borrowedArrival && d == start) continue;
+        final n = tripDayOn(trip.startDate, trip.endDate, d);
+        if (n == null || n == tripLastDay || plannedDays[gi].contains(n)) {
+          continue;
+        }
+        days.add(n);
+      }
+      emptyDays.add(days);
+    }
+
+    // Groups mirror [legs] one-to-one; chips key by first item position into
+    // the full-itinerary map above.
     final groups = <CityGroup>[
       for (var i = 0; i < legs.length; i++)
         (
@@ -533,6 +597,7 @@ class TripDerivation {
           qualifier: legChips[i].qualifier,
           dateRange: legDates[i],
           items: legs[i].items,
+          emptyDays: emptyDays[i],
         ),
     ];
 
@@ -571,10 +636,16 @@ class TripDerivation {
 
     // Mirrors the screen's `_buildGroupItemSlivers` day-header rule:
     // non-filler items carrying a day tag.
+    // Every day key a group RENDERS a row for — the planned days, plus the
+    // empty-day placeholders. Day-jump has to be able to land on a day whose
+    // whole point is that nothing is planned on it: under a spine, "today" in
+    // the middle of a stay usually IS one of these, and without them the Today
+    // chip quietly resolves to the nearest planned day instead.
     final liveDayKeys = <String>{
-      for (final g in groups)
-        for (final it in g.items)
-          if (!isCityFiller(it) && it.day != null) '${g.key}#${it.day}',
+      for (var i = 0; i < groups.length; i++) ...{
+        for (final d in plannedDays[i]) '${groups[i].key}#$d',
+        for (final d in groups[i].emptyDays) '${groups[i].key}#$d',
+      },
     };
 
     final geoStays = [

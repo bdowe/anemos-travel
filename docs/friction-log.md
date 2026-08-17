@@ -5,6 +5,120 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-15 — it planned the whole trip before anyone said yes
+
+- **[app] Friction:** Brian — *"when planning a trip, sometimes it pulls the list
+  of activities to do without confirming with me or asking. I feel like I just
+  want to get the high level structure of the trip done first, then figure out
+  the details of each day in the city later."* Two complaints in one sentence:
+  no confirmation, and the wrong altitude.
+- **[app] Both were literally in the prompt.** The trigger sentence read *"When
+  you have gathered **enough** places for the user's trip, call create_itinerary
+  to finalize the plan"* — the decision to write was the model's own, and the
+  criterion was its own sense of sufficiency. `create_itinerary`'s description
+  said it again: *"call this when you have identified **all** the places."* The
+  only pacing line in ~9 KB of doctrine was the closer, *"ask clarifying
+  questions **if needed** before **searching**"* — hedged, and about searching,
+  not writing. Grep found no "structure", "outline", "high-level" or "draft"
+  anywhere in the agent's instructions: **a trip's shape was not a concept the
+  planner had.**
+- **[app] The app already believed in confirming; the place where trips are born
+  never got told.** Every seeded prompt the trip page hands the agent gates on
+  the traveler — *"when I confirm a plan, call update_itinerary_section"*
+  (`seedPlanItineraryEmpty`), *"propose where everything fits… and when I
+  confirm"* (`seedScheduleItems`). Those are client-seeded user messages.
+  `basePrompt`, which governs a fresh chat, had no such sentence. Same shape as
+  the last-day bug two days earlier: the app held the belief, only the writer
+  was missing.
+- **[app] "Structure with no activities" turned out not to be representable, and
+  that decided the design.** A trip's cities are a projection of its activity
+  items — `computeTripLegs` opens `if len(items) == 0 { return nil }` and the
+  Dart twin does the same — so a cities-and-dates-only trip renders a blank
+  page: no cities, no date chips, no map, Bookings tab hidden, chat FAB hidden.
+  A **sparse** itinerary renders perfectly, so the shape ships as a *spine*: one
+  place on each city's arrival day and one on the day you move on, middles
+  empty. **2N − 1 places for N cities**, and stating it as arithmetic is what
+  makes it checkable rather than a habit.
+- **[app] The move-on place and the arrival place do different jobs, and only one
+  of them is about dates.** A city's last item day IS its departure date, and
+  that same date IS the next city's arrival — so a city with nothing on the day
+  you leave renders as though you left the day you arrived, and the next city
+  swallows its nights. The arrival place is redundant for the dates *except on
+  the last city*, which has no move-on day: without it that city has zero items,
+  and a city with zero items is not a run at all — it vanishes from the trip.
+  Both are pinned, including a characterization test on each side that asserts
+  the WRONG output for arrival-anchors-only.
+- **[app] The missing move-on place then closes the hotel slot, silently.**
+  `bookingSlotClaimed` routes a fully-dated stay to `stayNightsCovered`, which
+  is *documented* as **"vacuously true when from >= to"** — so a zero-night leg's
+  stay counts as Closed with the checkbox visibly unchecked, and Next Step stops
+  asking you to book that city, while `checkLodging` (which walks item days, not
+  leg ranges) goes on warning that there is no lodging. Two systems, opposite
+  answers about the same city. Nothing rendered a "0 nights" label either, and
+  `RenderLeg.ZeroNight` had ridden the payload since the leg-dates work **with no
+  consumer anywhere**. It has one now.
+- **[app] `end_date` quietly stopped being optional.** `persistTrip` derives a
+  missing end from the highest item day. On a dense itinerary that was the real
+  last day; on a spine it is the FINAL city's *arrival*, so a 10-day trip saves
+  as a 7-day one and a one-city spine saves as a **one-day trip** — and because
+  the trip then genuinely ends early, the last-leg anchor has nothing left to
+  correct against. Now refused outright, before anything persists.
+- **[dev] Refuse the mechanical, report the judgement — and scope each rule to
+  the failure it actually prevents.** Three refusals ship (one-sided dates, an
+  undated place on a dated trip, a MIX of tagged and untagged places). A city
+  whose places sit on one day is deliberately NOT refused: it is usually a
+  missing move-on place and sometimes a genuine same-day stop, and no payload
+  can tell them apart. The blanket version would have been draft two of the
+  last-day rule, which banned museums on a departure day and was rightly
+  disobeyed. Likewise the "no tools in pass 1" ban is on **place research**,
+  named tool by tool — `check_flight_connectivity` before naming a city the
+  traveler didn't ask for is already mandatory two paragraphs later, and an
+  unscoped ban would have contradicted it.
+- **[dev] Reusing `walkDayCoverage` was load-bearing, not tidy.** The tool result
+  now names the days that carry nothing. Built from that function, the
+  **journey-home day is structurally incapable of appearing** — it already drops
+  the trip's last day ("there is nothing to plan on it") and already ignores city
+  fillers. A hand-rolled `1..tripDayCount` loop would list it and the model would
+  offer to fill the day you fly home: the bug fixed two days earlier, reopened
+  from the other side. Mutation-checked by removing the `cov.Total--` and
+  watching "days 7-8" appear.
+- **[dev] For the empty-day rows, both obvious windows were wrong.** Visible
+  ranges draw the previous city's departure day as unplanned under *two* cities
+  and offer the journey home; raw ranges silently miss a day genuinely inside the
+  stay the header advertises. The rule that works is **visible, minus the shared
+  arrival day and minus the trip's last day** — the two days a visible window
+  knowingly borrows. The existing Paris→Rome fixture is what caught both.
+- **[dev] An empty day is not a section.** `spliceSection` rejects a selector
+  that matches nothing, so `scope='day'` cannot fill a day with no items — which
+  is exactly what "Plan this day" asks for. So the placeholder does NOT share the
+  day sparkle's action: the sparkle refines a populated day, the placeholder
+  fills an empty one with a city-scoped rewrite. The miss error also gained the
+  remediation it never had, so a model that tries the wrong scope is told the
+  call that works instead of improvising.
+- **[dev] A seed that carries an instruction may apply it; a seed that carries
+  only a gap must propose first.** Worth writing down because
+  `_buildSectionSeed` gets this right for a refine and wrong for an empty trip —
+  with zero items it emitted "The full itinerary:" followed by nothing, then
+  "keeping unchanged places exactly as listed above", then "Start by asking what
+  I want to change". An agent politely asking what to change about nothing.
+- **[dev] "Refine with AI" on an itemless trip was a button that refused.** It
+  was visible, enabled, and only ever fired the snack *"Add some places before
+  refining with AI."* — while the Next Step card had already routed around that
+  guard on purpose. The two entry points were never wrong; the callee was, so
+  fixing the callee fixed both doors at once. The copy is deleted with its only
+  caller.
+- **[dev] What the tests can and cannot prove, said out loud in the file.** The
+  fake Anthropic *scripts* the model's turns, so no test here shows the model
+  withholding `create_itinerary` on turn 1. What is pinned is the server contract
+  a shape turn depends on — chips, zero `done` events, zero trips, chat still
+  resumable — plus the prompt sentences as text. **Model restraint is a live-run
+  item**, exactly as it was for the last-day rule, whose first draft passed
+  review and then produced prose contradicting its own tool call.
+- **[dev] `auth_autofill_submit_test.dart` is a coin flip on a loaded machine** —
+  two of three isolated runs failed here, untouched by this change. The log
+  already predicted it: *"a timing test whose failure mode is 'the machine got
+  busier' fails for whoever adds the next test file."* This was that file.
+
 ## 2026-08-17 — The Bookings filter cost more screen than the bookings
 
 - **[app] Friction → fixed:** *"Should these big buttons for each city be a

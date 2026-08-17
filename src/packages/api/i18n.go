@@ -252,6 +252,8 @@ var messages = map[string]map[string]string{
 	"review.confirmBooking":       {"en": "Confirm your booking for %s.", "es": "Confirma tu reserva de %s."},
 	"review.emptyDay":             {"en": "Day %d has nothing planned.", "es": "El día %d no tiene nada planificado."},
 	"review.emptyDayRange":        {"en": "Days %d–%d have nothing planned.", "es": "Los días %d–%d no tienen nada planificado."},
+	"review.legGuessedDates":      {"en": "%s has no place assigned to a day, so its dates are a guess.", "es": "%s no tiene ningún lugar asignado a un día, así que sus fechas son una estimación."},
+	"review.legNoNights":          {"en": "%s shows no nights — you arrive and leave on the same day.", "es": "%s no muestra noches — llegas y te vas el mismo día."},
 	"review.fix.addBus":           {"en": "Add bus", "es": "Añadir autobús"},
 	"review.fix.addDrive":         {"en": "Add drive", "es": "Añadir trayecto en coche"},
 	"review.fix.addFerry":         {"en": "Add ferry", "es": "Añadir ferri"},

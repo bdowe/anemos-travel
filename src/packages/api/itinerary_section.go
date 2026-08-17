@@ -47,7 +47,7 @@ var itineraryLocationSchema = map[string]any{
 		},
 		"day": map[string]any{
 			"type":        "integer",
-			"description": "The trip day this place belongs to, starting at 1 and increasing chronologically across the whole trip; all places on the same day share the same number (e.g. days 1–3 in Paris, then day 4 onward in Rome). Combined with time_of_day this makes each day read as a sequential schedule. A city's LAST day is the day the traveler leaves it, so it holds at most one easy nearby place — and the trip's final day, the journey home, usually holds none at all unless you know they travel late.",
+			"description": "The trip day this place belongs to, starting at 1 and increasing chronologically across the whole trip; all places on the same day share the same number (e.g. days 1–3 in Paris, then day 4 onward in Rome). Combined with time_of_day this makes each day read as a sequential schedule. A city's LAST day is the day the traveler leaves it, so it holds at most one easy nearby place — and the trip's final day, the journey home, usually holds none at all unless you know they travel late. Days carrying nothing at all are legitimate: a spine leaves the middle of every stay empty until the traveler asks for that city. But a city's FIRST and LAST days must each carry a place, because those two days are what date the city. The day the traveler moves between cities carries the SAME day number in both — the easy place in the city they leave (time_of_day 'morning') and the arrival place in the city they reach ('afternoon' or 'evening'), never both in the same part of the day.",
 		},
 		"local_source_name": map[string]any{
 			"type":        "string",
@@ -257,7 +257,13 @@ func spliceSection(existing []store.ItineraryItem, sel sectionSelector, newLocs 
 		out = append(out, locationFromItem(it))
 	}
 	if insertAt == -1 {
-		return nil, fmt.Errorf("no itinerary items matched %s; the trip has %s", describeSelector(sel), describeSections(existing))
+		// Self-correcting, because the commonest way to land here is now a
+		// legitimate request: a spine leaves the middle of every stay empty, and
+		// an empty day has no items for a 'day' selector to match. A section is
+		// a slice of items that EXIST — it cannot be conjured — so filling an
+		// empty day is a city-scoped rewrite. Say that, rather than leaving the
+		// model to improvise against a bare rejection.
+		return nil, fmt.Errorf("no itinerary items matched %s; the trip has %s. A day with nothing on it yet is not a section — scope 'day' can only replace items that already exist. To add places to an empty day, use scope 'city' with that city's COMPLETE list: its existing places, unchanged, plus the new ones tagged with the day you are filling", describeSelector(sel), describeSections(existing))
 	}
 	// Every submitted place must already belong to the targeted section. Items
 	// outside it survive in `out`, so splicing them in from newLocs as well

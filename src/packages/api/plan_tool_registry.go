@@ -280,7 +280,7 @@ var findParkingTool = anthropic.ToolParam{
 
 var createItineraryTool = anthropic.ToolParam{
 	Name:        "create_itinerary",
-	Description: anthropic.String("Finalize the itinerary with the chosen list of locations to visit. Call this when you have identified all the places for the trip."),
+	Description: anthropic.String("Save the trip's itinerary. Call this ONLY after the traveler has agreed to the trip's shape — which cities, how many nights in each, the dates. Their agreement is the gate, not how many places you have found. The first save is normally a SPINE: every city with one place on the day they arrive and one easy place on the day they move on, and the days in between deliberately empty. A spine is a complete, valid itinerary — its empty days are the plan, not a gap to fill in before saving. Every city must carry a place on the day the traveler moves on from it, because that day is what sets the city's departure date; the last city is the exception and carries only its arrival, since the day you leave it is the journey home. Calling this again later saves a NEW VERSION of the whole trip, so always send the COMPLETE list of places for every city, never just the part you changed."),
 	InputSchema: anthropic.ToolInputSchemaParam{
 		Properties: map[string]any{
 			"locations": map[string]any{
@@ -298,11 +298,11 @@ var createItineraryTool = anthropic.ToolParam{
 			},
 			"start_date": map[string]any{
 				"type":        "string",
-				"description": "The trip's first day as YYYY-MM-DD (day 1). Include it whenever the traveler has given or agreed to travel dates.",
+				"description": "The trip's first day as YYYY-MM-DD (day 1). Include it whenever the traveler has given or agreed to travel dates — which, since their agreement to the shape is what authorizes this call, is essentially every time.",
 			},
 			"end_date": map[string]any{
 				"type":        "string",
-				"description": "The trip's last day as YYYY-MM-DD. Optional — if omitted it's derived from start_date plus the number of days in the itinerary.",
+				"description": "The trip's last day as YYYY-MM-DD. Always send it alongside start_date. If omitted it is derived from start_date plus the itinerary's own day count, which a spine gets WRONG: a spine's highest day number is the FINAL city's ARRIVAL day, not the day the traveler comes home, so the trip would be saved days short and its last city would render too few nights.",
 			},
 		},
 		Required: []string{"locations"},
@@ -693,6 +693,16 @@ func runCreateItineraryTool(s *planSession, input json.RawMessage) (string, bool
 	}
 	json.Unmarshal(input, &in)
 
+	// Refuse the mechanical mistakes BEFORE anything is written or streamed
+	// (plan_spine.go): nothing persists, no `done` event fires, and the model
+	// retries against an unchanged trip. A spine rests each city's dates on two
+	// rows, so a missing end date or an undated place is a wrong date on the
+	// traveler's page rather than a cosmetic gap — docs/zen.md's "contracts the
+	// model consumes must make wrong guesses fail loudly".
+	if refusal := itineraryWriteRefusal(in.StartDate, in.EndDate, in.Locations); refusal != "" {
+		return refusal, true
+	}
+
 	// Distance-optimize the walking order within each day/time-of-day
 	// block, leaving Claude's day and time-of-day assignments intact.
 	in.Locations = reorderItineraryByDistance(in.Locations)
@@ -739,11 +749,19 @@ func runCreateItineraryTool(s *planSession, input json.RawMessage) (string, bool
 	// without the echo the model cannot tell that a city whose last day is
 	// empty still renders through the trip's end date, and would "fix" a range
 	// that was never wrong.
+	//
+	// It now guards a second class too. A spine's middle days are empty BY
+	// AGREEMENT, so the echo has to say which days those are — otherwise the
+	// model's only honest options are to claim the trip is planned (which the
+	// traveler falsifies the moment they open the page) or to quietly fill them
+	// back in. Order matters: legs, then the open days, then the mechanics
+	// paragraph — so the open-days sentence sits inside the same
+	// don't-"fix"-this blast radius the leg ranges already had.
 	result := "Itinerary created successfully."
 	if s.tripID != nil {
-		legs, transport := tripLegsRender(s, *s.tripID)
+		legs, transport, open := tripPostStateRender(s, *s.tripID)
 		if legs != "" {
-			result += " The page now renders these city legs:\n" + legs +
+			result += " The page now renders these city legs:\n" + legs + open +
 				"Each leg renders from the previous city's departure through its own last day, and the final city through the trip's end date — so leaving the day home empty does not shorten it. If a range is wrong, use set_leg_dates (one city) or set_trip_dates (the whole trip) with calendar dates, never recomputed day numbers."
 		}
 		result += transportEchoText(transport)
@@ -762,6 +780,17 @@ func runUpdateItinerarySectionTool(s *planSession, input json.RawMessage) (strin
 
 	if s.boundTripID == nil {
 		return "This session is not bound to a saved trip; update_itinerary_section is unavailable.", true
+	}
+	// An empty list is a DELETE wearing the clothes of an edit, and nothing
+	// downstream treats it as one: the splice removes the section's items,
+	// inserts nothing, and commits. On scope 'trip' that wipes the itinerary;
+	// on scope 'city' it erases the city — and with it the two dated places a
+	// spine hangs that city's calendar span on, which silently re-chains every
+	// leg after it. `items` is also nil when the key is simply absent, so a
+	// truncated tool call lands here too. Errors should never pass silently
+	// (docs/zen.md).
+	if len(in.Items) == 0 {
+		return "items came back empty, so this call would DELETE that section rather than update it — and on a city that also removes the places its dates are derived from, which shifts every later city's dates. Send the section's COMPLETE list of places. If the traveler really does want a city dropped from the trip, use scope 'trip' with the complete itinerary minus that city, so the remaining dates are ones you chose rather than ones that fell out.", true
 	}
 	// Same in-block walking-distance cleanup create_itinerary gets.
 	in.Items = reorderItineraryByDistance(in.Items)
@@ -790,9 +819,9 @@ func runUpdateItinerarySectionTool(s *planSession, input json.RawMessage) (strin
 	// same tool result. Best-effort: any read error degrades to the plain
 	// confirmation rather than failing a write that already committed.
 	result := "Section updated — the traveler's trip page has refreshed."
-	legs, transport := tripLegsRender(s, *s.boundTripID)
+	legs, transport, open := tripPostStateRender(s, *s.boundTripID)
 	if legs != "" {
-		result += " The page now renders these city legs:\n" + legs +
+		result += " The page now renders these city legs:\n" + legs + open +
 			"A city's LAST item day is its departure day; each leg renders from the previous city's departure through its own last day, and the FINAL city through the trip's end date — so leaving the day home empty does not shorten it. If these ranges don't match what the traveler asked for, do NOT resend the list with recomputed day numbers — use set_leg_dates (one city's dates) or set_trip_dates (the whole trip) with calendar dates."
 	}
 	result += transportEchoText(transport)
@@ -811,25 +840,32 @@ func transportEchoText(transport string) string {
 		"These are the checklist rows the traveler sees, and each one's booking link follows its mode. If one is wrong for how they should actually travel — a sea crossing, an overnight train, a drive — call set_leg_transport_mode for that leg instead of describing a different mode in your reply."
 }
 
-// tripLegsRender re-reads a trip an itinerary write just committed and returns
-// legsRenderSummary for it, plus legTransportSummary — how the traveler gets
-// between those legs. Both are "" when the trip has no start date, no dated
-// legs, or any read fails (the write already committed; visibility is
-// best-effort). Shared by create_itinerary and update_itinerary_section so both
-// writers echo the same post-state.
-func tripLegsRender(s *planSession, tripID uuid.UUID) (legs string, transport string) {
+// tripPostStateRender re-reads a trip an itinerary write just committed and
+// returns the model-facing post-state in three parts: the rendered city legs,
+// how the traveler gets BETWEEN those legs, and the plannable days that carry
+// nothing yet. All "" when the trip has no start date, no dated legs, or any
+// read fails (the write already committed; visibility is best-effort). Shared
+// by create_itinerary and update_itinerary_section so both writers echo the
+// same post-state.
+//
+// A segments read failure suppresses the OPEN-DAYS part alone and keeps the
+// legs and transport. walkDayCoverage counts a day covered by a real transport
+// segment as planned, so without the segments a travel day looks empty — and
+// naming it would have the model offer to fill a day the traveler spends on a
+// plane. Better to say nothing than to say it wrong.
+func tripPostStateRender(s *planSession, tripID uuid.UUID) (legs, transport, open string) {
 	q := store.New(dbPool)
 	trip, err := q.GetEditableTripByID(s.ctx, store.GetEditableTripByIDParams{ID: tripID, UserID: s.uid})
 	if err != nil || !trip.StartDate.Valid {
-		return "", ""
+		return "", "", ""
 	}
 	items, err := q.GetItineraryItemsByTrip(s.ctx, tripID)
 	if err != nil {
-		return "", ""
+		return "", "", ""
 	}
 	stays, err := q.ListAccommodationsByTrip(s.ctx, tripID)
 	if err != nil {
-		return "", ""
+		return "", "", ""
 	}
 	// A chosen mode outranks the derivation, so the echo has to read the
 	// checklist back rather than re-derive from scratch — otherwise the result
@@ -838,7 +874,14 @@ func tripLegsRender(s *planSession, tripID uuid.UUID) (legs string, transport st
 	if todos, err := q.ListBookingTodosByTrip(s.ctx, tripID); err == nil {
 		overrides = legModeOverrides(todos)
 	}
-	return legsRenderSummary(trip, items, stays), legTransportSummary(trip, items, stays, overrides)
+	legs = legsRenderSummary(trip, items, stays)
+	transport = legTransportSummary(trip, items, stays, overrides)
+	segs, err := q.ListSegmentsByTrip(s.ctx, tripID)
+	if err != nil {
+		return legs, transport, ""
+	}
+	return legs, transport,
+		openDaysSummary(exportData{Trip: trip, Items: items, Accommodations: stays, Segments: segs})
 }
 
 func runSavePreferencesTool(s *planSession, input json.RawMessage) (string, bool) {

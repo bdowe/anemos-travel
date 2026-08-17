@@ -300,7 +300,12 @@ func TestPlanSetTripDatesValidationLeavesDBUntouched(t *testing.T) {
 func TestPlanSetTripDatesFreshChatSameTurn(t *testing.T) {
 	resetDB(t)
 	newFakeAnthropic(t,
-		toolTurn("create_itinerary", `{"title":"Athens Weekend","start_date":"2026-06-01","locations":[{"name":"Acropolis","latitude":37.97,"longitude":23.72,"day":1},{"name":"Plaka","latitude":37.972,"longitude":23.73,"day":2}]}`),
+		// end_date is explicit because create_itinerary now refuses a write that
+		// dates one end and not the other (plan_spine.go): a spine's highest day
+		// number is its final city's ARRIVAL, so deriving the end from it saves
+		// the trip short. 2026-06-02 is exactly what the old derivation produced
+		// from this day span, so everything downstream is unchanged.
+		toolTurn("create_itinerary", `{"title":"Athens Weekend","start_date":"2026-06-01","end_date":"2026-06-02","locations":[{"name":"Acropolis","latitude":37.97,"longitude":23.72,"day":1},{"name":"Plaka","latitude":37.972,"longitude":23.73,"day":2}]}`),
 		toolTurn("set_trip_dates", `{"start_date":"2026-06-08"}`),
 		textTurn("Saved and re-dated."))
 
@@ -349,7 +354,9 @@ func TestPlanSetTripDatesFreshChatNextTurnLineage(t *testing.T) {
 	// The fake keys turn selection off tool_result count, so a second /plan
 	// request would replay turn 0 — script each request with its own fake.
 	newFakeAnthropic(t,
-		toolTurn("create_itinerary", `{"title":"Athens Weekend","start_date":"2026-06-01","locations":[{"name":"Acropolis","latitude":37.97,"longitude":23.72,"day":1}]}`),
+		// Explicit end_date, same reason as above; 2026-06-01 is what the old
+		// day-span derivation produced for this one-day itinerary.
+		toolTurn("create_itinerary", `{"title":"Athens Weekend","start_date":"2026-06-01","end_date":"2026-06-01","locations":[{"name":"Acropolis","latitude":37.97,"longitude":23.72,"day":1}]}`),
 		textTurn("Saved!"))
 
 	user, token := createTestUser(t, "lineage@example.com")

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -93,6 +94,7 @@ func reviewTrip(ctx context.Context, locale string, data exportData, opts review
 	findings := make([]Finding, 0)
 	findings = append(findings, checkDates(locale, data)...)
 	findings = append(findings, checkUnscheduled(locale, data)...)
+	findings = append(findings, checkLegShape(locale, data)...)
 	findings = append(findings, checkDensity(locale, data)...)
 	findings = append(findings, checkLodging(locale, data)...)
 	findings = append(findings, checkTransit(locale, data)...)
@@ -333,6 +335,131 @@ func walkDayCoverage(d exportData) dayCoverage {
 		cov.Empty = append(cov.Empty, dayRun{first: runStart, last: day})
 	}
 	return cov
+}
+
+// checkLegShape flags a city leg whose rendered dates are not the ones anybody
+// chose (specs/shape-before-schedule). Both cases are silent everywhere else,
+// which is the reason this check exists rather than a comment:
+//
+//   - A leg renders ZERO nights because no place sits on the day the traveler
+//     moves on. Its nights land on the NEXT city, whose range starts at this
+//     leg's end. The page draws no nights label at all below one night, and
+//     RenderLeg.ZeroNight has ridden the trip payload since the leg-dates work
+//     with no consumer anywhere — so today nothing tells anyone. Worse, the
+//     booking walk reads a zero-length stay slot as vacuously covered
+//     (stayNightsCovered), so Next Step stops asking the traveler to book that
+//     city while Trip Health's own night walk still says there is no lodging.
+//     This is the finding that makes those two agree.
+//   - A leg's span came from the weighted auto-allocation: no place on it
+//     carries a day, so its share of the trip was computed, not chosen. Under a
+//     spine every city holds the same couple of places, which makes that split
+//     exactly equal — and indistinguishable, on screen, from real dates.
+//
+// The LAST leg is exempt from the nights check: it legitimately ends on the day
+// the traveler flies home, and the trip-end anchor has already stretched it as
+// far as it can. Reads computeTripLegs, the one leg derivation the page and the
+// payload also read, so a finding here is about the dates on screen.
+func checkLegShape(locale string, d exportData) []Finding {
+	tripID := d.Trip.ID.String()
+	legs := computeTripLegs(d.Trip, d.Items, d.Accommodations)
+	var out []Finding
+	for i, leg := range legs {
+		if leg.Start == nil || leg.End == nil {
+			continue
+		}
+		last := i == len(legs)-1
+		switch {
+		case !last && nightsBetween(*leg.Start, *leg.End) == 0:
+			out = append(out, Finding{
+				Severity: "warn", Category: "dates", TripID: tripID,
+				Message: tr(locale, "review.legNoNights", leg.Label),
+			})
+		case leg.DateSource == "auto":
+			out = append(out, Finding{
+				Severity: "warn", Category: "dates", TripID: tripID,
+				Message: tr(locale, "review.legGuessedDates", leg.Label),
+			})
+		}
+	}
+	return out
+}
+
+// legLabelOnDay names the city a trip day falls in — the label of the leg whose
+// RENDERED span covers it — or "" when no leg does. One attribution rule, read
+// by openDaysSummary and by the ladder's schedule seed, so the days a tool
+// result calls "open in Lisbon" are the same days its CTA offers to fill there.
+// Attributing by the rendered span rather than by re-deriving hubs is what keeps
+// it honest on the days a spine leaves empty: those days carry no item to read a
+// hub off in the first place.
+func legLabelOnDay(d exportData, day int) string {
+	if !d.Trip.StartDate.Valid || day < 1 {
+		return ""
+	}
+	date := d.Trip.StartDate.Time.AddDate(0, 0, day-1)
+	for _, leg := range computeTripLegs(d.Trip, d.Items, d.Accommodations) {
+		if leg.Start == nil || leg.End == nil {
+			continue
+		}
+		if !date.Before(*leg.Start) && !date.After(*leg.End) {
+			return leg.Label
+		}
+	}
+	return ""
+}
+
+// openDaysRunCap bounds how many empty-day runs openDaysSummary names, so a
+// three-week spine's tool result stays readable.
+const openDaysRunCap = 6
+
+// openDaysSummary names the plannable days that carry nothing yet, each with
+// the city it falls in — "days 2-3 in Lisbon, day 5 in Porto". The other half
+// of an itinerary write's post-state (specs/shape-before-schedule): once the
+// planner saves a SPINE, "Itinerary created successfully" plus a list of leg
+// ranges stops describing what the traveler will actually see, because the
+// middle of every stay is deliberately empty. The model needs to be able to say
+// which days it left open — and to offer to fill one — without subtracting item
+// days from a list, which is exactly the unfalsifiable derivation docs/zen.md
+// was written about.
+//
+// Days come from walkDayCoverage, the ONE definition of an empty day, and that
+// reuse is load-bearing rather than tidy: it already drops the trip's last day
+// ("there is nothing to plan on it") and already ignores city fillers, so the
+// JOURNEY-HOME day is structurally incapable of appearing here. A hand-rolled
+// 1..tripDayCount loop would list it, and the model would offer to fill the day
+// the traveler flies home — the bug fixed on 2026-08-15, reopened from a new
+// direction.
+//
+// Cities come from computeTripLegs, so a day is attributed by the span the page
+// RENDERS rather than by re-deriving hubs. A run whose first day falls in no
+// leg prints without a city instead of guessing one. Empty when every plannable
+// day is covered, so a dense itinerary's tool result is unchanged.
+func openDaysSummary(d exportData) string {
+	runs := walkDayCoverage(d).Empty
+	if len(runs) == 0 || !d.Trip.StartDate.Valid {
+		return ""
+	}
+	shown := runs
+	more := 0
+	if len(shown) > openDaysRunCap {
+		more = len(shown) - openDaysRunCap
+		shown = shown[:openDaysRunCap]
+	}
+	parts := make([]string, 0, len(shown))
+	for _, r := range shown {
+		part := fmt.Sprintf("day %d", r.first)
+		if r.last > r.first {
+			part = fmt.Sprintf("days %d-%d", r.first, r.last)
+		}
+		if city := legLabelOnDay(d, r.first); city != "" {
+			part += " in " + city
+		}
+		parts = append(parts, part)
+	}
+	out := "Days with nothing planned yet: " + strings.Join(parts, ", ")
+	if more > 0 {
+		out += fmt.Sprintf(", and %d more run(s)", more)
+	}
+	return out + ". If the traveler agreed to a spine first, that is the plan working — do NOT fill them in this turn and do NOT re-save to \"fix\" them. Tell them which days are open and offer to plan one city whenever they are ready.\n"
 }
 
 // checkDensity flags days with nothing planned (walkDayCoverage owns what that

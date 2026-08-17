@@ -156,3 +156,21 @@ func TestSummarizePlanConversationRecordsFatalHealth(t *testing.T) {
 		t.Fatalf("tracker after fatal Messages.New = %+v", s)
 	}
 }
+
+// The agreed SHAPE lives only in prose until create_itinerary runs, and history
+// folds at 24 messages — so a shape agreed early and referenced later ("ok, now
+// do Madrid") crosses a compaction boundary with nothing but this instruction
+// carrying it. Lose either clause and the planner re-proposes a different shape,
+// or re-fills a city it already filled, without noticing
+// (specs/shape-before-schedule).
+func TestCompactSystemPromptPreservesTheAgreedShape(t *testing.T) {
+	for _, want := range []string{
+		"the agreed trip SHAPE if one was proposed",
+		"whether the traveler APPROVED it",
+		"which cities have been filled in day by day versus which are still just the spine's two anchor places",
+	} {
+		if !strings.Contains(compactSystemPrompt, want) {
+			t.Errorf("compactSystemPrompt lost %q", want)
+		}
+	}
+}
