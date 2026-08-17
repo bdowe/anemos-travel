@@ -22,14 +22,36 @@ import 'support/l10n_test_app.dart';
 /// the action counts that actually squeeze the title slot (trip detail's five
 /// icons being the worst case in the app).
 ///
-/// Two things are asserted everywhere, and they are the promise: the wordmark
-/// is **present**, and it is **neither truncated nor scaled down**. A brand
-/// that survives as "ANEM…" or as illegibly small type has not survived.
+/// **The promise, in three statements:**
+///
+/// 1. With **no page title** (Home, Landing) the wordmark is present at every
+///    width, **neither truncated nor scaled down**. A brand that survives as
+///    "ANEM…" or as illegibly small type has not survived.
+/// 2. At **rail widths**, beside a title, the same holds — in every locale and
+///    at every text scale. The rail has the rose, so the word is the bar's only
+///    brand there and never steps aside.
+/// 3. **Below** rail widths, beside a title, the wordmark is whole **or
+///    absent**: it yields the row when keeping it is what would clip the page's
+///    own name. What the bar must never do is show half of it.
+///
+/// Statement 3 reverses the ordering PR #418 shipped, and it was reversed by
+/// what the old one produced on a phone: `ANEMOS · Plan your t…`.
+///
+/// The yield is **measured, not thresholded** — see `the wordmark yields on
+/// measurement, never on a breakpoint`, the test that fails if somebody
+/// rewrites the ladder as `width < 800`.
+///
+/// One caveat that shapes what can be asserted here: widget tests render in a
+/// fallback face with quite different metrics from Marcellus/Cinzel (a page
+/// title measures ~2.2x its browser width), so *which* branch a given width
+/// lands in diverges from production. Assertions below are therefore on the
+/// invariant, never on "the wordmark is present at width N" for a narrow N —
+/// the browser pass owns that. Same reason [_fallbackFontScalesAt] exists.
 ///
 /// The action counts are a ceiling, not decoration. Five icons fit beside the
 /// wordmark at rail widths and nowhere near it on a phone — which is why trip
-/// detail folds two of its five into the overflow below 800px. Add a fourth
-/// narrow action anywhere and [_narrowActionCounts] is what fails.
+/// detail folds everything but health into the overflow below 800px. Add a
+/// fourth narrow action anywhere and [_narrowActionCounts] is what fails.
 const _widths = <double>[320, 360, 390, 700, 800, 1200];
 const _narrowActionCounts = <int>[0, 2, 3];
 const _wideActionCounts = <int>[0, 2, 5];
@@ -61,7 +83,7 @@ final _fallbackFontScalesAt = <(double, int)>{(320.0, 3)};
 
 Future<void> _pumpBar(
   WidgetTester tester, {
-  Widget? title,
+  String? title,
   int actions = 0,
   required double width,
   bool inShell = true,
@@ -158,6 +180,29 @@ void _expectScaledNoWorseThan(
       reason: 'scaled past $floor of natural: $where');
 }
 
+/// Whole, or gone — never half. The invariant on the phone side of the ladder,
+/// where the word may legitimately have stepped out of the row so the page's
+/// own name could be read.
+void _expectWordmarkWholeOrAbsent(
+    WidgetTester tester, double natural, String where) {
+  if (find.text(AppInfo.name).evaluate().isEmpty) {
+    expect(tester.takeException(), isNull, reason: 'overflow or throw: $where');
+    return;
+  }
+  _expectWordmarkWhole(tester, natural, where);
+}
+
+/// Wherever the title row starts — the wordmark when it is there, the page
+/// title when the wordmark has yielded. Used to assert the row's left edge is
+/// invariant across a push, which is [_leadingSlot]'s whole job and is a
+/// separate question from which element happens to occupy it.
+double _rowLeft(WidgetTester tester, String title) {
+  final wordmark = find.text(AppInfo.name);
+  return wordmark.evaluate().isNotEmpty
+      ? tester.getTopLeft(wordmark).dx
+      : tester.getTopLeft(find.text(title)).dx;
+}
+
 /// The full promise: whole *and* painted at full size.
 void _expectWordmarkFullSize(
     WidgetTester tester, double natural, String where) {
@@ -182,16 +227,25 @@ void main() {
     for (final width in _widths) {
       final counts = width >= 800 ? _wideActionCounts : _narrowActionCounts;
       for (final actions in counts) {
-        for (final title in [null, const Text('Greece 2026')]) {
-          final where =
-              'w=$width actions=$actions title=${title == null ? 'none' : 'yes'}';
-          await _pumpBar(tester, title: title, actions: actions, width: width);
-          if (_fallbackFontScalesAt.contains((width, actions))) {
-            _expectWordmarkWhole(tester, natural, where);
-            _expectScaledNoWorseThan(tester, natural, 0.9, where);
-          } else {
-            _expectWordmarkFullSize(tester, natural, where);
-          }
+        // No title: nothing competes, so the strongest form of the promise
+        // holds — present, whole, full size (statement 1).
+        final where = 'w=$width actions=$actions';
+        await _pumpBar(tester, actions: actions, width: width);
+        if (_fallbackFontScalesAt.contains((width, actions))) {
+          _expectWordmarkWhole(tester, natural, where);
+          _expectScaledNoWorseThan(tester, natural, 0.9, where);
+        } else {
+          _expectWordmarkFullSize(tester, natural, where);
+        }
+
+        // With a title: full size at rail widths (statement 2), whole-or-gone
+        // below them (statement 3).
+        await _pumpBar(tester,
+            title: 'Greece 2026', actions: actions, width: width);
+        if (width >= 800) {
+          _expectWordmarkFullSize(tester, natural, 'titled, $where');
+        } else {
+          _expectWordmarkWholeOrAbsent(tester, natural, 'titled, $where');
         }
       }
     }
@@ -210,14 +264,19 @@ void main() {
           final where = 'w=$width actions=$actions inShell=$inShell';
 
           await _pumpBar(tester,
-              title: const Text('Greece 2026'),
+              title: 'Greece 2026',
               actions: actions,
               width: width,
               inShell: inShell);
-          final atRoot = tester.getTopLeft(find.text(AppInfo.name)).dx;
+          // The row's left edge, not specifically the wordmark's: on a narrow
+          // titled bar the word may have yielded the row to the title. Both
+          // sides of this comparison get the same title-row width — that is
+          // what the reserved slot buys — so both take the same ladder branch
+          // and the two reads are of the same element.
+          final atRoot = _rowLeft(tester, 'Greece 2026');
 
           await _pumpBar(tester,
-              title: const Text('Greece 2026'),
+              title: 'Greece 2026',
               actions: actions,
               width: width,
               inShell: inShell,
@@ -227,7 +286,7 @@ void main() {
           expect(find.byType(BackButton), findsOneWidget,
               reason: 'no back button to be anchored against: $where');
 
-          expect(tester.getTopLeft(find.text(AppInfo.name)).dx,
+          expect(_rowLeft(tester, 'Greece 2026'),
               moreOrLessEquals(atRoot, epsilon: 0.5),
               reason: 'the brand moved on push: $where');
         }
@@ -254,9 +313,18 @@ void main() {
     final natural = await _naturalWidth(tester);
 
     for (final width in _widths) {
+      final where = 'outside shell, w=$width';
       await _pumpBar(tester,
-          title: const Text('Connect app'), width: width, inShell: false);
-      _expectWordmarkFullSize(tester, natural, 'outside shell, w=$width');
+          title: 'Connect app', width: width, inShell: false);
+      if (width >= 800) {
+        _expectWordmarkFullSize(tester, natural, where);
+      } else {
+        _expectWordmarkWholeOrAbsent(tester, natural, where);
+      }
+      // Outside the shell there is no rail, so the rose is in the leading slot
+      // on every one of these — the brand is on screen even where the word
+      // yielded.
+      expect(find.byType(BrandLogo), findsOneWidget, reason: where);
     }
   });
 
@@ -266,11 +334,15 @@ void main() {
     for (final width in _widths) {
       await _pumpBar(tester,
           // The longest app-bar title the app ships (quizTitle, es).
-          title: const Text('Configura tu perfil de viaje'),
+          title: 'Configura tu perfil de viaje',
           actions: 2,
           width: width,
           locale: const Locale('es'));
-      _expectWordmarkFullSize(tester, natural, 'es, w=$width');
+      if (width >= 800) {
+        _expectWordmarkFullSize(tester, natural, 'es, w=$width');
+      } else {
+        _expectWordmarkWholeOrAbsent(tester, natural, 'es, w=$width');
+      }
     }
   });
 
@@ -293,11 +365,16 @@ void main() {
       for (final actions in counts) {
         final where = 'textScale=$scale w=$width actions=$actions';
         await _pumpBar(tester,
-            title: const Text('Greece 2026'),
+            title: 'Greece 2026',
             actions: actions,
             width: width,
             textScale: scale);
-        _expectWordmarkWhole(tester, natural, where);
+        _expectWordmarkWholeOrAbsent(tester, natural, where);
+
+        // Where the word yielded the row to the title there is nothing left to
+        // measure — a scale that grows the word is exactly what makes it yield,
+        // and yielding whole is the correct outcome, not a clip.
+        if (find.text(AppInfo.name).evaluate().isEmpty) continue;
 
         if (_fallbackFontScalesAt.contains((width, actions))) {
           // The backstop scales the 1.6x word down to the slot, and this one
@@ -333,21 +410,91 @@ void main() {
         reason: 'scaled past legibility');
   });
 
-  testWidgets('the page title is what yields — ellipsized, then dropped',
+  testWidgets('the wordmark is what yields, and the page name is what stays',
       (tester) async {
     // Wide: both on screen, brand first.
-    await _pumpBar(tester, title: const Text('Greece 2026'), width: 1200);
+    await _pumpBar(tester, title: 'Greece 2026', width: 1200);
     expect(find.text('Greece 2026'), findsOneWidget);
     expect(tester.getTopLeft(find.text(AppInfo.name)).dx,
         lessThan(tester.getTopLeft(find.text('Greece 2026')).dx));
 
-    // Squeezed to nothing: the title goes, the brand stays. Trip detail on
-    // the smallest phone is the real shape here, and it repeats its title in
-    // the body one line down.
-    await _pumpBar(tester,
-        title: const Text('Greece 2026'), actions: 3, width: 320);
-    expect(find.text('Greece 2026'), findsNothing);
-    expect(find.text(AppInfo.name), findsOneWidget);
+    // Squeezed — trip detail's icon row on the smallest phone. Under #418 the
+    // title went and `ANEMOS` stayed, so the traveler got a header naming the
+    // app they had open rather than the trip they were looking at. Now it is
+    // the other way round, and the rose in the leading slot keeps the brand on
+    // screen on a tab root.
+    await _pumpBar(tester, title: 'Greece 2026', actions: 3, width: 320);
+    expect(find.text('Greece 2026'), findsOneWidget,
+        reason: 'the page name is what a phone header is for');
+    expect(find.text(AppInfo.name), findsNothing,
+        reason: 'the wordmark is what yields on a squeezed phone bar');
+    expect(find.byType(BrandLogo), findsOneWidget,
+        reason: 'a tab root still shows the rose in its leading slot');
+  });
+
+  testWidgets('the wordmark yields on measurement, never on a breakpoint',
+      (tester) async {
+    // The regression guard for the cheap version of this fix. A narrow bar is
+    // not automatically a cramped one: an iPad in portrait (744) and a
+    // half-width desktop window (799) are both below kRailBreakpoint and both
+    // have hundreds of pixels to spare, so gating on the breakpoint would
+    // strip the wordmark off them for nothing.
+    //
+    // Deliberately paired with the squeeze case above — same title, same
+    // locale, differing only in room. If the two stop disagreeing, the ladder
+    // has become a threshold.
+    for (final width in [744.0, 799.0]) {
+      await _pumpBar(tester, title: 'Greece 2026', actions: 1, width: width);
+      expect(find.text(AppInfo.name), findsOneWidget,
+          reason: 'wordmark dropped at $width, which has room to spare');
+      expect(find.text('Greece 2026'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('a phone hands the page name the wordmark\'s room',
+      (tester) async {
+    // Brian's screenshot, as an assertion. The bug was never that the title was
+    // absent — it was 126px of `Plan your t…`, which cleared _minTitleWidth
+    // comfortably and still read as broken chrome. The fix is that the word's
+    // pixels go to the title, so that is what is asserted: the title starts at
+    // the row's left edge, with no room for a word in front of it.
+    //
+    // GEOMETRY rather than "the string renders whole", because a widget test
+    // renders in a fallback face where every glyph is a full em: 'Plan your
+    // trip' measures ~311px here against ~143px of Marcellus in a browser. A
+    // whole-string assertion at a real phone width would be testing the test
+    // font. The real string at the real width is the browser pass's job.
+    const title = 'Plan your trip';
+
+    await _pumpBar(tester, title: title, actions: 1, width: 375);
+    expect(find.text(title), findsOneWidget);
+    expect(find.text(AppInfo.name), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    // The row starts at the leading slot's edge, so the title's left is the
+    // slot width plus its own Flexible's zero padding — i.e. it did not begin
+    // a wordmark further in.
+    expect(tester.getTopLeft(find.text(title)).dx,
+        lessThan(kToolbarHeight + await _naturalWidth(tester)),
+        reason: 'something wordmark-sized is still sitting in front of it');
+  });
+
+  testWidgets('a short page name renders whole beside the wordmark',
+      (tester) async {
+    // The other half of the pair above: the ladder admits a title only when it
+    // fits WHOLE, so a short one keeps both. Short enough that even the test
+    // font's em-per-glyph metrics fit at 375.
+    const title = 'Greece 26';
+
+    await _pumpBar(tester, title: title, width: 4000, inShell: false);
+    final natural = tester.getSize(find.text(title)).width;
+
+    await _pumpBar(tester, title: title, actions: 1, width: 375);
+    expect(tester.getSize(find.text(title)).width,
+        moreOrLessEquals(natural, epsilon: 0.5),
+        reason: 'ellipsized despite fitting — the ladder is not measuring');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('the rose lives in the leading slot and no longer yields to '
@@ -432,7 +579,7 @@ void main() {
     // The brand carries excludeSemantics (the mark and the word would
     // otherwise announce "Anemos" twice), so the title must sit outside it.
     final handle = tester.ensureSemantics();
-    await _pumpBar(tester, title: const Text('Notifications'), width: 1200);
+    await _pumpBar(tester, title: 'Notifications', width: 1200);
 
     expect(find.bySemanticsLabel('Notifications'), findsOneWidget);
     expect(find.bySemanticsLabel(AppInfo.name), findsOneWidget);
@@ -446,7 +593,7 @@ void main() {
     // label is "Anemos" too, so an unlabelled slot would announce the product
     // name twice and bury the only thing about the control worth knowing.
     final handle = tester.ensureSemantics();
-    await _pumpBar(tester, title: const Text('Notifications'), width: 700);
+    await _pumpBar(tester, title: 'Notifications', width: 700);
 
     expect(find.bySemanticsLabel(AppInfo.name), findsOneWidget,
         reason: 'the rose must not announce the product name a second time');
@@ -483,11 +630,11 @@ void main() {
       final counts = width >= 800 ? _wideActionCounts : _narrowActionCounts;
       for (final actions in counts) {
         await _pumpBar(tester,
-            title: const Text('Greece 2026'), actions: actions, width: width);
+            title: 'Greece 2026', actions: actions, width: width);
         final atRoot = find.text('Greece 2026').evaluate().length;
 
         await _pumpBar(tester,
-            title: const Text('Greece 2026'),
+            title: 'Greece 2026',
             actions: actions,
             width: width,
             pushed: true);

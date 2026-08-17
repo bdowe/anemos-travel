@@ -127,7 +127,7 @@ class _ImportTripScreenState extends ConsumerState<ImportTripScreen> {
     final hasText = _controller.text.trim().isNotEmpty;
 
     return Scaffold(
-      appBar: GradientAppBar(title: Text(l10n.importFromAi)),
+      appBar: GradientAppBar(title: l10n.importFromAi),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [

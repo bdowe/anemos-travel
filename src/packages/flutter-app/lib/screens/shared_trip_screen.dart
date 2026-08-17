@@ -58,8 +58,8 @@ class SharedTripScreen extends ConsumerWidget {
     return Scaffold(
       appBar: GradientAppBar(
         title: shared.maybeWhen(
-          data: (s) => Text(s.trip.title),
-          orElse: () => Text(l10n.sharedTitle),
+          data: (s) => s.trip.title,
+          orElse: () => l10n.sharedTitle,
         ),
       ),
       body: shared.when(

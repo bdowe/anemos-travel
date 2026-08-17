@@ -49,7 +49,7 @@ class _AdminMetricsScreenState extends ConsumerState<AdminMetricsScreen> {
         // The house app bar, like every other screen — which also puts the
         // brand up here. This was the one screen still wearing raw M3 chrome.
         appBar: const GradientAppBar(
-          title: Text('Metrics'),
+          title: 'Metrics',
           bottom: TabBar(
             isScrollable: true,
             // The gradient is dark, so the tabs carry their own light palette

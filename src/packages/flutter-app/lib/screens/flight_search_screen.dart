@@ -424,7 +424,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
     final l10n = context.l10n;
 
     return Scaffold(
-      appBar: GradientAppBar(title: Text(l10n.flightSearchTitle)),
+      appBar: GradientAppBar(title: l10n.flightSearchTitle),
       // One scroll surface for form + results (declutter series): the form
       // can't push results off a phone viewport, and the whole page scrolls.
       body: CustomScrollView(

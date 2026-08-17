@@ -169,7 +169,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     final user = ref.watch(authProvider).user;
 
     return Scaffold(
-      appBar: GradientAppBar(title: Text(l10n.settingsTitle)),
+      appBar: GradientAppBar(title: l10n.settingsTitle),
       body: Column(
         children: [
           // A thin global activity bar (the account calls all share one _busy

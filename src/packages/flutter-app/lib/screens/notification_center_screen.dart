@@ -106,7 +106,7 @@ class _NotificationCenterScreenState
         notifs.maybeWhen(data: (list) => list.isNotEmpty, orElse: () => false);
     return Scaffold(
       appBar: GradientAppBar(
-        title: Text(l10n.notifTitle),
+        title: l10n.notifTitle,
         actions: [
           if (hasRows)
             // Destructive exits live behind an overflow menu, not a bare icon

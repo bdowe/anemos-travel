@@ -15,9 +15,17 @@ import 'package:travel_route_planner/widgets/trip_refine_panel.dart';
 import 'support/l10n_test_app.dart';
 
 /// Mobile declutter, header half: on narrow the meta row drops the Refine
-/// button (it becomes an app-bar sparkle). The dates chip humanizes at BOTH
-/// widths — it read raw ISO on wide until 2026-08-14, so the two assertions
-/// below are deliberately the same string.
+/// button. It became an app-bar sparkle, and since 2026-08-17 it is a row in
+/// the `⋮` actions sheet instead — the app bar needed those ~48px so the
+/// trip's own NAME could be read at 375px rather than clipped to "Big Su…".
+/// Health keeps the only narrow icon, because its severity badge is glanceable
+/// and a badge inside a menu is a badge nobody sees.
+///
+/// The header card is deliberately NOT where refine went back to: narrow drops
+/// its button for one clean chip row, and putting it back undoes that.
+///
+/// The dates chip humanizes at BOTH widths — it read raw ISO on wide until
+/// 2026-08-14, so the two assertions below are deliberately the same string.
 class _FakeTripsApiService extends TripsApiService {
   final Trip trip;
   _FakeTripsApiService(this.trip) : super(ApiClient(baseUrl: 'http://test'));
@@ -70,10 +78,21 @@ Future<void> _pump(WidgetTester tester, Trip trip,
   await tester.pumpAndSettle();
 }
 
+/// Opens the `⋮` sheet and picks Refine — the phone route since refine gave
+/// up its app-bar icon to the trip's name.
+Future<void> _refineFromOverflow(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('More options'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Refine with AI'));
+  // The caller runs the action AFTER the sheet closes — never from inside its
+  // dead context — so this settles two transitions, not one.
+  await tester.pumpAndSettle();
+}
+
 void main() {
   const phone = Size(390, 844);
 
-  testWidgets('narrow owner: sparkle in app bar opens refine; dates humanize',
+  testWidgets('narrow owner: refine rides the ⋮; dates humanize',
       (tester) async {
     await _pump(tester, _trip(), surface: phone);
 
@@ -86,11 +105,18 @@ void main() {
     expect(find.textContaining('2026-09-01'), findsNothing);
     expect(find.widgetWithText(ActionChip, 'Sep 1 – Sep 3'), findsOneWidget);
 
-    // The app-bar sparkle opens the refine panel (narrow => sheet).
-    final sparkle = find.byTooltip('Refine with AI');
-    expect(sparkle, findsOneWidget);
-    await tester.tap(sparkle);
-    await tester.pumpAndSettle();
+    // ...and no app-bar sparkle either: that icon is what bought the header
+    // the room for the trip's name. Scoped to the AppBar — the itinerary rows
+    // keep their own per-item sparkles, which is why an unscoped byIcon here
+    // finds two and says nothing about the header.
+    expect(find.byTooltip('Refine with AI'), findsNothing);
+    expect(
+      find.descendant(
+          of: find.byType(AppBar), matching: find.byIcon(Icons.auto_awesome)),
+      findsNothing,
+    );
+
+    await _refineFromOverflow(tester);
     expect(find.byType(TripRefinePanel), findsOneWidget);
   });
 
@@ -101,8 +127,7 @@ void main() {
   // it, so the assertion doesn't hardcode the app bar's height.
   testWidgets('narrow: the refine sheet opens full-height', (tester) async {
     await _pump(tester, _trip(), surface: phone);
-    await tester.tap(find.byTooltip('Refine with AI'));
-    await tester.pumpAndSettle();
+    await _refineFromOverflow(tester);
 
     final available = tester.getRect(find.byType(DraggableScrollableSheet));
     final panel = tester.getRect(find.byType(TripRefinePanel));
@@ -121,8 +146,7 @@ void main() {
   testWidgets('narrow: dragging the handle down shrinks the sheet',
       (tester) async {
     await _pump(tester, _trip(), surface: phone);
-    await tester.tap(find.byTooltip('Refine with AI'));
-    await tester.pumpAndSettle();
+    await _refineFromOverflow(tester);
 
     final available = tester.getRect(find.byType(DraggableScrollableSheet));
     final opened = tester.getRect(find.byType(TripRefinePanel)).height;
@@ -137,16 +161,60 @@ void main() {
     expect(dragged / available.height, closeTo(0.4, 0.06));
   });
 
-  testWidgets('narrow editor collaborator keeps the sparkle (spec)',
+  testWidgets('the phone app bar folds everything but health into the ⋮',
       (tester) async {
-    await _pump(tester, _trip(access: 'editor'), surface: phone);
-    expect(find.byTooltip('Refine with AI'), findsOneWidget);
+    // The width budget, enumerated. Every icon up here costs the trip's name
+    // ~48px, and at 375px the name has only ~131px to begin with — so what is
+    // pinned is which actions are ALLOWED an icon, not a count. (A count would
+    // need the health provider resolved; this fixture leaves it pending, so
+    // health renders a SizedBox and any total would be fixture noise. The
+    // ceiling on how many the bar can hold lives in brand_everywhere_test's
+    // _narrowActionCounts.)
+    await _pump(tester, _trip(), surface: phone);
+
+    final bar = find.byType(AppBar);
+    void expectFolded(IconData icon, String what) {
+      expect(find.descendant(of: bar, matching: find.byIcon(icon)), findsNothing,
+          reason: '$what belongs in the ⋮ on a phone');
+    }
+
+    // Both mutation-checked: restoring the refine icon, or dropping `!_narrow`
+    // from share, reds this test.
+    expectFolded(Icons.auto_awesome, 'refine');
+    expectFolded(Icons.share_outlined, 'share');
+    // Wear is deliberately NOT asserted here. Its action reads a provider this
+    // fixture leaves unresolved, so it renders a SizedBox either way and
+    // `expectFolded(Icons.luggage_outlined, …)` passes whether it is folded or
+    // not — a green line that proves nothing. Its fold predates this lane and
+    // is unchanged; a real assertion needs a wear-state override.
+    expect(find.descendant(of: bar, matching: find.byIcon(Icons.more_vert)),
+        findsOneWidget);
+
+    // And the point of the budget: the trip's name is up there, whole.
+    final title = find.descendant(of: bar, matching: find.text('Sevilla week'));
+    expect(title, findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('narrow viewer never gets the sparkle', (tester) async {
+  testWidgets('narrow editor collaborator keeps refine (spec)',
+      (tester) async {
+    await _pump(tester, _trip(access: 'editor'), surface: phone);
+    await tester.tap(find.byTooltip('More options'));
+    await tester.pumpAndSettle();
+    expect(find.text('Refine with AI'), findsOneWidget);
+  });
+
+  testWidgets('narrow viewer never gets refine', (tester) async {
     await _pump(tester, _trip(access: 'viewer'), surface: phone);
     expect(find.byTooltip('Refine with AI'), findsNothing);
     expect(find.byIcon(Icons.auto_awesome), findsNothing);
+
+    // ...and it is not hiding in the ⋮ either. Without opening the sheet this
+    // assertion would pass on a build that put refine in there ungated —
+    // exactly the regression moving it into a menu makes easy to ship.
+    await tester.tap(find.byTooltip('More options'));
+    await tester.pumpAndSettle();
+    expect(find.text('Refine with AI'), findsNothing);
   });
 
   testWidgets('wide keeps the header button; dates humanize there too',

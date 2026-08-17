@@ -357,7 +357,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
 
     return Scaffold(
       appBar: GradientAppBar(
-        title: Text(l10n.prefsTitle),
+        title: l10n.prefsTitle,
       ),
       body: body,
     );

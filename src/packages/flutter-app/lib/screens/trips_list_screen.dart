@@ -358,7 +358,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
 
     return Scaffold(
       appBar: GradientAppBar(
-        title: Text(l10n.tripsListTitle),
+        title: l10n.tripsListTitle,
         actions: [
           // The entry point that covers the gap the other two leave: an
           // account with exactly one trip sees neither the empty state nor

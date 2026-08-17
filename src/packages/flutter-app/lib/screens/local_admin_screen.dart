@@ -27,7 +27,7 @@ class _LocalAdminScreenState extends ConsumerState<LocalAdminScreen> {
       length: 3,
       child: Scaffold(
         appBar: const GradientAppBar(
-          title: Text('Local intel admin'),
+          title: 'Local intel admin',
         ),
         body: Column(
           children: const [

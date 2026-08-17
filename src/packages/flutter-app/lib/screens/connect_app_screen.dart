@@ -291,7 +291,7 @@ class _ConnectAppScreenState extends ConsumerState<ConnectAppScreen> {
     }
 
     return Scaffold(
-      appBar: GradientAppBar(title: Text(l10n.connectAppBarTitle)),
+      appBar: GradientAppBar(title: l10n.connectAppBarTitle),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),

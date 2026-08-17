@@ -177,7 +177,7 @@ class _LogTripScreenState extends ConsumerState<LogTripScreen> {
     final range = _dates;
 
     return Scaffold(
-      appBar: GradientAppBar(title: Text(l10n.logTripTitle)),
+      appBar: GradientAppBar(title: l10n.logTripTitle),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
