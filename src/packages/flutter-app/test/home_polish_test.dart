@@ -123,12 +123,17 @@ void main() {
   });
 
   testWidgets(
-      'tiny app bar drops the MARK and keeps the wordmark — the brand '
-      'name is what has to survive', (WidgetTester tester) async {
+      'tiny app bar keeps BOTH — the mark is not in the title row to drop',
+      (WidgetTester tester) async {
+    // This used to assert the opposite. The mark was rung 3 of the title row's
+    // ladder and yielded first at widths like this; it now sits in the leading
+    // slot, which the title row cannot spend, so it no longer yields to width
+    // at all. What absorbs the squeeze here is the wordmark's FittedBox
+    // backstop — whole, just smaller — and brand_everywhere_test owns that.
     await _pumpHome(tester, surface: const Size(230, 690));
 
     expect(find.text(AppInfo.name), findsOneWidget);
-    expect(find.byType(BrandLogo), findsNothing);
+    expect(find.byType(BrandLogo), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -202,16 +207,34 @@ void main() {
     expect(container.read(navIndexProvider), AppTab.home.index);
   });
 
-  testWidgets('the lockup is ONE tap target, not a mark nested in a target',
-      (WidgetTester tester) async {
+  testWidgets('the brand is two targets side by side, not one nested in '
+      'another', (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(700, 800));
 
-    // Mutation pin against giving the mark its own onTap: a second, nested
-    // InkWell would hit-test and ripple twice over the same brand.
+    // The brand is split across two AppBar slots now — the rose leads, the
+    // word follows — so "one target over the whole lockup" is no longer the
+    // shape. What still must not happen is NESTING: an InkWell inside an
+    // InkWell hit-tests and ripples twice over the same pixels. One ancestor
+    // each is the assertion, and it is why the rose has no onTap of its own
+    // inside the wordmark's target.
     expect(
       find.ancestor(of: find.byType(BrandLogo), matching: find.byType(InkWell)),
       findsOneWidget,
     );
+    expect(
+      find.ancestor(
+          of: find.text(AppInfo.name), matching: find.byType(InkWell)),
+      findsOneWidget,
+    );
+
+    // ...and both halves do the same thing, which is the point of splitting
+    // them without splitting the behaviour.
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(HomeScreen)));
+    container.read(navIndexProvider.notifier).state = AppTab.plan.index;
+    await tester.tap(find.byType(BrandLogo));
+    await tester.pump();
+    expect(container.read(navIndexProvider), AppTab.home.index);
   });
 
   testWidgets('tapping the brand scrolls Home back to the top',
