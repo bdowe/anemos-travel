@@ -167,7 +167,7 @@ Future<(_FakeBookingTodosApiService, _FakeAccommodationsApiService)> _pump(
 }
 
 /// Taps the Bookings header tab; when [count] is given, first pins the
-/// booked-progress pill riding the tab ('1/2' etc.) — the counter is a
+/// booked-progress pill riding the tab ('2/3' etc.) — the counter is a
 /// [StatusPill] beside the label now, not part of it (dropped entirely on
 /// narrow; these tests run wide at 800). Pass no count for a trip whose
 /// todos are empty (viewer trips included): the tab renders bare.
@@ -229,7 +229,7 @@ void main() {
           ],
         ));
 
-    await _openBookingsTab(tester, '1/2');
+    await _openBookingsTab(tester, '2/3');
     await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
     await tester.pumpAndSettle();
 
@@ -376,7 +376,7 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    await _openBookingsTab(tester, '1/2');
+    await _openBookingsTab(tester, '2/3');
 
     expect(find.text('Louvre'), findsNothing);
     expect(find.text('Café de Flore'), findsNothing);
@@ -397,7 +397,7 @@ void main() {
     _useTallViewport(tester);
     final (todosApi, accApi) = await _pump(tester, mixedTrip());
 
-    await _openBookingsTab(tester, '1/2');
+    await _openBookingsTab(tester, '2/3');
     await tester.tap(find.descendant(
         of: find.widgetWithText(BookingTodoRow, 'Stay in Paris'),
         matching: find.byType(Checkbox)));
@@ -484,9 +484,12 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    // Pill '1/2' — one booked custom todo of two todos. The count rides
+    // Pill '2/3' — every visible checkbox behind the tab: the unbooked stay
+    // todo, the booked custom todo, and the booked detail-only arrival
+    // segment. Entries, not todos — the pill is the fold of the destination
+    // chips (bookingOverallCount). The count rides
     // the tab as a StatusPill (this tab replaced the old one-way counter).
-    await _openBookingsTab(tester, '1/2');
+    await _openBookingsTab(tester, '2/3');
 
     expect(find.text('Louvre'), findsNothing);
     expect(
@@ -619,7 +622,7 @@ void main() {
     expect(find.text('Add transport'), findsNothing);
 
     // Bookings view: the swap, not an addition.
-    await _openBookingsTab(tester, '1/2');
+    await _openBookingsTab(tester, '2/3');
     expect(find.text('Add booking'), findsOneWidget);
     expect(find.text('Add place'), findsNothing);
 
@@ -635,7 +638,7 @@ void main() {
       'custom-booking dialog', (tester) async {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
-    await _openBookingsTab(tester, '1/2');
+    await _openBookingsTab(tester, '2/3');
 
     Future<void> pick(String item) async {
       await tester.tap(find.text('Add booking'));
@@ -664,7 +667,7 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    await _openBookingsTab(tester, '1/2');
+    await _openBookingsTab(tester, '2/3');
     await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
     await tester.pumpAndSettle();
     expect(find.text('Add booking'), findsOneWidget);
@@ -692,7 +695,7 @@ void main() {
     _useTallViewport(tester);
     await _pump(tester, mixedTrip());
 
-    await _openBookingsTab(tester, '1/2');
+    await _openBookingsTab(tester, '2/3');
     await tester.tap(find.widgetWithText(FilterChip, 'Not booked yet'));
     await tester.pumpAndSettle();
 

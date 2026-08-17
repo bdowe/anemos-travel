@@ -363,6 +363,30 @@ void main() {
           (booked: 0, total: 1));
     });
 
+    test('bookingOverallCount is the fold of bookingDestinationCounts', () {
+      final todos = [
+        _todo('transport:home>>paris'),
+        _todo('stay:paris', kind: 'stay', booked: true),
+        _todo('custom:helicopter', kind: 'other', booked: true),
+      ];
+      final d = _compute(bookingTodos: todos, stays: [_parisStay]);
+      final perChip = bookingDestinationCounts(d.groupedBookings, d.legLabels,
+          otherKey: 'Other places');
+      final overall = bookingOverallCount(d.groupedBookings, d.legLabels);
+      var booked = 0, total = 0;
+      for (final c in perChip.values) {
+        booked += c.booked;
+        total += c.total;
+      }
+      // The pill and the chips are one number split two ways — whatever the
+      // partition decides, both inherit it.
+      expect(overall, (booked: booked, total: total));
+      // And it counts entries, not todos: here they coincide in total (every
+      // entry has a todo) but the shape is pinned by the widget test with a
+      // todo-less confirmed segment.
+      expect(overall.total, greaterThanOrEqualTo(todos.length));
+    });
+
     test('bookingEntryBooked: the todo wins, then the record', () {
       const bookedStay = Accommodation(id: 'a9', name: 'X', booked: true);
       expect(

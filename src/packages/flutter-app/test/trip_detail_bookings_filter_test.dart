@@ -18,6 +18,7 @@ import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/booking_detail_row.dart';
 import 'package:travel_route_planner/widgets/booking_filter_bar.dart';
 import 'package:travel_route_planner/widgets/booking_todo_card.dart';
+import 'package:travel_route_planner/widgets/status_pill.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -174,6 +175,67 @@ Future<void> _tapDestination(WidgetTester tester, String label) async {
 }
 
 void main() {
+  testWidgets('the tab pill is the sum of the destination chips',
+      (tester) async {
+    _useViewport(tester, const Size(900, 3000));
+    // A fixture where todos and entries genuinely differ: two stay todos
+    // (one booked) plus a booked confirmed segment that matched no todo — a
+    // third checkbox the old todo-count pill never saw ('1/2' vs the three
+    // rows actually behind the tab).
+    await _pump(
+      tester,
+      _trip(
+        items: [
+          _item(0, 'Louvre', 'Paris', 1),
+          _item(1, 'Colosseum', 'Rome', 2),
+        ],
+        todos: const [
+          BookingTodo(
+              id: 'td-paris',
+              kind: 'stay',
+              todoKey: 'stay:paris',
+              title: 'Stay in Paris',
+              booked: true),
+          BookingTodo(
+              id: 'td-rome',
+              kind: 'stay',
+              todoKey: 'stay:rome',
+              title: 'Stay in Rome'),
+        ],
+        segments: const [
+          TripSegment(
+              id: 'seg-x',
+              mode: 'train',
+              origin: 'Lyon',
+              destination: 'Marseille',
+              booked: true),
+        ],
+      ),
+    );
+
+    // The pill already carries the entries count before the tab is opened.
+    expect(
+        find.descendant(
+            of: find.byType(StatusPill), matching: find.text('2/3')),
+        findsOneWidget);
+    expect(find.text('1/2'), findsNothing,
+        reason: 'the todo-only count must not survive anywhere');
+
+    await _openBookingsTab(tester);
+
+    // The pill equals the fold of the chips — parsed from the same render.
+    var booked = 0, total = 0;
+    for (final label in const ['Paris', 'Rome', 'Other bookings']) {
+      final c = _countOn(tester, label);
+      booked += c.booked;
+      total += c.total;
+    }
+    expect((booked: booked, total: total), (booked: 2, total: 3));
+
+    // ...and both equal the checkboxes the tab actually reveals.
+    expect(_visibleRowCounts(tester), (booked: 2, total: 3));
+  });
+
   testWidgets('a chip count equals the rows that chip reveals', (tester) async {
     _useViewport(tester, const Size(900, 3000));
     await _pump(
