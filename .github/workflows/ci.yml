@@ -23,6 +23,54 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Raising the service worker's manifest cache name spends a ONE-SHOT eviction:
+  # activate() takes its no-prior-manifest branch and calls
+  # caches.delete(CACHE_NAME) exactly once per client, unrepeatably. Spent while
+  # Cloudflare is serving stale bytes, it refills every client FROM the stale
+  # edge — turning a shipped fix into a wider outage. That has now been paid for
+  # twice (v2 with #426, v3 with #447), both times because the precondition
+  # lived in a PR description, and a description is a convention someone has to
+  # remember at the moment of merging.
+  #
+  # So a PR that raises the suffix has to show the production edge agrees with
+  # the origin. PRs that don't touch it exit in a second, without a network call.
+  #
+  # Known blind spot, stated rather than implied: Cloudflare caches per data
+  # center, so a green here proves the PoP this runner reached — not every PoP.
+  # It is a tripwire, not a proof. The runbook (dockerize/production/README.md)
+  # is still the authority: purge first, then merge.
+  sw-manifest-bump-guard:
+    name: SW manifest bump requires a clean edge
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Does this PR raise the manifest suffix?
+        id: suffix
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          file=dockerize/deployment/Dockerfile
+          head=$(grep -oE 'flutter-app-manifest-v[0-9]+' "$file" | head -1)
+          base=$(git show "FETCH_HEAD:$file" | grep -oE 'flutter-app-manifest-v[0-9]+' | head -1)
+          echo "base=${base:-<none>}  head=${head:-<none>}"
+          if [ "$head" = "$base" ]; then
+            echo "unchanged — this PR does not spend the one-shot eviction"
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: The edge must be clean before the shot is spent
+        if: steps.suffix.outputs.bumped == 'true'
+        run: |
+          echo "This PR raises the service-worker manifest suffix, which fires a"
+          echo "one-shot cache eviction on every client — once, and never again."
+          echo "Merged while the edge is stale, it refills every client FROM the"
+          echo "stale edge. Checking the production edge now:"
+          echo
+          ./scripts/verify-edge-parity.sh https://anemos.travel
+
   go:
     name: Go (fmt, vet, test, sqlc drift)
     runs-on: ubuntu-latest

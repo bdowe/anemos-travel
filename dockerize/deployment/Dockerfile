@@ -103,16 +103,29 @@ RUN sed -i 's/origin\.length + 1/origin.length + 5/g' build/web/flutter_service_
 #
 # A BUMP IS ONLY VALID ONCE THE EDGE IS VERIFIED CLEAN. It fires exactly once
 # per client and cannot be re-fired, so it spends its single shot refilling the
-# cache from whatever the CDN is serving at that moment. v2 shipped with #426
-# while Cloudflare still held the pre-#419 icon font under a one-year TTL —
-# correcting the header here did not evict it, because a stored object keeps
-# the freshness lifetime it was stored with. So v2 wiped every client's content
-# cache and refilled it from the stale edge: users who had been fine were healed
-# into breakage, and the one-shot lever was spent. v3 is the replacement shot,
-# fired after the purge. Before ever bumping again: purge the CDN, run
-# scripts/verify-edge-parity.sh until it passes, and only then raise the suffix.
-RUN sed -i "s/'flutter-app-manifest'/'flutter-app-manifest-v3'/" build/web/flutter_service_worker.js \
-    && grep -q "const MANIFEST = 'flutter-app-manifest-v3';" build/web/flutter_service_worker.js \
+# cache from whatever the CDN is serving at that moment. Correcting a cache
+# header does not evict anything already stored — a stored object keeps the
+# freshness lifetime it was stored with — so "we fixed the header" is never
+# evidence the edge is clean.
+#
+# This has now been paid for TWICE:
+#   v2 (#426, 2026-08-14) shipped while Cloudflare still held the pre-#419 icon
+#      font under a one-year TTL. It wiped every client's content cache and
+#      refilled it from the stale edge: users who had been fine were healed
+#      into breakage.
+#   v3 (#447, 2026-08-16) was written as the replacement shot, to be spent
+#      AFTER the purge — and merged before the purge happened, so it burned the
+#      same way. The PR carried the constraint as a note in its body, and a note
+#      is a convention someone has to remember at the moment of merging.
+#
+# v4 is the third shot. The precondition is no longer written down and hoped
+# for: the `sw-manifest-bump-guard` job in .github/workflows/ci.yml fails any PR
+# that raises this suffix while the production edge disagrees with the origin.
+# Before bumping to v5: purge the CDN, then let that job go green — do not
+# override it. (Note its one blind spot: Cloudflare caches per data center, so
+# the guard proves the PoP the runner reached, not every PoP.)
+RUN sed -i "s/'flutter-app-manifest'/'flutter-app-manifest-v4'/" build/web/flutter_service_worker.js \
+    && grep -q "const MANIFEST = 'flutter-app-manifest-v4';" build/web/flutter_service_worker.js \
     && ! grep -q "'flutter-app-manifest'" build/web/flutter_service_worker.js
 
 # Send every service-worker cache MISS to the network instead of to the
