@@ -5,15 +5,19 @@ import '../l10n/l10n.dart';
 import '../theme/spacing.dart';
 import '../utils/clothing_recs.dart';
 
-/// The what-to-wear block at the top of the merged "What to wear & pack"
-/// section (specs/what-to-wear): consecutive same-guidance regions fold into
-/// one row ([groupWearRegions]) — a muted "Prague, Kraków · Aug 24 – Sep 1 ·
-/// 15°–27°" line followed by the deterministic clothing phrase. When any
-/// displayed region is historical, ONE italic footnote after the rows says
-/// the ranges are typical rather than a forecast — the old per-row qualifier
-/// read as repetition. Display-only: the trip screen builds the
-/// [WearRegionRec]s from its own weather watches (collapsed-row summaries
-/// must be fed by the parent).
+/// The city-by-city detail inside the "What to wear & pack" sheet
+/// (specs/what-to-wear): consecutive same-guidance regions fold into one row
+/// ([groupWearRegions]) — a muted "Prague, Kraków · Aug 24 – Sep 1 · 15°–27°"
+/// line followed by the deterministic clothing phrase.
+///
+/// These rows sit behind a collapsed disclosure; [PackEssentialsList] carries
+/// the trip-level answer above it. The historical footnote is NOT here: it
+/// qualifies the sheet header's temperature envelope too, so hiding it behind
+/// the same tap would let the numbers make a forecast claim they can't back.
+/// The sheet owns it (gate: [anyHistorical]).
+///
+/// Display-only: the trip screen builds the [WearRegionRec]s from its own
+/// weather watches and passes a press-time snapshot.
 class WearRecsList extends StatelessWidget {
   final List<WearRegionRec> regions;
 
@@ -90,16 +94,94 @@ class WearRecsList extends StatelessWidget {
               ],
             ),
           ),
-        if (groups.any((g) => g.historical))
+      ],
+    );
+  }
+}
+
+/// The trip-level packing answer at the top of the sheet: one row per thing to
+/// bring, with the stops that ask for it. Reads [packEssentials], which is the
+/// union over the very groups [WearRecsList] renders below — so this list can
+/// never promise something the city detail doesn't say, nor drop something it
+/// does.
+///
+/// Read-only by design (specs/what-to-wear amendment 2026-08-17): these are a
+/// derivation, the checklist under them is the traveler's own state, and
+/// nothing here writes into it.
+class PackEssentialsList extends StatelessWidget {
+  final List<WearRegionRec> regions;
+
+  const PackEssentialsList({super.key, required this.regions});
+
+  /// Muted 18px leading glyph — the [CollapsibleSection] row convention.
+  /// [PackEssential.rainGear] and [PackEssential.sunProtection] deliberately
+  /// reuse the day chip's rain/sun glyphs (`_weatherGlyph`) so the two
+  /// surfaces read as one vocabulary.
+  IconData _iconFor(PackEssential e) => switch (e) {
+        PackEssential.thermals => Icons.thermostat,
+        PackEssential.warmCoat => Icons.ac_unit,
+        PackEssential.jacket => Icons.dry_cleaning_outlined,
+        PackEssential.lightLayer => Icons.layers_outlined,
+        PackEssential.summerClothes => Icons.checkroom,
+        PackEssential.rainGear => Icons.umbrella,
+        PackEssential.sunProtection => Icons.wb_sunny,
+      };
+
+  /// Pure l10n mapping — which essentials a region earns lives in
+  /// [essentialsFor], next to the band phrases these echo.
+  String _labelFor(AppLocalizations l10n, PackEssential e) => switch (e) {
+        PackEssential.thermals => l10n.wearPackThermals,
+        PackEssential.warmCoat => l10n.wearPackWarmCoat,
+        PackEssential.jacket => l10n.wearPackJacket,
+        PackEssential.lightLayer => l10n.wearPackLightLayer,
+        PackEssential.summerClothes => l10n.wearPackSummerClothes,
+        PackEssential.rainGear => l10n.wearPackRainGear,
+        PackEssential.sunProtection => l10n.wearPackSunProtection,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final item in packEssentials(regions))
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Text(
-              // Italic+muted only — the _weatherChip qualifier treatment.
-              l10n.wearHistoricalFootnote,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: muted,
-                fontStyle: FontStyle.italic,
-              ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  // Optical nudge onto the label's first line, which is
+                  // taller than the glyph.
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Icon(_iconFor(item.essential), size: 18, color: muted),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _labelFor(l10n, item.essential),
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      Text(
+                        // Plain ', ' join — locale-safe with no conjunction,
+                        // the same rule as the row labels above.
+                        item.everyStop
+                            ? l10n.wearEveryStop
+                            : item.labels.join(', '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
       ],

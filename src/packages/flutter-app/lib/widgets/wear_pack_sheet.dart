@@ -6,6 +6,7 @@ import '../providers/checklist_provider.dart';
 import '../theme/spacing.dart';
 import '../utils/clothing_recs.dart';
 import 'checklist_section.dart';
+import 'collapsible_section.dart';
 import 'status_pill.dart';
 import 'wear_recs.dart';
 
@@ -75,11 +76,16 @@ Future<void> showWearPackSheet(
   );
 }
 
-/// The sheet body: a header line (title · summary · checked-count pill) over
-/// the per-leg guidance rows and the live checklist — the same composition
-/// the old collapsed-section row expanded to. Public so tests can scope
-/// finders to the sheet.
-class WearPackSheetBody extends ConsumerWidget {
+/// The sheet body: a header line (title · summary · checked-count pill), then
+/// the trip-level packing answer, then the per-region guidance behind a
+/// "City by city" disclosure, then the live checklist. Public so tests can
+/// scope finders to the sheet.
+///
+/// Leading with the summary is the 2026-08-17 amendment: on an eight-city trip
+/// the per-region rows opened as sixteen lines of prose and left the reader to
+/// work out the union themselves. [packEssentials] does that union from the
+/// same groups [WearRecsList] renders, so the detail collapses losslessly.
+class WearPackSheetBody extends ConsumerStatefulWidget {
   final String tripId;
   final List<WearRegionRec> regions;
   final bool canEdit;
@@ -97,7 +103,20 @@ class WearPackSheetBody extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WearPackSheetBody> createState() => _WearPackSheetBodyState();
+}
+
+class _WearPackSheetBodyState extends ConsumerState<WearPackSheetBody> {
+  /// [CollapsibleSection] requires the parent to own this. Route-scoped here —
+  /// the sheet body never reparents, and reopening the sheet is meant to start
+  /// closed again, so there is nothing to lift higher.
+  bool _cityDetailOpen = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tripId = widget.tripId;
+    final regions = widget.regions;
+    final canEdit = widget.canEdit;
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final items = ref.watch(checklistProvider(tripId)).valueOrNull;
@@ -108,8 +127,8 @@ class WearPackSheetBody extends ConsumerWidget {
     if (regions.isEmpty && !showChecklist) return const SizedBox.shrink();
     final checked = items?.where((i) => i.checked).length ?? 0;
     // Header one-liner: the cross-region temperature envelope plus the rain
-    // signal — kind-neutral by design, the "typical" qualifier lives in
-    // [WearRecsList]'s single footnote. Spaced dash like the date ranges
+    // signal — kind-neutral by design, the "typical" qualifier lives in the
+    // single footnote below the summary. Spaced dash like the date ranges
     // ("Sep 15 – Sep 20"), so a negative low never collides with it
     // ("-6° – 2°"). Without weather, the checked-count summary stands in.
     final String summary;
@@ -151,12 +170,61 @@ class WearPackSheetBody extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        if (regions.isNotEmpty) WearRecsList(regions: regions),
+        if (regions.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+            child: Text(
+              l10n.wearPackTitle,
+              // Muted labelLarge section label — the city_events_sheet group
+              // header treatment, which is what keeps this read-only block
+              // visibly distinct from the editable checklist below it.
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          PackEssentialsList(regions: regions),
+          // Outside the disclosure on purpose: this qualifies the header's
+          // temperature envelope as much as the rows, so it can't hide behind
+          // a tap (specs/what-to-wear, the "framed as typical" story).
+          if (anyHistorical(regions))
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Text(
+                // Italic+muted only — the _weatherChip qualifier treatment.
+                l10n.wearHistoricalFootnote,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          // One displayed group means the detail adds only its dates — the
+          // envelope is already in the header — so a disclosure would be a tap
+          // charged for nothing. Render it inline instead.
+          //
+          // Grouping is recomputed rather than threaded through: it is pure
+          // and runs over a handful of legs, and passing groups down would
+          // cost [WearRecsList] and [PackEssentialsList] the regions-in
+          // contract that keeps them display-only.
+          if (groupWearRegions(regions).length < 2)
+            WearRecsList(regions: regions)
+          else
+            CollapsibleSection(
+              title: l10n.wearByCityTitle,
+              icon: Icons.location_on_outlined,
+              expanded: _cityDetailOpen,
+              onToggle: () =>
+                  setState(() => _cityDetailOpen = !_cityDetailOpen),
+              child: WearRecsList(regions: regions),
+            ),
+        ],
         if (regions.isNotEmpty && showChecklist) const Divider(height: 24),
         ChecklistSection(
           tripId: tripId,
           canEdit: canEdit,
-          isOffline: isOffline,
+          isOffline: widget.isOffline,
           showHeader: false,
         ),
       ],

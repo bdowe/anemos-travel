@@ -6428,6 +6428,66 @@ abstract class AppLocalizations {
   /// **'Beyond the 16-day forecast, ranges show typical weather for these dates.'**
   String get wearHistoricalFootnote;
 
+  /// No description provided for @wearPackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pack for this trip'**
+  String get wearPackTitle;
+
+  /// No description provided for @wearByCityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'City by city'**
+  String get wearByCityTitle;
+
+  /// No description provided for @wearEveryStop.
+  ///
+  /// In en, this message translates to:
+  /// **'every stop'**
+  String get wearEveryStop;
+
+  /// No description provided for @wearPackThermals.
+  ///
+  /// In en, this message translates to:
+  /// **'Thermals'**
+  String get wearPackThermals;
+
+  /// No description provided for @wearPackWarmCoat.
+  ///
+  /// In en, this message translates to:
+  /// **'A warm coat, hat, and gloves'**
+  String get wearPackWarmCoat;
+
+  /// No description provided for @wearPackJacket.
+  ///
+  /// In en, this message translates to:
+  /// **'A jacket or warm layer'**
+  String get wearPackJacket;
+
+  /// No description provided for @wearPackLightLayer.
+  ///
+  /// In en, this message translates to:
+  /// **'A light layer for evenings'**
+  String get wearPackLightLayer;
+
+  /// No description provided for @wearPackSummerClothes.
+  ///
+  /// In en, this message translates to:
+  /// **'Summer clothes'**
+  String get wearPackSummerClothes;
+
+  /// No description provided for @wearPackRainGear.
+  ///
+  /// In en, this message translates to:
+  /// **'An umbrella or rain jacket'**
+  String get wearPackRainGear;
+
+  /// No description provided for @wearPackSunProtection.
+  ///
+  /// In en, this message translates to:
+  /// **'Sun protection'**
+  String get wearPackSunProtection;
+
   /// Caption on the Konami-code easter egg. Not translated — it is a song title.
   ///
   /// In en, this message translates to:

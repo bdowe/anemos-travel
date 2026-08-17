@@ -5,6 +5,52 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-17 — "What to wear & pack" never said what to pack
+
+- **[app] Friction → fixed:** on the 8-city Europe trip the sheet opened as
+  **sixteen lines of prose** — one two-line paragraph per city, "Mild — light
+  layers", "Warm — summer clothes, a light evening layer", four times over —
+  and never answered the question its own title asks. The reader had to hold
+  eight phrasings in their head and do the union themselves: *three of these
+  say rain, so… umbrella.* The #330 fold was working correctly; the trip
+  genuinely has eight distinct weather stories. **Volume was the problem, not
+  a bug**, which is why the previous fix (merge same-guidance rows) couldn't
+  reach it — there was nothing left to merge.
+- **[app] The summary had to be the union, not a second opinion.** The
+  tempting version writes a fresh trip-level phrase from the raw flags. That
+  gives you two derivations of one thing, and the day the header says
+  "umbrella" while no visible row says rain, nobody can tell which is wrong.
+  Instead `packEssentials` iterates **`groupWearRegions`** — the exact list
+  the rows render — and maps each displayed phrase to the objects it asks for.
+  Every suggestion is backed by a visible row and every row contributes at
+  least one suggestion, which is what makes collapsing the detail behind
+  "City by city" lossless rather than lossy. Same rule that moved
+  `effectiveAdvisories` widget→util in #330, one level up.
+- **[app] What a row promises decides where it can hide.** The historical
+  footnote ("ranges show typical weather for these dates") qualifies the
+  **header's** temperature envelope as much as the rows', so putting it inside
+  the collapsible would have let the numbers make a forecast claim they can't
+  back, one tap away from the correction. It renders outside the disclosure
+  and is pinned that way. Corollary the other direction: with one displayed
+  group the detail adds only its dates — the envelope is already in the header
+  — so there is no disclosure at all rather than a tap that buys nothing.
+- **[dev] A "nothing is a no-op" loop is a claim you have to check per case.**
+  First draft of the advisory test asserted that every `WearAdvisory` adds an
+  essential *over the mild band*. `bigSwing` ("big day–night range, bring
+  layers") maps to the same light layer `mild` already yields, so it failed —
+  correctly. The honest form pairs each advisory with a band that does **not**
+  already imply its object, and the overlap gets its own test saying so: one
+  object, one row, the union is idempotent. A green universal loop here would
+  have meant the table was wrong, not that the code was right.
+- **[dev] A fixture keyed on a derivation restates the derivation.** The
+  wear tests' weather fake keys on `'<city>|<startDate>'`, and *startDate* is
+  the **visible** leg range — so a new two-city fixture with the obvious dates
+  silently resolved one leg to an empty report, folded the trip to a single
+  group, and failed two tests for a reason that had nothing to do with them.
+  Tests about what the sheet SAYS now use a city-keyed fake; the one test that
+  is genuinely about windows keeps the city|date fake and stays the only
+  place that spelling appears.
+
 ## 2026-08-17 — Trip Health argued with the checklist
 
 - **[app] Friction → fixed:** *"It says I don't have lodging booked for days

@@ -2611,6 +2611,16 @@
   "wearFreezingNights": "freezing nights, warm layers",
   "wearSummaryRain": "rain likely",
   "wearHistoricalFootnote": "Beyond the 16-day forecast, ranges show typical weather for these dates.",
+  "wearPackTitle": "Pack for this trip",
+  "wearByCityTitle": "City by city",
+  "wearEveryStop": "every stop",
+  "wearPackThermals": "Thermals",
+  "wearPackWarmCoat": "A warm coat, hat, and gloves",
+  "wearPackJacket": "A jacket or warm layer",
+  "wearPackLightLayer": "A light layer for evenings",
+  "wearPackSummerClothes": "Summer clothes",
+  "wearPackRainGear": "An umbrella or rain jacket",
+  "wearPackSunProtection": "Sun protection",
   "rickRollCaption": "Never gonna give you up",
   "@rickRollCaption": {
     "description": "Caption on the Konami-code easter egg. Not translated — it is a song title."

@@ -330,6 +330,187 @@ void main() {
       expect((g.loC, g.hiC), (15, 26));
     });
   });
+
+  group('essentialsFor', () {
+    test('every band asks for something', () {
+      for (final band in TempBand.values) {
+        expect(essentialsFor(band, const {}), isNotEmpty,
+            reason: '$band contributes nothing to the summary');
+      }
+    });
+
+    test('the band table matches the phrases the rows render', () {
+      expect(essentialsFor(TempBand.freezing, const {}),
+          {PackEssential.thermals, PackEssential.warmCoat});
+      expect(essentialsFor(TempBand.cold, const {}), {PackEssential.warmCoat});
+      expect(essentialsFor(TempBand.cool, const {}), {PackEssential.jacket});
+      expect(essentialsFor(TempBand.mild, const {}), {PackEssential.lightLayer});
+      expect(essentialsFor(TempBand.warm, const {}),
+          {PackEssential.summerClothes, PackEssential.lightLayer});
+      expect(essentialsFor(TempBand.hot, const {}),
+          {PackEssential.summerClothes, PackEssential.sunProtection});
+    });
+
+    test('every advisory contributes its object', () {
+      // Paired with a band that does NOT already imply it, so each row proves
+      // the advisory arm rather than the band's.
+      const table = {
+        WearAdvisory.rainLikely: (TempBand.mild, PackEssential.rainGear),
+        WearAdvisory.extremeHeat: (TempBand.mild, PackEssential.sunProtection),
+        WearAdvisory.freezingNights: (TempBand.mild, PackEssential.jacket),
+        WearAdvisory.bigSwing: (TempBand.hot, PackEssential.lightLayer),
+      };
+      expect(table.keys, WearAdvisory.values.toSet(),
+          reason: 'a new advisory needs a row here');
+      table.forEach((advisory, expected) {
+        final (band, essential) = expected;
+        final bare = essentialsFor(band, const {});
+        expect(bare, isNot(contains(essential)),
+            reason: 'pick a band that does not already imply $essential');
+        expect(essentialsFor(band, {advisory}), containsAll([...bare, essential]));
+      });
+    });
+
+    test('an advisory restating the band is idempotent, not a second row', () {
+      // "big day–night range, bring layers" on a mild leg asks for the same
+      // light layer "Mild — light layers" already does. One object, one row —
+      // the union is what the summary shows.
+      expect(essentialsFor(TempBand.mild, {WearAdvisory.bigSwing}),
+          essentialsFor(TempBand.mild, const {}));
+    });
+  });
+
+  group('packEssentials', () {
+    // The screenshot trip that prompted the summary: eight distinct stories,
+    // none of which fold.
+    List<WearRegionRec> europeTrip() => [
+          region('Amsterdam', '2026-08-24', '2026-08-26',
+              rec(band: TempBand.mild, lo: 13, hi: 22)),
+          region('Prague', '2026-08-26', '2026-08-29', rec(lo: 17, hi: 27)),
+          region('Kraków', '2026-08-29', '2026-09-04',
+              rec(lo: 15, hi: 32, rainLikely: true, bigSwing: true)),
+          region('Copenhagen', '2026-09-04', '2026-09-07',
+              rec(band: TempBand.mild, lo: 13, hi: 23, rainLikely: true)),
+          region('Berlin', '2026-09-07', '2026-09-10',
+              rec(band: TempBand.mild, lo: 12, hi: 24)),
+          region('Gothenburg', '2026-09-10', '2026-09-13',
+              rec(band: TempBand.mild, lo: 11, hi: 22, rainLikely: true)),
+          region('Sorrento', '2026-09-13', '2026-09-18', rec(lo: 18, hi: 28)),
+          region('Rome', '2026-09-18', '2026-09-22',
+              rec(band: TempBand.hot, lo: 19, hi: 32, bigSwing: true)),
+        ];
+
+    test('is exactly the union of what the displayed rows say', () {
+      final regions = europeTrip();
+      final groups = groupWearRegions(regions);
+      expect(groups, hasLength(8), reason: 'fixture must not fold');
+
+      final fromRows = <PackEssential>{
+        for (final g in groups) ...essentialsFor(g.band, g.advisories),
+      };
+      final summary =
+          packEssentials(regions).map((i) => i.essential).toSet();
+      expect(summary, fromRows);
+    });
+
+    test('renders in PackEssential order, whatever the itinerary order', () {
+      final forward = packEssentials(europeTrip()).map((i) => i.essential);
+      expect(forward, [
+        PackEssential.lightLayer,
+        PackEssential.summerClothes,
+        PackEssential.rainGear,
+        PackEssential.sunProtection,
+      ]);
+      // Reversing the trip reverses the labels, never the row order.
+      final reversed =
+          packEssentials(europeTrip().reversed.toList()).map((i) => i.essential);
+      expect(reversed, forward);
+    });
+
+    test('attributes each object to its stops, in itinerary order', () {
+      final items = {
+        for (final i in packEssentials(europeTrip())) i.essential: i,
+      };
+      expect(items[PackEssential.summerClothes]!.labels,
+          ['Prague', 'Kraków', 'Sorrento', 'Rome']);
+      expect(items[PackEssential.rainGear]!.labels,
+          ['Kraków', 'Copenhagen', 'Gothenburg']);
+      expect(items[PackEssential.sunProtection]!.labels, ['Rome']);
+    });
+
+    test('everyStop only when every displayed group asks for it', () {
+      final items = {
+        for (final i in packEssentials(europeTrip())) i.essential: i,
+      };
+      // Every band on this trip wants a light layer; nothing else does.
+      expect(items[PackEssential.lightLayer]!.everyStop, isTrue);
+      expect(items[PackEssential.summerClothes]!.everyStop, isFalse);
+      expect(items[PackEssential.rainGear]!.everyStop, isFalse);
+    });
+
+    test('everyStop counts GROUPS, not cities — a merged run is one', () {
+      // Two mild+rain legs fold into one group; the lone hot leg is the other.
+      // Rain covers 2 of 3 cities but only 1 of 2 displayed rows.
+      final regions = [
+        region('Bergen', '2026-09-01', '2026-09-04',
+            rec(band: TempBand.mild, rainLikely: true)),
+        region('Ålesund', '2026-09-04', '2026-09-07',
+            rec(band: TempBand.mild, rainLikely: true)),
+        region('Seville', '2026-09-09', '2026-09-13', rec(band: TempBand.hot)),
+      ];
+      expect(groupWearRegions(regions), hasLength(2));
+      final items = {
+        for (final i in packEssentials(regions)) i.essential: i,
+      };
+      expect(items[PackEssential.rainGear]!.everyStop, isFalse);
+      expect(items[PackEssential.rainGear]!.labels, ['Bergen', 'Ålesund']);
+      expect(items[PackEssential.summerClothes]!.labels, ['Seville']);
+    });
+
+    test('a revisited city is named once', () {
+      final items = packEssentials([
+        region('Paris', '2026-09-15', '2026-09-17', rec(rainLikely: true)),
+        region('Nice', '2026-09-17', '2026-09-20', rec(band: TempBand.hot)),
+        region('Paris', '2026-09-20', '2026-09-22', rec(rainLikely: true)),
+      ]);
+      final rain =
+          items.firstWhere((i) => i.essential == PackEssential.rainGear);
+      expect(rain.labels, ['Paris']);
+    });
+
+    test('a cold trip asks for the cold things', () {
+      final items = packEssentials([
+        region('Tromsø', '2026-01-05', '2026-01-09',
+            rec(band: TempBand.freezing, lo: -12, hi: -3, freezingNights: true)),
+      ]).map((i) => i.essential);
+      // freezingNights is suppressed on a freezing band, so no jacket row —
+      // the coat already said it.
+      expect(items, [PackEssential.thermals, PackEssential.warmCoat]);
+    });
+
+    test('empty in, empty out', () {
+      expect(packEssentials([]), isEmpty);
+    });
+  });
+
+  group('anyHistorical', () {
+    test('agrees with the grouped rows it gates the footnote for', () {
+      for (final regions in [
+        <WearRegionRec>[],
+        [region('Prague', '2026-08-24', '2026-08-27', rec())],
+        [
+          region('Prague', '2026-08-24', '2026-08-27', rec()),
+          region('Lisbon', '2026-09-10', '2026-09-14', rec(historical: true)),
+        ],
+        [region('Lisbon', '2026-09-10', '2026-09-14', rec(historical: true))],
+      ]) {
+        expect(
+          anyHistorical(regions),
+          groupWearRegions(regions).any((g) => g.historical),
+        );
+      }
+    });
+  });
 }
 
 /// Direct [ClothingRec] builder for grouping tests — grouping consumes the

@@ -1095,6 +1095,16 @@
   "wearFreezingNights": "noches bajo cero, capas de abrigo",
   "wearSummaryRain": "lluvia probable",
   "wearHistoricalFootnote": "Más allá del pronóstico de 16 días, los rangos muestran el tiempo habitual en estas fechas.",
+  "wearPackTitle": "Qué llevar en este viaje",
+  "wearByCityTitle": "Ciudad por ciudad",
+  "wearEveryStop": "todas las paradas",
+  "wearPackThermals": "Ropa térmica",
+  "wearPackWarmCoat": "Abrigo, gorro y guantes",
+  "wearPackJacket": "Una chaqueta o capa de abrigo",
+  "wearPackLightLayer": "Una capa ligera para la noche",
+  "wearPackSummerClothes": "Ropa de verano",
+  "wearPackRainGear": "Un paraguas o chubasquero",
+  "wearPackSunProtection": "Protección solar",
   "rickRollCaption": "Never gonna give you up",
   "rickRollDismissHint": "toca donde sea para salir"
 }
