@@ -3128,7 +3128,7 @@ abstract class AppLocalizations {
   /// **'No bookings for this destination.'**
   String get tripBookingsLensNoneForDestination;
 
-  /// No description provided for @tripBookingsAllBookedForDestination.
+  /// Shown in the 'Not booked yet' scope when ONE destination is selected and that destination is fully booked. Deliberately not tripFilterAllBooked, which claims the whole trip is done.
   ///
   /// In en, this message translates to:
   /// **'Nothing left to book here.'**
