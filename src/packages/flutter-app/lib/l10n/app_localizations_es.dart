@@ -3343,11 +3343,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get refineNewChat => 'Chat nuevo';
 
   @override
-  String get refineNewChatConfirmTitle => '¿Empezar un chat nuevo?';
+  String get refineClearChat => 'Borrar chat';
 
   @override
-  String get refineNewChatConfirmBody =>
-      'Se borrará esta conversación. Tu viaje no se ve afectado.';
+  String get refineClearChatConfirmTitle => '¿Borrar esta conversación?';
+
+  @override
+  String get refineClearChatConfirmBody =>
+      'Se eliminará el chat. Tu viaje y su plan no se ven afectados.';
 
   @override
   String get refineResumeLoading => 'Restaurando tu conversación…';

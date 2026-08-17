@@ -5,6 +5,31 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-17 — the button named what it creates, not what it destroys
+
+- **[app] Friction → fixed:** *"Maybe rename 'New chat' to 'Clear chat'?"* The
+  refine panel header read `✨ Refining Kraków — New chat — ✕`. "New chat" names
+  a creation; the button discards the trip's saved conversation, locally and
+  server-side. The app already knew — the confirm dialog behind it said "This
+  conversation will be cleared." The label was the last part still pretending
+  otherwise, one day after #446 gave it that label.
+- **[app] One key, five sites, two meanings.** `refineNewChat` also backed the
+  expired and failed panels' recovery buttons, where the transcript is *already*
+  gone and the button genuinely starts a new one. Renaming the key would have
+  put "Clear chat" under the sentence "This conversation has expired." **A
+  shared string is only a shared string while the sites share a meaning** — so
+  the destructive three (header, Continue-chat ⋮, confirm button) took a new
+  `refineClearChat` and the two recovery buttons kept the old one. The test that
+  used to just check the expired panel now asserts the split holds.
+- **[dev] Blunter copy exposed a dialog that was already lying.** In the expired
+  state `hasConversation` is true via the trip's stale `refine_chat` summary, so
+  tapping "New chat" raised a confirm — which as "Clear this conversation?"
+  would contradict, word for word, the panel the traveler was reading. Fixed at
+  the same gate #446 rewrote: `expired` is the one state that answers *no*
+  despite the summary, because the server's 404 already settled it.
+  Mutation-checked. **Rewording a string is a reason to re-read the condition
+  that shows it** — the sharper sentence is what made the wrong state visible.
+
 ## 2026-08-17 — The chat opened too short to chat in
 
 - **[app] Friction → fixed:** *"Clicking the chat button on mobile doesn't

@@ -5522,17 +5522,23 @@ abstract class AppLocalizations {
   /// **'New chat'**
   String get refineNewChat;
 
-  /// No description provided for @refineNewChatConfirmTitle.
+  /// No description provided for @refineClearChat.
   ///
   /// In en, this message translates to:
-  /// **'Start a new chat?'**
-  String get refineNewChatConfirmTitle;
+  /// **'Clear chat'**
+  String get refineClearChat;
 
-  /// No description provided for @refineNewChatConfirmBody.
+  /// No description provided for @refineClearChatConfirmTitle.
   ///
   /// In en, this message translates to:
-  /// **'This conversation will be cleared. Your trip is not affected.'**
-  String get refineNewChatConfirmBody;
+  /// **'Clear this conversation?'**
+  String get refineClearChatConfirmTitle;
+
+  /// No description provided for @refineClearChatConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The chat will be deleted. Your trip and its plan aren\'t affected.'**
+  String get refineClearChatConfirmBody;
 
   /// No description provided for @refineResumeLoading.
   ///

@@ -3324,11 +3324,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get refineNewChat => 'New chat';
 
   @override
-  String get refineNewChatConfirmTitle => 'Start a new chat?';
+  String get refineClearChat => 'Clear chat';
 
   @override
-  String get refineNewChatConfirmBody =>
-      'This conversation will be cleared. Your trip is not affected.';
+  String get refineClearChatConfirmTitle => 'Clear this conversation?';
+
+  @override
+  String get refineClearChatConfirmBody =>
+      'The chat will be deleted. Your trip and its plan aren\'t affected.';
 
   @override
   String get refineResumeLoading => 'Restoring your conversation…';
