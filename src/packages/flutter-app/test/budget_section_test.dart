@@ -235,6 +235,17 @@ Expense _both(String id, String category, String label,
         actualAmount: paid,
         purchased: true);
 
+/// Lays [child] out at [width] when one is asked for, and otherwise hands back
+/// the same widget untouched — an `Align`/`SizedBox` wrapper applied
+/// unconditionally would loosen the horizontal constraint every other case in
+/// this file relies on.
+Widget _maybeNarrow(double? width, Widget child) => width == null
+    ? child
+    : Align(
+        alignment: Alignment.topLeft,
+        child: SizedBox(width: width, child: child),
+      );
+
 Future<_FakeBudgetApiService> _pump(
   WidgetTester tester,
   List<Expense> expenses, {
@@ -244,6 +255,10 @@ Future<_FakeBudgetApiService> _pump(
   bool isOffline = false,
   Locale? locale,
   DailySpendGuide? dailySpend,
+  // Width the section is laid out at, when a case is about the add row's
+  // shape. Applied only when passed, so every existing call stays
+  // byte-identical (and keeps the full surface width it always had).
+  double? width,
 }) async {
   final fake = _FakeBudgetApiService(expenses,
       targetAmount: targetAmount, currency: currency);
@@ -263,9 +278,12 @@ Future<_FakeBudgetApiService> _pump(
       supportedLocales: const [Locale('en'), Locale('es')],
       localizationsDelegates: testLocalizationsDelegates,
         home: Scaffold(
-          body: SingleChildScrollView(
-            child: BudgetSection(
-                tripId: 't1', canEdit: canEdit, isOffline: isOffline),
+          body: _maybeNarrow(
+            width,
+            SingleChildScrollView(
+              child: BudgetSection(
+                  tripId: 't1', canEdit: canEdit, isOffline: isOffline),
+            ),
           ),
         ),
       ),
@@ -507,28 +525,144 @@ void main() {
     expect(categoryButton.enabled, isFalse);
   });
 
-  testWidgets(
-      'amount hint renders un-truncated under the app theme at phone width',
-      (tester) async {
-    await tester.binding.setSurfaceSize(const Size(360, 690));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await _pump(tester, [_exp('a', 'food', 'Lunch', 20)]);
+  /// Asserts every add-row hint currently on screen renders whole.
+  ///
+  /// A too-narrow hint ellipsizes silently — a field hint inherits
+  /// `hintMaxLines` from `TextField.maxLines` (1), which turns on
+  /// `TextOverflow.ellipsis` against a tight width — so it never throws and
+  /// "no exception" proves nothing. The full string's intrinsic width has to
+  /// fit the width the field gave the hint. Compared against constraints, not
+  /// painted size: painted width drops the trailing letter-spacing that
+  /// intrinsic width keeps, and `bodyLarge` has 0.5 of it.
+  void expectHintsWhole(WidgetTester tester, List<String> hints, String where) {
+    for (final hint in hints) {
+      final finder = find.text(hint);
+      expect(finder, findsOneWidget, reason: '"$hint" is missing $where');
+      final paragraph = tester.renderObject<RenderParagraph>(finder);
+      expect(
+        paragraph.getMaxIntrinsicWidth(double.infinity),
+        lessThanOrEqualTo(paragraph.constraints.maxWidth),
+        reason: '"$hint" is being ellipsized $where',
+      );
+    }
+    expect(tester.takeException(), isNull, reason: 'overflow $where');
+  }
 
-    // A too-narrow hint ellipsizes (never throws), so "no exception" proves
-    // nothing: the full string's intrinsic width must fit in the width the
-    // field gave the hint. (Compared against constraints, not painted size —
-    // painted width excludes trailing letter-spacing that intrinsic width
-    // includes.) English only on purpose — the 1em-per-glyph FlutterTest
-    // font inflates "Importe" past any realistic width, while Inter fits it
-    // easily at the shipped 136px.
-    final hint = find.text('Amount');
-    expect(hint, findsOneWidget);
-    final paragraph = tester.renderObject<RenderParagraph>(hint);
-    expect(
-      paragraph.getMaxIntrinsicWidth(double.infinity),
-      lessThanOrEqualTo(paragraph.constraints.maxWidth),
-      reason: 'the Amount hint is being ellipsized — widen the amount field',
-    );
+  // The real gate, and deliberately CONSTANT-FREE: it never names a width the
+  // row is supposed to have, only the invariant that whatever the row decided,
+  // both hints survived it. So it catches drift in the fixed-width budget or
+  // in the field-chrome figure directly, and names the width that broke.
+  //
+  // Both locales, because measuring in the font the widget renders in is what
+  // finally makes Spanish testable: the old 136px constant was chosen for
+  // Inter and asserted against the 1em-per-glyph FlutterTest font, which is
+  // why its predecessor had to give up and say "English only on purpose".
+  for (final (locale, hints) in [
+    (null, ['Add an expense…', 'Amount']),
+    (const Locale('es'), ['Añade un gasto…', 'Importe']),
+  ]) {
+    final tag = locale?.languageCode ?? 'en';
+    testWidgets('the add row truncates neither hint at any width it can get '
+        '($tag)', (tester) async {
+      for (final width in [
+        320.0, 360.0, 390.0, 412.0, 430.0, 500.0, 700.0, 900.0, //
+      ]) {
+        await _pump(tester, [_exp('a', 'food', 'Lunch', 20)],
+            locale: locale, width: width);
+        expectHintsWhole(tester, hints, 'at ${width}px in $tag');
+      }
+    });
+  }
+
+  testWidgets('the add row is one line when it fits and two when it is not',
+      (tester) async {
+    // Geometry, not widget type: what matters is whether the two fields share
+    // a line, which is what a reader sees. 900 and 360 are widths where Inter
+    // and the FlutterTest font agree on the verdict, so this is font-robust.
+    double topOf(WidgetTester t, int i) =>
+        t.getTopLeft(find.byType(TextField).at(i)).dy;
+
+    await _pump(tester, const [], width: 900);
+    expect(topOf(tester, 0), topOf(tester, 1),
+        reason: 'a 900px row has room for one line');
+
+    await _pump(tester, const [], width: 360);
+    expect(topOf(tester, 1), greaterThan(topOf(tester, 0)),
+        reason: 'a 360px row must drop the amount onto a second line');
+  });
+
+  testWidgets('the split responds to text scale, not to a hardcoded width',
+      (tester) async {
+    // Same width both times — only the type gets bigger. A px breakpoint
+    // cannot pass this; a measurement cannot fail it.
+    double topOf(WidgetTester t, int i) =>
+        t.getTopLeft(find.byType(TextField).at(i)).dy;
+
+    await _pump(tester, const [], width: 800);
+    expect(topOf(tester, 0), topOf(tester, 1));
+
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(tester, const [], width: 800);
+    expect(topOf(tester, 1), greaterThan(topOf(tester, 0)),
+        reason: 'bigger type needs more room, so the same width must stack');
+  });
+
+  testWidgets('at the narrowest widths the description gets the line to itself',
+      (tester) async {
+    // The third rung, and the reason the width sweep above passes at 320: the
+    // category trigger costs the description 56px, and there is a width where
+    // that is the difference between a whole hint and a truncated one. This
+    // pins the ladder's last step as a decision rather than an accident.
+    double dyOf(WidgetTester t, Finder f) => t.getTopLeft(f).dy;
+    final categoryFinder = find.byType(PopupMenuButton<String>);
+    final labelFinder = find.byType(TextField).first;
+
+    await _pump(tester, const [], width: 360);
+    expect(dyOf(tester, categoryFinder), dyOf(tester, labelFinder),
+        reason: 'a 360px row can still afford the category beside the label');
+
+    await _pump(tester, const [], width: 320);
+    expect(dyOf(tester, categoryFinder), greaterThan(dyOf(tester, labelFinder)),
+        reason: 'at 320px the category has to move off the label\'s line');
+  });
+
+  testWidgets('next carries from the label to the amount on both shapes',
+      (tester) async {
+    // Untested before this change, and the thing splitting a Row into a Column
+    // is most likely to break silently: `next` walks the ambient
+    // ReadingOrderTraversalPolicy, so it has to cross the line break. (The
+    // commit itself is covered by the add-button tests above; this harness's
+    // testTextInput.receiveAction does not reach onSubmitted, on the one-line
+    // shape either, so asserting it here would pin the harness, not the row.)
+    for (final width in [900.0, 360.0]) {
+      await _pump(tester, const [], width: width);
+      await tester.enterText(find.byType(TextField).first, 'Gelato');
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pumpAndSettle();
+
+      final amount = tester.state<EditableTextState>(find.descendant(
+          of: find.byType(TextField).last,
+          matching: find.byType(EditableText)));
+      expect(amount.widget.focusNode.hasFocus, isTrue,
+          reason: 'next must reach the amount field at ${width}px');
+    }
+  });
+
+  testWidgets('the icon affordances are the widths the row budgets for them',
+      (tester) async {
+    // The row's arithmetic spends 48 on each. It renders them inside a
+    // SizedBox of that width rather than predicting them, so this asserts a
+    // declaration held — and it would fire the moment someone removed those
+    // boxes, since IconButton is 48 only on mobile and 40 on desktop.
+    await _pump(tester, const [], width: 360);
+    for (final finder in [
+      find.byType(PopupMenuButton<String>),
+      find.widgetWithIcon(IconButton, Icons.add),
+    ]) {
+      expect(tester.getSize(finder).width, 48,
+          reason: 'this width is spent by the add row\'s split arithmetic');
+    }
   });
 
   testWidgets(
