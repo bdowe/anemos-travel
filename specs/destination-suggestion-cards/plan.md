@@ -47,6 +47,25 @@ None.
   `DestinationSuggestionCard` (photo, credit overlay, two-line prompt) and
   `DestinationSuggestionRow` (LayoutBuilder + centered Wrap, owns the width
   math). Geometry constants are imported from `place_photo_card.dart`.
+  **Superseded:** `DestinationSuggestionRow` is deleted; the card exposes
+  `heightFor(width)` so the carousel can reserve its page from the same
+  derivation the card lays out with.
+- **`lib/widgets/destination_carousel.dart`** — added by the revision.
+  `DestinationSuggestionCarousel`: an endless `PageView.builder` over
+  `index % prompts.length` (wrapping is one forward slide, not an eleven-page
+  sweep back), advanced by a `Timer` — not a repeating `AnimationController`,
+  which would schedule frames forever and hang `pumpAndSettle` in every test
+  that pumps the Plan tab. The timer is gated on `TickerMode.of(context)`
+  (the app's first: `AppShell` keeps tabs mounted and freezes hidden ones with
+  `TickerMode`, which does **not** stop a `Timer`), on
+  `MediaQuery.disableAnimationsOf` / `accessibleNavigationOf` (the app's first
+  reduced-motion handling), and on a `ScrollStartNotification` carrying real
+  `dragDetails`.
+- **`lib/providers/suggestions_provider.dart`** — the revision adds
+  `suggestionOrderProvider` (the whole pool, shuffled) beside
+  `suggestionPickerProvider` (three chips for the home hero), and
+  `RandomSuggestions.picker` is **required**: which draw a surface makes is
+  stated at its call site, never inherited.
 - **`lib/widgets/empty_state.dart`** — two strictly additive changes to a
   widget with ~45 call sites: a `content` slot between message and actions,
   and `icon` loosened to `IconData?`. Every existing caller still passes an

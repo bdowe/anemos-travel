@@ -3,56 +3,6 @@ import 'package:flutter/material.dart';
 import '../theme/spacing.dart';
 import 'place_photo_card.dart'
     show kPlaceCardWidth, kPlaceCardHeight, kPlaceCardImageHeight;
-import 'random_suggestions.dart' show ResolvedSuggestion;
-
-/// The drawn suggestions as a centered wrap of photo cards, sized to the space
-/// they actually get.
-///
-/// Full-size cards once three fit side by side; below that each takes half the
-/// row, so two sit across and the third wraps. Three full-width cards stacked
-/// would push the composer off a phone screen, and a horizontal rail would
-/// hide picks behind a scroll the empty state gives no reason to try.
-class DestinationSuggestionRow extends StatelessWidget {
-  final List<ResolvedSuggestion> prompts;
-  final void Function(String prompt) onSelect;
-
-  const DestinationSuggestionRow({
-    super.key,
-    required this.prompts,
-    required this.onSelect,
-  });
-
-  /// The card width for a row of [prompts] cards within [maxWidth].
-  static double cardWidth(double maxWidth, int count) {
-    final full = count * kPlaceCardWidth + (count - 1) * AppSpacing.sm;
-    if (maxWidth >= full) return kPlaceCardWidth;
-    return ((maxWidth - AppSpacing.sm) / 2).clamp(120.0, kPlaceCardWidth);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = cardWidth(constraints.maxWidth, prompts.length);
-        return Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          alignment: WrapAlignment.center,
-          children: [
-            for (final p in prompts)
-              DestinationSuggestionCard(
-                prompt: p.text,
-                asset: p.asset,
-                credit: p.credit,
-                width: width,
-                onTap: () => onSelect(p.text),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
 
 /// A one-tap conversation starter rendered as a destination photo card.
 ///
@@ -78,9 +28,9 @@ class DestinationSuggestionCard extends StatelessWidget {
 
   final VoidCallback onTap;
 
-  /// Set by [DestinationSuggestionRow] from the real available width. Passed
-  /// in rather than read from `MediaQuery` because the cards sit inside a
-  /// `PageContainer` with padding, so the window is not the space they get.
+  /// Set by [DestinationSuggestionCarousel] from the real available width.
+  /// Passed in rather than read from `MediaQuery` because the cards sit inside
+  /// a `PageContainer` with padding, so the window is not the space they get.
   final double width;
 
   const DestinationSuggestionCard({
@@ -92,18 +42,26 @@ class DestinationSuggestionCard extends StatelessWidget {
     this.width = kPlaceCardWidth,
   });
 
+  /// The image band scales with the card so the photo keeps its aspect; the
+  /// text block does not, because two lines of `titleSmall` is what decides
+  /// whether a prompt fits and that does not change with width.
+  static double _imageHeightFor(double width) =>
+      kPlaceCardImageHeight * (width / kPlaceCardWidth);
+
+  /// How tall a card of [width] renders. Public because the carousel has to
+  /// reserve the page height before the card exists — one derivation, so the
+  /// two cannot disagree and leave the card clipped or the page padded.
+  static double heightFor(double width) =>
+      _imageHeightFor(width) + (kPlaceCardHeight - kPlaceCardImageHeight);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Scale the image band with the card so the photo keeps its aspect, but
-    // leave the text block a fixed height: two lines of titleSmall is what
-    // decides whether a prompt fits, and that does not change with width.
-    final imageHeight = kPlaceCardImageHeight * (width / kPlaceCardWidth);
-    final textHeight = kPlaceCardHeight - kPlaceCardImageHeight;
+    final imageHeight = _imageHeightFor(width);
 
     return SizedBox(
       width: width,
-      height: imageHeight + textHeight,
+      height: heightFor(width),
       child: Card(
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
@@ -152,8 +110,12 @@ class DestinationSuggestionCard extends StatelessWidget {
                       horizontal: AppSpacing.sm,
                       vertical: AppSpacing.xs,
                     ),
+                    // Centred, not top-aligned: the text block reserves two
+                    // lines so a long prompt or a longer locale never clips,
+                    // and on a carousel-width card most prompts take one —
+                    // top-aligning left the title hanging over dead space.
                     child: Align(
-                      alignment: Alignment.topLeft,
+                      alignment: Alignment.centerLeft,
                       child: Text(
                         prompt,
                         maxLines: 2,

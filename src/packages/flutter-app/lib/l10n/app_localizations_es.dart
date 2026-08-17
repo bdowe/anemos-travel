@@ -3048,7 +3048,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatInputHint => '¿A dónde quieres ir?';
 
   @override
+  String get chatInputHintShort => '¿A dónde?';
+
+  @override
   String get chatFollowUpHint => 'Haz una pregunta de seguimiento…';
+
+  @override
+  String get chatFollowUpHintShort => 'Seguimiento…';
 
   @override
   String get chatSend => 'Enviar';
@@ -3309,6 +3315,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get refineAssistantHint => 'Pregunta lo que quieras sobre este viaje…';
+
+  @override
+  String get refineAssistantHintShort => 'Pregunta sobre el viaje…';
 
   @override
   String get refineHint => 'Pide cambios...';

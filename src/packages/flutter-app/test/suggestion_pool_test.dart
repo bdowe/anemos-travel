@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:travel_route_planner/l10n/l10n.dart';
@@ -19,6 +20,17 @@ void main() {
         expect(i, inInclusiveRange(0, suggestionPool.length - 1));
       }
     }
+  });
+
+  test('the carousel order is the WHOLE pool, shuffled', () {
+    // The agent empty state cycles this order, so a short draw would silently
+    // hide destinations behind a carousel that claims to show them all.
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final order = container.read(suggestionOrderProvider)();
+    expect(order, hasLength(suggestionPool.length));
+    expect(order.toSet(), hasLength(suggestionPool.length));
   });
 
   test('every pool prompt is reachable', () {

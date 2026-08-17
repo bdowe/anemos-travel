@@ -5096,11 +5096,23 @@ abstract class AppLocalizations {
   /// **'Where do you want to go?'**
   String get chatInputHint;
 
+  /// No description provided for @chatInputHintShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Where to?'**
+  String get chatInputHintShort;
+
   /// No description provided for @chatFollowUpHint.
   ///
   /// In en, this message translates to:
   /// **'Ask a follow-up…'**
   String get chatFollowUpHint;
+
+  /// No description provided for @chatFollowUpHintShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow-up…'**
+  String get chatFollowUpHintShort;
 
   /// No description provided for @chatSend.
   ///
@@ -5461,6 +5473,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ask anything about this trip…'**
   String get refineAssistantHint;
+
+  /// No description provided for @refineAssistantHintShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about this trip…'**
+  String get refineAssistantHintShort;
 
   /// No description provided for @refineHint.
   ///

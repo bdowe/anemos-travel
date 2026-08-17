@@ -2,6 +2,18 @@
 
 > **WHAT & WHY only.** See `plan.md` for the technical approach.
 
+> **Revision — the cards became a carousel.** As first shipped the three
+> drawn cards wrapped two-across on a phone, and this spec recorded that a
+> horizontal rail was rejected because it "would hide picks behind a scroll
+> the empty state gives no reason to try". That reasoning holds for a rail
+> that sits still. It stops holding for one that moves itself: an
+> auto-advancing carousel shows the traveler the whole pool without asking
+> them to go looking for it, and it is *shorter* than the wrapped grid, so the
+> message box sits higher rather than lower. The surface now cycles **all
+> twelve** destinations, one full-width card at a time, shuffled per visit.
+> The criteria below are updated in place; the ones about photos, credits,
+> language and tap behaviour are unchanged.
+
 ## Context
 
 The Plan tab's chat empty state — the first thing a traveler sees when they
@@ -28,24 +40,31 @@ so the screen reads as part of the app rather than a new idea.
 
 ## Acceptance Criteria
 
-- [ ] With an empty conversation, the Plan tab shows three destination photo
-  cards, each captioned with the suggestion it stands for.
+- [ ] With an empty conversation, the Plan tab shows one destination photo
+  card at a time, captioned with the suggestion it stands for, and moves on to
+  the next every few seconds.
+- [ ] The carousel cycles the whole pool in a fresh random order each visit,
+  and comes back round rather than stopping at the last one.
+- [ ] It stops advancing on its own while the Plan tab is hidden, under
+  reduced-motion or a screen reader, and for good once the traveler has
+  swiped it themselves.
 - [ ] Each card shows a photo of ITS own destination — Positano for the Amalfi
   road trip, Tokyo for the Tokyo weekend.
 - [ ] Tapping a card sends exactly the text printed on it as the traveler's
   message, and the conversation starts.
 - [ ] "What's near me?" and "Import from AI chat" remain available and
   unchanged in behaviour; they are not given photos.
-- [ ] The suggestions still re-draw on each fresh chat and each page load, and
-  a language switch relabels the same three without reshuffling them.
+- [ ] The order still re-draws on each fresh chat and each page load, and a
+  language switch relabels the same order without reshuffling it.
 - [ ] Every card carries a visible photographer + license credit, including
   when the photo fails to load.
 - [ ] No shipped photo is under a share-alike or copyleft license, since a
   crop would inherit that obligation.
 - [ ] A card whose photo is missing or fails to load still shows its text and
   is still tappable — no blank box, no dead card.
-- [ ] On a phone-width window the cards fit two across and wrap, with nothing
-  clipped and the message box still reachable.
+- [ ] On a phone-width window the card fills the width with nothing clipped
+  and the message box still reachable — and the block is no taller than the
+  wrapped grid it replaced.
 - [ ] The home tab's hero card is unchanged: white text chips over the
   existing hero photo.
 
@@ -66,14 +85,20 @@ already were.
 - **Surface:** the agent chat's empty state only (the Plan tab, and the trip
   refine panel's chat when empty). The home hero keeps text chips — it already
   sits on a photo, and cards there would be photo-on-photo.
-- **Layout:** headline and subtitle, then the three photo cards, then the
-  near-me chip and the import button. The generic chat glyph is dropped: the
-  photos are the visual anchor.
+- **Layout:** headline and subtitle, then the carousel and its page dots, then
+  the near-me chip and the import button. The generic chat glyph is dropped:
+  the photos are the visual anchor.
 - **Card:** destination photo above the suggestion text, which wraps to two
   lines so longer prompts and longer locales stay readable. The photographer
   credit sits over the bottom of the photo.
-- **Narrow windows:** cards shrink and wrap two-across rather than stacking
-  three full-width, which would push the message box off screen.
+- **Carousel:** one card per page, filling the available width up to a cap so
+  the photo never becomes a banner. It advances every few seconds and loops
+  forwards past the last destination. It is swipeable, and a swipe ends the
+  auto-advance for that visit — nothing gets pulled out from under a thumb.
+  The dots show position and are not tap targets; the card is the button.
+- **When it holds still:** a hidden Plan tab (the tab stays mounted, so this
+  is explicit), reduced-motion or screen-reader settings, and after a swipe.
+  A held-still carousel is still fully usable by hand.
 - **Failure:** a missing image leaves a neutral placeholder with the credit
   and text intact; the card still sends its prompt.
 
