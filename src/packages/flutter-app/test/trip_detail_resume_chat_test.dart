@@ -216,9 +216,45 @@ void main() {
     expect(find.text('This conversation has expired.'), findsOneWidget);
     expect(find.byType(SnackBar), findsNothing);
     expect(find.text('Retry'), findsNothing);
+    // Deliberately still "New chat", not "Clear chat": the transcript is
+    // already gone, so this button starts one rather than destroying one.
     expect(find.text('New chat'), findsOneWidget);
+    expect(find.text('Clear chat'), findsNothing);
     // Nothing was sent into the empty panel.
     expect(_refineState(tester).messages, isEmpty);
+  });
+
+  testWidgets('an expired conversation clears without asking first',
+      (WidgetTester tester) async {
+    // The confirm exists to get consent for a loss. Here the server has
+    // already answered 404, so the trip's `refine_chat` summary is stale and
+    // there is nothing left to lose — asking would contradict the panel the
+    // traveler is reading in the same breath.
+    final api = _FakeTripsApiService(
+      _trip(chat: _summary()),
+      failWith: const ApiException(
+          statusCode: 404, message: 'gone', endpoint: '/trips/t1/refine-chat'),
+      clearedTrip: _trip(),
+    );
+    await tester.pumpWidget(_app(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Continue chat'));
+    await tester.pumpAndSettle();
+    expect(find.text('This conversation has expired.'), findsOneWidget);
+
+    // A tap below the narrow sheet's fold only warns and silently does
+    // nothing, so bring the action up the way a drag would.
+    await tester.ensureVisible(find.text('New chat'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New chat'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Clear this conversation?'), findsNothing);
+    expect(api.deleteCalls, 1,
+        reason: 'the stale server-side row is still dropped');
+    expect(find.byType(ChatPanel), findsOneWidget,
+        reason: 'the dead end is replaced by a live composer, in one tap');
   });
 
   testWidgets('a failed restore offers a retry that actually refetches',
@@ -295,7 +331,7 @@ void main() {
     expect(_refineState(tester).messages, hasLength(2));
   });
 
-  testWidgets('New chat clears the conversation only after confirmation',
+  testWidgets('Clear chat clears the conversation only after confirmation',
       (WidgetTester tester) async {
     final api =
         _FakeTripsApiService(_trip(chat: _summary()), detail: _detail());
@@ -309,28 +345,30 @@ void main() {
     // Tapped by its label, which is the point: it shipped icon-only behind a
     // tooltip nobody on a touchscreen can see. `find.text` rather than
     // widgetWithText — TextButton.icon builds a private subtype.
-    expect(find.text('New chat'), findsOneWidget);
-    await tester.tap(find.text('New chat'));
+    expect(find.text('Clear chat'), findsOneWidget);
+    await tester.tap(find.text('Clear chat'));
     await tester.pumpAndSettle();
-    expect(find.text('Start a new chat?'), findsOneWidget);
+    expect(find.text('Clear this conversation?'), findsOneWidget);
 
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(_refineState(tester).messages, hasLength(2));
     expect(api.deleteCalls, 0);
 
-    await tester.tap(find.text('New chat'));
+    await tester.tap(find.text('Clear chat'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'New chat'));
+    // Scoped to the dialog: the header button carries the same words, so a
+    // bare find.text matches twice while the dialog is up.
+    await tester.tap(find.widgetWithText(FilledButton, 'Clear chat'));
     await tester.pumpAndSettle();
 
     expect(_refineState(tester).messages, isEmpty);
     expect(api.deleteCalls, 1);
     // Nothing left to discard.
-    expect(find.text('New chat'), findsNothing);
+    expect(find.text('Clear chat'), findsNothing);
   });
 
-  testWidgets('New chat from the Continue chat row asks first, then clears',
+  testWidgets('Clear chat from the Continue chat row asks first, then clears',
       (WidgetTester tester) async {
     // This path clears WITHOUT opening the panel, so no transcript is ever
     // hydrated here — a confirm gated on the in-memory message list would wave
@@ -342,15 +380,15 @@ void main() {
 
     await tester.tap(_rowMenu);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('New chat'));
+    await tester.tap(find.text('Clear chat'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Start a new chat?'), findsOneWidget);
+    expect(find.text('Clear this conversation?'), findsOneWidget);
     expect(api.deleteCalls, 0);
     expect(api.getChatCalls, 0,
         reason: 'discarding a conversation never restores it first');
 
-    await tester.tap(find.widgetWithText(FilledButton, 'New chat'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Clear chat'));
     await tester.pumpAndSettle();
 
     expect(api.deleteCalls, 1);
@@ -369,7 +407,7 @@ void main() {
 
     await tester.tap(_rowMenu);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('New chat'));
+    await tester.tap(find.text('Clear chat'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();

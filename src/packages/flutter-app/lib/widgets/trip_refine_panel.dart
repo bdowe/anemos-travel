@@ -156,10 +156,16 @@ class TripRefinePanel extends ConsumerWidget {
               // glyph reads as chrome. The title above is Expanded and
               // ellipsizes, so a long chapter yields to this rather than
               // pushing it off the header.
+              //
+              // It names the LOSS, not a creation: this button only exists when
+              // there is a conversation, and pressing it destroys that one. The
+              // two buttons in [_body] keep [refineNewChat] on purpose — there
+              // the transcript is already gone or unreachable, so "clear" would
+              // be offering to destroy nothing.
               if (phase == RefineChatPhase.ready && hasConversation)
                 TextButton.icon(
-                  icon: const Icon(Icons.add_comment_outlined, size: 18),
-                  label: Text(l10n.refineNewChat),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: Text(l10n.refineClearChat),
                   onPressed: onNewChat,
                 ),
               IconButton(

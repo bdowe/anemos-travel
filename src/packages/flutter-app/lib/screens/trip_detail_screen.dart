@@ -2079,10 +2079,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             onSelected: (_) => _newChat(trip),
             itemBuilder: (context) => [
               PopupMenuItem(
-                value: 'new',
+                value: 'clear',
                 child: ListTile(
-                  leading: const Icon(Icons.add_comment_outlined),
-                  title: Text(l10n.refineNewChat),
+                  leading: const Icon(Icons.delete_outline),
+                  title: Text(l10n.refineClearChat),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -2154,7 +2154,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// so changes patch the trip in place (no new versions).
   ///
   /// Since specs/trip-refine-memory this APPENDS: a ✨ tap is a change of
-  /// subject, not a new chat. Only "New chat" discards one.
+  /// subject, not a new chat. Only "Clear chat" discards one.
   Future<void> _openRefine(Trip trip, RefineTarget target) async {
     // Chat/refine needs the network; also keeps the refine panel from ever
     // observing a cached (read-only) trip.
@@ -2221,9 +2221,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     await _openRefine(trip, const RefineTarget.assistant());
   }
 
-  /// Explicit "New chat": discard the conversation here and server-side, so the
-  /// page stops advertising one the traveler just dismissed. Confirms first —
-  /// with one running chat per trip, this really does throw the thread away.
+  /// Explicit "Clear chat": discard the conversation here and server-side, so
+  /// the page stops advertising one the traveler just dismissed. Confirms first
+  /// — with one running chat per trip, this really does throw the thread away.
+  ///
+  /// Also backs the expired/failed panels' "New chat" button, which is the same
+  /// action seen from a state where there is nothing left to lose.
   Future<void> _newChat(Trip trip) async {
     final l10n = context.l10n;
     // "Is there a conversation?" is answered from wherever one can exist, not
@@ -2231,22 +2234,27 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // clears without ever opening the panel, so the transcript is NOT
     // hydrated there and an in-memory-only test would skip the confirm on
     // exactly the fifty-message chat it exists to protect.
-    final hasConversation =
-        ref.read(tripRefineProvider(widget.tripId)).messages.isNotEmpty ||
-            trip.refineChat != null;
+    //
+    // `expired` is the one state that answers NO despite `trip.refineChat`: the
+    // server already told us the transcript is gone (404), so that summary is
+    // stale and asking to clear it would contradict the panel the traveler is
+    // reading ("This conversation has expired.") in the same breath.
+    final hasConversation = _chatPhase != RefineChatPhase.expired &&
+        (ref.read(tripRefineProvider(widget.tripId)).messages.isNotEmpty ||
+            trip.refineChat != null);
     if (hasConversation) {
       final confirm = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text(l10n.refineNewChatConfirmTitle),
-          content: Text(l10n.refineNewChatConfirmBody),
+          title: Text(l10n.refineClearChatConfirmTitle),
+          content: Text(l10n.refineClearChatConfirmBody),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context, false),
                 child: Text(l10n.commonCancel)),
             FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: Text(l10n.refineNewChat)),
+                child: Text(l10n.refineClearChat)),
           ],
         ),
       );
