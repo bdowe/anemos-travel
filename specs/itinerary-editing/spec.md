@@ -40,8 +40,11 @@ changes applied to the same trip in place.
 - [ ] Each "Day N" sub-header, each city group header, and the trip header
       offer a "refine" action that opens an AI chat panel.
 - [ ] On a wide window (desktop/web), the chat panel docks to the right of the
-      itinerary; on a narrow window it appears as a collapsible/draggable
-      bottom sheet. In both cases the itinerary remains visible and scrollable.
+      itinerary and both stay visible and scrollable. On a narrow window it is a
+      draggable bottom sheet that **opens at full height** — a 45% default left
+      the transcript ~200px once the panel's own header and composer were
+      subtracted — and the itinerary is reached by dragging the sheet down to
+      its peek position or closing it.
 - [ ] Asking the panel for a change updates only the targeted section; items
       outside the section are unchanged, and the page refreshes in place
       without navigation.
@@ -94,7 +97,8 @@ changes applied to the same trip in place.
   category → Save → dialog closes, itinerary refreshes with the new item at
   the end of its day.
 - **Refine happy path:** tap the refine icon on a day, city, or the trip
-  header → chat panel opens (right dock ≥ ~900px, bottom sheet below) seeded
+  header → chat panel opens (right dock ≥ ~900px, full-height bottom sheet
+  below) seeded
   with that section's contents → user types a request → AI streams its
   reasoning, shows an "Updating itinerary…" indicator while applying → the
   itinerary refreshes in place → conversation can continue for further tweaks.
