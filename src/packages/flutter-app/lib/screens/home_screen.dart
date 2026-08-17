@@ -8,6 +8,7 @@ import '../providers/local_provider.dart';
 import '../providers/plan_provider.dart';
 import '../providers/recent_trip_provider.dart';
 import '../providers/resumable_chats_provider.dart';
+import '../providers/suggestions_provider.dart';
 import '../providers/trips_provider.dart';
 import '../navigation/app_nav.dart';
 import '../navigation/app_routes.dart';
@@ -424,6 +425,9 @@ class _AgentHeroCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           RandomSuggestions(
+            // A sample, not the pool: these are static chips on a hero photo
+            // with room for three.
+            picker: suggestionPickerProvider,
             builder: (context, prompts) => Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,

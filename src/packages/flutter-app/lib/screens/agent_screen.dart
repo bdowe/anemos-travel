@@ -8,12 +8,13 @@ import '../theme/spacing.dart';
 import '../widgets/account_menu.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/chat_panel.dart';
-import '../widgets/destination_suggestion_card.dart';
+import '../widgets/destination_carousel.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/near_me_chip.dart';
 import '../widgets/random_suggestions.dart';
 import '../providers/auth_provider.dart';
 import '../providers/plan_provider.dart';
+import '../providers/suggestions_provider.dart';
 import '../widgets/page_container.dart';
 import 'auth_screen.dart';
 import 'trip_detail_screen.dart';
@@ -130,6 +131,9 @@ class _EmptyState extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     return RandomSuggestions(
+      // The whole pool, shuffled — the carousel cycles it, so a three-pick
+      // sample would loop the same three cards every fifteen seconds.
+      picker: suggestionOrderProvider,
       builder: (context, prompts) => EmptyState(
         // No glyph here: the destination photos are this screen's visual
         // anchor, and a generic chat bubble over them is just weight
@@ -142,7 +146,7 @@ class _EmptyState extends ConsumerWidget {
         // transcript, so an English message they never wrote would read as a
         // bug. The agent answers in their language anyway
         // (specs/i18n-spanish).
-        content: DestinationSuggestionRow(
+        content: DestinationSuggestionCarousel(
           prompts: prompts,
           onSelect: (prompt) =>
               ref.read(planProvider.notifier).sendMessage(prompt),

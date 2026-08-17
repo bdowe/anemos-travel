@@ -47,6 +47,10 @@ class ChatPanel extends ConsumerStatefulWidget {
   /// a default can't be a const literal now that it is translated.
   final String? inputHint;
 
+  /// A shorter spelling of [inputHint], used when the composer measures too
+  /// narrow for the full one. Null falls back to the generic short hint.
+  final String? shortInputHint;
+
   /// Shown instead of the message list while the conversation is empty.
   final Widget? emptyState;
 
@@ -76,6 +80,7 @@ class ChatPanel extends ConsumerStatefulWidget {
     required this.state,
     required this.notifier,
     this.inputHint,
+    this.shortInputHint,
     this.emptyState,
     this.footerBuilder,
     this.onViewTrip,
@@ -425,6 +430,7 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
             focusNode: _inputFocus,
             isStreaming: isStreaming,
             hint: widget.inputHint ?? context.l10n.chatInputHint,
+            shortHint: widget.shortInputHint ?? context.l10n.chatInputHintShort,
             onSend: _send,
             onStop: () => ref.read(widget.notifier).stopStreaming(),
             hasDraftAttachments: _pending.isNotEmpty || _processingCount > 0,
@@ -1752,6 +1758,11 @@ class _InputBar extends StatelessWidget {
   final FocusNode focusNode;
   final bool isStreaming;
   final String hint;
+
+  /// Used in place of [hint] when the field is too narrow to render it on one
+  /// line. See [_hintFor].
+  final String shortHint;
+
   final VoidCallback onSend;
   final VoidCallback onStop;
   final bool hasDraftAttachments;
@@ -1764,6 +1775,7 @@ class _InputBar extends StatelessWidget {
     required this.focusNode,
     required this.isStreaming,
     required this.hint,
+    required this.shortHint,
     required this.onSend,
     required this.onStop,
     required this.hasDraftAttachments,
@@ -1771,6 +1783,31 @@ class _InputBar extends StatelessWidget {
     required this.dictation,
     this.floating = false,
   });
+
+  /// [full] when it renders on one line inside [textWidth], else [short].
+  ///
+  /// Measured, not switched on a width breakpoint. Three things move this
+  /// boundary and a breakpoint would have to guess all three: whether the mic
+  /// button is on screen at all (`_MicButton` collapses to nothing when
+  /// dictation is unavailable — a 48px swing), which locale is loaded, and the
+  /// traveler's text scale. Measuring answers all three at once, and answers
+  /// them for the refine dock's hints as well as the agent screen's.
+  static String _hintFor(
+    BuildContext context,
+    double textWidth, {
+    required String full,
+    required String short,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: full, style: Theme.of(context).textTheme.bodyLarge),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final fits = painter.width <= textWidth;
+    painter.dispose();
+    return fits ? full : short;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1813,23 +1850,44 @@ class _InputBar extends StatelessWidget {
             icon: const Icon(Icons.attach_file),
           ),
           Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              maxLines: null,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => onSend(),
-              decoration: InputDecoration(
-                hintText: isStreaming ? context.l10n.chatFollowUpHint : hint,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg, vertical: 10),
-              ),
+            // The LayoutBuilder is here, inside the Expanded, because this is
+            // the only place the field's REAL width is known: it already
+            // accounts for the mic having collapsed (see [_hintFor]).
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final textWidth = constraints.maxWidth - AppSpacing.lg * 2;
+                return TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  maxLines: null,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => onSend(),
+                  decoration: InputDecoration(
+                    hintText: _hintFor(
+                      context,
+                      textWidth,
+                      full: isStreaming ? context.l10n.chatFollowUpHint : hint,
+                      short: isStreaming
+                          ? context.l10n.chatFollowUpHintShort
+                          : shortHint,
+                    ),
+                    // The structural guarantee. Without it InputDecorator
+                    // renders the hint with maxLines: null and a hint too wide
+                    // for the field takes the whole composer to two lines —
+                    // which is exactly what "Where do you want to go?" did on
+                    // a phone. A short hint that still overflows now clips.
+                    hintMaxLines: 1,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainerHighest,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg, vertical: 10),
+                  ),
+                );
+              },
             ),
           ),
           _MicButton(dictation: dictation),

@@ -2064,7 +2064,9 @@
     }
   },
   "chatInputHint": "Where do you want to go?",
+  "chatInputHintShort": "Where to?",
   "chatFollowUpHint": "Ask a follow-up…",
+  "chatFollowUpHintShort": "Follow-up…",
   "chatSend": "Send",
   "chatStopGenerating": "Stop generating",
   "chatAttachImages": "Attach images",
@@ -2229,6 +2231,7 @@
     }
   },
   "refineAssistantHint": "Ask anything about this trip…",
+  "refineAssistantHintShort": "Ask about this trip…",
   "refineHint": "Ask for changes...",
   "refineNewChat": "New chat",
   "refineNewChatConfirmTitle": "Start a new chat?",

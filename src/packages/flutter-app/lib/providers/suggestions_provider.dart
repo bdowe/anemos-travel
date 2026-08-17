@@ -81,3 +81,16 @@ final suggestionPickerProvider = Provider<List<int> Function()>((ref) {
   final random = Random();
   return () => pickSuggestionIndices(random);
 });
+
+/// EVERY pool index, in random order — the agent empty state's carousel
+/// cycles the whole pool rather than a sample of it.
+///
+/// A sibling of [suggestionPickerProvider] rather than a parameter on it: the
+/// home hero still shows [kSuggestionCount] chips it can fit, and the two
+/// surfaces now want genuinely different draws. Which provider a surface
+/// reads is stated at its call site (`RandomSuggestions.picker`), so neither
+/// can silently inherit the other's count. Same determinism seam rules apply.
+final suggestionOrderProvider = Provider<List<int> Function()>((ref) {
+  final random = Random();
+  return () => pickSuggestionIndices(random, count: suggestionPool.length);
+});

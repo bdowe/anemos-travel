@@ -12,8 +12,8 @@ import '../providers/suggestions_provider.dart';
 /// implementation. The home hero uses only [text].
 typedef ResolvedSuggestion = ({String text, String asset, String credit});
 
-/// Draws [kSuggestionCount] random prompts from [suggestionPool] once per
-/// element lifetime and hands them, resolved, to [builder].
+/// Draws prompts from [suggestionPool] once per element lifetime and hands
+/// them, resolved, to [builder].
 ///
 /// One draw per mount is the contract: picks stay stable across rebuilds
 /// (locale, theme, app-bar state) and re-roll on remount — the chat panel
@@ -25,7 +25,17 @@ class RandomSuggestions extends ConsumerStatefulWidget {
   final Widget Function(
       BuildContext context, List<ResolvedSuggestion> prompts) builder;
 
-  const RandomSuggestions({super.key, required this.builder});
+  /// Which draw to make: [suggestionPickerProvider] for the home hero's
+  /// [kSuggestionCount] chips, [suggestionOrderProvider] for the agent
+  /// carousel's whole shuffled pool. Required, not defaulted: a surface's
+  /// count is something it states, never something it inherits.
+  final Provider<List<int> Function()> picker;
+
+  const RandomSuggestions({
+    super.key,
+    required this.builder,
+    required this.picker,
+  });
 
   @override
   ConsumerState<RandomSuggestions> createState() => _RandomSuggestionsState();
@@ -37,7 +47,7 @@ class _RandomSuggestionsState extends ConsumerState<RandomSuggestions> {
   @override
   void initState() {
     super.initState();
-    _picks = ref.read(suggestionPickerProvider)();
+    _picks = ref.read(widget.picker)();
   }
 
   @override

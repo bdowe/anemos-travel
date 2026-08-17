@@ -219,6 +219,7 @@ class TripRefinePanel extends ConsumerWidget {
           // One running conversation carries both jobs — questions and edits —
           // so the open-ended hint is the honest one.
           inputHint: l10n.refineAssistantHint,
+          shortInputHint: l10n.refineAssistantHintShort,
         );
     }
   }
