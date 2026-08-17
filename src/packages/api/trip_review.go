@@ -337,11 +337,17 @@ func walkDayCoverage(d exportData) dayCoverage {
 
 // checkDensity flags days with nothing planned (walkDayCoverage owns what that
 // means — whole trip span, city fillers excluded, travel days included) and
-// over-packed days (more than 6 items, or two+ items sharing a time_of_day).
-// Buckets by absolute day so a day split across hubs still counts once. The
-// zero-dated-items early return stands: "no places saved yet" is
-// checkUnscheduled's finding to make, and one empty run spanning the whole trip
-// would only repeat it.
+// over-packed days (more than 6 items, or 3+ items sharing a time_of_day —
+// AT MOST ONE finding per day, see the packed branch). Buckets by absolute day
+// so a day split across hubs still counts once. The zero-dated-items early
+// return stands: "no places saved yet" is checkUnscheduled's finding to make,
+// and one empty run spanning the whole trip would only repeat it.
+//
+// Every finding here is INFO, so none of them reach the attention tier or the
+// health badge (TripReviewSection.partition splits on severity alone). How you
+// arranged a day is taste; the badge counts the gaps you have to fill — a
+// night with no bed, a leg with no booking — and a busy Tuesday sitting in
+// that same count is what made "28 to fix" unreadable.
 func checkDensity(locale string, d exportData) []Finding {
 	tripID := d.Trip.ID.String()
 	buckets := map[int][]store.ItineraryItem{}
@@ -384,7 +390,7 @@ func checkDensity(locale string, d exportData) []Finding {
 		dd := day
 		if len(items) > 6 {
 			f := Finding{
-				Severity: "warn", Category: "packing", TripID: tripID, Day: &dd,
+				Severity: "info", Category: "packing", TripID: tripID, Day: &dd,
 				Message: tr(locale, "review.packedDay", day, len(items)),
 			}
 			// Offer a one-tap move of the last item in the crowded day to the
@@ -398,6 +404,12 @@ func checkDensity(locale string, d exportData) []Finding {
 				}
 			}
 			out = append(out, f)
+			// One finding per day. A packed day's slots are all crowded by
+			// construction, so emitting them too said the same thing four ways
+			// (an over-stuffed Day 6 produced "too packed" plus one row for
+			// each of morning/afternoon/evening) and buried the days that had
+			// a genuinely lopsided schedule without being full.
+			continue
 		}
 		todCount := map[string]int{}
 		for _, it := range items {
@@ -405,11 +417,13 @@ func checkDensity(locale string, d exportData) []Finding {
 				todCount[t]++
 			}
 		}
-		// Fixed order keeps the output deterministic.
+		// Fixed order keeps the output deterministic. Three in a slot, not two:
+		// dinner and a bar is an evening, not a scheduling defect, and flagging
+		// every pair made the commonest shape of a good evening a warning.
 		for _, tod := range []string{"morning", "afternoon", "evening"} {
-			if todCount[tod] > 1 {
+			if todCount[tod] > 2 {
 				f := Finding{
-					Severity: "warn", Category: "packing", TripID: tripID, Day: &dd,
+					Severity: "info", Category: "packing", TripID: tripID, Day: &dd,
 					Message: tr(locale, "review.timeOfDayCollision", day, todCount[tod], tr(locale, "review.tod."+tod)),
 				}
 				if target := lighterDay(d, day); target != nil {
@@ -498,7 +512,7 @@ func checkLodging(locale string, d exportData) []Finding {
 	var cur *nightRun
 	for n := 0; n < nights; n++ {
 		night := start.AddDate(0, 0, n)
-		if nightCovered(d.Accommodations, night) {
+		if nightCovered(d, night) {
 			cur = nil
 			continue
 		}
@@ -545,18 +559,52 @@ func checkLodging(locale string, d exportData) []Finding {
 	return out
 }
 
-// nightCovered reports whether any real (non-auto) accommodation covers the
-// given night. Auto drafts are itinerary-derived suggestions, not real
-// lodging — counting them as coverage hides genuinely unbooked nights (same
-// skip as checkBookings). Shared by checkLodging's night walk and the
-// next-step booking-slot walk (trip_next_step.go) so "covered" has one
-// definition.
-func nightCovered(accs []store.Accommodation, night time.Time) bool {
-	for _, a := range accs {
+// nightCovered is the ONE answer to "does the traveler have a bed this night".
+// Two sources close a night, and both are the traveler's own assertion:
+//
+//   - a real (non-auto) accommodation covering it. Auto drafts are itinerary-
+//     derived suggestions, not real lodging — counting them as coverage hides
+//     genuinely unbooked nights (same skip as checkBookings).
+//   - a lodging booking-todo they TICKED, spanning it. A checked box with no
+//     accommodation row means "booked elsewhere, details not entered here", and
+//     answering "No lodging booked" to that contradicts the checklist two
+//     scrolls up the same screen.
+//
+// The second source was deliberately excluded once (specs/next-step-cta:
+// "the two surfaces are allowed to differ here") — dogfooding said otherwise,
+// so the walk's rule is now the shared one. Shared by checkLodging's night walk
+// and the next-step booking-slot walk (trip_next_step.go), which is why it
+// takes the whole exportData: a caller holding only the accommodations cannot
+// answer this question, and the signature should say so.
+func nightCovered(d exportData, night time.Time) bool {
+	for _, a := range d.Accommodations {
 		if a.Auto {
 			continue
 		}
 		if stayCoversNight(a.CheckIn, a.CheckOut, night) {
+			return true
+		}
+	}
+	return bookedStayTodoCoversNight(d.BookingTodos, night)
+}
+
+// bookedStayTodoCoversNight reports whether a lodging to-do the traveler
+// checked off spans this night. An UNBOOKED row covers nothing — the tick is
+// the assertion, not the row's existence — and a row missing either date
+// covers nothing, the same guard stayCoversNight applies to accommodations.
+//
+// The filter is `kind`, not the "stay:" todo_key prefix: kind is the column
+// that MEANS "this row is about lodging" (migration 00010), and a custom row
+// the traveler added by hand carries only kind — its key is "custom:<uuid>"
+// (booking_todo_handler.go). walkBookingSlots filters on the key prefix
+// instead because it asks a different question ("which slots are in itinerary
+// order"), which custom rows have no place in.
+func bookedStayTodoCoversNight(todos []store.BookingTodo, night time.Time) bool {
+	for _, t := range todos {
+		if !t.Booked || t.Kind != "stay" {
+			continue
+		}
+		if stayCoversNight(t.DepartDate, t.ReturnDate, night) {
 			return true
 		}
 	}
@@ -646,6 +694,11 @@ func checkTransit(locale string, d exportData) []Finding {
 		if segmentConnects(d.Segments, from, to) {
 			continue
 		}
+		// Same rule nightCovered applies to lodging: a leg the traveler ticked
+		// off is booked, whether or not they entered the segment here.
+		if bookedTransportTodoConnects(d.BookingTodos, from, to) {
+			continue
+		}
 		origin, dest := from, to
 		// One resolution for the whole app (leg_transport_mode.go): a bookable
 		// ferry pair, then the trip's stated mode, then geography, then flight.
@@ -705,6 +758,34 @@ func segmentConnects(segs []store.TripSegment, from, to string) bool {
 			return true
 		}
 		if fuzzyMatch(o, to) && fuzzyMatch(dst, from) {
+			return true
+		}
+	}
+	return false
+}
+
+// bookedTransportTodoConnects reports whether a transport to-do the traveler
+// checked off runs from -> to. Endpoints come from legEndpoints, which already
+// walks the 00064 label columns -> title -> todo_key ladder and refuses the
+// reserved @home token (so a home leg, which names no city, never claims a
+// city pair — and checkTransit only ever asks about city pairs anyway).
+//
+// DIRECTIONAL, unlike segmentConnects. A hand-entered segment may well have
+// its endpoints the other way round, but 00064 made a derived leg's direction
+// load-bearing precisely because a trip can leave from ALB and come home into
+// EWR — so letting a booked return silence the outbound would be a fresh
+// instance of the lie this rule exists to remove.
+func bookedTransportTodoConnects(todos []store.BookingTodo, from, to string) bool {
+	from, to = strings.ToLower(from), strings.ToLower(to)
+	for _, t := range todos {
+		if !t.Booked || t.Kind != "transport" {
+			continue
+		}
+		o, dst, ok := legEndpoints(t)
+		if !ok {
+			continue
+		}
+		if fuzzyMatch(strings.ToLower(o), from) && fuzzyMatch(strings.ToLower(dst), to) {
 			return true
 		}
 	}

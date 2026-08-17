@@ -67,23 +67,76 @@ func TestCheckDensity_EmptyAndPacked(t *testing.T) {
 	morning := strp("morning")
 	items := []store.ItineraryItem{
 		{ID: uuid.New(), Name: "A", Day: i32p(1), TimeOfDay: morning},
-		{ID: uuid.New(), Name: "B", Day: i32p(1), TimeOfDay: morning}, // two mornings on day 1
+		{ID: uuid.New(), Name: "B", Day: i32p(1), TimeOfDay: morning},
+		{ID: uuid.New(), Name: "C", Day: i32p(1), TimeOfDay: morning}, // three mornings on day 1
 		// day 2 empty
-		{ID: uuid.New(), Name: "C", Day: i32p(3)},
+		{ID: uuid.New(), Name: "D", Day: i32p(3)},
 	}
 	fs := checkDensity("en", exportData{Trip: store.Trip{ID: uuid.New()}, Items: items})
-	cats := map[string][]Finding{}
+	// Everything checkDensity emits is a suggestion, never attention-tier.
 	for _, f := range fs {
-		cats[f.Severity] = append(cats[f.Severity], f)
+		if f.Severity != "info" {
+			t.Fatalf("density findings must all be info, got %+v", f)
+		}
 	}
-	if len(cats["info"]) != 1 { // day 2 empty
-		t.Fatalf("expected one empty-day info, got %+v", fs)
+	msgs := map[string]bool{}
+	for _, f := range fs {
+		msgs[f.Message] = true
 	}
-	if got := cats["info"][0].Message; got != "Day 2 has nothing planned." {
-		t.Fatalf("single empty day should keep the singular message, got %q", got)
+	if len(fs) != 2 {
+		t.Fatalf("expected exactly two findings (empty day + morning collision), got %+v", fs)
 	}
-	if len(cats["warn"]) != 1 { // two mornings day 1
-		t.Fatalf("expected one over-packed warn, got %+v", fs)
+	if !msgs["Day 2 has nothing planned."] {
+		t.Fatalf("single empty day should keep the singular message, got %+v", fs)
+	}
+	if !msgs["Day 1 has 3 things scheduled for the morning."] {
+		t.Fatalf("expected the 3-item morning collision, got %+v", fs)
+	}
+}
+
+// Two things in one slot is a normal evening — dinner and a bar — not a
+// scheduling defect. Flagging every pair is what made Trip Health unreadable,
+// so the collision threshold is 3.
+func TestCheckDensity_TwoInASlotIsFine(t *testing.T) {
+	evening := strp("evening")
+	items := []store.ItineraryItem{
+		{ID: uuid.New(), Name: "Moeders", Day: i32p(1), TimeOfDay: evening},
+		{ID: uuid.New(), Name: "Door 74", Day: i32p(1), TimeOfDay: evening},
+	}
+	fs := checkDensity("en", exportData{Trip: store.Trip{ID: uuid.New()}, Items: items})
+	for _, f := range fs {
+		if strings.Contains(f.Message, "scheduled for the") {
+			t.Fatalf("two items in a slot must not be flagged, got %+v", f)
+		}
+	}
+}
+
+// A packed day says one thing once. Its slots are all crowded by construction,
+// so emitting them too said the same thing four times over.
+func TestCheckDensity_PackedDayEmitsOneFinding(t *testing.T) {
+	var items []store.ItineraryItem
+	for i, tod := range []string{
+		"morning", "morning", "morning",
+		"afternoon", "afternoon", "afternoon",
+		"evening", "evening", "evening",
+	} {
+		items = append(items, store.ItineraryItem{
+			ID: uuid.New(), Name: fmt.Sprintf("A%d", i), Day: i32p(1), TimeOfDay: strp(tod)})
+	}
+	// A second, lighter day so the packed finding still earns its move fix.
+	items = append(items, store.ItineraryItem{ID: uuid.New(), Name: "B", Day: i32p(2)})
+	fs := checkDensity("en", exportData{Trip: store.Trip{ID: uuid.New()}, Items: items})
+	var forDay1 []Finding
+	for _, f := range fs {
+		if f.Day != nil && *f.Day == 1 {
+			forDay1 = append(forDay1, f)
+		}
+	}
+	if len(forDay1) != 1 {
+		t.Fatalf("a packed day should emit exactly one finding, got %+v", forDay1)
+	}
+	if !strings.Contains(forDay1[0].Message, "too packed") {
+		t.Fatalf("the one finding should be the packed-day one, got %q", forDay1[0].Message)
 	}
 }
 
@@ -224,6 +277,74 @@ func TestCheckLodging_GateAndCoverage(t *testing.T) {
 	}
 }
 
+// A stay row the traveler TICKED is lodging, even with no accommodation row
+// behind it — that is what "booked elsewhere, details not entered here" looks
+// like, and answering "No lodging booked" to it contradicts the checklist on
+// the same screen. Ticking the box is the assertion; the row's existence is
+// not.
+func TestCheckLodging_CheckedStayTodoCoversItsNights(t *testing.T) {
+	trip := store.Trip{ID: uuid.New(),
+		StartDate: dateVal(t, "2026-08-01"), EndDate: dateVal(t, "2026-08-04")} // nights 1,2,3
+
+	stayTodo := func(booked bool, in, out string) store.BookingTodo {
+		td := store.BookingTodo{ID: uuid.New(), Kind: "stay",
+			TodoKey: "stay:amsterdam", Title: "Stay in Amsterdam", Booked: booked, Auto: true}
+		if in != "" {
+			td.DepartDate, td.ReturnDate = dateVal(t, in), dateVal(t, out)
+		}
+		return td
+	}
+
+	// Booked, spanning nights 1-2 (checkout 08-03, exclusive) → only night 3 left.
+	fs := checkLodging("en", exportData{Trip: trip,
+		BookingTodos: []store.BookingTodo{stayTodo(true, "2026-08-01", "2026-08-03")}})
+	if len(fs) != 1 || fs[0].Day == nil || *fs[0].Day != 3 {
+		t.Fatalf("checked stay should cover nights 1-2, got %+v", fs)
+	}
+
+	// Booked across the whole trip → silent.
+	fs = checkLodging("en", exportData{Trip: trip,
+		BookingTodos: []store.BookingTodo{stayTodo(true, "2026-08-01", "2026-08-04")}})
+	if len(fs) != 0 {
+		t.Fatalf("a checked stay spanning the trip should silence the check, got %+v", fs)
+	}
+
+	// UNCHECKED, same dates → every night still flagged. The row alone is the
+	// app's own suggestion, not a booking.
+	fs = checkLodging("en", exportData{Trip: trip,
+		BookingTodos: []store.BookingTodo{stayTodo(false, "2026-08-01", "2026-08-04")}})
+	if len(fs) != 1 || fs[0].Day == nil || *fs[0].Day != 1 {
+		t.Fatalf("an unchecked stay row must not cover anything, got %+v", fs)
+	}
+
+	// Checked but DATELESS → covers nothing; we cannot know which nights.
+	fs = checkLodging("en", exportData{Trip: trip,
+		BookingTodos: []store.BookingTodo{stayTodo(true, "", "")}})
+	if len(fs) != 1 || fs[0].Day == nil || *fs[0].Day != 1 {
+		t.Fatalf("a dateless stay row covers no specific night, got %+v", fs)
+	}
+
+	// A transport row never counts as a bed, however it is dated or ticked.
+	flight := store.BookingTodo{ID: uuid.New(), Kind: "transport",
+		TodoKey: "transport:@home>>amsterdam", Title: "ALB → Amsterdam", Booked: true,
+		DepartDate: dateVal(t, "2026-08-01"), ReturnDate: dateVal(t, "2026-08-04")}
+	fs = checkLodging("en", exportData{Trip: trip, BookingTodos: []store.BookingTodo{flight}})
+	if len(fs) != 1 || fs[0].Day == nil || *fs[0].Day != 1 {
+		t.Fatalf("a transport row is not lodging, got %+v", fs)
+	}
+
+	// A CUSTOM row the traveler added by hand carries kind but no "stay:" key
+	// (booking_todo_handler mints "custom:<uuid>"), which is why the filter is
+	// kind and not the key prefix.
+	custom := store.BookingTodo{ID: uuid.New(), Kind: "stay",
+		TodoKey: "custom:" + uuid.NewString(), Title: "Hotel Ibis", Booked: true,
+		DepartDate: dateVal(t, "2026-08-01"), ReturnDate: dateVal(t, "2026-08-04")}
+	if fs := checkLodging("en", exportData{Trip: trip,
+		BookingTodos: []store.BookingTodo{custom}}); len(fs) != 0 {
+		t.Fatalf("a checked custom stay should cover its nights, got %+v", fs)
+	}
+}
+
 func TestCheckLodging_GroupsRuns(t *testing.T) {
 	// gap–covered–gap: 5 nights, a stay covers only night 3 → two range runs.
 	trip := store.Trip{ID: uuid.New(),
@@ -300,6 +421,49 @@ func TestCheckTransit_MissingLeg(t *testing.T) {
 		Origin: strp("Rome"), Destination: strp("Florence")}}
 	if fs := checkTransit("en", exportData{Trip: trip, Items: items, Segments: segs}); len(fs) != 0 {
 		t.Fatalf("connected legs should be silent, got %+v", fs)
+	}
+}
+
+// Lodging's rule, applied to legs: a transport row the traveler ticked off is
+// booked, whether or not they also entered the segment here.
+func TestCheckTransit_CheckedTransportTodoCoversItsLeg(t *testing.T) {
+	trip := store.Trip{ID: uuid.New()}
+	items := []store.ItineraryItem{
+		{ID: uuid.New(), Name: "Colosseum", City: strp("Rome"), Day: i32p(1)},
+		{ID: uuid.New(), Name: "Duomo", City: strp("Florence"), Day: i32p(2)},
+	}
+	leg := func(booked bool, key, title string) store.BookingTodo {
+		return store.BookingTodo{ID: uuid.New(), Kind: "transport",
+			TodoKey: key, Title: title, Booked: booked, Auto: true}
+	}
+
+	if fs := checkTransit("en", exportData{Trip: trip, Items: items,
+		BookingTodos: []store.BookingTodo{leg(true, "transport:rome>>florence", "Rome → Florence")},
+	}); len(fs) != 0 {
+		t.Fatalf("a checked leg should be silent, got %+v", fs)
+	}
+
+	// Unchecked → the row is the app's own suggestion, and the gap stands.
+	if fs := checkTransit("en", exportData{Trip: trip, Items: items,
+		BookingTodos: []store.BookingTodo{leg(false, "transport:rome>>florence", "Rome → Florence")},
+	}); len(fs) != 1 {
+		t.Fatalf("an unchecked leg must not cover anything, got %+v", fs)
+	}
+
+	// DIRECTIONAL, unlike segmentConnects: 00064 made a derived leg's direction
+	// load-bearing, so a booked return must not silence the outbound.
+	if fs := checkTransit("en", exportData{Trip: trip, Items: items,
+		BookingTodos: []store.BookingTodo{leg(true, "transport:florence>>rome", "Florence → Rome")},
+	}); len(fs) != 1 {
+		t.Fatalf("the booked RETURN must not cover the outbound, got %+v", fs)
+	}
+
+	// A stay row is not transport, however it is titled.
+	if fs := checkTransit("en", exportData{Trip: trip, Items: items,
+		BookingTodos: []store.BookingTodo{{ID: uuid.New(), Kind: "stay",
+			TodoKey: "stay:rome", Title: "Rome → Florence", Booked: true}},
+	}); len(fs) != 1 {
+		t.Fatalf("a stay row is not a leg, got %+v", fs)
 	}
 }
 
@@ -721,12 +885,12 @@ func TestFix_OverPacked_LighterDayAndNone(t *testing.T) {
 	fs := checkDensity("en", exportData{Trip: store.Trip{ID: tripID}, Items: items})
 	var packed *Finding
 	for i := range fs {
-		if fs[i].Severity == "warn" && strings.Contains(fs[i].Message, "too packed") {
+		if fs[i].Severity == "info" && strings.Contains(fs[i].Message, "too packed") {
 			packed = &fs[i]
 		}
 	}
 	if packed == nil || packed.Fix == nil {
-		t.Fatalf("expected an over-packed warn with a fix, got %+v", fs)
+		t.Fatalf("expected an over-packed info with a fix, got %+v", fs)
 	}
 	if packed.Fix.Action != "move_item" || packed.Fix.TargetDay == nil || *packed.Fix.TargetDay != 2 {
 		t.Fatalf("over-packed fix = %+v", packed.Fix)

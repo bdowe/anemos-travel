@@ -543,17 +543,17 @@ func walkBookingSlots(d exportData) bookingWalk {
 // auto drafts too (pinned by TestNextStep_WalkTransportClaims).
 func bookingSlotClaimed(d exportData, t store.BookingTodo) bool {
 	if strings.HasPrefix(t.TodoKey, "stay:") && t.DepartDate.Valid && t.ReturnDate.Valid {
-		return stayNightsCovered(d.Accommodations, t.DepartDate.Time, t.ReturnDate.Time)
+		return stayNightsCovered(d, t.DepartDate.Time, t.ReturnDate.Time)
 	}
 	return todoClaimed(d, t)
 }
 
 // stayNightsCovered reports whether every night in [from, to) — checkout-
-// exclusive, matching stayCoversNight — has a real (non-auto) stay covering
-// it. Vacuously true when from >= to.
-func stayNightsCovered(accs []store.Accommodation, from, to time.Time) bool {
+// exclusive, matching stayCoversNight — has a bed under nightCovered.
+// Vacuously true when from >= to.
+func stayNightsCovered(d exportData, from, to time.Time) bool {
 	for night := from; night.Before(to); night = night.AddDate(0, 0, 1) {
-		if !nightCovered(accs, night) {
+		if !nightCovered(d, night) {
 			return false
 		}
 	}

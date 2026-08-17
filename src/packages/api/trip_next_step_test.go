@@ -413,12 +413,17 @@ func TestNextStep_WalkReturnHomeLast(t *testing.T) {
 	}
 }
 
-// A satisfied walk NEVER falls through to the findings: every slot checked off
-// with zero accommodation rows still means "booked elsewhere", so the ladder
-// moves on (the health sheet keeps flagging the same gap — that's its job).
-func TestNextStep_WalkNeverFallsThroughToFindings(t *testing.T) {
+// Every slot checked off with zero accommodation rows means "booked
+// elsewhere", and BOTH surfaces now believe it: the ladder moves on AND Trip
+// Health raises nothing. The health sheet used to keep flagging the same
+// nights — "the two surfaces are allowed to differ here", specs/next-step-cta
+// — until dogfooding produced a trip whose stay rows were all ticked under a
+// banner reading "No lodging booked for the nights of Aug 24 – Aug 28".
+// Nights no slot spans are a different question, and still surface:
+// see TestNextStep_WalkUnslottedNightsStillSurface.
+func TestNextStep_CheckedSlotsSilenceLodgingAndAdvance(t *testing.T) {
 	d := nextStepFixture(t)
-	d.Accommodations = nil // checkLodging WILL emit findings for every night
+	d.Accommodations = nil // the ONLY lodging evidence is the checked boxes
 	d.BookingTodos = bookSlots(walkTodos(t),
 		"transport:ewr>>paris", "stay:paris", "transport:paris>>lyon",
 		"stay:lyon", "transport:lyon>>ewr")
@@ -427,8 +432,11 @@ func TestNextStep_WalkNeverFallsThroughToFindings(t *testing.T) {
 		ID: uuid.New(), Kind: "other", TodoKey: "custom:abc", Title: "Rent a car"})
 
 	findings := reviewTrip(context.Background(), "en", d, reviewOptions{}, reviewDeps{})
-	if firstFindingIn(findings, "lodging") == nil {
-		t.Fatal("fixture precondition: expected lodging findings to exist")
+	if f := firstFindingIn(findings, "lodging"); f != nil {
+		t.Fatalf("checked stay slots cover their nights, got %q", f.Message)
+	}
+	if f := firstFindingIn(findings, "transit"); f != nil {
+		t.Fatalf("checked transport slots cover their legs, got %q", f.Message)
 	}
 	step, progress := deriveNextStep("en", nextStepNow, d, findings)
 	mustStep(t, step, progress, "book_trip", 4)

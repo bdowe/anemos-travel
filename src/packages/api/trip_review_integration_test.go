@@ -126,6 +126,68 @@ func TestTripReview_BrokenTrip(t *testing.T) {
 	}
 }
 
+// The reported bug, end to end on the wire: a dated trip whose derived stay
+// rows are all TICKED — and which has no accommodation records at all, because
+// the traveler booked on Airbnb and never typed the details in here — must not
+// be told "No lodging booked". Unticking brings the nights straight back: the
+// checkbox is the assertion, and it is the only thing that moved.
+func TestTripReview_CheckedStayRowsAreNotALodgingGap(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "owner@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	id := trip.ID.String()
+
+	rec := doJSON(t, "PATCH", "/api/v1/trips/"+id, token, map[string]any{
+		"start_date": "2026-08-24", "end_date": "2026-08-29",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch trip = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// The two derived stay rows the trip page syncs, spanning every night.
+	rec = doJSON(t, "PUT", "/api/v1/trips/"+id+"/booking-todos", token, []map[string]any{
+		{"kind": "stay", "todo_key": "stay:amsterdam", "title": "Stay in Amsterdam",
+			"destination": "Amsterdam", "depart_date": "2026-08-24", "return_date": "2026-08-26"},
+		{"kind": "stay", "todo_key": "stay:prague", "title": "Stay in Prague",
+			"destination": "Prague", "depart_date": "2026-08-26", "return_date": "2026-08-29"},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("sync todos = %d: %s", rec.Code, rec.Body.String())
+	}
+	todos := decodeTodoList(t, rec)
+	if len(todos) != 2 {
+		t.Fatalf("expected 2 synced stay rows, got %d", len(todos))
+	}
+
+	// Unticked, they are the app's own suggestions — the gap stands.
+	if got := reviewCategories(t, id, token); !got["lodging"] {
+		t.Fatalf("unticked stay rows must not cover anything, got %v", got)
+	}
+
+	setBooked := func(todo map[string]any, booked bool) {
+		t.Helper()
+		r := doJSON(t, "PATCH", "/api/v1/trips/"+id+"/booking-todos/"+todo["id"].(string),
+			token, map[string]any{"booked": booked})
+		if r.Code != http.StatusOK {
+			t.Fatalf("set booked=%v = %d: %s", booked, r.Code, r.Body.String())
+		}
+	}
+	for _, todo := range todos {
+		setBooked(todo, true)
+	}
+
+	if got := reviewCategories(t, id, token); got["lodging"] {
+		rec := doJSON(t, "GET", "/api/v1/trips/"+id+"/review", token, nil)
+		t.Fatalf("ticked stay rows still reported a lodging gap: %s", rec.Body.String())
+	}
+
+	// Unticking one city brings back exactly that city's nights.
+	setBooked(todos[0], false)
+	if got := reviewCategories(t, id, token); !got["lodging"] {
+		t.Fatalf("unticking a stay must restore its nights, got %v", got)
+	}
+}
+
 func TestTripReview_CleanTrip(t *testing.T) {
 	resetDB(t)
 	owner, ownerToken := createTestUser(t, "owner@example.com")

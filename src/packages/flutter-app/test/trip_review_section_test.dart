@@ -315,4 +315,47 @@ void main() {
     // Button is disabled offline — no extra fetch.
     expect(fake.checkHoursCalls, isNot(contains(true)));
   });
+
+  group('partition', () {
+    // The server sorts day-major; the tier sort only hoists criticals. Dart's
+    // List.sort is NOT stable, so comparing severity alone left equal-severity
+    // findings in arbitrary order — and now that scheduling taste is `info`,
+    // this tier is almost entirely `warn`. Unbooked nights have to read in
+    // calendar order.
+    // Sized past 32 deliberately: below that, Dart's sort falls back to
+    // insertion sort, which happens to be stable — so a short fixture would
+    // pass against the unstable implementation and prove nothing.
+    test('keeps the wire (day) order within a severity', () {
+      final wire = [
+        for (var day = 1; day <= 40; day++)
+          _f('warn', day.isEven ? 'lodging' : 'transit', 'day $day', day: day),
+      ];
+      final split = TripReviewSection.partition(wire);
+      expect([for (final f in split.attention) f.message],
+          [for (var day = 1; day <= 40; day++) 'day $day']);
+    });
+
+    test('still hoists critical above warn, each half in wire order', () {
+      final split = TripReviewSection.partition([
+        _f('warn', 'lodging', 'warn early', day: 1),
+        _f('critical', 'dates', 'critical late', day: 8),
+        _f('warn', 'transit', 'warn late', day: 9),
+        _f('critical', 'dates', 'critical later', day: 12),
+      ]);
+      expect([for (final f in split.attention) f.message],
+          ['critical late', 'critical later', 'warn early', 'warn late']);
+    });
+
+    test('info and unknown severities fall to suggestions, in wire order', () {
+      final split = TripReviewSection.partition([
+        _f('info', 'packing', 'day 6 packed', day: 6),
+        _f('warn', 'lodging', 'no bed', day: 2),
+        _f('nonsense', 'packing', 'unknown severity', day: 1),
+        _f('info', 'weather', 'rain', day: 3),
+      ]);
+      expect([for (final f in split.attention) f.message], ['no bed']);
+      expect([for (final f in split.suggestions) f.message],
+          ['day 6 packed', 'unknown severity', 'rain']);
+    });
+  });
 }

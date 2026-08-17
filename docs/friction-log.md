@@ -5,6 +5,62 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-17 — Trip Health argued with the checklist
+
+- **[app] Friction → fixed:** *"It says I don't have lodging booked for days
+  that I do."* Trip Health read **"Mostly ready — 28 to fix"** and led with
+  *"No lodging booked for the nights of Mon, Aug 24 – Fri, Aug 28 (5
+  nights)"* — while two scrolls up, `Stay in Amsterdam · Aug 24 – Aug 26` and
+  `Stay in Prague · Aug 26 – Aug 29` were both **ticked and struck through**.
+  The app was contradicting the traveler about the traveler's own trip, on one
+  screen, at the same moment.
+- **[app] The divergence was designed, written down, and wrong.**
+  `specs/next-step-cta/plan.md` said it outright: *"a checked checkbox with no
+  accommodation row is the traveler telling us they booked elsewhere. Trip
+  Health still reports the gap — that is its job, and **the two surfaces are
+  allowed to differ here**."* The Next Step walk honored the tick
+  (`walkBookingSlots`); `checkLodging` never read `booking_todos` at all,
+  though `exportData` had been carrying them the whole time. This is the same
+  shape as the 2026-08-15 entry below — *"Two answers to one question, and the
+  rendering one was the lie"* — with the polarity flipped: here the **server**
+  was the liar and the screen was right. **When two surfaces answer one
+  question, "they're allowed to differ" is a decision with a shelf life** — it
+  survives exactly until someone sees both at once. `nightCovered` is now the
+  one answer to "does the traveler have a bed this night", and takes the whole
+  `exportData` so a caller holding only the accommodations can't ask it.
+- **[app] The same hole was one scroll further down, unreported.**
+  `checkTransit` ignored booked transport to-dos identically — invisible only
+  because transit findings carry no `Day` and sort to the bottom of the list.
+  Fixed in the same pass; **directional**, unlike `segmentConnects`, because
+  00064 made a derived leg's direction load-bearing and a booked return
+  silencing the outbound would be a fresh instance of the bug. Fixing only
+  what was pointed at would have re-earned the same complaint next week.
+- **[app] The badge counted taste as if it were a gap.** Of the 28, one
+  over-stuffed day contributed **four**: "Day 6 has 9 items planned" plus one
+  row for each of morning/afternoon/evening. And the slot rule fired at *two*
+  — so "Day 1 has 2 things scheduled for the evening" was the app flagging
+  dinner and a bar. Now: at most one density finding per day, the slot
+  threshold is 3, and every `checkDensity` finding is `info`, so scheduling
+  taste lands in the collapsed Suggestions tier and the badge counts only what
+  you must actually fill. **A count you can't act on isn't information, it's
+  weather** — and it was sitting on the same number as five unbooked nights.
+- **[dev] Two causes wore one symptom, and only one was the rule.** "Out of
+  date" was also literally true: `tripReviewProvider` is non-`autoDispose` and
+  `_load()` never invalidated it, so **adding a stay, editing one, deleting
+  one, adding a segment, adding a place, editing or deleting an item, and
+  reordering a section** all left the previous answer on screen — leaving and
+  returning to the trip didn't help either. Eight callers, eight chances to
+  forget; `_load()` owns the invalidation now. The near-miss: the rule fix
+  alone would have made the reported screenshot correct and left the next
+  mutation stale, which is how a bug comes back wearing a different hat.
+- **[dev] A stable-sort test is vacuous under 32 elements.** The client
+  re-sorts the attention tier by severity, and `List.sort` is not stable in
+  Dart — but below length 32 it falls back to insertion sort, which is. The
+  six-finding fixture passed against the *unfixed* implementation; only a
+  40-finding one failed. Worth remembering whenever a test's subject is an
+  ordering guarantee: **pick the fixture size that reaches the code path, not
+  the size that reads nicely.**
+
 ## 2026-08-16 — daily food & drink budget
 
 - **[dev] The tests were all green and the section still read badly.** The
