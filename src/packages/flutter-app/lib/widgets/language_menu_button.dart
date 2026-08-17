@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
 import '../providers/locale_provider.dart';
-import '../theme/spacing.dart';
 
 /// App-bar globe button offering the same choices as the account-settings
 /// language picker (specs/i18n-spanish): every entry in [kSupportedLocales].
@@ -17,18 +16,13 @@ class LanguageMenuButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final l10n = context.l10n;
     // Checked state mirrors the settings picker.
     final language = ref.watch(localeProvider.select((s) => s.language));
     return PopupMenuButton<String>(
       tooltip: l10n.languageMenuTooltip,
-      // Open below the bar, on an M3 surface, instead of the default
-      // overlapping panel that would inherit the app bar's white icons.
-      position: PopupMenuPosition.under,
-      color: theme.colorScheme.surface,
-      elevation: 3,
-      shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+      // Surface, elevation, radius and the below-the-bar position come from
+      // `popupMenuTheme` (app_theme.dart).
       // No explicit color: inherits the bar's foreground (white on the
       // gradient bars, onSurface on the auth screen's transparent bar).
       icon: const Icon(Icons.language),

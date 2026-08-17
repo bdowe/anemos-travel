@@ -23,6 +23,10 @@ import 'support/l10n_test_app.dart';
 /// Before it, the only affordance on a derived "EWR → Amsterdam" row was
 /// "Add details…", which POSTs a segment — so a traveler correcting EWR to ALB
 /// got a second row contradicting the first, and the airport never moved.
+///
+/// The app-bar overflow briefly carried a second entry into the same sheet,
+/// covering a trip with no derived legs to hang the row link on. It has been
+/// removed: the rows are the door.
 
 class _FakeTripsApiService extends TripsApiService {
   final Trip trip;
@@ -195,21 +199,25 @@ void main() {
     expect(find.text('Saved. 1 leg renamed.'), findsOneWidget);
   });
 
-  testWidgets('the app bar reaches the airports without a derived leg',
+  testWidgets('the airports live on the journey rows, not the app-bar menu',
       (tester) async {
     _useTallViewport(tester);
-    final trip = Trip(
-      id: 't1',
-      title: 'Nothing planned yet',
-      createdAt: '2026-08-01',
-      updatedAt: '2026-08-01',
-    );
-    await _pumpTrip(tester, _FakeTripsApiService(trip));
+    await _pumpTrip(tester, _FakeTripsApiService(_trip()));
 
+    // The overflow used to carry a "Trip airports…" entry for the trip with no
+    // derived legs. It is gone: a duplicate door on a trip-wide menu is one
+    // more thing between a traveler and the row that actually names the
+    // airport, and the row is where somebody changing one looks first.
     await tester.tap(find.descendant(
         of: find.byType(AppBar), matching: find.byIcon(Icons.more_vert)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Trip airports…'));
+    expect(find.text('Trip airports…'), findsNothing);
+    await tester.tapAt(const Offset(5, 5)); // dismiss
+    await tester.pumpAndSettle();
+
+    // …and the remaining door still reaches the same sheet.
+    await _openRowMenu(tester, 'EWR → Amsterdam');
+    await tester.tap(find.text('Change departure airport…'));
     await tester.pumpAndSettle();
     expect(find.byType(TripAirportsSheet), findsOneWidget);
   });

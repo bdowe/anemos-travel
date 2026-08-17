@@ -951,6 +951,12 @@
   "tripPrintSavePdf": "Print / Save as PDF",
   "tripAddToCalendar": "Add to calendar",
   "tripTurnOffSharing": "Turn off sharing",
+  "tripTurnOffSharingConfirmTitle": "Turn off sharing?",
+  "@tripTurnOffSharingConfirmTitle": {
+    "description": "Confirmation before revoking a trip's share links. Revoking cuts off everyone already holding one, and the old links never work again."
+  },
+  "tripTurnOffSharingConfirmBody": "Anyone with a link will lose access to this trip. Links you've already sent stop working.",
+  "tripTurnOffSharingConfirmAction": "Turn off",
   "tripDeleteTrip": "Delete trip",
   "tripRemoveFromMyTrips": "Remove from my trips",
   "tripMoreActions": "More options",

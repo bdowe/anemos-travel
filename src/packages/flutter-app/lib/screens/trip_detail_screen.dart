@@ -83,6 +83,7 @@ import '../widgets/place_photo_card.dart';
 import '../widgets/plan_progress_sheet.dart';
 import '../widgets/source_links_card.dart';
 import '../widgets/status_pill.dart';
+import '../widgets/trip_actions_sheet.dart';
 import '../widgets/trip_airports_sheet.dart';
 import '../widgets/trip_map.dart';
 import '../widgets/trip_refine_panel.dart';
@@ -2655,8 +2656,33 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
   }
 
+  /// Revoking cuts off everyone already holding the link, and nothing brings
+  /// those links back — so it confirms, the same as the other two actions that
+  /// take something away (delete, leave). It sits beside "Manage access" now
+  /// that it does; unconfirmed, that adjacency was a mis-tap away from
+  /// stranding a co-planner.
   Future<void> _revokeLink() async {
     final l10n = context.l10n;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.tripTurnOffSharingConfirmTitle),
+        content: Text(l10n.tripTurnOffSharingConfirmBody),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.commonCancel)),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.tripTurnOffSharingConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    if (!mounted) return;
     try {
       await ref.read(tripsApiServiceProvider).revokeShareLink(widget.tripId);
       _showSnack(l10n.tripSharingTurnedOff);
@@ -5467,43 +5493,53 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
-  /// The share menu's dispatch and its items, factored out so the wide app
-  /// bar's own share button and the narrow overflow menu that absorbs it can
-  /// never drift into offering different things.
-  void _onShareMenuSelected(String v) {
-    switch (v) {
-      case 'copy':
-        _shareLink();
-      case 'invite':
-        _inviteCoPlanner();
-      case 'manage':
-        _manageCoPlanners();
-      case 'print':
-        _openPrintExport();
-      case 'calendar':
-        _openCalendarExport();
-      case 'revoke':
-        _revokeLink();
-    }
-  }
-
-  List<PopupMenuEntry<String>> _shareMenuItems(AppLocalizations l10n) => [
-        PopupMenuItem(
-            value: 'copy',
-            child: Text(shareUsesNativeSheet
+  /// The share actions, grouped, factored out so the wide app bar's own share
+  /// button and the narrow overflow that absorbs it can never drift into
+  /// offering different things.
+  ///
+  /// "Turn off sharing" sits with the links it revokes rather than trailing
+  /// the exports — it is a link action, and print/calendar are a different
+  /// job. That adjacency is only safe because it confirms now; see
+  /// [_revokeLink].
+  List<List<TripAction>> _shareActionSections(AppLocalizations l10n) => [
+        [
+          TripAction(
+            icon: shareUsesNativeSheet ? Icons.share_outlined : Icons.link,
+            label: shareUsesNativeSheet
                 ? l10n.tripShareLinkAction
-                : l10n.tripCopyShareLink)),
-        PopupMenuItem(
-            value: 'invite',
-            child: Text(shareUsesNativeSheet
+                : l10n.tripCopyShareLink,
+            onSelected: _shareLink,
+          ),
+          TripAction(
+            icon: Icons.group_add_outlined,
+            label: shareUsesNativeSheet
                 ? l10n.tripShareInviteAction
-                : l10n.tripCopyInviteLink)),
-        PopupMenuItem(value: 'manage', child: Text(l10n.tripManageAccess)),
-        const PopupMenuDivider(),
-        PopupMenuItem(value: 'print', child: Text(l10n.tripPrintSavePdf)),
-        PopupMenuItem(value: 'calendar', child: Text(l10n.tripAddToCalendar)),
-        const PopupMenuDivider(),
-        PopupMenuItem(value: 'revoke', child: Text(l10n.tripTurnOffSharing)),
+                : l10n.tripCopyInviteLink,
+            onSelected: _inviteCoPlanner,
+          ),
+          TripAction(
+            icon: Icons.group_outlined,
+            label: l10n.tripManageAccess,
+            onSelected: _manageCoPlanners,
+          ),
+          TripAction(
+            icon: Icons.link_off,
+            label: l10n.tripTurnOffSharing,
+            onSelected: _revokeLink,
+          ),
+        ],
+        [
+          TripAction(
+            icon: Icons.description_outlined,
+            label: l10n.tripPrintSavePdf,
+            onSelected: _openPrintExport,
+          ),
+          TripAction(
+            icon: Icons.calendar_month_outlined,
+            label: l10n.tripAddToCalendar,
+            onSelected: _openCalendarExport,
+          ),
+        ],
       ];
 
   /// The app bar's `⋮`. Always the home of the destructive exits — owners get
@@ -5514,10 +5550,17 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// That is what buys the ANEMOS wordmark its room: five icons on a 360px
   /// bar leave the title slot smaller than the wordmark itself.
   ///
-  /// A Consumer rather than a bare PopupMenuButton because the wear gate is a
-  /// provider watch that must subscribe this button alone, not the screen —
-  /// and the entries are built here rather than inside `itemBuilder` for the
-  /// same reason: a menu builder has no ref to watch with.
+  /// Narrow opens a bottom sheet, wide a popup, both rendered from the same
+  /// [TripAction] sections — ten entries anchored in a phone's top-right
+  /// corner was the one stack of choices on this screen that wasn't already a
+  /// sheet. At wide the list is down to a single entry, and that is
+  /// deliberate: the destructive exits live behind a menu so they cannot be
+  /// hit by accident. Do not put the bare trash icon back.
+  ///
+  /// A Consumer rather than a bare button because the wear gate is a provider
+  /// watch that must subscribe this button alone, not the screen — and the
+  /// sections are built here rather than inside `itemBuilder` for the same
+  /// reason: a menu builder has no ref to watch with.
   Widget _overflowAppBarAction(Trip trip, AppLocalizations l10n) {
     return Consumer(
       builder: (context, ref, _) {
@@ -5538,103 +5581,73 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         final foldShown = _narrow && _foldControlShown(d);
         final foldCollapsed = foldShown && _allGroupsCollapsed(d);
 
-        final entries = <PopupMenuEntry<String>>[
-          if (foldShown)
-            PopupMenuItem(
-              value: 'foldall',
-              child: ListTile(
-                leading: Icon(foldCollapsed
-                    ? Icons.unfold_more
-                    : Icons.unfold_less),
-                title: Text(foldCollapsed
-                    ? l10n.tripExpandAll
-                    : l10n.tripCollapseAll),
-                contentPadding: EdgeInsets.zero,
+        // Sections in order; the separators between them are DERIVED from
+        // these boundaries and empty sections drop out, so nothing here
+        // places a divider. What this replaced guarded each one with an `||`
+        // chain that grew a term per feature and was already a term out of
+        // step with the block it fenced.
+        //
+        // Trip airports deliberately has no entry: a derived home leg carries
+        // its own "Change airport" link, which is where somebody looking to
+        // change one actually looks.
+        final sections = <List<TripAction>>[
+          [
+            if (foldShown)
+              TripAction(
+                icon: foldCollapsed ? Icons.unfold_more : Icons.unfold_less,
+                label:
+                    foldCollapsed ? l10n.tripExpandAll : l10n.tripCollapseAll,
+                onSelected: () => _toggleAllGroups(trip),
               ),
-            ),
-          if (wear.available) ...[
-            if (foldShown) const PopupMenuDivider(),
-            PopupMenuItem(
-              value: 'wear',
-              child: ListTile(
-                leading: const Icon(Icons.luggage_outlined),
-                title: Text(l10n.wearSectionTitle),
-                contentPadding: EdgeInsets.zero,
+            if (wear.available)
+              TripAction(
+                icon: Icons.luggage_outlined,
+                label: l10n.wearSectionTitle,
+                onSelected: () => _openWearSheet(trip, wear.regions),
               ),
-            ),
           ],
-          if (absorbsShare) ...[
-            if (foldShown || wear.available) const PopupMenuDivider(),
-            ..._shareMenuItems(l10n),
-          ],
-          // Reachable even on a trip with no cities yet, where there are no
-          // derived legs to carry the row-level entry.
-          if (!_isOffline && !_readOnly) ...[
-            if (foldShown || wear.available || absorbsShare)
-              const PopupMenuDivider(),
-            PopupMenuItem(
-              value: 'airports',
-              child: ListTile(
-                leading: const Icon(Icons.flight_takeoff),
-                title: Text(l10n.tripAirportsMenuLabel),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ],
-          if (canExit) ...[
-            if (foldShown || wear.available || absorbsShare || !_readOnly)
-              const PopupMenuDivider(),
-            if (trip.isOwner)
-              PopupMenuItem(
-                value: 'delete',
-                child: ListTile(
-                  leading: Icon(Icons.delete_outline,
-                      color: Theme.of(context).colorScheme.error),
-                  title: Text(l10n.tripDeleteTrip,
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.error)),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              )
-            else
-              PopupMenuItem(
-                value: 'leave',
-                child: ListTile(
-                  leading: const Icon(Icons.bookmark_remove_outlined),
-                  title: Text(l10n.tripRemoveFromMyTrips),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
+          if (absorbsShare) ..._shareActionSections(l10n),
+          [
+            if (canExit)
+              trip.isOwner
+                  ? TripAction(
+                      icon: Icons.delete_outline,
+                      label: l10n.tripDeleteTrip,
+                      onSelected: _delete,
+                      destructive: true,
+                    )
+                  : TripAction(
+                      icon: Icons.bookmark_remove_outlined,
+                      label: l10n.tripRemoveFromMyTrips,
+                      onSelected: _leaveTrip,
+                    ),
           ],
         ];
-        if (entries.isEmpty) return const SizedBox.shrink();
+        if (sections.every((s) => s.isEmpty)) return const SizedBox.shrink();
 
-        return PopupMenuButton<String>(
-          // share_plus needs a rect to point the iPad popover at, and the
-          // anchor has to be whichever button is actually on screen.
-          key: absorbsShare ? _shareMenuKey : null,
+        if (_narrow) {
+          return IconButton(
+            // share_plus needs a rect to point the iPad popover at, and the
+            // anchor has to be whichever button is actually on screen — here
+            // the button itself, since the sheet it opens is gone by the time
+            // the share call fires.
+            key: absorbsShare ? _shareMenuKey : null,
+            icon: const Icon(Icons.more_vert),
+            tooltip: l10n.tripMoreActions,
+            onPressed: () async {
+              final action =
+                  await showTripActionsSheet(context, sections: sections);
+              // Run after the sheet closes, never from inside it: its context
+              // is dead, and share_plus must anchor on a live button.
+              if (action != null && mounted) action.onSelected();
+            },
+          );
+        }
+        return PopupMenuButton<TripAction>(
           icon: const Icon(Icons.more_vert),
           tooltip: l10n.tripMoreActions,
-          onSelected: (v) {
-            // Every value needs its own case: the default arm forwards to
-            // the share handler, whose own switch has no default — so a
-            // missing case compiles clean, runs clean, and does nothing.
-            switch (v) {
-              case 'foldall':
-                _toggleAllGroups(trip);
-              case 'wear':
-                _openWearSheet(trip, wear.regions);
-              case 'airports':
-                _openTripAirports();
-              case 'delete':
-                _delete();
-              case 'leave':
-                _leaveTrip();
-              default:
-                _onShareMenuSelected(v);
-            }
-          },
-          itemBuilder: (context) => entries,
+          onSelected: (action) => action.onSelected(),
+          itemBuilder: (context) => tripActionPopupEntries(context, sections),
         );
       },
     );
@@ -6192,12 +6205,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           // Sharing is an owner-only surface; it mutates, so it's hidden
           // while offline-serving.
           if (trip != null && trip.isOwner && !_isOffline && !_narrow)
-            PopupMenuButton<String>(
+            PopupMenuButton<TripAction>(
               key: _shareMenuKey,
               icon: const Icon(Icons.share_outlined),
               tooltip: l10n.tripShareTrip,
-              onSelected: _onShareMenuSelected,
-              itemBuilder: (context) => _shareMenuItems(l10n),
+              onSelected: (action) => action.onSelected(),
+              itemBuilder: (context) =>
+                  tripActionPopupEntries(context, _shareActionSections(l10n)),
             ),
           if (trip != null) _overflowAppBarAction(trip, l10n),
         ],

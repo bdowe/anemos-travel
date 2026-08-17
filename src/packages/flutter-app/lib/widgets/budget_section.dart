@@ -1095,10 +1095,6 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           padding: EdgeInsets.zero,
           tooltip: context.l10n.budgetCategoryLabel,
           enabled: !widget.isOffline,
-          position: PopupMenuPosition.under,
-          color: theme.colorScheme.surface,
-          elevation: 3,
-          shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
           icon: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
