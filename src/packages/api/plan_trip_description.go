@@ -119,7 +119,7 @@ func runSetTripDescriptionTool(s *planSession, input json.RawMessage) (string, b
 		return "Could not load the trip to update its description.", true
 	}
 	// The one refusal that matters: the traveler's own words are not the
-	// planner's to replace on a hunch. Stored, not inferred (migration 00070) —
+	// planner's to replace on a hunch. Stored, not inferred (migration 00071) —
 	// a prompt rule the model must remember is not an invariant.
 	if reason == summaryReasonTripChanged && travelerWroteSummary(trip) {
 		return travelerAuthoredReply(trip), true

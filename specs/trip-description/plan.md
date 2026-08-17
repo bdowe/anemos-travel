@@ -21,7 +21,7 @@ carry "write NULL", so a description could be set and replaced but never cleared
 `query/preferences.sql`'s `clear_home_airport` flag was written to escape. Second,
 one column with one writer is what keeps the page and the chat from drifting.
 
-## Storage — migration 00070
+## Storage — migration 00071
 
 | Column | Meaning | On a version save |
 |---|---|---|

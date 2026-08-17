@@ -78,7 +78,7 @@ func TestSetTripDescriptionRefreshesAgentProse(t *testing.T) {
 	}
 }
 
-// The invariant migration 00070 exists for: prose a person wrote is not the
+// The invariant migration 00071 exists for: prose a person wrote is not the
 // planner's to replace on a hunch. The refusal must also SAY what is there, so
 // the model can offer the change instead of guessing again.
 func TestSetTripDescriptionRefusesToOverwriteTravelerProse(t *testing.T) {
@@ -304,7 +304,7 @@ func TestTripDescriptionSummaryIsExplicitAboutAbsence(t *testing.T) {
 		{"traveler wrote it", store.Trip{Summary: ptr("Our anniversary."), SummarySource: ptr(summarySourceTraveler)}, "the traveler wrote this themselves"},
 		{"traveler removed it", store.Trip{SummarySource: ptr(summarySourceTraveler)}, "removed it on purpose"},
 		{"never written", store.Trip{}, "none yet"},
-		// Pre-00070 prose: provably not the traveler's, because no human writer
+		// Pre-00071 prose: provably not the traveler's, because no human writer
 		// existed. It must read as refreshable, not as protected.
 		{"untracked author", store.Trip{Summary: ptr("Legacy blurb.")}, "written by the assistant"},
 	}

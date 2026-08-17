@@ -27,7 +27,7 @@ import (
 // one place — the two surfaces differ only in how they are authorized and how
 // they word the answer.
 
-// Who a description's words belong to (trips.summary_source, 00070). The planner
+// Who a description's words belong to (trips.summary_source, 00071). The planner
 // may refresh prose it wrote; it may never overwrite the traveler's.
 const (
 	summarySourceAgent    = "agent"
@@ -54,7 +54,7 @@ type appliedTripSummary struct {
 // An empty [next] CLEARS the description. Clearing still stamps a source, and
 // that pairing is the whole point: summary NULL with source 'traveler' is the
 // traveler having removed the blurb on purpose, a state the planner must respect
-// and one a single column could not express (see 00070).
+// and one a single column could not express (see 00071).
 func applyTripSummary(ctx context.Context, q *store.Queries, trip store.Trip, next, source string, actor uuid.UUID) (appliedTripSummary, error) {
 	text := strings.TrimSpace(next)
 	if utf8.RuneCountInString(text) > maxSummaryLen {
@@ -93,7 +93,7 @@ func applyTripSummary(ctx context.Context, q *store.Queries, trip store.Trip, ne
 
 // travelerWroteSummary reports whether the trip's description is the traveler's
 // own — including the case where they REMOVED it, which is equally their
-// decision. NULL source is provably not theirs: until 00070 no human writer
+// decision. NULL source is provably not theirs: until 00071 no human writer
 // existed, so the planner may refresh it.
 func travelerWroteSummary(trip store.Trip) bool {
 	return strPtrVal(trip.SummarySource) == summarySourceTraveler

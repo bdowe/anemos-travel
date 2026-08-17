@@ -259,7 +259,7 @@ UPDATE trips SET travel_mode = $2 WHERE id = $1;
 UPDATE trips SET start_date = $2, end_date = $3 WHERE id = $1;
 
 -- name: SetTripSummary :exec
--- The ONE writer of a saved trip's description after creation (00070,
+-- The ONE writer of a saved trip's description after creation (00071,
 -- specs/trip-description) — called by applyTripSummary for both the trip page's
 -- PATCH and the chat's set_trip_description. Authorization happens in the
 -- callers (editableTrip / resolveDateShiftTrip), same as SetTripDates, so editor

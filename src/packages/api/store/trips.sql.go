@@ -747,7 +747,7 @@ type SetTripSummaryParams struct {
 	ID            uuid.UUID `json:"id"`
 }
 
-// The ONE writer of a saved trip's description after creation (00070,
+// The ONE writer of a saved trip's description after creation (00071,
 // specs/trip-description) — called by applyTripSummary for both the trip page's
 // PATCH and the chat's set_trip_description. Authorization happens in the
 // callers (editableTrip / resolveDateShiftTrip), same as SetTripDates, so editor
