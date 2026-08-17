@@ -120,6 +120,11 @@ something cost has always been a takeover.
   un-pay, edit dialog, sticky mode control on its own line so the add row's
   horizontal composition — and its 136px no-ellipsis regression test — is
   untouched).
+  *[Later: the add row's OTHER hint was truncating to "Add a…" on every phone,
+  which no test covered. It now measures both hints and stacks onto two lines
+  when one line can't seat them, so the 136 is gone and the row's shape is
+  derived rather than assumed. Keeping this control on its own line was the
+  right call and is now a stronger one — see `_buildModeControl`.]*
 - **Provider:** `providers/budget_provider.dart` — the planned/paid mode joins
   `ExpenseDraft` (PR #435), not widget `State`: it is a *choice*, like category,
   and must survive the remount that opening the chat panel causes.
