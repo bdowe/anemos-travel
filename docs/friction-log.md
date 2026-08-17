@@ -119,6 +119,28 @@ actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
   already predicted it: *"a timing test whose failure mode is 'the machine got
   busier' fails for whoever adds the next test file."* This was that file.
 
+## 2026-08-17 — The pill now sums the chips (follow-up to the filter strip)
+
+- **[app] Debt paid the same day it was logged.** The entry below left the
+  Bookings tab pill counting booking *todos* while the new destination chips
+  count *entries* (one visible checkbox each), so a confirmed record with no
+  todo made the chips sum past the pill. Brian: *"reconcile the pill counts
+  too."* The pill is now `bookingOverallCount` — literally the **fold of
+  `bookingDestinationCounts`** — so the tab's number and the chips' numbers
+  are one count split two ways; they cannot drift because there is nothing
+  to drift between.
+- **[app] The claimed blocker was misread.** The entry below said the pill was
+  "load-bearing for `specs/next-step-cta` parity". The spec says the opposite:
+  exact parity between the book-everything count and the bookings tab's
+  partition is **Out of Scope** ("the trigger is exact; the count is
+  motivational"). Re-read the spec section, not the summary of it, before
+  declaring a constraint.
+- **[app] Viewers stay un-counted, now for a stated reason.** The server
+  withholds todos from viewers, so a viewer's entries are only the confirmed
+  records — their pill would read "3/3, all booked" while the owner sees the
+  real remainder. A partial count states a false total; no number beats a
+  partial one. The existing `_bookingTodos.isEmpty` gate keeps that job.
+
 ## 2026-08-17 — The Bookings filter cost more screen than the bookings
 
 - **[app] Friction → fixed:** *"Should these big buttons for each city be a
@@ -139,11 +161,9 @@ actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
   doubles as a per-city progress read. Counts come from the same enumeration
   and the same booked-predicate the ROWS use (`bookingSlotEntries` /
   `bookingEntryBooked`, extracted for exactly this reason) — the #455 rule that
-  a count answers for the rows beneath it. Open debt unchanged: the Bookings
-  tab's own pill still counts booking *todos*, so a trip with confirmed records
-  that matched no todo sums higher on the chips than in the pill. Documented at
-  both sites rather than quietly reconciled — the pill is load-bearing for
-  `specs/next-step-cta` parity.
+  a count answers for the rows beneath it. ~~Open debt: the Bookings tab's own
+  pill still counts booking *todos*~~ — reconciled the same day (entry above):
+  the pill is now the fold of the chips.
 - **[dev] Two layout bugs the new widget tests caught, not the eye.** A 320px
   Spanish row at 1.3× text **overflowed by 94px**, and short of overflowing the
   pinned pair starved the strip to ~180px on a 420px body — less than one

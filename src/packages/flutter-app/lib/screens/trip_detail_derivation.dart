@@ -162,10 +162,10 @@ bool bookingEntryExists(BookingEntry e) =>
 /// what selecting that chip reveals. A revisited city has one entry here and
 /// one chip, summing both of its runs.
 ///
-/// Counts ENTRIES, not todos: the Bookings tab's own pill counts booking todos
-/// only, so a trip with confirmed records that matched no todo sums higher
-/// here. That divergence is the tab pill's (it is load-bearing for
-/// specs/next-step-cta parity); these counts answer for the rows beneath them.
+/// Counts ENTRIES (one visible checkbox each), not todos — these counts
+/// answer for the rows beneath them. The Bookings tab pill is the FOLD of
+/// this map ([bookingOverallCount]), so the pill and the chips agree by
+/// construction rather than by two spellings kept in step.
 Map<String, ({int booked, int total})> bookingDestinationCounts(
   GroupedBookings grouped,
   List<String> labels, {
@@ -198,6 +198,33 @@ Map<String, ({int booked, int total})> bookingDestinationCounts(
     add(otherKey, s.booked);
   }
   return counts;
+}
+
+/// The trip-wide booked/total the Bookings tab pill shows: the SUM of the
+/// destination chips, computed by folding [bookingDestinationCounts] rather
+/// than by a second walk over the slots. Whatever that partition decides —
+/// which records claim a slot, which fall residual — the pill inherits, so
+/// the tab's promise and the chips' promises are one number split two ways.
+///
+/// Before this fold the pill counted booking TODOS while the chips counted
+/// entries, so a confirmed record with no todo (a viewer-visible stay, a
+/// manually added segment) made the chips sum past the pill.
+({int booked, int total}) bookingOverallCount(
+  GroupedBookings grouped,
+  List<String> labels,
+) {
+  var booked = 0, total = 0;
+  // otherKey only names the residual bucket; any non-label value works here
+  // because the fold reads values, not keys. Using the canonical label keeps
+  // a real 'Other places' leg and the residual bucket merged the same way
+  // the strip merges them.
+  for (final c
+      in bookingDestinationCounts(grouped, labels, otherKey: kOtherPlacesLabel)
+          .values) {
+    booked += c.booked;
+    total += c.total;
+  }
+  return (booked: booked, total: total);
 }
 
 /// True for the AI's "city filler" placeholder — an item whose name is just

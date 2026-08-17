@@ -4130,17 +4130,32 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               // door into this view.) Dropped on narrow: three tabs +
               // pill is what genuinely shrinks the FittedBox trio at
               // 390px, and the count is one tap away inside the view.
+              //
+              // The number is the FOLD of the destination chips
+              // (bookingOverallCount over the one groupedBookings
+              // partition), not a count of todos: the pill's promise is
+              // "this many checkboxes behind this tab", and confirmed
+              // records with no todo are checkboxes too. Still gated on
+              // having todos at all — the server withholds them from
+              // viewers, whose entries are only the confirmed records, so
+              // a viewer's count would read "all booked" while the owner
+              // sees the real remainder. No number beats a partial one.
               _headerTab(
                 theme,
                 label: l10n.tripTabBookings,
                 trailing: (_narrow || _bookingTodos.isEmpty)
                     ? null
-                    : StatusPill.custom(
-                        label:
-                            '${_bookingTodos.where((t) => t.booked).length}/${_bookingTodos.length}',
-                        background: theme.colorScheme.surfaceContainerHighest,
-                        foreground: theme.colorScheme.onSurfaceVariant,
-                      ),
+                    : () {
+                        final d = _derive(trip);
+                        final c = bookingOverallCount(
+                            d.groupedBookings, d.legLabels);
+                        return StatusPill.custom(
+                          label: '${c.booked}/${c.total}',
+                          background:
+                              theme.colorScheme.surfaceContainerHighest,
+                          foreground: theme.colorScheme.onSurfaceVariant,
+                        );
+                      }(),
                 selected: _inBookingsView,
                 onTap: () => setState(() {
                   _itemFilter = 'bookings';
