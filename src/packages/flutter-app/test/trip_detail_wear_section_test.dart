@@ -22,18 +22,23 @@ import 'package:travel_route_planner/widgets/wear_recs.dart';
 
 import 'support/l10n_test_app.dart';
 
-/// "What to wear & pack" (specs/what-to-wear), now an app-bar luggage icon
-/// opening a modal sheet (the Trip health precedent): the sheet header shows
-/// the cross-region temperature envelope + rain signal and the checked/total
-/// pill; the body is deterministic phrase rows above the intact checklist,
-/// with consecutive same-guidance legs folded into ONE grouped row
-/// (groupWearRegions); historical data yields a single trailing footnote,
-/// never a per-row qualifier; a revisited city keeps per-visit weather
-/// queries (distinct guidance keeps its rows separate); a leg whose report is
-/// empty drops out without hiding the icon; recommendations alone show the
-/// icon for read-only viewers; without weather the old checklist gating
-/// holds. The checklist stays LIVE inside the sheet (its provider), while
-/// the regions are a press-time snapshot.
+/// "What to wear & pack" (specs/what-to-wear), an app-bar luggage icon opening
+/// a modal sheet (the Trip health precedent): the sheet header shows the
+/// cross-region temperature envelope + rain signal and the checked/total pill;
+/// the body LEADS with the trip-level packing summary (packEssentials —
+/// objects, attributed to the stops that ask for them, "every stop" when that
+/// is all of them) and puts the deterministic per-city phrase rows behind a
+/// collapsed "City by city" disclosure, above the intact checklist.
+///
+/// Invariants pinned here: consecutive same-guidance legs fold into ONE
+/// grouped row (groupWearRegions), and a trip with only one such group skips
+/// the disclosure entirely; the historical footnote renders ONCE and stays
+/// OUTSIDE the disclosure (it qualifies the header envelope too), never as a
+/// per-row qualifier; a revisited city keeps per-visit weather queries; a leg
+/// whose report is empty drops out without hiding the icon; recommendations
+/// alone show the icon for read-only viewers; without weather the old
+/// checklist gating holds. The checklist stays LIVE inside the sheet (its
+/// provider), while the regions are a press-time snapshot.
 
 class _FakeTripsApiService extends TripsApiService {
   final Trip trip;
@@ -71,6 +76,20 @@ class _MapWeatherApiService extends WeatherApiService {
     calls.add(key);
     return byKey[key] ?? const WeatherReport();
   }
+}
+
+/// Per-CITY reports, whatever window is asked for. The visible-range windows
+/// are pinned by the revisited-city test above; tests about what the sheet
+/// SAYS use this so they don't restate that derivation in their fixture keys.
+class _CityWeatherApiService extends WeatherApiService {
+  final Map<String, WeatherReport> byCity;
+  _CityWeatherApiService(this.byCity)
+      : super(ApiClient(baseUrl: 'http://test'));
+
+  @override
+  Future<WeatherReport> getTripWeather(String city, String startDate,
+          {String? endDate}) async =>
+      byCity[city] ?? const WeatherReport();
 }
 
 class _FakeChecklistApiService extends ChecklistApiService {
@@ -197,10 +216,31 @@ Future<void> _openSheet(WidgetTester tester,
   await tester.pumpAndSettle();
 }
 
-/// Finder scoped to the wear block, so day-chip text (which shares strings
+/// Finder scoped to the per-city rows, so day-chip text (which shares strings
 /// like the "typical" qualifier) can never satisfy a wear-row assertion.
 Finder _inRecs(String text) => find.descendant(
     of: find.byType(WearRecsList), matching: find.textContaining(text));
+
+/// Finder scoped to the sheet as a whole — for the summary rows and the
+/// footnote, which live OUTSIDE [WearRecsList] (the footnote qualifies the
+/// header envelope too, so it must not hide behind the disclosure).
+Finder _inSheet(String text) => find.descendant(
+    of: find.byType(WearPackSheetBody), matching: find.textContaining(text));
+
+/// Finder scoped to the summary rows only, so a per-city phrase can never
+/// stand in for a packing suggestion.
+Finder _inPack(String text) => find.descendant(
+    of: find.byType(PackEssentialsList), matching: find.textContaining(text));
+
+Finder _cityDetailRow({String title = 'City by city'}) => find.text(title);
+
+/// Opens the collapsed per-city detail. Only present on trips with two or
+/// more displayed groups — a single group renders its row inline.
+Future<void> _expandCityDetail(WidgetTester tester,
+    {String title = 'City by city'}) async {
+  await tester.tap(_cityDetailRow(title: title));
+  await tester.pumpAndSettle();
+}
 
 Finder _sheetDividers() => find.descendant(
     of: find.byType(WearPackSheetBody), matching: find.byType(Divider));
@@ -256,7 +296,7 @@ void main() {
     expect(_inRecs('typical for these dates'), findsNothing);
     expect(_inRecs('big day–night range'), findsNothing);
     // All-forecast trip: no historical footnote either.
-    expect(_inRecs('Beyond the 16-day forecast'), findsNothing);
+    expect(_inSheet('Beyond the 16-day forecast'), findsNothing);
     // Recs and checklist both present → exactly one separating divider.
     expect(_sheetDividers(), findsOneWidget);
     // The checklist renders below, still editable: item row + add field.
@@ -283,7 +323,7 @@ void main() {
     // wearHistoricalFootnote says "typical weather for these dates" so the
     // footnote can never satisfy this substring by accident.
     expect(_inRecs('typical for these dates'), findsNothing);
-    expect(_inRecs('Beyond the 16-day forecast'), findsOneWidget);
+    expect(_inSheet('Beyond the 16-day forecast'), findsOneWidget);
     // Dry historical days: no rain phrase, summary has no rain suffix.
     expect(find.textContaining('rain likely'), findsNothing);
     expect(find.text('17° – 27°'), findsOneWidget);
@@ -317,6 +357,8 @@ void main() {
       weather: weather,
     );
     await _openSheet(tester);
+    // Three distinct groups → the rows live behind the disclosure.
+    await _expandCityDetail(tester);
 
     // Two Paris rows with their own visit windows and temps, Nice between.
     // Displayed dates AND the weather queries are both the VISIBLE ranges
@@ -362,7 +404,7 @@ void main() {
         _inRecs('Paris, Nice · Sep 15 – Sep 16 · 15° – 24°'), findsOneWidget);
     expect(_inRecs('Warm — summer clothes, a light evening layer'),
         findsOneWidget);
-    expect(_inRecs('Beyond the 16-day forecast'), findsNothing);
+    expect(_inSheet('Beyond the 16-day forecast'), findsNothing);
     // The display merged, but weather stayed per-leg.
     expect(weather.calls, contains('Paris|2026-09-15'));
     expect(weather.calls, contains('Nice|2026-09-15'));
@@ -393,7 +435,7 @@ void main() {
     expect(
         _inRecs('Paris, Nice · Sep 15 – Sep 16 · 15° – 24°'), findsOneWidget);
     expect(
-        _inRecs('Beyond the 16-day forecast, ranges show typical weather'
+        _inSheet('Beyond the 16-day forecast, ranges show typical weather'
             ' for these dates.'),
         findsOneWidget);
     expect(_inRecs('typical for these dates'), findsNothing);
@@ -571,6 +613,137 @@ void main() {
     expect(find.text('15° – 24° · rain likely'), findsOneWidget);
   });
 
+  testWidgets('the summary leads with the objects, attributed to their stops',
+      (tester) async {
+    // Four cities, four distinct stories — the shape that made the old sheet
+    // sixteen lines of prose. Rain hits two of them; only Rome is hot.
+    final weather = _CityWeatherApiService({
+      'Amsterdam': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-15', tempMinC: 13, tempMaxC: 22),
+      ]),
+      'Kraków': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(
+            date: '2026-09-16',
+            tempMinC: 15,
+            tempMaxC: 27,
+            precipProbability: 80),
+      ]),
+      'Gothenburg': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(
+            date: '2026-09-17',
+            tempMinC: 11,
+            tempMaxC: 20,
+            precipProbability: 90),
+      ]),
+      'Rome': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-18', tempMinC: 19, tempMaxC: 32),
+      ]),
+    });
+    await _pump(
+      tester,
+      trip: _trip(endDate: '2026-09-19', items: [
+        _item(0, 'Rijksmuseum', 1, city: 'Amsterdam'),
+        _item(1, 'Wawel', 2, city: 'Kraków'),
+        _item(2, 'Haga', 3, city: 'Gothenburg'),
+        _item(3, 'Forum', 4, city: 'Rome'),
+      ]),
+      weather: weather,
+    );
+    await _openSheet(tester);
+
+    expect(_inSheet('Pack for this trip'), findsOneWidget);
+    // Every band here wants a light layer, so it collapses to "every stop"
+    // rather than naming all four.
+    expect(_inPack('A light layer for evenings'), findsOneWidget);
+    expect(_inPack('every stop'), findsOneWidget);
+    // The rest name exactly the stops that ask for them, in itinerary order.
+    expect(_inPack('Summer clothes'), findsOneWidget);
+    expect(_inPack('Kraków, Rome'), findsOneWidget);
+    expect(_inPack('An umbrella or rain jacket'), findsOneWidget);
+    expect(_inPack('Kraków, Gothenburg'), findsOneWidget);
+    expect(_inPack('Sun protection'), findsOneWidget);
+    expect(_inPack('Rome'), findsWidgets);
+    // Nothing cold on this trip.
+    expect(_inPack('A warm coat'), findsNothing);
+    expect(_inPack('Thermals'), findsNothing);
+  });
+
+  testWidgets('the per-city rows start collapsed and open on tap',
+      (tester) async {
+    final weather = _CityWeatherApiService({
+      'Paris': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-15', tempMinC: 8, tempMaxC: 15),
+      ]),
+      'Nice': const WeatherReport(kind: 'forecast', days: [
+        WeatherDay(date: '2026-09-16', tempMinC: 19, tempMaxC: 31),
+      ]),
+    });
+    await _pump(
+      tester,
+      trip: _trip(endDate: '2026-09-17', items: [
+        _item(0, 'Louvre', 1),
+        _item(1, 'Promenade', 2, city: 'Nice'),
+      ]),
+      weather: weather,
+    );
+    await _openSheet(tester);
+
+    // The summary is up front; the detail is a closed row, not content.
+    expect(_inPack('Sun protection'), findsOneWidget);
+    expect(_cityDetailRow(), findsOneWidget);
+    expect(find.byType(WearRecsList), findsNothing);
+    expect(_inSheet('Cool — a jacket and layers'), findsNothing);
+
+    await _expandCityDetail(tester);
+    expect(find.byType(WearRecsList), findsOneWidget);
+    expect(_inRecs('Paris ·'), findsOneWidget);
+    expect(_inRecs('Cool — a jacket and layers'), findsOneWidget);
+    expect(_inRecs('Nice ·'), findsOneWidget);
+    expect(_inRecs('Hot — light fabrics and sun protection'), findsOneWidget);
+  });
+
+  testWidgets('the historical footnote stays visible while the detail is closed',
+      (tester) async {
+    // The footnote qualifies the header envelope as much as the rows, so
+    // hiding it behind the disclosure would let the numbers make a forecast
+    // claim they cannot back.
+    final weather = _CityWeatherApiService({
+      'Paris': const WeatherReport(kind: 'historical', days: [
+        WeatherDay(date: '2025-09-15', tempMinC: 8, tempMaxC: 15),
+      ]),
+      'Nice': const WeatherReport(kind: 'historical', days: [
+        WeatherDay(date: '2025-09-16', tempMinC: 19, tempMaxC: 31),
+      ]),
+    });
+    await _pump(
+      tester,
+      trip: _trip(endDate: '2026-09-17', items: [
+        _item(0, 'Louvre', 1),
+        _item(1, 'Promenade', 2, city: 'Nice'),
+      ]),
+      weather: weather,
+    );
+    await _openSheet(tester);
+
+    expect(find.byType(WearRecsList), findsNothing);
+    expect(_inSheet('Beyond the 16-day forecast'), findsOneWidget);
+    // …and still exactly once when the rows come out.
+    await _expandCityDetail(tester);
+    expect(_inSheet('Beyond the 16-day forecast'), findsOneWidget);
+  });
+
+  testWidgets('one displayed group renders its row inline, with no disclosure',
+      (tester) async {
+    // A single group's only extra facts are its dates — the envelope is
+    // already in the header — so charging a tap for it would be theatre.
+    await _pump(tester, trip: _trip(), report: _warmRainyForecast);
+    await _openSheet(tester);
+
+    expect(_cityDetailRow(), findsNothing);
+    expect(find.byType(WearRecsList), findsOneWidget);
+    expect(_inRecs('Paris · Sep 15 – Sep 16 · 15° – 24°'), findsOneWidget);
+  });
+
   testWidgets('renders the Spanish strings under the es locale',
       (tester) async {
     // The locale provider sets Intl.defaultLocale in the real app; tests set
@@ -590,6 +763,12 @@ void main() {
     await _openSheet(tester, tooltip: 'Qué ponerte y qué llevar');
     expect(find.text('Qué ponerte y qué llevar'), findsOneWidget);
     expect(find.textContaining('lluvia probable'), findsWidgets);
+    // The summary leads, translated: heading, objects, and the every-stop
+    // stand-in (one leg, so every group asks for each of them).
+    expect(_inSheet('Qué llevar en este viaje'), findsOneWidget);
+    expect(_inPack('Ropa de verano'), findsOneWidget);
+    expect(_inPack('Un paraguas o chubasquero'), findsOneWidget);
+    expect(_inPack('todas las paradas'), findsWidgets);
     expect(
         find.descendant(
             of: find.byType(WearRecsList),
@@ -611,11 +790,6 @@ void main() {
     );
     await _openSheet(tester, tooltip: 'Qué ponerte y qué llevar');
 
-    expect(
-        find.descendant(
-            of: find.byType(WearRecsList),
-            matching:
-                find.textContaining('el tiempo habitual en estas fechas')),
-        findsOneWidget);
+    expect(_inSheet('el tiempo habitual en estas fechas'), findsOneWidget);
   });
 }

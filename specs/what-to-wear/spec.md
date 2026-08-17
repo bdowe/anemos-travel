@@ -31,8 +31,19 @@ when the old row did (no resolved checklist and no leg with weather).
 Weather regions are a press-time snapshot; the checklist stays live inside
 the sheet.
 
+Amended 2026-08-17 (friction log, direction picked by Brian): the sheet leads
+with a **trip-level packing summary** — the objects to bring — and the per-city
+guidance rows move behind a collapsed "City by city" disclosure. On an
+eight-city trip the rows opened as sixteen lines of prose and never answered
+"what goes in the bag"; the reader had to do the union themselves. The summary
+IS that union, computed from the same displayed groups, so collapsing the
+detail loses nothing.
+
 ## User Stories
 
+- As a **traveler about to pack**, I want **one short list of what to bring for
+  the whole trip** so that **I can fill a bag without reading a paragraph per
+  city and doing the union in my head**.
 - As a **traveler planning a trip**, I want **to see what kind of clothes suit
   each region during my dates** so that **I can pack right without researching
   climate myself**.
@@ -49,6 +60,21 @@ the sheet.
       cross-region temperature envelope and rain signal (e.g. "21°–31° ·
       rain likely"). *(2026-08-13: was the trailing-cluster row's collapsed
       summary.)*
+- [ ] *(2026-08-17)* Under the header, the sheet leads with **one row per thing
+      to pack**: a muted icon, the object, and the stops that ask for it —
+      "every stop" when every displayed group does. The set is the UNION of
+      what the per-city rows say, mapped object-by-object from the same band
+      phrase and surviving advisories (`essentialsFor`), so every suggestion is
+      backed by a visible row and every row contributes at least one
+      suggestion. Rows render in a fixed order, never a sorted one.
+- [ ] *(2026-08-17)* The per-city guidance sits behind a collapsed **"City by
+      city"** disclosure and is byte-identical to what it was when expanded. A
+      trip with only ONE displayed group skips the disclosure and renders that
+      row inline — its only extra fact is its dates, and the envelope is
+      already in the header.
+- [ ] *(2026-08-17)* The historical footnote renders OUTSIDE the disclosure,
+      so it is visible while the detail is closed: it qualifies the header's
+      temperature envelope as much as the rows.
 - [ ] The sheet lists one row per run of consecutive same-guidance
       legs: legs merge when the temperature band and the surviving advisory
       phrases match AND the date ranges are adjacent (≤1 day apart). A row
@@ -122,7 +148,12 @@ is client display only and not part of any server contract).
 
 - Wind, UV, snow, humidity, or condition icons (daily min/max/precip only).
 - Per-day recommendations (per-region granularity only).
-- Auto-adding checklist items from recommendations.
+- Auto-adding checklist items from recommendations — reconfirmed 2026-08-17
+  when the summary made a one-tap "add to checklist" tempting. A truthful
+  "already added" state needs a real identity on `checklist_items`; matching
+  the generated label would make the LABEL the key, the failure migration
+  00064 was written to undo (and 00070's `leg_key` written to avoid). Without
+  it a second tap silently duplicates. Named as the sequel, not smuggled in.
 - Temperature units preference (°C-only today app-wide; noted as a separate
   follow-up this feature makes more visible).
 - Any server-side clothing phrasing (the chat agent already reads raw weather

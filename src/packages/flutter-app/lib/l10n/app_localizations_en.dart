@@ -3890,6 +3890,36 @@ class AppLocalizationsEn extends AppLocalizations {
       'Beyond the 16-day forecast, ranges show typical weather for these dates.';
 
   @override
+  String get wearPackTitle => 'Pack for this trip';
+
+  @override
+  String get wearByCityTitle => 'City by city';
+
+  @override
+  String get wearEveryStop => 'every stop';
+
+  @override
+  String get wearPackThermals => 'Thermals';
+
+  @override
+  String get wearPackWarmCoat => 'A warm coat, hat, and gloves';
+
+  @override
+  String get wearPackJacket => 'A jacket or warm layer';
+
+  @override
+  String get wearPackLightLayer => 'A light layer for evenings';
+
+  @override
+  String get wearPackSummerClothes => 'Summer clothes';
+
+  @override
+  String get wearPackRainGear => 'An umbrella or rain jacket';
+
+  @override
+  String get wearPackSunProtection => 'Sun protection';
+
+  @override
   String get rickRollCaption => 'Never gonna give you up';
 
   @override

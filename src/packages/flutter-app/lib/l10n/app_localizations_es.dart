@@ -3917,6 +3917,36 @@ class AppLocalizationsEs extends AppLocalizations {
       'Más allá del pronóstico de 16 días, los rangos muestran el tiempo habitual en estas fechas.';
 
   @override
+  String get wearPackTitle => 'Qué llevar en este viaje';
+
+  @override
+  String get wearByCityTitle => 'Ciudad por ciudad';
+
+  @override
+  String get wearEveryStop => 'todas las paradas';
+
+  @override
+  String get wearPackThermals => 'Ropa térmica';
+
+  @override
+  String get wearPackWarmCoat => 'Abrigo, gorro y guantes';
+
+  @override
+  String get wearPackJacket => 'Una chaqueta o capa de abrigo';
+
+  @override
+  String get wearPackLightLayer => 'Una capa ligera para la noche';
+
+  @override
+  String get wearPackSummerClothes => 'Ropa de verano';
+
+  @override
+  String get wearPackRainGear => 'Un paraguas o chubasquero';
+
+  @override
+  String get wearPackSunProtection => 'Protección solar';
+
+  @override
   String get rickRollCaption => 'Never gonna give you up';
 
   @override

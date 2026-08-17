@@ -174,3 +174,48 @@ tests: `trip_detail_wear_section_test.dart` reworked to the icon/sheet
 surface + new cases (Escape, breakpoints, live pill, Budget-view icon),
 `trip_detail_fix_actions_test.dart` layout contract, `checklist_section_test.dart`
 callback form, `trip_detail_filter_lenses_test.dart` comment.
+
+## Amendment 2026-08-17 — summary first, city detail behind a disclosure
+
+Client-only again; **`trip_detail_screen.dart` is untouched** (`_wearState` /
+`_legClothingRecs` already hand the sheet a `List<WearRegionRec>` and
+`showWearPackSheet`'s signature is unchanged), so the lane never contended for
+the god file.
+
+- **`lib/utils/clothing_recs.dart`** — the derivation stays in one place:
+  `enum PackEssential` (declaration order IS render order — nothing sorts, so
+  Dart's sub-32 insertion-sort fallback can't make an ordering test vacuous),
+  `essentialsFor(TempBand, Set<WearAdvisory>)` mapping each rendered phrase to
+  the objects it asks for, `typedef PackItem`, and `packEssentials(regions)`
+  built by iterating **`groupWearRegions`** — the exact list `WearRecsList`
+  renders. That is what makes the collapse lossless, and it is pinned by a
+  test asserting set-equality between the summary and the union over the
+  groups. `PackItem.everyStop` counts contributing GROUPS, not labels: a
+  merged run is one stop's worth of guidance however many cities it names.
+  `anyHistorical(regions)` hoists the footnote gate out of the widget (equal
+  to `groups.any((g) => g.historical)` because groups partition the regions
+  and OR the flag).
+- **`lib/widgets/wear_recs.dart`** — new `PackEssentialsList` (muted 18px
+  leading glyph, object over its attribution). `rainGear`/`sunProtection`
+  reuse the day chip's `Icons.umbrella`/`Icons.wb_sunny` so the two surfaces
+  share one vocabulary. `WearRecsList` loses its footnote block and is
+  otherwise unchanged.
+- **`lib/widgets/wear_pack_sheet.dart`** — `WearPackSheetBody` becomes a
+  `ConsumerStatefulWidget` owning `_cityDetailOpen` (`CollapsibleSection`
+  requires the parent to own `expanded`; route-scoped, and reopening the sheet
+  is meant to start closed). Order: header · muted `wearPackTitle` label ·
+  `PackEssentialsList` · footnote · disclosure-or-inline rows · divider ·
+  checklist. `groupWearRegions(regions).length < 2` renders the rows inline.
+  `regions.isEmpty` (the Next Step `add_packing` entry, offline, undated) keeps
+  today's checklist-only body verbatim.
+- **l10n:** ten `wear*` keys in `app_en.arb` + `app_es.arb`.
+- **Tests:** `clothing_recs_test.dart` gains `essentialsFor` (band table,
+  per-advisory table, and the idempotence of an advisory that restates its
+  band — "bring layers" on a mild leg is the same light layer, one row not
+  two), `packEssentials` (union invariant, fixed order under reversal,
+  attribution + revisit dedupe, group-not-city `everyStop`) and `anyHistorical`.
+  `trip_detail_wear_section_test.dart` gains `_inSheet`/`_inPack` finders and
+  a `_CityWeatherApiService` (keyed by city, so tests about what the sheet SAYS
+  don't restate the visible-range derivation the revisited-city test pins),
+  plus cases for the summary, collapsed-by-default, footnote-visible-while-
+  collapsed, and the one-group inline rule.

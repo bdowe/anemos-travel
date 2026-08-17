@@ -7,7 +7,9 @@
 // bands live here, so the chip and the recs can never disagree. The wear
 // rows' advisory suppression and same-guidance grouping live here too
 // ([effectiveAdvisories]/[groupWearRegions]), so the fold compares exactly
-// what the widget renders. The Go trip
+// what the widget renders, and the sheet's trip-level packing summary
+// ([packEssentials]) is derived from those same groups, so collapsing the
+// per-city rows behind a disclosure loses nothing. The Go trip
 // review keeps its own advisory constants (trip_review.go: rainProbPct,
 // rainHistoricMM, hotThresholdC, coldThresholdC) for a different job —
 // exception findings, not banded phrasing. They are deliberately NOT twinned,
@@ -146,9 +148,9 @@ ClothingRec? clothingRec(WeatherReport report) {
   );
 }
 
-/// Cross-region envelope for the collapsed one-liner ("21°–31° · rain
+/// Cross-region envelope for the sheet's header one-liner ("21°–31° · rain
 /// likely"). Kind-neutral by design: the numbers make no forecast claim, so
-/// the "typical" qualifier stays on the expanded per-leg rows.
+/// the "typical" qualifier stays in the footnote.
 ({int loC, int hiC, bool rainLikely}) clothingSummary(List<ClothingRec> recs) {
   assert(recs.isNotEmpty, 'clothingSummary needs at least one rec');
   var lo = recs.first.loC;
@@ -261,4 +263,117 @@ List<WearGroup> groupWearRegions(List<WearRegionRec> regions) {
     ));
   }
   return groups;
+}
+
+/// Whether any displayed row is an archive ("typical") report — the gate for
+/// the sheet's single historical footnote. Reads the regions rather than the
+/// groups deliberately, and the two agree by construction: [groupWearRegions]
+/// partitions the regions and ORs `historical` across each run, so
+/// `groups.any((g) => g.historical)` and this are the same predicate. The
+/// footnote qualifies the header envelope as well as the rows, so it renders
+/// outside the collapsible city detail — hence a gate the sheet can call
+/// without building groups.
+bool anyHistorical(List<WearRegionRec> regions) =>
+    regions.any((r) => r.rec.historical);
+
+/// One thing to put in the bag. The sheet leads with these — the trip-level
+/// answer — and the per-region rows sit behind a disclosure.
+///
+/// Values are in RENDER order (warmest clothing → lightest → weather gear).
+/// [packEssentials] emits by iterating this list, so ordering is fixed at
+/// declaration and nothing sorts: a comparator here would be both redundant
+/// and, under Dart's insertion-sort fallback below 32 elements, untestable.
+enum PackEssential {
+  thermals,
+  warmCoat,
+  jacket,
+  lightLayer,
+  summerClothes,
+  rainGear,
+  sunProtection,
+}
+
+/// The objects a displayed row's phrasing asks for: the band phrase plus each
+/// surviving advisory, re-expressed as things to pack. Every arm is non-empty
+/// (pinned by test), so no rendered row can contribute nothing to the summary.
+///
+/// This is the ONE mapping — read it against the `wearBand*`/`wear*` ARB
+/// strings the rows render (`WearRecsList._phrases`): the cold band says
+/// "warm coat, hat, and gloves", so it yields [PackEssential.warmCoat]. Change
+/// a phrase and change the arm with it, or the summary starts promising
+/// something the detail below it never says.
+Set<PackEssential> essentialsFor(
+  TempBand band,
+  Set<WearAdvisory> advisories,
+) =>
+    {
+      ...switch (band) {
+        TempBand.freezing => {PackEssential.thermals, PackEssential.warmCoat},
+        TempBand.cold => {PackEssential.warmCoat},
+        TempBand.cool => {PackEssential.jacket},
+        TempBand.mild => {PackEssential.lightLayer},
+        TempBand.warm => {
+            PackEssential.summerClothes,
+            PackEssential.lightLayer,
+          },
+        TempBand.hot => {
+            PackEssential.summerClothes,
+            PackEssential.sunProtection,
+          },
+      },
+      for (final a in advisories)
+        ...switch (a) {
+          WearAdvisory.rainLikely => {PackEssential.rainGear},
+          WearAdvisory.extremeHeat => {PackEssential.sunProtection},
+          WearAdvisory.freezingNights => {PackEssential.jacket},
+          WearAdvisory.bigSwing => {PackEssential.lightLayer},
+        },
+    };
+
+/// One summary row: the thing to pack, the stops that ask for it, and whether
+/// that is every stop on the trip (the labels then read as noise — "every
+/// stop" says it shorter and stays true as the itinerary grows).
+typedef PackItem = ({
+  PackEssential essential,
+  List<String> labels,
+  bool everyStop,
+});
+
+/// The trip-level packing answer: the UNION of what the displayed rows already
+/// say, grouped by object instead of by city.
+///
+/// Built by iterating [groupWearRegions] — the exact list `WearRecsList`
+/// renders — so the summary and the city detail behind the disclosure cannot
+/// disagree: every essential here is claimed by at least one visible row, and
+/// every visible row contributes at least one essential (see [essentialsFor]).
+/// That is what makes collapsing the rows lossless.
+///
+/// [PackItem.everyStop] counts contributing GROUPS, not labels: a merged run
+/// is one stop's worth of guidance however many cities it names, so a
+/// two-city group that folded because its guidance is identical must not read
+/// as broader coverage than a single-city one.
+List<PackItem> packEssentials(List<WearRegionRec> regions) {
+  final groups = groupWearRegions(regions);
+  final labelsBy = <PackEssential, List<String>>{};
+  final groupsBy = <PackEssential, int>{};
+  for (final g in groups) {
+    for (final e in essentialsFor(g.band, g.advisories)) {
+      final labels = labelsBy.putIfAbsent(e, () => <String>[]);
+      for (final label in g.labels) {
+        // Itinerary order, deduped — a revisited city must not read
+        // "Paris, Paris" (the [groupWearRegions] label rule).
+        if (!labels.contains(label)) labels.add(label);
+      }
+      groupsBy[e] = (groupsBy[e] ?? 0) + 1;
+    }
+  }
+  return [
+    for (final e in PackEssential.values)
+      if (labelsBy[e] case final labels?)
+        (
+          essential: e,
+          labels: labels,
+          everyStop: groupsBy[e] == groups.length,
+        ),
+  ];
 }
