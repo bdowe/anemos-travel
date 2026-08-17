@@ -2615,8 +2615,8 @@
   "@rickRollCaption": {
     "description": "Caption on the Konami-code easter egg. Not translated — it is a song title."
   },
-  "rickRollDismissHint": "press esc to escape",
+  "rickRollDismissHint": "tap anywhere to escape",
   "@rickRollDismissHint": {
-    "description": "Hint under the easter-egg caption telling the user how to close it."
+    "description": "Hint under the easter-egg caption telling the user how to close it. Deliberately not 'press esc' — the egg has a touch trigger, and a phone has no Escape key. Escape still works; a tap is the instruction that is true on every device."
   }
 }

@@ -6434,10 +6434,10 @@ abstract class AppLocalizations {
   /// **'Never gonna give you up'**
   String get rickRollCaption;
 
-  /// Hint under the easter-egg caption telling the user how to close it.
+  /// Hint under the easter-egg caption telling the user how to close it. Deliberately not 'press esc' — the egg has a touch trigger, and a phone has no Escape key. Escape still works; a tap is the instruction that is true on every device.
   ///
   /// In en, this message translates to:
-  /// **'press esc to escape'**
+  /// **'tap anywhere to escape'**
   String get rickRollDismissHint;
 }
 

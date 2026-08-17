@@ -3893,5 +3893,5 @@ class AppLocalizationsEn extends AppLocalizations {
   String get rickRollCaption => 'Never gonna give you up';
 
   @override
-  String get rickRollDismissHint => 'press esc to escape';
+  String get rickRollDismissHint => 'tap anywhere to escape';
 }
