@@ -556,6 +556,27 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   bool _refreshQueued = false;
   Future<void>? _refreshFuture;
 
+  /// Item ids as they stood before something the traveler ASKED FOR started
+  /// writing — armed by [_armRevealOfNewItems], consumed by [_refresh] once
+  /// its coalescing loop has settled. Null on every other refresh (the
+  /// background status poll, the chat-delete cleanup), which is what keeps a
+  /// collaborator's edit from unfolding a list you deliberately folded.
+  Set<String>? _revealBaseline;
+
+  /// Arms the next [_refresh] to reveal whatever it brings in.
+  ///
+  /// Idempotent across a streaming turn: the FIRST snapshot wins. A second
+  /// `trip_updated` landing mid-fetch must not redefine "new" as "added after
+  /// the batch I already missed" — one turn is one baseline.
+  void _armRevealOfNewItems() {
+    if (_revealBaseline != null) return;
+    final trip = _trip;
+    if (trip == null) return;
+    _revealBaseline = {
+      for (final i in trip.items ?? const <ItineraryItem>[]) i.id
+    };
+  }
+
   /// Silent in-place reload with trailing coalescing. The server can emit
   /// several `trip_updated` events in one streaming turn; a bump that lands
   /// mid-fetch queues exactly one more pass so the final state always
@@ -585,6 +606,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         _invalidateReview();
         await _load(silent: true);
       } while (mounted && _refreshQueued);
+      // AFTER the loop, not inside it: a turn that writes three times in a
+      // row should reveal once, against the state the turn started from.
+      final baseline = _revealBaseline;
+      _revealBaseline = null;
+      if (mounted && baseline != null) _revealNewItems(baseline);
       _refreshFuture = null;
     }();
     _refreshFuture = future;
@@ -1898,30 +1924,52 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     if (added == true) {
       await _load();
       if (!mounted) return; // _load awaited: the screen may be gone
-      _expandRunsOfNewItems(beforeIds);
+      // Open whatever it landed in, then point the map at it. The map write
+      // is THIS path's alone: adding one place is a request to look at it.
+      final legKey = _revealNewItems(beforeIds);
+      final t = _trip;
+      if (legKey != null && t != null) _setMapFocus(_derive(t), legKey);
     }
   }
 
-  /// Focus the map on the run holding the first item that wasn't in the
-  /// trip before the add, so the new pin is immediately visible. Groups
-  /// default expanded now, so the un-collapse only matters when the user
-  /// manually collapsed the target group — a place added into a collapsed
-  /// run would otherwise land with zero visible feedback.
-  void _expandRunsOfNewItems(Set<String> beforeIds) {
+  /// Un-collapse every destination group — and every day inside it — that
+  /// gained an item, so something the traveler just asked for can never land
+  /// inside a folded section. Returns the leg key of the FIRST new item in
+  /// build order (null when nothing was added) for callers that also want the
+  /// map to move; the reveal itself NEVER writes focus, so the chat path can
+  /// use it without dragging the camera around mid-conversation.
+  ///
+  /// Two things make this load-bearing rather than defensive. Folding is one
+  /// tap now, so "the traveler folded this city" went from a deliberate act
+  /// to the ordinary posture of anyone surveying a long trip. And the chat
+  /// adds in BATCHES across several cities — the old version stopped at the
+  /// first new item, which was right when [_addPlace] (exactly one place) was
+  /// the only caller and silently wrong for "added 4 places in Rome and
+  /// Paris". Days count as much as cities: un-collapsing Rome reveals nothing
+  /// if the item landed on a day that is itself folded.
+  String? _revealNewItems(Set<String> beforeIds) {
     final trip = _trip;
-    if (trip == null) return;
+    if (trip == null) return null;
     final d = _derive(trip);
+    String? firstLegKey;
+    var changed = false;
     for (final i in trip.items ?? const <ItineraryItem>[]) {
       if (beforeIds.contains(i.id)) continue;
       final legKey = d.legKeyOfPosition(i.position);
-      if (legKey == null) return;
-      _setMapFocus(d, legKey);
+      // `continue`, not `return`: one unresolvable item must not abandon the
+      // rest of the batch.
+      if (legKey == null) continue;
+      firstLegKey ??= legKey;
       final groupKey = d.groupKeyForLeg(legKey);
-      if (groupKey != null && _collapsedGroups.remove(groupKey)) {
-        setState(() {});
+      if (groupKey == null) continue;
+      if (_collapsedGroups.remove(groupKey)) changed = true;
+      final day = i.day;
+      if (day != null && _collapsedDays.remove('$groupKey#$day')) {
+        changed = true;
       }
-      return;
     }
+    if (changed) setState(() {});
+    return firstLegKey;
   }
 
   Future<void> _patch(
@@ -4295,8 +4343,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         await showAddToTripSheet(context, payload, currentTripId: widget.tripId);
     // _refresh(), not a bare silent _load(): it serializes with any reload the
     // refine panel has in flight, so a pre-add snapshot can't land after us
-    // and momentarily erase the just-added item.
-    if (added != null && added.id == widget.tripId) _refresh();
+    // and momentarily erase the just-added item. Armed like the chat path —
+    // an add the traveler just made must be visible, folded city or not.
+    if (added != null && added.id == widget.tripId) {
+      _armRevealOfNewItems();
+      _refresh();
+    }
   }
 
   Widget _itemTile(ItineraryItem item, double indentLeft, ThemeData theme,
@@ -5963,7 +6015,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     ref.listen(
         tripRefineProvider(widget.tripId).select((s) => s.tripUpdateCount),
         (prev, next) {
-      if (mounted && next > (prev ?? 0)) _refresh();
+      if (mounted && next > (prev ?? 0)) {
+        // Snapshot BEFORE the refetch — _trip is still the pre-turn state
+        // here — so the reveal can tell what this turn added. Without it a
+        // chat that reports "added 4 places" leaves them inside folded
+        // cities and the list appears not to have moved.
+        _armRevealOfNewItems();
+        _refresh();
+      }
     });
     // A turn still running behind a closed panel: the FAB says so, or an
     // accidental back reads as "did that kill it?".
