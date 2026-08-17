@@ -43,6 +43,10 @@ asset needs a provenance row it could not honestly be given.
 - [ ] Seven taps in quick succession on the brand in the app bar do the same,
       with no keyboard — on every screen the app bar appears, including the
       ones where the brand is not a button at all.
+- [ ] "Quick succession" means a pace a person can actually produce by hand:
+      tapping about once a second, or pausing between taps, still gets there.
+      A tap every three seconds does not.
+- [ ] The hook is audible on a phone, not only on a desktop browser.
 - [ ] Those taps change nothing else: a single tap still goes home where it did
       before, the brand gains no ripple, tooltip or button role where it had
       none, and taps spread out over ordinary navigation never accumulate.
@@ -84,8 +88,14 @@ None. Nothing is persisted; the rolled state lasts as long as it is on screen.
 
 ## Edge Cases & Error States
 
-- **The browser refuses audio.** Safari can withhold playback even after a
-  keystroke. The visual is never gated on sound.
+- **The browser refuses audio.** The visual is never gated on sound. Note the
+  rule is stricter than "the user has interacted at some point": Safari wants
+  audio opened *inside* a gesture handler, and the egg starts its tune a frame
+  later than the gesture that triggered it. Audio is therefore made ready at
+  the user's first interaction with the page, not when the egg fires — the
+  first version did the latter and was silent on phones.
+- **The phone is on silent.** Web audio obeys the hardware switch on iOS and
+  nothing in a web page can override it. Not a bug we can fix.
 - **The code is entered while already rolling.** Ignored — restarting would
   re-attack the tune from the top.
 - **The code is entered with a text field focused.** It fires, and the field

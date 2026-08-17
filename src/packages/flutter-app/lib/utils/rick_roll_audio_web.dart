@@ -6,9 +6,10 @@ import 'package:web/web.dart' as web;
 import 'rick_roll_tune.dart';
 
 /// Peak amplitude of the whole tune. Square waves carry far more energy than
-/// their amplitude suggests, so this sits low deliberately: an easter egg that
-/// blows somebody's headphones off is a bug report, not a joke.
-const double _masterGain = 0.12;
+/// their amplitude suggests, so this stays low — an easter egg that blows
+/// somebody's headphones off is a bug report, not a joke — but not so low that
+/// a phone speaker cannot produce it.
+const double _masterGain = 0.18;
 
 /// Seconds of lead-in before the first note. The scheduler needs a moment of
 /// headroom or the browser drops the attack of note one.
@@ -21,31 +22,70 @@ const double _leadIn = 0.06;
 const double _attack = 0.01;
 const double _release = 0.05;
 
-/// Plays [kRickRollHook] through one [web.AudioContext] of scheduled square
-/// waves.
+/// The one audio context for the page's lifetime.
+///
+/// Shared rather than per-play because it can only be opened at a moment the
+/// browser allows, and that moment is the user's first interaction — long
+/// before anybody enters the code. See [primeRickRollAudio].
+web.AudioContext? _shared;
+bool _primed = false;
+
+/// Opens the audio context on the first real interaction with the page.
+///
+/// The listeners sit on `document` in the **capture** phase so they see the
+/// event before Flutter's own handling, and they are never removed: a context
+/// can be suspended again by the browser (a backgrounded tab, an iOS call),
+/// and re-resuming on the next interaction is exactly the recovery wanted.
+///
+/// Creating the context here rather than at import time is deliberate. A
+/// context constructed with no user activation is born `suspended`, and on
+/// Safari `resume()` outside a gesture handler will not revive it — so an
+/// eagerly-built one would be permanently silent, which is the failure this
+/// function exists to prevent.
+void primeRickRollAudio() {
+  if (_primed) return;
+  _primed = true;
+  try {
+    final unlock = ((web.Event _) => _openContext()).toJS;
+    final options = web.AddEventListenerOptions(capture: true, passive: true);
+    for (final type in const ['pointerdown', 'keydown', 'touchend']) {
+      web.document.addEventListener(type, unlock, options);
+    }
+  } catch (_) {
+    // No document, or an engine that dislikes the options bag. The egg still
+    // runs; it may just be silent.
+  }
+}
+
+/// The context if we have a usable one, opening or resuming it if we can.
+/// Returns null rather than throwing — silence is an ordinary outcome.
+web.AudioContext? _openContext() {
+  try {
+    final ctx = _shared ??= web.AudioContext();
+    if (ctx.state != 'running') {
+      ctx.resume().toDart.catchError((Object _) => null);
+    }
+    return ctx;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Plays [kRickRollHook] as scheduled square waves.
 ///
 /// Every note is scheduled up front against the context clock rather than
 /// driven by a Dart timer: timers drift, and a melody that drifts is a melody
 /// nobody recognizes.
 ///
-/// Returns [SilentRickRollPlayback] rather than throwing if the browser will
-/// not give us a context. A keystroke grants user activation in Chrome and
-/// Firefox, but Safari can still hand back a context that never starts, so the
-/// caller must treat "no sound" as an ordinary outcome.
+/// Returns [SilentRickRollPlayback] rather than throwing if there is no usable
+/// context. The caller treats that exactly like success, because the visual
+/// must never depend on audio.
 RickRollPlayback playRickRollHook() {
-  final web.AudioContext ctx;
-  try {
-    ctx = web.AudioContext();
-  } catch (_) {
-    return const SilentRickRollPlayback();
-  }
+  final ctx = _openContext();
+  if (ctx == null) return const SilentRickRollPlayback();
 
+  final oscillators = <web.OscillatorNode>[];
   try {
-    // Best-effort: a context created before the browser considers the page
-    // "activated" starts suspended. Failure here is not fatal — the notes are
-    // still scheduled, they just may never sound.
-    ctx.resume().toDart.catchError((Object _) => null);
-
     final master = ctx.createGain();
     master.gain.setValueAtTime(_masterGain, ctx.currentTime);
     master.connect(ctx.destination);
@@ -74,36 +114,47 @@ RickRollPlayback playRickRollHook() {
         env.connect(master);
         osc.start(at);
         osc.stop(end + 0.01);
+        oscillators.add(osc);
       }
       at += seconds;
     }
-    return _AudioContextPlayback(ctx);
+    return _ScheduledPlayback(oscillators, master);
   } catch (_) {
-    // Half-scheduled is worse than silent: tear the context down so no
-    // fragment of the tune is left playing.
-    final playback = _AudioContextPlayback(ctx)..stop();
+    // Half-scheduled is worse than silent: silence what was scheduled.
+    final playback = _ScheduledPlayback(oscillators, null)..stop();
     return playback;
   }
 }
 
-class _AudioContextPlayback implements RickRollPlayback {
-  _AudioContextPlayback(this._ctx);
+class _ScheduledPlayback implements RickRollPlayback {
+  _ScheduledPlayback(this._oscillators, this._master);
 
-  final web.AudioContext _ctx;
+  final List<web.OscillatorNode> _oscillators;
+  final web.GainNode? _master;
   bool _stopped = false;
 
-  /// Closing the context kills every scheduled note at once, which is why
-  /// nothing here tracks the individual oscillators. Guarded and wrapped
-  /// because closing twice — dismissing by hand at the exact moment the tune
-  /// ends on its own — throws `InvalidStateError`.
+  /// Stops the notes and cuts the branch off the graph.
+  ///
+  /// It deliberately does NOT close the context — that context is shared and
+  /// unlocked, and closing it would spend the one unlock the page is going to
+  /// get. (The previous version could close it, because it built a throwaway
+  /// context per play; that is exactly the design that was silent on Safari.)
+  /// Disconnecting the master gain is what makes the cut instant, since
+  /// `stop()` on an already-finished node is a no-op and on a not-yet-started
+  /// one throws.
   @override
   void stop() {
     if (_stopped) return;
     _stopped = true;
     try {
-      _ctx.close().toDart.catchError((Object _) => null);
-    } catch (_) {
-      // Already closed, or the context was never usable.
+      _master?.disconnect();
+    } catch (_) {}
+    for (final osc in _oscillators) {
+      try {
+        osc.stop();
+      } catch (_) {
+        // Already finished, or never started. Either way it is not sounding.
+      }
     }
   }
 }

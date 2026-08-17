@@ -10,7 +10,21 @@ const int kSecretTapCount = 7;
 /// achievable for someone who is not especially quick without ever
 /// accumulating across the minutes of ordinary navigation taps a session
 /// contains.
-const Duration kSecretTapWindow = Duration(milliseconds: 700);
+///
+/// **This was 700 ms and that was too strict to use.** It shipped verified
+/// only by automation that tapped every 145 ms — five times faster than the
+/// limit — so the boundary was never near. A person tapping at a natural
+/// once-a-second pace, and especially one pausing to see whether anything is
+/// happening, overruns it and silently restarts at one every time. The gesture
+/// gives no feedback, so an overrun is indistinguishable from a feature that
+/// does not exist, which is exactly how it was reported.
+///
+/// Two seconds is still far too short to accumulate by accident: it needs
+/// SEVEN consecutive taps inside it, and ordinary navigation taps on the brand
+/// are seconds or minutes apart. When changing this, test at the boundary —
+/// the useful measurement is the slowest cadence that still fires, not the
+/// fastest.
+const Duration kSecretTapWindow = Duration(seconds: 2);
 
 /// Counts taps arriving in rapid succession — the touch counterpart to
 /// [KonamiDetector], and pure for the same reason: the interesting cases are

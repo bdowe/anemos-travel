@@ -105,6 +105,23 @@ abstract interface class RickRollPlayback {
   void stop();
 }
 
+/// The two functions the conditional import must supply, documented here
+/// because this file is the contract both implementations answer to:
+///
+/// * `void primeRickRollAudio()` — called once at app start. A browser will
+///   not let a page make noise until the user has interacted with it, and the
+///   check is stricter than "has the user ever done anything": **Safari
+///   requires the audio context to be resumed inside the gesture handler
+///   itself**. By the time the egg fires, the tune is started from a widget's
+///   `initState`, a frame or more after the tap or keystroke that caused it —
+///   outside any handler. Chrome's page-level sticky activation forgives that;
+///   Safari does not, which is why the sound worked on desktop and not on a
+///   phone. The unlock therefore cannot wait for the egg: it hooks the FIRST
+///   real interaction with the page, where the browser is still willing.
+///
+/// * `RickRollPlayback playRickRollHook()` — schedules [kRickRollHook] and
+///   returns a handle. Must never throw: "no sound" is an ordinary outcome.
+
 /// The "no sound happened" answer — returned by the non-web stub and by the
 /// web implementation when the browser refuses to give us an audio context.
 /// The overlay treats it exactly like a successful one: the visual never
