@@ -1502,6 +1502,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripTurnOffSharing => 'Turn off sharing';
 
   @override
+  String get tripTurnOffSharingConfirmTitle => 'Turn off sharing?';
+
+  @override
+  String get tripTurnOffSharingConfirmBody =>
+      'Anyone with a link will lose access to this trip. Links you\'ve already sent stop working.';
+
+  @override
+  String get tripTurnOffSharingConfirmAction => 'Turn off';
+
+  @override
   String get tripDeleteTrip => 'Delete trip';
 
   @override

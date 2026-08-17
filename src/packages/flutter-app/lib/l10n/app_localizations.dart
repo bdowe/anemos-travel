@@ -2720,6 +2720,24 @@ abstract class AppLocalizations {
   /// **'Turn off sharing'**
   String get tripTurnOffSharing;
 
+  /// Confirmation before revoking a trip's share links. Revoking cuts off everyone already holding one, and the old links never work again.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off sharing?'**
+  String get tripTurnOffSharingConfirmTitle;
+
+  /// No description provided for @tripTurnOffSharingConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone with a link will lose access to this trip. Links you\'ve already sent stop working.'**
+  String get tripTurnOffSharingConfirmBody;
+
+  /// No description provided for @tripTurnOffSharingConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off'**
+  String get tripTurnOffSharingConfirmAction;
+
   /// No description provided for @tripDeleteTrip.
   ///
   /// In en, this message translates to:

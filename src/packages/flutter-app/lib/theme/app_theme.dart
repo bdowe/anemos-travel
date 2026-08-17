@@ -86,6 +86,23 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
       ),
+      // Menus were the one surface every call site re-declared by hand, so
+      // most of them didn't and took raw M3 instead — including the trip's
+      // own `⋮`, which then opened as a panel OVERLAPPING the gradient app
+      // bar and inheriting its white foreground. Stated once here:
+      // `under` clears the bar, and the surface/elevation/radius match
+      // cardTheme so a menu reads like every other raised thing in the app.
+      // Dark takes the same explicit tonal step cardTheme does, for the same
+      // reason: a `surface`-colored menu floating over a `surface`-colored
+      // page is a hairline border away from invisible, and the tint that
+      // would otherwise separate it is deliberately off everywhere.
+      popupMenuTheme: PopupMenuThemeData(
+        color: isDark ? colorScheme.surfaceContainerHigh : colorScheme.surface,
+        elevation: 3,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+        position: PopupMenuPosition.under,
+      ),
       inputDecorationTheme: InputDecorationTheme(
         border: const OutlineInputBorder(borderRadius: AppRadius.smAll),
         filled: true,

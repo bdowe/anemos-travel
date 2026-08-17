@@ -1515,6 +1515,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripTurnOffSharing => 'Desactivar el uso compartido';
 
   @override
+  String get tripTurnOffSharingConfirmTitle => '¿Desactivar el uso compartido?';
+
+  @override
+  String get tripTurnOffSharingConfirmBody =>
+      'Quien tenga un enlace perderá el acceso a este viaje. Los enlaces que ya enviaste dejarán de funcionar.';
+
+  @override
+  String get tripTurnOffSharingConfirmAction => 'Desactivar';
+
+  @override
   String get tripDeleteTrip => 'Eliminar viaje';
 
   @override

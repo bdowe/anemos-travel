@@ -212,12 +212,9 @@ class AccountMenu extends ConsumerWidget {
         : const Icon(Icons.account_circle);
     return PopupMenuButton<String>(
       tooltip: l10n.accountMenuTooltip,
-      // Open below the bar, on an M3 surface, instead of the default overlapping
-      // panel that would inherit the app bar's white icons.
-      position: PopupMenuPosition.under,
-      color: theme.colorScheme.surface,
-      elevation: 3,
-      shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+      // Surface, elevation, radius and the below-the-bar position now come
+      // from `popupMenuTheme` (app_theme.dart) — stated once for every menu
+      // in the app rather than per call site.
       icon: unread > 0 ? Badge.count(count: unread, child: avatar) : avatar,
       onSelected: (v) => _onSelected(context, ref, v),
       itemBuilder: (_) => _items(theme, l10n, user?.displayName, user?.email,
@@ -247,9 +244,6 @@ class RailAccountButton extends ConsumerWidget {
     );
     return PopupMenuButton<String>(
       tooltip: l10n.accountMenuTooltip,
-      color: theme.colorScheme.surface,
-      elevation: 3,
-      shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
       icon: unread > 0 ? Badge.count(count: unread, child: avatar) : avatar,
       onSelected: (v) => _onSelected(context, ref, v),
       itemBuilder: (_) => _items(theme, l10n, user?.displayName, user?.email,
