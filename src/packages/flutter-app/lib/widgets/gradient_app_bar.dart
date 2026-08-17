@@ -11,9 +11,19 @@ import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
 import 'brand_logo.dart';
 
-/// The mark's own size in the brand row: the 28px rose, [BrandBadge]'s
-/// horizontal padding, and the gap before the wordmark.
-const double _markSlot = 28 + AppSpacing.sm * 2 + AppSpacing.sm;
+/// The rose, and the gap before the wordmark.
+///
+/// 36, not the 28 it was while plated, and measured rather than guessed: the
+/// rose radiates from a small hub, so most of its box is empty and its optical
+/// size runs well under its layout size. At 28 the reversed cut's gold
+/// intercardinals antialias away against the gradient and it reads as a thin
+/// white star; 32 is the floor and 36 reads as the wind rose it is. It is also
+/// what the nav rail paints, so the brand is one size wherever it appears.
+///
+/// The arithmetic lands back on the plated cost exactly — 28 + the badge's two
+/// 8px flanks + an 8px gap was also 52 — so retiring the plate moved no width
+/// threshold in the ladder below.
+const double _markSlot = 36 + AppSpacing.lg;
 
 /// The brand's tap padding, which is [AppSpacing.xs] on every side.
 const double _brandPadding = AppSpacing.xs * 2;
@@ -45,14 +55,15 @@ const double _minTitleWidth = 56;
 ///    ellipsized. That is the whole point.
 /// 2. **The page title** — [Flexible], ellipsized, dropped below
 ///    [_titleMinWidth].
-/// 3. **The plated mark** — dropped first, and always absent at rail widths,
-///    where `_RailBrand` already shows the rose one corner over on the same
-///    centre line (PR #406). Two roses 80px apart is a duplicate, not a
-///    lockup.
+/// 3. **The mark** — dropped first, and always absent at rail widths, where
+///    `_RailBrand` already shows the rose one corner over on the same centre
+///    line (PR #406). Two roses 80px apart is a duplicate, not a lockup.
 ///
-/// The plate is right here and nowhere else by policy: teal/gold artwork needs
-/// a light plate on gradient chrome and floats bare on neutral surfaces — see
-/// [BrandLogo]'s class doc.
+/// The rose floats bare here, as it does everywhere: this bar just takes the
+/// reversed cut ([BrandLogo.markLight]) because its field is the teal gradient
+/// and the dark artwork would be teal-on-teal. The white plate that used to
+/// sit behind it is retired — see [BrandLogo]'s class doc for the policy and
+/// why, and re-litigate it there rather than reintroducing a plate here.
 class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
   /// The page's own title. Null where the brand stands alone.
   final Widget? title;
@@ -170,14 +181,12 @@ class _BrandTitle extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (showMark) ...const [
-                BrandBadge(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-                  // No onTap of its own: one outer InkWell only, or the brand
-                  // hit-tests and ripples twice over the same pixels.
-                  child: BrandLogo.mark(size: 28),
-                ),
-                SizedBox(width: AppSpacing.sm),
+                // markLight, not mark: this field is the teal brand gradient,
+                // where the dark rose is teal-on-teal — its cardinals all but
+                // disappear and it reads as a gold asterisk. Retiring the
+                // plate is what made the reversed cut necessary here.
+                BrandLogo.markLight(size: 36),
+                SizedBox(width: AppSpacing.lg),
               ],
               const BrandWordmark(),
             ],

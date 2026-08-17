@@ -258,10 +258,16 @@ var printViewTmpl = template.Must(template.New("print-view").Parse(`<!DOCTYPE ht
       opacity: 0.85; margin: 0 0 6px; display: flex; align-items: center; gap: 10px;
     }
     header .brand img {
-      /* White plate behind the teal rose (the icon PNG is transparent), same
-         treatment as the in-app BrandBadge; box-sizing is border-box, so grow
-         the box to keep an 18px glyph. print-color-adjust keeps the plate in
-         print output, where backgrounds are stripped by default. */
+      /* White plate behind the teal rose (the icon PNG is transparent).
+         The app retired its plate and floats the reversed rose on teal
+         instead (brand_logo.dart, policy v3) — print deliberately does not
+         follow, because paper has a second state the app does not: the
+         header's teal band is a background, stripped by default in print
+         output, while print-color-adjust keeps this plate. The dark rose
+         therefore reads either way — separated by the plate on the teal
+         band, and on plain white when the band is gone. The reversed rose
+         would be invisible in that second state. box-sizing is border-box,
+         so grow the box to keep an 18px glyph. */
       height: 26px; width: 26px; padding: 4px;
       background: rgba(255, 255, 255, 0.92);
       border-radius: 5px;

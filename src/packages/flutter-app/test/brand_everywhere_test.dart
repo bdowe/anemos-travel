@@ -243,6 +243,25 @@ void main() {
     expect(find.text(AppInfo.name), findsOneWidget);
   });
 
+  testWidgets('the bar floats the REVERSED mark on its teal gradient',
+      (tester) async {
+    // The bar's field is AppColors.brandGradient, where the dark teal/gold
+    // rose is teal-on-teal — unreadable, which is what the retired white
+    // plate existed to fix. Since v3 of the plate policy nothing sits behind
+    // the rose, so the cut is load-bearing: swapping this back to
+    // BrandLogo.mark makes the brand vanish into the header rather than
+    // merely look wrong. Mirrors splash_screen_test's identical assertion.
+    await _pumpBar(tester, width: 700);
+
+    final image = tester.widget<Image>(
+      find.descendant(of: find.byType(BrandLogo), matching: find.byType(Image)),
+    );
+    expect(
+      (image.image as AssetImage).assetName,
+      'assets/images/anemos_mark_light.png',
+    );
+  });
+
   testWidgets('at rail widths the bar drops the mark — the rail has it',
       (tester) async {
     await _pumpBar(tester, width: 1200);

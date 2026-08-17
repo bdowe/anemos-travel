@@ -3,49 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:travel_route_planner/navigation/app_nav.dart';
-import 'package:travel_route_planner/widgets/brand_logo.dart';
 
-/// Logo-links-home: the brand badge is tappable when given onTap (Home app
-/// bar; the rail brand is a bare mark with its own InkWell, pinned in
-/// nav_tab_reset_test.dart), and goHome mirrors the shell's tab-select
-/// behavior (selectTab): land on the Home ROOT — the Home stack is popped to
-/// its root whether the tap switches tabs or Home is already active.
+/// Logo-links-home: goHome mirrors the shell's tab-select behavior
+/// (selectTab): land on the Home ROOT — the Home stack is popped to its root
+/// whether the tap switches tabs or Home is already active.
+///
+/// The tap target itself is pinned elsewhere, not here: the brand row carries
+/// exactly one InkWell over the whole lockup (home_polish_test.dart), and the
+/// rail brand is a bare mark with its own (nav_tab_reset_test.dart). The two
+/// widget tests that used to stand in this file exercised the retired
+/// BrandBadge plate directly and went with it.
 void main() {
-  testWidgets('BrandBadge with onTap fires the callback',
-      (WidgetTester tester) async {
-    var taps = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: BrandBadge(
-            onTap: () => taps++,
-            child: const SizedBox(width: 24, height: 24),
-          ),
-        ),
-      ),
-    );
-
-    await tester.tap(find.byType(BrandBadge));
-    expect(taps, 1);
-  });
-
-  testWidgets('BrandBadge without onTap stays a plain surface',
-      (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: BrandBadge(child: SizedBox(width: 24, height: 24)),
-        ),
-      ),
-    );
-
-    expect(
-      find.descendant(
-          of: find.byType(BrandBadge), matching: find.byType(InkWell)),
-      findsNothing,
-    );
-  });
-
   testWidgets('goHome switches back to the Home tab from another tab',
       (WidgetTester tester) async {
     late WidgetRef capturedRef;

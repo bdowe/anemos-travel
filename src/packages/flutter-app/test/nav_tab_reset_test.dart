@@ -166,8 +166,8 @@ void main() {
   testWidgets('the rail brand mark taps through to the Home root',
       (tester) async {
     // Logo-links-home through the real rail: the brand mark at the top of the
-    // rail is a bare BrandLogo with its own InkWell (no BrandBadge plate), so
-    // pin that the tap surface survived the plate's removal.
+    // rail is a bare BrandLogo with its own InkWell — no plate anywhere in the
+    // app since v3 — so pin that the tap surface survived the plate's removal.
     final container = await pumpApp(tester);
 
     await tester.tap(railDestination('Trips'));
