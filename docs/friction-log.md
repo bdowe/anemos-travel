@@ -5,6 +5,44 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-17 — The Bookings filter cost more screen than the bookings
+
+- **[app] Friction → fixed:** *"Should these big buttons for each city be a
+  dropdown instead?"* On an eight-city trip the destination filter was a `Wrap`
+  of chips under a separate "Not booked yet" chip — **~5 rows of chrome before
+  the first booking row**, and it grew with the trip. It is now one row at every
+  width: the scope chip, a pinned **All** chip, and a horizontally scrolling
+  strip. Not a dropdown, because a dropdown trades one tap per city switch for
+  the same row it saves; the strip keeps the trip's shape visible.
+- **[app] The old control had no visible "everything".** Clearing the filter
+  meant re-tapping the already-selected chip — an affordance nothing on screen
+  advertised. The All chip states the resting state, and a re-tap on a selected
+  destination is now a dead gesture rather than a second, hidden way to do the
+  same thing. (`MapLegChips` deliberately has no All chip: on a map a chip
+  selected at rest would put the strongest treatment on "no filter". Here the
+  resting state is the answer to a question the traveler asks.)
+- **[app] Each chip carries its own count (`Prague · 1/2`),** so the filter
+  doubles as a per-city progress read. Counts come from the same enumeration
+  and the same booked-predicate the ROWS use (`bookingSlotEntries` /
+  `bookingEntryBooked`, extracted for exactly this reason) — the #455 rule that
+  a count answers for the rows beneath it. Open debt unchanged: the Bookings
+  tab's own pill still counts booking *todos*, so a trip with confirmed records
+  that matched no todo sums higher on the chips than in the pill. Documented at
+  both sites rather than quietly reconciled — the pill is load-bearing for
+  `specs/next-step-cta` parity.
+- **[dev] Two layout bugs the new widget tests caught, not the eye.** A 320px
+  Spanish row at 1.3× text **overflowed by 94px**, and short of overflowing the
+  pinned pair starved the strip to ~180px on a 420px body — less than one
+  `Gothenburg · 0/2` chip, so it could never show a whole destination. Fix: cap
+  the pinned half at 50% and scale it down inside that (the view-tabs lever).
+- **[dev] Swapping a `ShaderMask` in and out re-parents the scroll view.** The
+  leading fade (which stops a scrolled-under chip's `· 0/2` tail from reading as
+  *All's* count) was applied only when scrolled — and inserting it rebuilt the
+  `SingleChildScrollView`, dropping the `ScrollController` position, so the strip
+  snapped back to the first chip the instant the fade engaged. The mask now
+  stays in the tree and only its gradient changes. Caught by the
+  reveal-the-selected-chip test.
+
 ## 2026-08-17 — the button named what it creates, not what it destroys
 
 - **[app] Friction → fixed:** *"Maybe rename 'New chat' to 'Clear chat'?"* The
