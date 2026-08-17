@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +15,7 @@ import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 
 import 'support/chip_finders.dart';
+import 'support/city_groups.dart';
 import 'support/l10n_test_app.dart';
 
 /// Returns a fixed trip without hitting the network, so we can exercise the
@@ -243,16 +245,38 @@ void main() {
         reason: 'chevrons must align across rows');
   });
 
-  testWidgets('phone width: header row never overflows and stays flush right',
+  testWidgets('phone width: the city name gets the row, dates go beneath it',
       (WidgetTester tester) async {
-    // The test font renders every glyph as a full-size square, so the chip
-    // here measures far wider than any real font — the harshest squeeze the
-    // row can see. The shared-width cap must ellipsize the chip (never
-    // overflow), and the chevron must stay flush with the row end.
+    // The regression this pass exists to kill: the chip is rigid and the
+    // label's Expanded is the only flex child, so on a phone the chip took
+    // its measured width first and "Prague" rendered as "Pra…". The test font
+    // renders every glyph as a full-size square, so the squeeze here is
+    // harsher than any real font — if the name survives this, it survives.
     await tester.binding.setSurfaceSize(const Size(375, 667));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await _pump(tester, _pragueKrakowTrip());
 
+    // The dates still belong to Prague's header (chipTextIn scopes to the
+    // row), but they now sit on a SECOND line under the name.
+    final name = cityHeaderLabel('Prague');
+    final dates = chipTextIn('Prague', 'Aug 24 – Aug 27');
+    expect(dates, findsOneWidget);
+    expect(chipTextIn('Prague', '· 3 nights'), findsOneWidget);
+    expect(
+      tester.getTopLeft(dates).dy,
+      greaterThan(tester.getTopLeft(name).dy),
+      reason: 'the date range must stack BELOW the city name on a phone',
+    );
+
+    // The name is not truncated: it paints its full intrinsic width. A
+    // regression to the one-line layout clamps this well under it.
+    final painted = tester.getSize(name).width;
+    final intrinsic = (tester.renderObject(name) as RenderParagraph)
+        .getMaxIntrinsicWidth(double.infinity);
+    expect(painted, moreOrLessEquals(intrinsic, epsilon: 0.5),
+        reason: '"Prague" must render whole, never ellipsized, at 375px');
+
+    // And the row still ends where it always did.
     final row = headerRowOf('Prague');
     // expand_more: groups land expanded (see the chevron test above).
     final chevron = find.descendant(
@@ -262,6 +286,35 @@ void main() {
       moreOrLessEquals(tester.getTopRight(row).dx, epsilon: 0.1),
       reason: 'chevron must stay flush with the row end at phone width',
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('phone width: no calendar chip icon, and no ghost refine slot',
+      (WidgetTester tester) async {
+    // The chip's Icons.event is gone with the chip; the pin above the second
+    // line is the row's only anchor. And 'Other places' no longer holds an
+    // invisible ~40px IconButton — that placeholder exists to keep the chip
+    // columns aligned, and narrow has no columns to keep. (The wide twin of
+    // this test, below, asserts the opposite on both counts.)
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pump(tester, _pragueMysteryTrip());
+
+    expect(find.descendant(
+            of: headerRowOf('Prague'), matching: find.byIcon(Icons.event)),
+        findsNothing);
+
+    final ghosts = find.descendant(
+        of: headerRowOf('Other places'),
+        matching: find.widgetWithIcon(IconButton, Icons.auto_awesome));
+    expect(ghosts, findsNothing,
+        reason: "'Other places' must not reserve a refine slot on a phone");
+    // The real button still renders on a city that HAS a hub.
+    expect(
+        find.descendant(
+            of: headerRowOf('Prague'),
+            matching: find.widgetWithIcon(IconButton, Icons.auto_awesome)),
+        findsOneWidget);
   });
 
   testWidgets('chip columns align across rows', (WidgetTester tester) async {
