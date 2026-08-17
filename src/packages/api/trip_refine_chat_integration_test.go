@@ -437,6 +437,14 @@ func TestBoundPromptSteersToGetTrip(t *testing.T) {
 		"may be resumed days later",
 		"AS IT WAS",
 		"call get_trip",
+		// #434's scope guard, pinned here after #442's integration restored it
+		// by hand: a cross-section reorder must be scope 'trip'. A rewrite
+		// replaces its section IN PLACE, so mixing another section's places
+		// into a 'city' or 'day' call duplicates them instead of moving them.
+		// Unpinned, a prompt restructure deletes this and the duplication bug
+		// #434 fixed comes back silently.
+		"is a whole-trip change",
+		"would duplicate those places rather than move them",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("bound prompt lost %q:\n%s", want, prompt)
