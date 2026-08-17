@@ -40,12 +40,33 @@ const _wideActionCounts = <int>[0, 2, 5];
 /// strict matrix above keeps meaning what it says.
 const double _subPhoneWidth = 230;
 
+/// The matrix cells the FALLBACK test font cannot hold, listed rather than
+/// hidden — if this set ever grows, that is a width regression, not a font
+/// artifact, and the diff should have to say so.
+///
+/// The widget-test fallback face runs ~35% wider than Cinzel, and at this one
+/// cell that difference is what tips the word into the [FittedBox]: it paints
+/// at ~0.94. **Checked in a browser rather than argued from arithmetic** — at
+/// 320px, on both Trips and trip detail, the real Cinzel wordmark paints 83px
+/// of ink, exactly what it paints at 390, so nothing scales on a real device.
+/// The page title is dropped at that width, which it was before this change
+/// too.
+///
+/// It is also why the large-text case lands in this cell and nowhere else: the
+/// backstop scales a 1.6x wordmark down to the slot, and the slot is wider than
+/// the unscaled *Cinzel* wordmark but narrower than the unscaled fallback one.
+// `final`, not `const`: records have no primitive equality, so a const Set of
+// them will not compile.
+final _fallbackFontScalesAt = <(double, int)>{(320.0, 3)};
+
 Future<void> _pumpBar(
   WidgetTester tester, {
   Widget? title,
   int actions = 0,
   required double width,
   bool inShell = true,
+  bool pushed = false,
+  bool fullscreenDialog = false,
   Locale? locale,
   double textScale = 1.0,
 }) async {
@@ -69,21 +90,41 @@ Future<void> _pumpBar(
   if (inShell) page = ShellScope(child: page);
 
   final content = page;
+
+  // A real second route when [pushed], because `impliesAppBarDismissal` is
+  // literally "is there an active route below me" — nothing short of a push
+  // makes Flutter build the 56px button this file is now about. Whether the
+  // route can be dismissed is the ONE difference between a tab root and a
+  // pushed screen, and it is the difference this bar exists to absorb.
+  final navKey = GlobalKey<NavigatorState>();
   await tester.pumpWidget(
     ProviderScope(
-      child: localizedTestApp(
+      child: MaterialApp(
+        navigatorKey: navKey,
+        localizationsDelegates: testLocalizationsDelegates,
+        supportedLocales: const [Locale('en'), Locale('es')],
         locale: locale,
         theme: AppTheme.light,
-        home: Builder(
-          builder: (context) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: TextScaler.linear(textScale)),
-            child: content,
-          ),
+        // The text-scale override wraps the NAVIGATOR, not `home`: a pushed
+        // route is home's sibling, not its descendant, so an override inside
+        // `home` would silently not reach the case under test.
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
         ),
+        // An empty page under the push, so no finder in this file can pick up
+        // a second copy of the bar.
+        home: pushed ? const Scaffold(body: SizedBox.shrink()) : content,
       ),
     ),
   );
+  if (pushed) {
+    navKey.currentState!.push(MaterialPageRoute<void>(
+      fullscreenDialog: fullscreenDialog,
+      builder: (_) => content,
+    ));
+  }
   await tester.pumpAndSettle();
 }
 
@@ -103,6 +144,18 @@ void _expectWordmarkWhole(WidgetTester tester, double natural, String where) {
   expect(tester.getSize(wordmark).width, moreOrLessEquals(natural, epsilon: 0.5),
       reason: 'wordmark laid out narrower than natural — truncated: $where');
   expect(tester.takeException(), isNull, reason: 'overflow or throw: $where');
+}
+
+/// How far the [FittedBox] backstop is allowed to have scaled the word down.
+/// Whole-but-shrunk is the correct trade where the slot genuinely runs out;
+/// whole-but-illegible is not, so the floor is asserted rather than assumed.
+void _expectScaledNoWorseThan(
+    WidgetTester tester, double natural, double floor, String where) {
+  final wordmark = find.text(AppInfo.name);
+  final painted =
+      tester.getBottomRight(wordmark).dx - tester.getTopLeft(wordmark).dx;
+  expect(painted, greaterThan(natural * floor),
+      reason: 'scaled past $floor of natural: $where');
 }
 
 /// The full promise: whole *and* painted at full size.
@@ -130,12 +183,70 @@ void main() {
       final counts = width >= 800 ? _wideActionCounts : _narrowActionCounts;
       for (final actions in counts) {
         for (final title in [null, const Text('Greece 2026')]) {
+          final where =
+              'w=$width actions=$actions title=${title == null ? 'none' : 'yes'}';
           await _pumpBar(tester, title: title, actions: actions, width: width);
-          _expectWordmarkFullSize(tester, natural,
-              'w=$width actions=$actions title=${title == null ? 'none' : 'yes'}');
+          if (_fallbackFontScalesAt.contains((width, actions))) {
+            _expectWordmarkWhole(tester, natural, where);
+            _expectScaledNoWorseThan(tester, natural, 0.9, where);
+          } else {
+            _expectWordmarkFullSize(tester, natural, where);
+          }
         }
       }
     }
+  });
+
+  testWidgets('the wordmark starts at the same x with and without a back '
+      'button — the brand does not move when you open a screen', (tester) async {
+    // The invariant the leading slot exists to hold, and the one nothing in
+    // this suite pinned before: `_pumpBar` never pushed a route, so the whole
+    // ladder was only ever verified with the slot empty. Opening a trip used to
+    // slide the wordmark 108px right.
+    for (final width in _widths) {
+      final counts = width >= 800 ? _wideActionCounts : _narrowActionCounts;
+      for (final actions in counts) {
+        for (final inShell in [true, false]) {
+          final where = 'w=$width actions=$actions inShell=$inShell';
+
+          await _pumpBar(tester,
+              title: const Text('Greece 2026'),
+              actions: actions,
+              width: width,
+              inShell: inShell);
+          final atRoot = tester.getTopLeft(find.text(AppInfo.name)).dx;
+
+          await _pumpBar(tester,
+              title: const Text('Greece 2026'),
+              actions: actions,
+              width: width,
+              inShell: inShell,
+              pushed: true);
+          // Without this the test would still pass if the back button simply
+          // stopped being drawn, which is the opposite of the fix.
+          expect(find.byType(BackButton), findsOneWidget,
+              reason: 'no back button to be anchored against: $where');
+
+          expect(tester.getTopLeft(find.text(AppInfo.name)).dx,
+              moreOrLessEquals(atRoot, epsilon: 0.5),
+              reason: 'the brand moved on push: $where');
+        }
+      }
+    }
+  });
+
+  testWidgets('a pushed page keeps the framework\'s own dismissal button',
+      (tester) async {
+    // The slot is filled by AppBar, not by us, so back-vs-close stays its
+    // decision: trip_map_screen is a fullscreenDialog and must keep its ✕.
+    await _pumpBar(tester, width: 390, pushed: true);
+    expect(find.byType(BackButton), findsOneWidget);
+    expect(find.byType(BrandLogo), findsNothing,
+        reason: 'the rose must not squat in the dismissal slot');
+
+    await _pumpBar(tester, width: 390, pushed: true, fullscreenDialog: true);
+    expect(find.byType(CloseButton), findsOneWidget,
+        reason: 'a fullscreenDialog takes the ✕, and that choice is not ours');
   });
 
   testWidgets('outside the shell too — the signed-out pages are pages',
@@ -188,6 +299,15 @@ void main() {
             textScale: scale);
         _expectWordmarkWhole(tester, natural, where);
 
+        if (_fallbackFontScalesAt.contains((width, actions))) {
+          // The backstop scales the 1.6x word down to the slot, and this one
+          // cell's slot is narrower than the FALLBACK font's unscaled wordmark
+          // — though wider than Cinzel's, so the promise below holds on a real
+          // device. Keep the legibility floor rather than nothing at all.
+          _expectScaledNoWorseThan(tester, unscaled, 0.9, where);
+          continue;
+        }
+
         final wordmark = find.text(AppInfo.name);
         final painted =
             tester.getBottomRight(wordmark).dx - tester.getTopLeft(wordmark).dx;
@@ -230,17 +350,23 @@ void main() {
     expect(find.text(AppInfo.name), findsOneWidget);
   });
 
-  testWidgets('the mark yields before the wordmark does', (tester) async {
-    // Roomy phone bar: plated mark and wordmark together.
-    await _pumpBar(tester, width: 700);
-    expect(find.byType(BrandLogo), findsOneWidget);
-    expect(find.text(AppInfo.name), findsOneWidget);
-
-    // Squeezed — trip detail's three icons on the smallest phone. The mark
-    // goes first; the word is what has to remain.
-    await _pumpBar(tester, actions: 3, width: 320);
-    expect(find.byType(BrandLogo), findsNothing);
-    expect(find.text(AppInfo.name), findsOneWidget);
+  testWidgets('the rose lives in the leading slot and no longer yields to '
+      'width', (tester) async {
+    // It used to be rung 3 of the title row's ladder, dropped whenever the row
+    // got tight — i.e. exactly when the bar looked most unbranded, and its
+    // coming and going is half of the 108px the wordmark used to travel. In a
+    // slot the title row cannot spend, it simply stays.
+    for (final width in [_subPhoneWidth, 320.0, 360.0, 700.0]) {
+      await _pumpBar(tester, actions: 3, width: width);
+      final rose = find.byType(BrandLogo);
+      expect(rose, findsOneWidget, reason: 'no rose at w=$width');
+      expect(tester.getCenter(rose).dx,
+          moreOrLessEquals(kToolbarHeight / 2, epsilon: 0.5),
+          reason: 'the rose left the leading slot at w=$width');
+      expect(tester.getTopLeft(find.text(AppInfo.name)).dx,
+          greaterThanOrEqualTo(kToolbarHeight),
+          reason: 'the wordmark reached back into the slot at w=$width');
+    }
   });
 
   testWidgets('the bar floats the REVERSED mark on its teal gradient',
@@ -262,15 +388,23 @@ void main() {
     );
   });
 
-  testWidgets('at rail widths the bar drops the mark — the rail has it',
+  testWidgets('at rail widths the leading slot empties — but keeps its width',
       (tester) async {
     await _pumpBar(tester, width: 1200);
     expect(find.byType(BrandLogo), findsNothing,
         reason: 'two roses 80px apart is a duplicate, not a lockup');
     expect(find.text(AppInfo.name), findsOneWidget);
+    final withRail = tester.getTopLeft(find.text(AppInfo.name)).dx;
 
-    // ...but only when there IS a rail. The signed-out pages are wide too,
-    // and dropping the mark there leaves it nowhere.
+    // The empty case is the inset, not an omission: drop the box and the
+    // wordmark slides left the moment the window crosses kRailBreakpoint.
+    await _pumpBar(tester, width: 700);
+    expect(tester.getTopLeft(find.text(AppInfo.name)).dx,
+        moreOrLessEquals(withRail, epsilon: 0.5),
+        reason: 'the inset must hold even where the rose does not');
+
+    // ...and the rail rule applies only when there IS a rail. The signed-out
+    // pages are wide too, and dropping the mark there leaves it nowhere.
     await _pumpBar(tester, width: 1200, inShell: false);
     expect(find.byType(BrandLogo), findsOneWidget);
   });
@@ -303,5 +437,64 @@ void main() {
     expect(find.bySemanticsLabel('Notifications'), findsOneWidget);
     expect(find.bySemanticsLabel(AppInfo.name), findsOneWidget);
     handle.dispose();
+  });
+
+  testWidgets('the brand is two nodes now, and only one of them says "Anemos"',
+      (tester) async {
+    // Splitting the lockup across two AppBar slots is what makes the wordmark
+    // sit still, and the risk it introduces is a stutter: the rose's own image
+    // label is "Anemos" too, so an unlabelled slot would announce the product
+    // name twice and bury the only thing about the control worth knowing.
+    final handle = tester.ensureSemantics();
+    await _pumpBar(tester, title: const Text('Notifications'), width: 700);
+
+    expect(find.bySemanticsLabel(AppInfo.name), findsOneWidget,
+        reason: 'the rose must not announce the product name a second time');
+    expect(find.bySemanticsLabel('Home'), findsOneWidget,
+        reason: 'the rose is named by what it does');
+    expect(find.bySemanticsLabel('Notifications'), findsOneWidget);
+    handle.dispose();
+  });
+
+  testWidgets('outside the shell the rose is decoration, not a node',
+      (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pumpBar(tester, width: 700, inShell: false);
+
+    expect(find.bySemanticsLabel(AppInfo.name), findsOneWidget);
+    expect(find.bySemanticsLabel('Home'), findsNothing,
+        reason: 'a "Home" node that goes nowhere is a dead affordance');
+    handle.dispose();
+  });
+
+  testWidgets('the page title drops at the same width pushed or not',
+      (tester) async {
+    // The other half of the invariant, and the one worth stating separately
+    // because it is what the reserved slot BUYS. The title's drop threshold
+    // used to depend on the back button — a pushed page paid 56px of leading
+    // that a tab root did not — so trip detail lost its trip name at widths
+    // where Trips still showed "My Trips". Now the two agree at every width.
+    //
+    // Deliberately relative rather than a hardcoded width: the exact
+    // threshold moves with the font (the test's fallback face runs ~35% wider
+    // than Cinzel), but "the same on both" does not, so this keeps meaning the
+    // same thing where a pinned number would only be measuring the fallback.
+    for (final width in _widths) {
+      final counts = width >= 800 ? _wideActionCounts : _narrowActionCounts;
+      for (final actions in counts) {
+        await _pumpBar(tester,
+            title: const Text('Greece 2026'), actions: actions, width: width);
+        final atRoot = find.text('Greece 2026').evaluate().length;
+
+        await _pumpBar(tester,
+            title: const Text('Greece 2026'),
+            actions: actions,
+            width: width,
+            pushed: true);
+        expect(find.text('Greece 2026').evaluate().length, atRoot,
+            reason: 'the title survives a back button differently: '
+                'w=$width actions=$actions');
+      }
+    }
   });
 }

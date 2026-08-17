@@ -89,6 +89,44 @@ void main() {
     expect(find.byType(RickRollOverlay), findsNothing);
   });
 
+  testWidgets('the rose counts too, now that it is the other half of the brand',
+      (tester) async {
+    // The Listener used to ride one widget because the brand WAS one widget.
+    // The rose lives in the app bar's leading slot now, and a trigger that
+    // only rode the wordmark would have silently halved the target — the kind
+    // of regression nothing else in the suite would notice.
+    //
+    // The surface has to be narrow first: at rail widths the leading slot is
+    // deliberately empty (the rail carries the rose), so the default 800x600
+    // test window would find nothing to tap.
+    tester.view.physicalSize = const Size(390, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpApp(tester, signedIn: true);
+
+    // No `hitTestable()` here, unlike [appBarBrand]: finders skip offstage
+    // widgets by default, so the shell's two inactive tabs are already out,
+    // and a RenderImage is not itself a hit-test target — hitTestable would
+    // find nothing to tap even though the rose is right there.
+    final rose = find.descendant(
+      of: find.byType(GradientAppBar),
+      matching: find.byType(BrandLogo),
+    );
+    expect(rose, findsOneWidget);
+
+    for (var i = 0; i < kSecretTapCount; i++) {
+      await tester.tap(rose);
+      await tester.pump();
+    }
+    expect(find.byType(RickRollOverlay), findsOneWidget);
+
+    await tester.tapAt(const Offset(40, 400));
+    await tester.pump();
+    expect(find.byType(RickRollOverlay), findsNothing);
+  });
+
   testWidgets('it also works where the brand is not a button', (tester) async {
     // Signed out, the brand has no onTap at all — no InkWell, no button
     // semantics. The Listener is deliberately outside that branch, because
