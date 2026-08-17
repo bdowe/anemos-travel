@@ -185,4 +185,133 @@ void main() {
     expect(budget.projected, isNull);
     expect(budget.planVariance, isNull);
   });
+
+  // --- daily food & drink (specs/daily-spend-guide) -------------------------
+
+  test('accepting a suggestion posts a PLANNED food line carrying its leg key',
+      () async {
+    late http.Request captured;
+    final service = _service(MockClient((request) async {
+      captured = request;
+      return http.Response(
+          jsonEncode({
+            'id': 'e9',
+            'category': 'food',
+            'label': 'Food & drink · Lisbon',
+            'amount': 400,
+            'planned_amount': 400,
+            'actual_amount': null,
+            'purchased': false,
+            'position': 9999,
+            'auto': false,
+            'source_kind': null,
+            'source_id': null,
+            'leg_key': 'Lisbon',
+          }),
+          201,
+          headers: {'content-type': 'application/json'});
+    }));
+
+    final expense = await service.addExpense('t1',
+        category: 'food',
+        label: 'Food & drink · Lisbon',
+        amount: 400,
+        planned: true,
+        legKey: 'Lisbon');
+
+    expect(captured.url.path, '/api/v1/trips/t1/budget/expenses');
+    final body = jsonDecode(captured.body) as Map<String, dynamic>;
+    expect(body['leg_key'], 'Lisbon');
+    expect(body['planned_amount'], 400);
+    expect(body['category'], 'food');
+    // A city plan is never a booking mirror — sending a source link alongside
+    // it is a 400 server-side, so it must not leak into this call.
+    expect(body.containsKey('source_kind'), isFalse);
+    expect(expense.legKey, 'Lisbon');
+    expect(expense.auto, isFalse);
+  });
+
+  test('a plain add sends no leg_key at all', () async {
+    late http.Request captured;
+    final service = _service(MockClient((request) async {
+      captured = request;
+      return http.Response(_expenseJson(planned: 20), 201,
+          headers: {'content-type': 'application/json'});
+    }));
+
+    await service.addExpense('t1',
+        category: 'general', label: 'Souvenirs', amount: 20, planned: true);
+
+    final body = jsonDecode(captured.body) as Map<String, dynamic>;
+    expect(body.containsKey('leg_key'), isFalse);
+  });
+
+  test('the daily-spend read hits its own path and passes the tier through',
+      () async {
+    late http.Request captured;
+    final service = _service(MockClient((request) async {
+      captured = request;
+      return http.Response(
+          jsonEncode({
+            'currency': 'EUR',
+            'tier': 'luxury',
+            'tier_source': 'request',
+            'basis': 'estimate',
+            'cities': [
+              {
+                'leg_key': 'Lisbon',
+                'label': 'Lisbon',
+                'nights': 4,
+                'daily_amount': 95.0,
+                'includes': 'Coffee, lunch, dinner with wine.',
+              }
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'});
+    }));
+
+    final guide = await service.getDailySpend('t1', tier: 'luxury');
+
+    expect(captured.method, 'GET');
+    expect(captured.url.path, '/api/v1/trips/t1/budget/daily-spend');
+    expect(captured.url.queryParameters['tier'], 'luxury');
+    expect(guide.currency, 'EUR');
+    expect(guide.tier, 'luxury');
+    expect(guide.tierSource, 'request');
+    // The provenance has to survive the wire — it is what makes showing the
+    // number honest.
+    expect(guide.basis, 'estimate');
+    expect(guide.cities.single.legKey, 'Lisbon');
+    expect(guide.cities.single.nights, 4);
+    expect(guide.cities.single.dailyAmount, 95.0);
+  });
+
+  test('omitting the tier sends no query string — the server resolves it',
+      () async {
+    late http.Request captured;
+    final service = _service(MockClient((request) async {
+      captured = request;
+      return http.Response(
+          jsonEncode({
+            'currency': 'USD',
+            'tier': 'mid',
+            'tier_source': 'profile',
+            'basis': 'estimate',
+            'cities': <dynamic>[],
+            'unavailable_reason': 'no_cities',
+          }),
+          200,
+          headers: {'content-type': 'application/json'});
+    }));
+
+    final guide = await service.getDailySpend('t1');
+
+    expect(captured.url.queryParameters.containsKey('tier'), isFalse);
+    // An answer with no cities is a 200 with a reason, never an error: the
+    // section disappears rather than shouting at the traveler.
+    expect(guide.isEmpty, isTrue);
+    expect(guide.unavailableReason, 'no_cities');
+    expect(guide.tierSource, 'profile');
+  });
 }

@@ -1042,6 +1042,79 @@ class AppLocalizationsEn extends AppLocalizations {
   String get budgetPlanAutoLocked => 'From a booking — un-book it to remove';
 
   @override
+  String get budgetDailyTitle => 'Daily food & drink';
+
+  @override
+  String get budgetDailySubtitle =>
+      'Typical local prices, per person — an estimate, not a quote.';
+
+  @override
+  String budgetDailyRate(String amount) {
+    return '$amount/person/day';
+  }
+
+  @override
+  String budgetDailyNights(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count nights',
+      one: '1 night',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get budgetDailyAdd => 'Add to plan';
+
+  @override
+  String budgetDailyInPlan(String amount) {
+    return 'In your plan · $amount';
+  }
+
+  @override
+  String budgetDailyAdded(String city) {
+    return '$city food & drink added to your plan';
+  }
+
+  @override
+  String budgetDailyExpenseLabel(String city) {
+    return 'Food & drink · $city';
+  }
+
+  @override
+  String budgetDailyTravelers(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count travelers',
+      one: '1 traveler',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get budgetDailyTravelersAdd => 'One more traveler';
+
+  @override
+  String get budgetDailyTravelersRemove => 'One fewer traveler';
+
+  @override
+  String get budgetDailyTierLabel => 'Spending level';
+
+  @override
+  String get budgetDailyTierBudget => 'Budget';
+
+  @override
+  String get budgetDailyTierMid => 'Mid-range';
+
+  @override
+  String get budgetDailyTierLuxury => 'Splurge';
+
+  @override
+  String get budgetDailyTierFromProfile => 'From your saved budget level';
+
+  @override
   String get checklistTitle => 'Packing & prep';
 
   @override

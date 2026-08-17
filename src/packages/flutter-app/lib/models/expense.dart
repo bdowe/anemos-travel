@@ -44,6 +44,13 @@ class Expense {
   @JsonKey(name: 'source_id')
   final String? sourceId;
 
+  /// The city leg this line plans for (migration 00070), or null for every
+  /// other expense — the identity the daily food & drink card finds its own
+  /// line by. Deliberately NOT part of the `auto` contract above: a leg-keyed
+  /// row is the traveler's own plan, so no booking-state change touches it.
+  @JsonKey(name: 'leg_key')
+  final String? legKey;
+
   const Expense({
     required this.id,
     required this.category,
@@ -56,6 +63,7 @@ class Expense {
     this.auto = false,
     this.sourceKind,
     this.sourceId,
+    this.legKey,
   });
 
   /// What this line was planned at, or null if it never carried a plan.
@@ -100,6 +108,7 @@ class Expense {
         auto: auto,
         sourceKind: sourceKind,
         sourceId: sourceId,
+        legKey: legKey,
       );
 
   factory Expense.fromJson(Map<String, dynamic> json) =>

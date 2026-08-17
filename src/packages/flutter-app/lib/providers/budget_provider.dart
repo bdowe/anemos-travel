@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/budget.dart';
+import '../models/daily_spend.dart';
 import '../models/expense.dart';
 import '../services/budget_api_service.dart';
+import '../utils/daily_spend.dart';
 import 'api_client_provider.dart';
 
 final budgetApiServiceProvider = Provider<BudgetApiService>((ref) {
@@ -116,3 +118,85 @@ class ExpenseDraftNotifier extends StateNotifier<ExpenseDraft> {
 final expenseDraftProvider =
     StateNotifierProvider.family<ExpenseDraftNotifier, ExpenseDraft, String>(
         (ref, tripId) => ExpenseDraftNotifier());
+
+// --- daily food & drink suggestion (specs/daily-spend-guide) ----------------
+
+/// Identifies one daily-spend read. The tier is part of the key because prices
+/// genuinely vary by it — a luxury answer must not be served from the mid
+/// fetch. Value equality by hand, the [WeatherQuery] convention: without it
+/// every rebuild is a new family key and refetches.
+@immutable
+class DailySpendQuery {
+  final String tripId;
+
+  /// null means "resolve it for me" — the server then uses the traveler's
+  /// saved budget level, or its default, and says which in `tier_source`.
+  final String? tier;
+
+  const DailySpendQuery({required this.tripId, this.tier});
+
+  @override
+  bool operator ==(Object other) =>
+      other is DailySpendQuery && other.tripId == tripId && other.tier == tier;
+
+  @override
+  int get hashCode => Object.hash(tripId, tier);
+}
+
+/// The per-city daily food & drink suggestion. **Best-effort**, exactly like
+/// [weatherByCityProvider]: any failure resolves to an empty guide rather than
+/// an error state, because a suggestion the Budget tab could not fetch is a
+/// section that shouldn't appear — never a red box over the traveler's money.
+final dailySpendProvider =
+    FutureProvider.family<DailySpendGuide, DailySpendQuery>((ref, query) async {
+  try {
+    return await ref
+        .watch(budgetApiServiceProvider)
+        .getDailySpend(query.tripId, tier: query.tier);
+  } catch (_) {
+    return const DailySpendGuide(cities: []);
+  }
+});
+
+/// What the traveler has set on the daily-spend section: which tier to price
+/// at, and how many people are eating.
+///
+/// Session-local and keyed by trip, the same lifetime and rationale as
+/// [ExpenseDraft] — the section is unmounted on every tab switch and every
+/// chat-panel toggle. Deliberately NOT persisted: [tier] is a look at a
+/// different price level, not a change to the traveler's saved budget level,
+/// and [travelers] is a property of this trip that the trip does not store.
+@immutable
+class DailySpendSettings {
+  /// null = let the server resolve the tier from the saved profile.
+  final String? tier;
+  final int travelers;
+
+  const DailySpendSettings({this.tier, this.travelers = 1});
+
+  DailySpendSettings copyWith({String? tier, int? travelers}) =>
+      DailySpendSettings(
+        tier: tier ?? this.tier,
+        travelers: travelers ?? this.travelers,
+      );
+}
+
+class DailySpendSettingsNotifier extends StateNotifier<DailySpendSettings> {
+  DailySpendSettingsNotifier() : super(const DailySpendSettings());
+
+  void setTier(String tier) {
+    if (tier == state.tier) return;
+    state = state.copyWith(tier: tier);
+  }
+
+  void setTravelers(int travelers) {
+    final next = clampTravelers(travelers);
+    if (next == state.travelers) return;
+    state = state.copyWith(travelers: next);
+  }
+}
+
+final dailySpendSettingsProvider = StateNotifierProvider.family<
+    DailySpendSettingsNotifier,
+    DailySpendSettings,
+    String>((ref, tripId) => DailySpendSettingsNotifier());

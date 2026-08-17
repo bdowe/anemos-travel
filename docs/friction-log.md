@@ -5,6 +5,42 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-16 — daily food & drink budget
+
+- **[dev] The tests were all green and the section still read badly.** The
+  model returns the same `includes` phrase for every city — because it
+  describes the *spending tier*, not the city — so printing it under each row
+  was pure repetition. Nothing in 43 passing widget tests could see that; one
+  screenshot of real output could. Same family as `summarizeHotels` stating
+  the bag basis once in its header. **A number's explanation belongs wherever
+  it stops varying.** The fix's first cut then compared the *deduped* set size
+  to the city count (always false for more than one city) and the new test
+  caught it on the first run — worth noting that the test written *for* the
+  fix earned its keep immediately.
+- **[dev] "No free API" was a design input, not an obstacle.** Two searches
+  and one grep settled it: no free global currency-denominated meal-price
+  feed exists, and we're on the *legacy* Places API where `price_level` is an
+  ordinal 0-4 — which `hotel_search_service.go` had already refused to map
+  onto money for the same reason. So the estimate is the model's and says so
+  in the subtitle, and `basis: "estimate"` rides the wire so a real provider
+  later is a new value rather than a silent change of meaning. Checking what
+  the data *can't* do first is what kept this from becoming a paid
+  subscription for one number.
+- **[dev] The multiplier decision was the whole feature's honesty.** Nights,
+  not days: two legs share their transition day, so per-city days bill it
+  twice and the section could never reconcile with the trip's own length.
+  Verified on a real trip — Lisbon 3 + Porto 4 = the trip's 7 — and the two
+  numbers matched the city header chips three inches up the page, which is the
+  only reason a traveler would trust either.
+- **[dev] Returning nights from the server kept the god screen out of it.**
+  Because the endpoint answers with city + nights + rate, `BudgetSection`
+  self-fetches and `trip_detail_screen.dart` was never opened — no new props
+  through 7,500 lines, and the lane contended with nothing.
+- **[dev] Spanish overflowed the header by 95px** ("Sin mirar el precio" sets
+  the tier dropdown's width). The planned/paid control had already answered
+  this exact question by taking its own line; `Wrap` rather than `Row` so no
+  text scale can bring it back.
+
 ## 2026-08-16 — the New chat button nobody could find
 
 - **[app] It shipped, and I went looking for it anyway.** #441 put "New chat"

@@ -4,13 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
 import '../models/budget.dart';
+import '../models/daily_spend.dart';
 import '../models/expense.dart';
 import '../providers/budget_provider.dart';
 import '../theme/spacing.dart';
+import '../utils/daily_spend.dart';
 import '../utils/money_format.dart';
 import 'budget_amounts.dart';
 import 'budget_categories.dart';
 import 'budget_target_dialog.dart';
+import 'daily_spend_section.dart';
 import 'empty_state.dart';
 
 /// The Budget tab's body: a single per-trip budget (one target in one
@@ -484,11 +487,44 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           _buildTotals(theme, budget, expenses),
         ],
         if (widget.canEdit) ...[
+          // Suggestions sit between the receipt and the add row: an input to
+          // planning, next to the other way of adding a line, and never above
+          // the real numbers. Editors only — accepting one is a write.
+          DailySpendSection(
+            tripId: widget.tripId,
+            expenses: expenses,
+            isOffline: widget.isOffline,
+            onAdd: _addDailySpend,
+          ),
           const SizedBox(height: AppSpacing.sm),
           _buildModeControl(theme),
           _buildAddRow(theme),
         ],
       ],
+    );
+  }
+
+  /// Files a city's suggested food & drink as a PLANNED expense, stamped with
+  /// the leg key so the suggestion card can find it again and a second tap
+  /// returns the same line instead of a duplicate.
+  ///
+  /// Goes through [_run] like every other write here, so it shares the busy
+  /// guard, the two invalidations and the error snackbar.
+  Future<void> _addDailySpend(
+      DailySpendCity city, double total, String label) async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    await _run(() => ref.read(budgetApiServiceProvider).addExpense(
+          widget.tripId,
+          category: kDailySpendCategory,
+          label: label,
+          amount: total,
+          planned: true,
+          legKey: city.legKey,
+        ));
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.budgetDailyAdded(city.label))),
     );
   }
 
