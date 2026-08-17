@@ -6799,50 +6799,75 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                           ],
                         );
                       }
-                      // Narrow: collapsible bottom sheet over the page; bottom
-                      // inset keeps the input above the keyboard.
+                      // Narrow: the chat OPENS FULL — everything between the app
+                      // bar and the nav bar. It used to open at 0.45, where the
+                      // panel's own header and composer are fixed costs that
+                      // left ~200px of transcript: one quick-reply chip and a
+                      // clipped bubble, on the surface the whole feature lives
+                      // on. Shrinking it is now a deliberate drag, not the
+                      // state you land in.
+                      //
+                      // snap with no snapSizes snaps to [min, max], so there
+                      // are exactly two resting places: full, and a 0.4 peek
+                      // that still shows the header and composer over a slice
+                      // of the itinerary. (0.45 wasn't even a snap target,
+                      // which is why the old sheet felt arbitrary.) Nothing is
+                      // remembered — every open starts full, so a peek can't
+                      // silently become the next open's default.
                       return Stack(
                         children: [
                           refreshable,
                           DraggableScrollableSheet(
-                            initialChildSize: 0.45,
-                            minChildSize: 0.15,
-                            maxChildSize: 0.92,
+                            initialChildSize: 1.0,
+                            minChildSize: 0.4,
+                            maxChildSize: 1.0,
                             snap: true,
                             builder: (context, scrollController) => Material(
                               elevation: 8,
                               borderRadius: const BorderRadius.vertical(
                                   top: Radius.circular(16)),
                               clipBehavior: Clip.antiAlias,
-                              child: Padding(
-                                padding: EdgeInsets.only(
-                                    bottom: MediaQuery.of(context)
-                                        .viewInsets
-                                        .bottom),
-                                child: Column(
-                                  children: [
-                                    // Drag handle (also a scrollable so the
-                                    // sheet responds to drags at its header).
-                                    SingleChildScrollView(
-                                      controller: scrollController,
-                                      child: Center(
-                                        child: Container(
-                                          width: 36,
-                                          height: 4,
-                                          margin: const EdgeInsets.symmetric(
-                                              vertical: 8),
-                                          decoration: BoxDecoration(
-                                            color: theme
-                                                .colorScheme.outlineVariant,
-                                            borderRadius:
-                                                BorderRadius.circular(2),
-                                          ),
+                              // No keyboard padding here: the Scaffold's
+                              // resizeToAvoidBottomInset (unset => true) hands
+                              // the body a MediaQuery with viewInsets.bottom
+                              // already removed, so the EdgeInsets.only that
+                              // used to sit here read 0 on every platform and
+                              // the composer was kept above the keyboard by the
+                              // body shrinking, not by this. It mattered more
+                              // once the sheet went full-height, so it was
+                              // checked rather than inherited.
+                              child: Column(
+                                children: [
+                                  // Drag handle (also a scrollable so the sheet
+                                  // responds to drags at its header). This strip
+                                  // is the ONLY place a drag resizes the sheet —
+                                  // the transcript's ListView has its own
+                                  // controller by design, so scrolling messages
+                                  // can't collapse the chat — and now that the
+                                  // sheet opens full, it is also the only way
+                                  // back down. The margin is the grab area, not
+                                  // decoration: 8 left a ~20px target at the
+                                  // very top edge of the screen.
+                                  SingleChildScrollView(
+                                    key: const Key('refineSheetHandle'),
+                                    controller: scrollController,
+                                    child: Center(
+                                      child: Container(
+                                        width: 36,
+                                        height: 4,
+                                        margin: const EdgeInsets.symmetric(
+                                            vertical: 14),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              theme.colorScheme.outlineVariant,
+                                          borderRadius:
+                                              BorderRadius.circular(2),
                                         ),
                                       ),
                                     ),
-                                    Expanded(child: panel),
-                                  ],
-                                ),
+                                  ),
+                                  Expanded(child: panel),
+                                ],
                               ),
                             ),
                           ),

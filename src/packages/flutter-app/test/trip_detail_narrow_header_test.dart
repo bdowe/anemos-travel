@@ -94,6 +94,49 @@ void main() {
     expect(find.byType(TripRefinePanel), findsOneWidget);
   });
 
+  // The sheet used to open at 0.45 of the body, and the panel's own header and
+  // composer are fixed costs inside it — so the transcript got ~200px: one
+  // quick-reply chip and a clipped bubble. It now opens full. Measured against
+  // the DraggableScrollableSheet's own box, which IS the space the body gives
+  // it, so the assertion doesn't hardcode the app bar's height.
+  testWidgets('narrow: the refine sheet opens full-height', (tester) async {
+    await _pump(tester, _trip(), surface: phone);
+    await tester.tap(find.byTooltip('Refine with AI'));
+    await tester.pumpAndSettle();
+
+    final available = tester.getRect(find.byType(DraggableScrollableSheet));
+    final panel = tester.getRect(find.byType(TripRefinePanel));
+
+    // > 0.85 rather than == 1.0: the drag handle strip sits above the panel
+    // inside the sheet, so the panel is always the extent minus that strip.
+    expect(panel.height / available.height, greaterThan(0.85));
+    // And it reaches the bottom — a tall panel floating above the fold would
+    // pass the ratio alone.
+    expect(panel.bottom, moreOrLessEquals(available.bottom, epsilon: 1));
+  });
+
+  // The other half of the contract: full is where it OPENS, not where it is
+  // stuck. Dragging the handle down snaps to the 0.4 peek, which is what makes
+  // the itinerary reachable without closing the chat.
+  testWidgets('narrow: dragging the handle down shrinks the sheet',
+      (tester) async {
+    await _pump(tester, _trip(), surface: phone);
+    await tester.tap(find.byTooltip('Refine with AI'));
+    await tester.pumpAndSettle();
+
+    final available = tester.getRect(find.byType(DraggableScrollableSheet));
+    final opened = tester.getRect(find.byType(TripRefinePanel)).height;
+
+    await tester.drag(
+        find.byKey(const Key('refineSheetHandle')), const Offset(0, 300));
+    await tester.pumpAndSettle();
+
+    final dragged = tester.getRect(find.byType(TripRefinePanel)).height;
+    expect(dragged, lessThan(opened));
+    // Snapped to minChildSize (0.4), not to some arbitrary resting point.
+    expect(dragged / available.height, closeTo(0.4, 0.06));
+  });
+
   testWidgets('narrow editor collaborator keeps the sparkle (spec)',
       (tester) async {
     await _pump(tester, _trip(access: 'editor'), surface: phone);

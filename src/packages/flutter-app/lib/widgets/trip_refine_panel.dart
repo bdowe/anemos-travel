@@ -240,9 +240,11 @@ class _Problem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Scrollable: on narrow the panel is a drag sheet that opens at 0.45 of
-    // the screen, which is shorter than this block — and an unreachable
-    // "New chat" button is the same dead end the state exists to escape.
+    // Scrollable: on narrow the panel is a drag sheet the traveler can pull
+    // down to 0.4 of the screen, which is shorter than this block — and an
+    // unreachable "New chat" button is the same dead end the state exists to
+    // escape. (The sheet OPENS full, so this is now the dragged case rather
+    // than the default one; it is still reachable, so the scroll view stays.)
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(24),

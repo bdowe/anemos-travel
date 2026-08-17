@@ -5,6 +5,40 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-17 — The chat opened too short to chat in
+
+- **[app] Friction → fixed:** *"Clicking the chat button on mobile doesn't
+  bring the chat window high enough to see."* On a phone the refine sheet
+  opened at `initialChildSize: 0.45`. Inside that box the panel's header
+  (~55px) and the composer (~140px) are **fixed costs**, so 45% of the body
+  bought roughly **200px of transcript** — one quick-reply chip and a clipped
+  bubble. The fraction was never the problem on its own; the problem is that a
+  fraction was chosen without subtracting what the box already owed.
+- **[app] The default was also not a resting place.** `snap: true` with no
+  `snapSizes` snaps to `[minChildSize, maxChildSize]` — so `0.45` was a
+  starting extent the sheet could never return to. Drag it at all and it left
+  and never came back, which is why the thing felt arbitrary rather than
+  merely small. It now opens at `1.0` with min `0.4`: **both** resting places
+  are reachable, and the one you land in is the useful one.
+- **[app] Full-height is the default, not the cage.** The itinerary is still
+  behind the sheet and still one drag away, which is what kept this a
+  three-number change instead of a new route. The drag strip's margin went
+  `8 → 14` in the same pass: it is the **grab area**, not decoration, and at
+  full extent a ~20px target pinned to the top edge of the screen is the only
+  way back down.
+- **[dev] A comment claimed a job the framework was already doing.** The sheet
+  padded itself by `MediaQuery.viewInsets.bottom` "so the input clears the
+  keyboard". `Scaffold._resizeToAvoidBottomInset` defaults **true** and passes
+  `removeBottomInset` when building the body's MediaQuery, so that value is
+  **always 0** in a Scaffold body — the composer was cleared by the body
+  shrinking, and had been all along. Harmless while the sheet was 45% tall;
+  worth checking rather than inheriting once it went full-height. Deleted.
+- **[dev] Both new tests were run against the old numbers before being kept.**
+  They failed at `0.409` and `0.109` — i.e. `0.45` and `0.15` each minus the
+  handle strip, which is also how we know the ratios are measuring the extent
+  and not something incidental. A height assertion that passes both ways is
+  worth nothing.
+
 ## 2026-08-17 — "What to wear & pack" never said what to pack
 
 - **[app] Friction → fixed:** on the 8-city Europe trip the sheet opened as
