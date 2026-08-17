@@ -2810,6 +2810,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final todayDay =
         tripDayOn(_trip?.startDate, _trip?.endDate, DateTime.now());
     final slivers = <Widget>[];
+    // Running month for the narrow day labels: the month is spelled out when
+    // it is the first dated day of this group and whenever it CHANGES, and
+    // dropped in between. So a city reads "Sat, Aug 29 · Sun 30 · Mon 31 ·
+    // Tue, Sep 1 · Wed 2" — the way a person writes a list of dates. Dropping
+    // it unconditionally would leave "Sun 31 / Tue 2" genuinely ambiguous
+    // across a month rollover, which is exactly where a traveler is checking.
+    int? lastMonth;
     var i = 0;
     while (i < items.length) {
       final day = items[i].day;
@@ -2821,6 +2828,9 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       if (day != null) {
         final dayKey = '$groupKey#$day';
         final collapsed = _collapsedDays.contains(dayKey);
+        final month = tripStart?.add(Duration(days: day - 1)).month;
+        final showMonth = month == null || month != lastMonth;
+        lastMonth = month;
         final header = _daySubHeader(
             day, tripStart, theme, collapsed, _runTravelMin(run), () {
           setState(() {
@@ -2847,7 +2857,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   }
                 : null,
             headerKey: _dayHeaderKeys.putIfAbsent(dayKey, GlobalKey.new),
-            isToday: day == todayDay);
+            isToday: day == todayDay,
+            showMonth: showMonth);
         // Tonight caption (specs/happening-now): a non-pinned content row —
         // it scrolls and collapses with the section, never joining the
         // pinned chrome. [showTonight] is true for at most one group, so
@@ -2961,6 +2972,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       {required bool cityCollapsed}) {
     final l10n = context.l10n;
     final chipStyle = _chipTextStyle(theme);
+    // Narrow drops the dates OUT of the header row and stacks them under the
+    // name (see [_cityHeaderMetaLine]). The row's rigid chip is measured for
+    // the widest group and can claim up to [_chipMaxWidth] of a ~300px phone
+    // row, and since the label's Expanded is the only flex child it absorbs
+    // the whole deficit — which is how "Prague" rendered as "Pra…". Columns
+    // are what the chip buys, and a phone has no room to spend on them.
+    final stackDates = _narrow && group.dateRange != null;
     final header = HoverReveal(
       builder: (context, revealed) => Material(
         color: theme.scaffoldBackgroundColor,
@@ -2977,7 +2995,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             });
           },
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            // Narrow buys back some of the second line's height at the top,
+            // where the gap between a city and the day header under it was
+            // the loosest thing on the phone.
+            padding: _narrow
+                ? const EdgeInsets.fromLTRB(16, 12, 16, 4)
+                : const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2995,9 +3018,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                     // nearest Row ancestor — the header tests navigate that
                     // ancestry to pair a city with its date chip.
                     Expanded(
-                      child: _cityHeaderLabel(l10n, group, theme),
+                      child: _cityHeaderLabel(l10n, group, theme,
+                          metaLine: stackDates
+                              ? _cityHeaderMetaLine(group, chipStyle)
+                              : null),
                     ),
-                    if (group.dateRange != null)
+                    if (group.dateRange != null && !stackDates)
                       // A rigid SizedBox at the per-build shared width
                       // ([_dateChipWidth]), so calendar icons, range starts,
                       // and nights suffixes form columns across rows.
@@ -3061,7 +3087,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                     // one per-row variance: it keeps an invisible,
                     // width-identical placeholder (same IconButton config, so
                     // density changes can't drift it) or its chip cluster
-                    // would sit a button-slot right of the other rows.
+                    // would sit a button-slot right of the other rows —
+                    // EXCEPT on narrow, where the dates have left the row and
+                    // there is no cluster left to align. Holding ~40px of a
+                    // phone row for a button nobody can see is the density
+                    // this pass exists to remove.
                     if (trip.canEdit && !_isOffline)
                       group.label != _kOtherPlaces
                           ? HoverRevealed(
@@ -3075,21 +3105,24 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                     trip, RefineTarget.city(group.label)),
                               ),
                             )
-                          : ExcludeSemantics(
-                              child: IgnorePointer(
-                                child: Opacity(
-                                  opacity: 0,
-                                  // No tooltip: IgnorePointer blocks hover, a
-                                  // ghost tooltip target would outlive it.
-                                  child: IconButton(
-                                    icon: const Icon(Icons.auto_awesome,
-                                        size: 16),
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: null,
+                          : _narrow
+                              ? const SizedBox.shrink()
+                              : ExcludeSemantics(
+                                  child: IgnorePointer(
+                                    child: Opacity(
+                                      opacity: 0,
+                                      // No tooltip: IgnorePointer blocks
+                                      // hover, a ghost tooltip target would
+                                      // outlive it.
+                                      child: IconButton(
+                                        icon: const Icon(Icons.auto_awesome,
+                                            size: 16),
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: null,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
                     const SizedBox(width: 4),
                     Icon(
                       cityCollapsed ? Icons.chevron_right : Icons.expand_more,
@@ -3999,12 +4032,20 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// The city header's name, with the repeat qualifier stacked beneath it when
   /// another group renders the SAME label — a revisited city, or one a bad
   /// section rewrite split in two. Without it the two headers read identically
-  /// and the duplicate looks like a rendering bug.
+  /// and the duplicate looks like a rendering bug. [metaLine] stacks under
+  /// both on narrow (the date range — see [_cityHeaderMetaLine]).
   ///
-  /// When there is no qualifier (every ordinary trip) this returns the bare
-  /// [Text] the header has always used, so the widget tree is unchanged.
+  /// This is the ONE place that decides the stacked-label shape: everything
+  /// that drops below the name joins this Column, so the name's [Text] keeps
+  /// the header's outer Row as its nearest Row ancestor and the header tests
+  /// can still navigate that ancestry to pair a city with its dates.
+  ///
+  /// With neither a qualifier nor a meta line (every ordinary trip on a
+  /// desktop) this returns the bare [Text] the header has always used, so the
+  /// widget tree is unchanged.
   Widget _cityHeaderLabel(
-      AppLocalizations l10n, CityGroup group, ThemeData theme) {
+      AppLocalizations l10n, CityGroup group, ThemeData theme,
+      {Widget? metaLine}) {
     final label = Text(
       groupLabelText(l10n, group.label),
       maxLines: 1,
@@ -4012,20 +4053,62 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
     );
     final qualifier = group.qualifier;
-    if (qualifier == null) return label;
+    if (qualifier == null && metaLine == null) return label;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         label,
-        Text(
-          qualifier,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
+        if (qualifier != null)
+          Text(
+            qualifier,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        if (metaLine != null) metaLine,
       ],
+    );
+  }
+
+  /// The narrow city header's second line: "Aug 24 – Aug 27 · 3 nights".
+  ///
+  /// Carries no calendar icon — the pin above it already anchors the row, and
+  /// a second glyph on a phone is the noise this pass removes. The range and
+  /// the nights stay TWO Texts, as they have since the chip columns landed:
+  /// `tripLegNights` owns the leading "· ", so a zero-night leg drops the
+  /// middot structurally rather than by a conditional in the format string.
+  /// Both are Flexible so an extreme text scale ellipsizes inside the label
+  /// column instead of overflowing it.
+  Widget _cityHeaderMetaLine(CityGroup group, TextStyle? chipStyle) {
+    final nights = group.dateRange!.nights;
+    return MergeSemantics(
+      // One utterance, matching the reading order the chip had.
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              group.dateRange!.range,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: chipStyle,
+            ),
+          ),
+          if (nights != null) ...[
+            const SizedBox(width: AppSpacing.xs),
+            Flexible(
+              child: Text(
+                nights,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: chipStyle,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -4107,6 +4190,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// today's tint is alpha-blended onto the scaffold background (never a
   /// translucent color) for the same reason. [headerKey] gives the Today
   /// scroller a stable handle on the header's render box.
+  ///
+  /// [showMonth] is the caller's answer to "would dropping the month here lose
+  /// anything" — see the running-month rule in [_buildGroupItemSlivers]. It
+  /// only bites on narrow; a desktop row has the width to spell every date.
   Widget _daySubHeader(
       int day,
       DateTime? tripStart,
@@ -4116,11 +4203,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       VoidCallback onTap,
       VoidCallback? onRefine,
       {Key? headerKey,
-      bool isToday = false}) {
+      bool isToday = false,
+      bool showMonth = true}) {
     final l10n = context.l10n;
-    final label = tripStart != null
-        ? _fmtDayHeader(tripStart.add(Duration(days: day - 1)))
-        : l10n.tripDayN(day);
+    final date = tripStart?.add(Duration(days: day - 1));
+    final label = date == null
+        ? l10n.tripDayN(day)
+        : (_narrow && !showMonth ? weekdayDay(date) : _fmtDayHeader(date));
     final muted = theme.colorScheme.onSurfaceVariant;
     final header = HoverReveal(
       builder: (context, revealed) => Material(
@@ -4133,11 +4222,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+            // Narrow drops the calendar glyph and indents to where the city
+            // name (and its dates) start instead: two calendar icons stacked
+            // two rows apart said less than one clean indent column does, and
+            // the day is subordinate to the city, so it should read that way.
+            padding: _narrow
+                ? const EdgeInsets.fromLTRB(24, 8, 16, 2)
+                : const EdgeInsets.fromLTRB(16, 12, 16, 2),
             child: Row(
               children: [
-                Icon(Icons.today, size: 16, color: theme.colorScheme.primary),
-                const SizedBox(width: 6),
+                if (!_narrow) ...[
+                  Icon(Icons.today, size: 16, color: theme.colorScheme.primary),
+                  const SizedBox(width: 6),
+                ],
                 Expanded(
                   child: Row(
                     children: [
@@ -6165,8 +6262,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       final grouped = derivation.groupedBookings;
                       final groups = derivation.groups;
                       // Shared per-build chip width — see _dateChipWidth's
-                      // doc for why this must stay a build-local.
-                      final dateChipWidth = _dateChipWidth(groups, theme);
+                      // doc for why this must stay a build-local. Narrow
+                      // stacks the dates under the name instead of rendering
+                      // the chip, so nothing consumes the measurement and the
+                      // TextPainter sweep over every group is skipped.
+                      final dateChipWidth =
+                          _narrow ? 0.0 : _dateChipWidth(groups, theme);
                       // Day-header GlobalKeys for the CURRENT groups' day
                       // keys, not just whatever happens to be built: a
                       // collapsed group's day headers don't exist yet, but

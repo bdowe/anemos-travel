@@ -14,6 +14,8 @@ import 'package:intl/intl.dart';
 String? _cachedLocaleTag;
 DateFormat? _mmmd;
 DateFormat? _mmmed;
+DateFormat? _e;
+DateFormat? _d;
 
 void _syncLocale() {
   final tag = Intl.defaultLocale;
@@ -21,6 +23,8 @@ void _syncLocale() {
     _cachedLocaleTag = tag;
     _mmmd = null;
     _mmmed = null;
+    _e = null;
+    _d = null;
   }
 }
 
@@ -36,6 +40,22 @@ DateFormat mmmd() {
 DateFormat mmmed() {
   _syncLocale();
   return _mmmed ??= DateFormat.MMMEd();
+}
+
+/// "Sat 29" — abbreviated weekday plus day of month, for the narrow trip-detail
+/// day header, where the city header directly above already states the month.
+///
+/// Composed from the two sub-patterns rather than asked for as a skeleton
+/// because **intl ships no `Ed` pattern**: it is absent from every locale in
+/// `data/dates/patterns/`, so `DateFormat.Ed()` does not exist. Both shipped
+/// locales lead with the weekday for this pair (`en: EEE, MMM d`,
+/// `es: EEE, d MMM`), so one order is right for both — revisit when adding a
+/// locale that puts the day first.
+String weekdayDay(DateTime date) {
+  _syncLocale();
+  final e = _e ??= DateFormat.E();
+  final d = _d ??= DateFormat.d();
+  return '${e.format(date)} ${d.format(date)}';
 }
 
 /// "Jul 15 – Jul 18" via [mmmd], collapsing a same-day pair to the single
