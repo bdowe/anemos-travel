@@ -28,6 +28,8 @@ asset needs a provenance row it could not honestly be given.
 
 - As **someone poking at the site**, I want the Konami code to do something
   ridiculous, so that finding it feels like a reward.
+- As **someone on a phone**, I want a way in that does not need arrow keys, so
+  that the egg is not reserved for people at desks.
 - As **anyone who triggers it by accident**, I want one obvious way out, so
   that a joke never becomes a trap.
 - As **a traveler mid-sentence in the chat composer**, I want my typing, my
@@ -38,6 +40,12 @@ asset needs a provenance row it could not honestly be given.
 
 - [ ] Entering ↑ ↑ ↓ ↓ ← → ← → B A rolls the site from any screen, signed in or
       out — including the landing page and the screens outside the tab shell.
+- [ ] Seven taps in quick succession on the brand in the app bar do the same,
+      with no keyboard — on every screen the app bar appears, including the
+      ones where the brand is not a button at all.
+- [ ] Those taps change nothing else: a single tap still goes home where it did
+      before, the brand gains no ripple, tooltip or button role where it had
+      none, and taps spread out over ordinary navigation never accumulate.
 - [ ] The rolled state shows an animated figure over a drifting rainbow, with
       the app still visible underneath, plus a caption and a close control.
 - [ ] The hook plays on the web. Where the browser refuses to start audio, the
@@ -65,10 +73,11 @@ None. Nothing is persisted; the rolled state lasts as long as it is on screen.
 ## UI Behavior
 
 - **Surface:** a layer above every route and dialog, so no screen has to know
-  it exists.
-- **Happy path:** enter the code → the roll appears over the current screen and
-  the tune starts → it ends itself when the tune does, or immediately on
-  Escape / tap / close.
+  it exists. The two triggers are the keyboard anywhere in the app, and the
+  brand in the app bar.
+- **Happy path:** enter the code (or tap the brand seven times) → the roll
+  appears over the current screen and the tune starts → it ends itself when the
+  tune does, or immediately on Escape / tap / close.
 - **States:** there are only two — rolled and not. There is no loading state
   (nothing is fetched) and no error state (a browser that will not play audio
   is an ordinary outcome, not a failure).
@@ -81,13 +90,21 @@ None. Nothing is persisted; the rolled state lasts as long as it is on screen.
   re-attack the tune from the top.
 - **The code is entered with a text field focused.** It fires, and the field
   keeps every one of those keystrokes.
-- **No keyboard.** Phones cannot enter the code at all. That is accepted, not
-  worked around: see Out of Scope.
+- **No keyboard.** Phones cannot enter the Konami code at all, which is what
+  the seven-tap trigger exists for.
+- **Taps that are not a burst.** A stray tap long before a deliberate run must
+  not cost the user a tap — it starts the new run rather than being discarded.
+- **The brand is tapped mid-navigation.** Each of the seven taps still does
+  whatever it did before, so on the shell the first one goes home. Accepted: a
+  single tap already does that.
 
 ## Out of Scope
 
-- Any mobile or touch trigger. Adding one means threading a tap counter through
-  the shared wordmark widget, and the code is a keyboard joke.
+- A trigger anywhere but the app-bar brand. The landing page's large hero
+  wordmark is a tempting second target but is not on every screen, and one
+  trigger is enough to find.
+- A shake gesture. It would mean a sensor dependency and, on iOS Safari, a
+  motion-permission prompt — a lot of machinery for a second way in.
 - Persisting that a user has found it, or any analytics on it.
 - A setting to disable it.
 - Sound on iOS/Android builds — those cannot reach the trigger.

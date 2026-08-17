@@ -5,6 +5,7 @@ import '../constants/app_info.dart';
 import '../l10n/l10n.dart';
 import '../navigation/app_nav.dart';
 import '../navigation/shell_scope.dart';
+import '../providers/easter_egg_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
@@ -127,7 +128,7 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
 /// navigate — which is also why `Semantics(excludeSemantics: true)` wraps just
 /// the brand. Wrapping the whole row would swallow the page title from screen
 /// readers and hand the title a "Home" button role it does not have.
-class _BrandTitle extends StatelessWidget {
+class _BrandTitle extends ConsumerWidget {
   final Widget? title;
   final VoidCallback? onTap;
 
@@ -141,7 +142,7 @@ class _BrandTitle extends StatelessWidget {
       {required this.title, required this.onTap, required this.inShell});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Measures the true title slot, so the thresholds above are stated in the
     // width the row actually gets — the tap padding sits inside this, not
     // around it.
@@ -212,6 +213,24 @@ class _BrandTitle extends StatelessWidget {
             ),
           );
         }
+
+        // The touch way into the easter egg (specs/konami-rickroll): seven
+        // taps in quick succession. Deliberately OUTSIDE the `onTap != null`
+        // branch — the brand is not tappable on the signed-out screens, and
+        // the landing page is exactly where somebody idly prodding the logo
+        // is standing.
+        //
+        // A Listener, not a GestureDetector: raw pointer events never enter
+        // the gesture arena, so this cannot compete with the InkWell above
+        // for the tap (nested recognizers resolve to the innermost, and the
+        // outer one would simply never fire). It adds no ripple, no tap
+        // target and no semantics, so the brand looks and reads exactly as it
+        // did — including on the screens where it is not a button.
+        brand = Listener(
+          onPointerDown: (_) =>
+              ref.read(rickRollProvider.notifier).brandTapped(),
+          child: brand,
+        );
 
         if (!showTitle) {
           // Nothing left to compete with, so this is the one place a squeeze
