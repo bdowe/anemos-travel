@@ -2924,6 +2924,18 @@ abstract class AppLocalizations {
   /// **'Add place'**
   String get tripAddPlace;
 
+  /// Tooltip (and phone overflow-menu label) for the one-tap control that folds every destination group on the trip itinerary. Flips to tripExpandAll once everything is collapsed. 'All' means every destination — say it without naming them, the way a file tree's collapse-all does.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse all'**
+  String get tripCollapseAll;
+
+  /// The other face of tripCollapseAll: re-opens every destination group AND every day section inside them.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand all'**
+  String get tripExpandAll;
+
   /// No description provided for @tripFilterUnbooked.
   ///
   /// In en, this message translates to:

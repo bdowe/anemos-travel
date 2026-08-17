@@ -1629,6 +1629,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripAddPlace => 'Añadir lugar';
 
   @override
+  String get tripCollapseAll => 'Contraer todo';
+
+  @override
+  String get tripExpandAll => 'Expandir todo';
+
+  @override
   String get tripFilterUnbooked => 'Sin reservar';
 
   @override

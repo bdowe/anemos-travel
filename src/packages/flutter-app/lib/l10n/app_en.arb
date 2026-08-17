@@ -1028,6 +1028,14 @@
   "tripItinerary": "Itinerary",
   "tripToday": "Today",
   "tripAddPlace": "Add place",
+  "tripCollapseAll": "Collapse all",
+  "@tripCollapseAll": {
+    "description": "Tooltip (and phone overflow-menu label) for the one-tap control that folds every destination group on the trip itinerary. Flips to tripExpandAll once everything is collapsed. 'All' means every destination — say it without naming them, the way a file tree's collapse-all does."
+  },
+  "tripExpandAll": "Expand all",
+  "@tripExpandAll": {
+    "description": "The other face of tripCollapseAll: re-opens every destination group AND every day section inside them."
+  },
   "tripFilterUnbooked": "Not booked yet",
   "tripFilterAllBooked": "Everything's booked",
   "tripFilterAllBookedMessage": "Nothing left to book on this trip — you're all set.",

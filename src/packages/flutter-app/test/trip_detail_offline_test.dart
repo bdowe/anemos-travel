@@ -150,8 +150,22 @@ void main() {
     expect(rename.onPressed, isNull);
     expect(find.byTooltip('Share trip'), findsNothing);
     // Delete/leave live behind the overflow menu, which mutates and is
-    // therefore hidden entirely while offline-serving.
+    // therefore hidden entirely while offline-serving. (This is a WIDE
+    // surface — _narrow is strictly < 800 — which is what keeps the
+    // narrow-only fold entry out of the menu and this assertion true.)
     expect(find.byTooltip('More options'), findsNothing);
+
+    // Folding the itinerary is pure view work, so it survives the network
+    // loss — like the view tabs below, and unlike every affordance above.
+    // A long saved itinerary you can only read is where it helps most.
+    expect(find.byTooltip('Collapse all'), findsOneWidget);
+    await tester.tap(find.byTooltip('Collapse all'));
+    await tester.pumpAndSettle();
+    expect(find.text('Acropolis'), findsNothing);
+    expect(find.byTooltip('Expand all'), findsOneWidget);
+    await tester.tap(find.byTooltip('Expand all'));
+    await tester.pumpAndSettle();
+    expect(find.text('Acropolis'), findsOneWidget);
 
     // The Bookings view's add menu is likewise disabled, not hidden. The
     // tab tap itself stays allowed offline — switching views is pure view
