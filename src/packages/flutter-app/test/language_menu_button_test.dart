@@ -129,7 +129,7 @@ void main() {
       child: localizedTestApp(
         home: Scaffold(
           appBar: GradientAppBar(
-            title: const Text('t'),
+            title: 't',
             actions: const [LanguageMenuButton()],
           ),
         ),

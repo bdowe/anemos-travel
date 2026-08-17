@@ -250,9 +250,10 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
         backgroundColor: appMapBackground,
         appBar: GradientAppBar(
           // Multi-city titles ("Barcelona, Madrid & 3 more") must ellipsize —
-          // the fullscreenDialog close button already eats leading width.
-          title:
-              Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          // the fullscreenDialog close button already eats leading width. The
+          // bar owns that now, and measures this string to decide whether the
+          // wordmark can stay beside it.
+          title: widget.title,
           actions: [
             // Persistent add affordance: the on-map CTA only exists in the
             // empty state, so once a leg has a single pin the full-screen map

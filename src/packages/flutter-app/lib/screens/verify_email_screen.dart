@@ -91,7 +91,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
       );
     }
     return Scaffold(
-      appBar: GradientAppBar(title: Text(l10n.verifyTitle)),
+      appBar: GradientAppBar(title: l10n.verifyTitle),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),

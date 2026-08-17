@@ -240,7 +240,7 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
       },
       child: Scaffold(
         appBar: GradientAppBar(
-          title: Text(l10n.quizTitle),
+          title: l10n.quizTitle,
           actions: [
             TextButton(
               onPressed: _submitting ? null : _skip,

@@ -70,7 +70,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: GradientAppBar(title: Text(context.l10n.resetAppBarTitle)),
+      appBar: GradientAppBar(title: context.l10n.resetAppBarTitle),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),

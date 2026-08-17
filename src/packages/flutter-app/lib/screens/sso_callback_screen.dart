@@ -108,7 +108,7 @@ class _SsoCallbackScreenState extends ConsumerState<SsoCallbackScreen> {
       );
     }
     return Scaffold(
-      appBar: GradientAppBar(title: Text(l10n.ssoTitle)),
+      appBar: GradientAppBar(title: l10n.ssoTitle),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),

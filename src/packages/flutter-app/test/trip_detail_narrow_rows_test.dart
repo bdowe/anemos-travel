@@ -198,18 +198,27 @@ void main() {
 
   testWidgets('threshold: 800 keeps desktop affordances, 799 flips to narrow',
       (tester) async {
+    // The app bar's own tell used to be the refine sparkle: absent at 800,
+    // present at 799. Refine no longer holds an icon at any width — it moved
+    // into the `⋮` so the trip's name could have those ~48px — so the tell is
+    // now share, which keeps its icon at 800 and folds below it.
+    final shareIcon = find.byIcon(Icons.share_outlined);
+
     await _pump(tester, _trip(), surface: const Size(800, 900));
-    // Desktop: maps button + full chip labels + no app-bar sparkle.
+    // Desktop: maps button + full chip labels + header Refine + share icon.
     expect(_inTiles(find.byIcon(Icons.map_outlined)), findsNWidgets(2));
     expect(find.text('Morning'), findsOneWidget);
     expect(find.text('Refine with AI'), findsOneWidget);
-    expect(find.byTooltip('Refine with AI'), findsNothing);
+    expect(shareIcon, findsOneWidget);
 
     await tester.binding.setSurfaceSize(const Size(799, 900));
     await tester.pumpAndSettle();
     expect(_inTiles(find.byIcon(Icons.map_outlined)), findsNothing);
     expect(find.text('Morning'), findsNothing);
     expect(find.text('Refine with AI'), findsNothing);
-    expect(find.byTooltip('Refine with AI'), findsOneWidget); // app-bar sparkle
+    expect(shareIcon, findsNothing);
+    // Refine has no icon on either side of the threshold now, so this says
+    // "it did not sneak back", not "it flipped".
+    expect(find.byTooltip('Refine with AI'), findsNothing);
   });
 }

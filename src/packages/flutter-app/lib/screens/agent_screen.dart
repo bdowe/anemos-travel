@@ -80,7 +80,7 @@ class _AgentScreenState extends ConsumerState<AgentScreen> {
 
     return Scaffold(
       appBar: GradientAppBar(
-        title: Text(l10n.agentScreenTitle),
+        title: l10n.agentScreenTitle,
         actions: [
           if (showReset)
             IconButton(

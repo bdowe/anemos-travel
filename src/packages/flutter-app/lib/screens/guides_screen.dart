@@ -23,7 +23,7 @@ class GuidesScreen extends ConsumerWidget {
     final guides = ref.watch(allGuidesProvider);
 
     return Scaffold(
-      appBar: GradientAppBar(title: Text(l10n.guidesTitle)),
+      appBar: GradientAppBar(title: l10n.guidesTitle),
       body: guides.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => EmptyState(

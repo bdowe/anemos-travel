@@ -5611,6 +5611,23 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                 onSelected: () => _openWearSheet(trip, wear.regions),
               ),
           ],
+          // Refine, narrow only — it held an app-bar icon until the header
+          // needed that ~48px for the trip's own name. Its own section
+          // because the group above is "look at this trip differently" and
+          // this one changes it.
+          //
+          // Editors only (specs/collaborator-refine), and offline HIDES it
+          // rather than disabling it: the icon could gray out, but a sheet row
+          // has no disabled state, and hiding a mutating entry offline is
+          // already this menu's vocabulary — same as share and the exits.
+          [
+            if (_narrow && trip.canEdit && !_isOffline)
+              TripAction(
+                icon: Icons.auto_awesome,
+                label: l10n.tripRefineWithAI,
+                onSelected: () => _openRefine(trip, const RefineTarget.trip()),
+              ),
+          ],
           if (absorbsShare) ..._shareActionSections(l10n),
           [
             if (canExit)
@@ -6180,33 +6197,28 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             )
           : null,
       appBar: GradientAppBar(
-        title: Text(
-            trip != null ? _displayTitle(trip) : l10n.tripTitleFallback,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
+        title: trip != null ? _displayTitle(trip) : l10n.tripTitleFallback,
         actions: [
-          // The app bar now also carries the ANEMOS wordmark, and a phone
-          // cannot fit five icons beside it — at 360px five actions leave the
-          // title slot ~48px, less than the wordmark itself. So at narrow the
-          // two actions that are already menus/sheets fold into the overflow
-          // (see [_overflowAppBarAction]) and the icon row drops to three.
+          // This is the app's width-budget boss: five icons beside the brand
+          // fit at rail widths and nowhere near it on a phone. At narrow
+          // everything that is already a menu or a sheet folds into the
+          // overflow (see [_overflowAppBarAction]) and the icon row drops to
+          // TWO — health plus the `⋮` itself.
           //
-          // The two that keep their icons earned it: health leads because its
-          // severity count is a glanceable badge, and refine is the header
-          // card's own Refine button relocated — narrow drops it down there
-          // (one clean chip row) precisely so the app bar can carry it.
+          // Health is the one action that earns an icon on a phone: its
+          // severity count is a glanceable badge, and a badge inside a menu is
+          // a badge nobody sees. Everything else is one tap further away and
+          // the trip's NAME gets the ~48px back — at 375px that is the
+          // difference between "Big Su…" and a name you can read, which is
+          // what the traveler actually needed the header for.
+          //
+          // Refine used to hold an icon here at narrow — it is the header
+          // card's own Refine button relocated, since narrow drops it down
+          // there for one clean chip row. It now rides the `⋮` instead, and
+          // the header card must STAY as it is: putting its button back is
+          // what #457's chip row was tidying away.
           if (trip != null) _healthAppBarAction(trip, theme),
           if (trip != null && !_narrow) _wearAppBarAction(trip),
-          // Same gates as the button it replaces: editors only
-          // (specs/collaborator-refine), disabled — not hidden — offline.
-          if (_narrow && trip != null && trip.canEdit)
-            IconButton(
-              icon: const Icon(Icons.auto_awesome),
-              tooltip: l10n.tripRefineWithAI,
-              onPressed: _isOffline
-                  ? null
-                  : () => _openRefine(trip, const RefineTarget.trip()),
-            ),
           // Sharing is an owner-only surface; it mutates, so it's hidden
           // while offline-serving.
           if (trip != null && trip.isOwner && !_isOffline && !_narrow)

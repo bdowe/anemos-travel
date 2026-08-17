@@ -36,19 +36,12 @@ class LocalGuideDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: GradientAppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.menu_book, size: 20),
-            const SizedBox(width: AppSpacing.sm),
-            Flexible(
-              child: Text(
-                l10n.guideDetailTitle,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        // Was an Icons.menu_book + label lockup; the icon is gone, because the
+        // bar now measures its title to decide what the brand can afford
+        // beside it and a widget cannot be measured. No loss — this was the
+        // one header of twenty-odd wearing an icon, and the page below it
+        // opens with the guide's own cover.
+        title: l10n.guideDetailTitle,
       ),
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),

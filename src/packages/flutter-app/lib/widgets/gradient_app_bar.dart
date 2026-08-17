@@ -84,20 +84,39 @@ const double _minTitleWidth = 56;
 /// root a net 24px of title budget, not 56. Nothing separates the title from
 /// [actions] now except an [IconButton]'s own padding, which measures fine.
 ///
-/// Two things then compete for the title slot, and the priority is fixed:
+/// Two things then compete for the title slot, and **the wordmark is the one
+/// that yields**:
 ///
-/// 1. **The wordmark** — always present, always the same size, never
-///    ellipsized. That is the whole point.
-/// 2. **The page title** — [Flexible], ellipsized, dropped below
-///    [_minTitleWidth].
+/// 1. **The page title** — whole, if the row can hold it whole.
+/// 2. **The wordmark** — always the same size and never ellipsized, but it
+///    steps out of the row when keeping it is exactly what would clip the
+///    page's own name. It never yields at rail widths, where it is the bar's
+///    only brand (the rose is on the rail, not in the leading slot).
 ///
-/// Rung 2 barely moves on a tab root — 24px shifts the drop threshold by about
-/// a phone-width hair, and Trips reads the same at 320 (dropped, as before),
-/// 360 (ellipsized) and 390 (whole). On a **pushed** page it moves a long way
-/// the *good* way: the rose leaving the row hands the title back the 52px it
-/// used to spend, which is why trip detail now shows its trip name on a phone
-/// at all. Measured in a browser against real Cinzel, not computed — the
-/// numbers here are easy to get wrong and the comment is load-bearing.
+/// That ordering is the reverse of PR #418's, and it was reversed by what the
+/// old one shipped to a phone: `ANEMOS · Plan your t…`. A stub of a page name
+/// tells a traveler nothing they did not already know, and on a tab root the
+/// bottom bar names the tab one row down anyway.
+///
+/// **Measured, not thresholded.** `width < kRailBreakpoint` would strip the
+/// wordmark off a 744px iPad in portrait and a 799px desktop window, both of
+/// which have hundreds of pixels to spare. Measuring means nothing changes
+/// anywhere there is room — which, after the 84px the leading slot and
+/// `titleSpacing: 0` above hand back, is most places: at 390px a tab root now
+/// fits `ANEMOS · Plan your trip` whole and the ladder never reaches rung 2.
+/// What still reaches it are the long ones — a trip name, `Set up your travel
+/// profile`, Spanish — and on a pushed page, where the leading slot holds a
+/// back button rather than the rose, that leaves the bar carrying no brand at
+/// all. Deliberate: back-button + the thing you opened is the universal mobile
+/// header, and the traveler branded the app one tap ago.
+///
+/// Rung ordering aside, the threshold arithmetic barely moves on a tab root —
+/// 24px shifts it by about a phone-width hair, and Trips reads the same at 320,
+/// 360 and 390. On a **pushed** page it moves a long way the *good* way: the
+/// rose leaving the row hands the title back the 52px it used to spend, which
+/// is why trip detail shows its trip name on a phone at all. Measured in a
+/// browser against real Cinzel, not computed — the numbers here are easy to get
+/// wrong and the comment is load-bearing.
 ///
 /// The rose floats bare, as it does everywhere: this bar just takes the
 /// reversed cut ([BrandLogo.markLight]) because its field is the teal gradient
@@ -106,7 +125,13 @@ const double _minTitleWidth = 56;
 /// why, and re-litigate it there rather than reintroducing a plate here.
 class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
   /// The page's own title. Null where the brand stands alone.
-  final Widget? title;
+  ///
+  /// Text, not a [Widget], because the ladder has to **measure** it to decide
+  /// what fits — and a widget cannot be measured before it is laid out. Taking
+  /// the string also puts the whole title contract in one place: this bar owns
+  /// its face, its colour, its `maxLines` and its ellipsis, instead of owning
+  /// half of them and trusting twenty call sites for the rest.
+  final String? title;
   final List<Widget>? actions;
 
   /// Defaults to false: the brand is left-anchored, so the whole title row is
@@ -133,6 +158,52 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize =>
       Size.fromHeight(kToolbarHeight + (bottom?.preferredSize.height ?? 0));
+
+  /// The face a page title paints in, exposed so anything that needs to
+  /// *measure* one uses the exact numbers it renders with — see [titleWidthIn].
+  /// Same pairing as [BrandWordmark.styleOf]/[BrandWordmark.widthIn], for the
+  /// same reason: two copies of a font spec drift, and the drift shows up as a
+  /// clipped header nobody can reproduce.
+  ///
+  /// The page title is a heading, so it takes the display face — a trip name
+  /// reads the same here as it does in the header below it.
+  ///
+  /// Handed to [AppBar.titleTextStyle] rather than to
+  /// `AppBarTheme.titleTextStyle` because AppBar folds `foregroundColor` into
+  /// the *defaults* branch only (`widget.titleTextStyle ??
+  /// appBarTheme.titleTextStyle ?? defaults.titleTextStyle?.copyWith(color:
+  /// foregroundColor)`): a themed style without a color would quietly paint
+  /// every title onSurface — dark text on the teal gradient. Hence the
+  /// explicit white.
+  ///
+  /// Size holds at 22 despite the face change: Marcellus sets ~9% narrower than
+  /// Inter Bold, so the longest trip titles gain room here, not lose it.
+  static const TextStyle titleStyle = TextStyle(
+    fontFamily: AppFonts.display,
+    fontWeight: FontWeight.w400,
+    fontSize: 22,
+    letterSpacing: 0.2,
+    color: Colors.white,
+  );
+
+  /// How wide [text] will actually paint as a page title in [context].
+  ///
+  /// Measured for the same reasons [BrandWordmark.widthIn] is: Marcellus may
+  /// not have loaded (widget tests fall back to a font of quite different
+  /// metrics), and the traveler's text-scale setting multiplies the answer. The
+  /// ladder is arithmetic on this number, so a hardcoded width would decide
+  /// "it fits" for a large-text user it does not fit for.
+  static double titleWidthIn(BuildContext context, String text) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: titleStyle),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -181,32 +252,20 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
       // from whatever precedes it, and on a phone those 16px are worth more as
       // title width. See [_titleEndGap] for what this costs on the other side.
       titleSpacing: 0,
-      title: _BrandTitle(title: title, onTap: onTap),
+      // railCarriesMark is passed down rather than recomputed: it is the same
+      // fact the leading slot above turns on, and the ladder needs it to know
+      // whether the wordmark is the bar's ONLY brand (rail widths) or has a
+      // rose standing beside it.
+      title: _BrandTitle(
+          title: title, onTap: onTap, railCarriesMark: railCarriesMark),
       actions: actions,
       centerTitle: centerTitle ?? false,
       bottom: bottom,
       backgroundColor: Colors.transparent,
       foregroundColor: Colors.white,
-      // The page title is a heading, so it takes the display face — a trip
-      // name reads the same here as it does in the header below it.
-      //
-      // Set here rather than on AppBarTheme.titleTextStyle because AppBar
-      // folds foregroundColor into the *defaults* branch only
-      // (`widget.titleTextStyle ?? appBarTheme.titleTextStyle ??
-      // defaults.titleTextStyle?.copyWith(color: foregroundColor)`): a themed
-      // style without a color would quietly paint every title onSurface —
-      // dark text on the teal gradient. Hence the explicit white.
-      //
-      // Size holds at 22 despite the face change: Marcellus sets ~9% narrower
-      // than Inter Bold, so the longest trip titles gain room here, not lose
-      // it.
-      titleTextStyle: const TextStyle(
-        fontFamily: AppFonts.display,
-        fontWeight: FontWeight.w400,
-        fontSize: 22,
-        letterSpacing: 0.2,
-        color: Colors.white,
-      ),
+      // Rationale on [titleStyle] itself, which is also what the ladder
+      // measures against.
+      titleTextStyle: titleStyle,
       flexibleSpace: Container(
         decoration: BoxDecoration(gradient: AppColors.brandGradient),
       ),
@@ -309,10 +368,18 @@ class _LeadingSlot extends ConsumerWidget {
 /// positioned identically whether a back button, the rose, or nothing at all is
 /// standing to its left.
 class _BrandTitle extends ConsumerWidget {
-  final Widget? title;
+  final String? title;
   final VoidCallback? onTap;
 
-  const _BrandTitle({required this.title, required this.onTap});
+  /// Whether the rail is showing the rose, which is the one case where this
+  /// row's wordmark is the bar's ONLY brand — so the one case where it does
+  /// not step aside for a page title.
+  final bool railCarriesMark;
+
+  const _BrandTitle(
+      {required this.title,
+      required this.onTap,
+      required this.railCarriesMark});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -321,16 +388,52 @@ class _BrandTitle extends ConsumerWidget {
     // around it.
     return LayoutBuilder(
       builder: (context, constraints) {
-        // The ladder, as arithmetic on what the wordmark actually measures —
-        // so it holds under a missing font or a large text-scale setting,
-        // where fixed thresholds would silently start clipping.
-        // Two rungs now, not three: the only question this row still asks is
-        // whether a page title fits beside the word.
+        // The ladder, as arithmetic on what the wordmark and the title
+        // actually measure — so it holds under a missing font or a large
+        // text-scale setting, where fixed thresholds would silently start
+        // clipping. Two rungs, and the wordmark is the one that yields.
         final slot = constraints.maxWidth;
         final brandCost = _brandPadding + BrandWordmark.widthIn(context);
+        final titleWidth = title == null
+            ? 0.0
+            : GradientAppBar.titleWidthIn(context, title!);
 
-        final showTitle =
-            title != null && slot >= brandCost + _separatorSlot + _minTitleWidth;
+        // What the title gets with the word beside it, and what it gets with
+        // the row to itself.
+        final roomBesideWordmark = slot - brandCost - _separatorSlot;
+
+        final bool showWordmark, showTitle;
+        if (title == null) {
+          // Home and Landing: the brand IS the title, so nothing competes.
+          showWordmark = true;
+          showTitle = false;
+        } else if (roomBesideWordmark >= titleWidth) {
+          // Room for both — which, after the leading slot handed back 84px, is
+          // most bars including a 390px tab root. Nothing yields when nothing
+          // has to, so this is also every width at or above the rail.
+          showWordmark = true;
+          showTitle = true;
+        } else if (railCarriesMark) {
+          // The rail has the rose, so the word is this bar's only brand and
+          // cannot leave. Ellipsize the title as before, and drop it below the
+          // floor. Unreachable in practice — a rail-width bar has the room —
+          // but stating it is what keeps #418's promise true by construction
+          // rather than by luck.
+          showWordmark = true;
+          showTitle = roomBesideWordmark >= _minTitleWidth;
+        } else if (slot - _brandPadding >= _minTitleWidth) {
+          // The wordmark steps out so the page's own name can be read. On a
+          // tab root the rose is still in the leading slot; on a pushed page
+          // the back button is, and the bar carries no brand — see the class
+          // doc, that is the deliberate half of this.
+          showWordmark = false;
+          showTitle = true;
+        } else {
+          // Not even a stub fits. Fall back to the brand alone and let the
+          // FittedBox below absorb the squeeze.
+          showWordmark = true;
+          showTitle = false;
+        }
 
         Widget brand = const Padding(
           padding: EdgeInsets.all(AppSpacing.xs),
@@ -405,15 +508,17 @@ class _BrandTitle extends ConsumerWidget {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            brand,
-            const _BrandSeparator(),
-            // The 20 screens that pass a bare Text keep ellipsizing correctly
-            // without any of them being edited.
+            // Both drop together: the interpunct pairs the brand with the page,
+            // and with no brand in the row it is a bullet in front of a
+            // sentence.
+            if (showWordmark) ...[brand, const _BrandSeparator()],
+            // Flexible, so a title the ladder admitted but cannot fit whole —
+            // an unbounded trip name — ellipsizes instead of overflowing.
             Flexible(
-              child: DefaultTextStyle.merge(
-                overflow: TextOverflow.ellipsis,
+              child: Text(
+                title!,
                 maxLines: 1,
-                child: title!,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
