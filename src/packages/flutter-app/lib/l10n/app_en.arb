@@ -456,6 +456,7 @@
   "budgetCategoryTransport": "Transport",
   "budgetCategoryShopping": "Shopping",
   "budgetCategoryGeneral": "General",
+  "budgetPlanAddAs": "Add as",
   "budgetPlanStatePlanned": "Planned",
   "budgetPlanStatePaid": "Paid",
   "budgetPlanRowBothSemantics": "Planned {planned}, paid {paid}",

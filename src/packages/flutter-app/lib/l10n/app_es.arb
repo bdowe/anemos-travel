@@ -300,6 +300,7 @@
   "budgetCategoryTransport": "Transporte",
   "budgetCategoryShopping": "Compras",
   "budgetCategoryGeneral": "General",
+  "budgetPlanAddAs": "Añadir como",
   "budgetPlanStatePlanned": "Previsto",
   "budgetPlanStatePaid": "Pagado",
   "budgetPlanRowBothSemantics": "Previsto {planned}, pagado {paid}",

@@ -1898,6 +1898,12 @@ abstract class AppLocalizations {
   /// **'General'**
   String get budgetCategoryGeneral;
 
+  /// No description provided for @budgetPlanAddAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Add as'**
+  String get budgetPlanAddAs;
+
   /// No description provided for @budgetPlanStatePlanned.
   ///
   /// In en, this message translates to:
