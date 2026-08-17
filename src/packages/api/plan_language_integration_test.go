@@ -180,6 +180,39 @@ func TestSystemPromptEnglishUnchanged(t *testing.T) {
 		if !strings.Contains(prompt, "one the TRAVELER wrote is theirs") {
 			t.Errorf("Accept-Language %q: prompt lost the traveler-authored-description boundary", header)
 		}
+		// The four rules below were each restored by hand during #442's
+		// integration, which is why they are pinned now: that branch rewrote
+		// basePrompt wholesale, dropped them, and nothing in CI noticed. A
+		// prompt rule worth shipping is worth a pin.
+		//
+		// #429: without this the model omits end_date and trip_handler derives
+		// it from maxDay — so a trip whose last day is deliberately empty ends a
+		// day early, and every leg's rendered span shifts with it.
+		if !strings.Contains(prompt, "no longer tells the trip when it ends") {
+			t.Errorf("Accept-Language %q: prompt lost the trip-end-is-not-the-last-item-day rule", header)
+		}
+		// #438, both halves. The first stops the flight reflex on a short hop;
+		// the second is the only way the model learns the app already DERIVED a
+		// mode and echoed it back — without it the Italy chat narrated flights
+		// while the checklist row said train, and nothing reconciled them.
+		if !strings.Contains(prompt, "suggest_transport with mode 'ground'") {
+			t.Errorf("Accept-Language %q: prompt lost the ground-transport routing rule", header)
+		}
+		if !strings.Contains(prompt, "call set_leg_transport_mode for that leg") {
+			t.Errorf("Accept-Language %q: prompt lost the correct-a-derived-leg-mode rule", header)
+		}
+		// #437: search_hotels is ungated, so it reaches every session shape — but
+		// a tool the prompt never mentions is a tool that does not exist. The
+		// price clause is pinned separately because it is the honest half: the
+		// provider can return properties whose rates were not checked, and
+		// quoting those anyway is how a traveler budgets against a number nobody
+		// verified.
+		if !strings.Contains(prompt, "call search_hotels with the city") {
+			t.Errorf("Accept-Language %q: prompt lost the hotel-search instruction", header)
+		}
+		if !strings.Contains(prompt, "never quote, estimate, or imply a price") {
+			t.Errorf("Accept-Language %q: prompt lost the unchecked-hotel-price boundary", header)
+		}
 		// These requests are anonymous and not trip-bound, so the prompt is
 		// exactly basePrompt — it must still end on basePrompt's final
 		// sentence, proving nothing was appended.
