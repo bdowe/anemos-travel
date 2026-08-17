@@ -52,7 +52,7 @@ func (q *Queries) CreateTripCollaborator(ctx context.Context, arg CreateTripColl
 }
 
 const getEditableTripByID = `-- name: GetEditableTripByID :one
-SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, t.origin, t.origin_airport, t.return_airport FROM trips t
+SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, t.origin, t.origin_airport, t.return_airport, t.summary_source FROM trips t
 WHERE t.id = $1
   AND (t.user_id = $2 OR EXISTS (
         SELECT 1 FROM trip_collaborators c
@@ -86,12 +86,13 @@ func (q *Queries) GetEditableTripByID(ctx context.Context, arg GetEditableTripBy
 		&i.Origin,
 		&i.OriginAirport,
 		&i.ReturnAirport,
+		&i.SummarySource,
 	)
 	return i, err
 }
 
 const getViewableTripByID = `-- name: GetViewableTripByID :one
-SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, t.origin, t.origin_airport, t.return_airport, CASE WHEN t.user_id = $2 THEN 'owner' ELSE c.role END::text AS access
+SELECT t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date, t.end_date, t.chat_id, t.summary, t.updated_by, t.travel_mode, t.origin, t.origin_airport, t.return_airport, t.summary_source, CASE WHEN t.user_id = $2 THEN 'owner' ELSE c.role END::text AS access
 FROM trips t
 LEFT JOIN trip_collaborators c ON c.owner_id = t.user_id AND c.chat_id = t.chat_id
      AND c.user_id = $2 AND c.revoked_at IS NULL
@@ -118,6 +119,7 @@ type GetViewableTripByIDRow struct {
 	Origin        *string     `json:"origin"`
 	OriginAirport *string     `json:"origin_airport"`
 	ReturnAirport *string     `json:"return_airport"`
+	SummarySource *string     `json:"summary_source"`
 	Access        string      `json:"access"`
 }
 
@@ -143,6 +145,7 @@ func (q *Queries) GetViewableTripByID(ctx context.Context, arg GetViewableTripBy
 		&i.Origin,
 		&i.OriginAirport,
 		&i.ReturnAirport,
+		&i.SummarySource,
 		&i.Access,
 	)
 	return i, err
@@ -199,7 +202,7 @@ func (q *Queries) ListCollaboratorsByOwnerAndChat(ctx context.Context, arg ListC
 const listLatestCollaboratedTripsForUser = `-- name: ListLatestCollaboratedTripsForUser :many
 SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
        latest.title, latest.start_date, latest.end_date,
-       latest.chat_id, latest.role, latest.version_count,
+       latest.chat_id, latest.summary, latest.role, latest.version_count,
        COALESCE(c2.cities, ARRAY[]::text[])::text[] AS cities,
        COALESCE(u.display_name, '')::text AS owner_name,
        COALESCE(ic.item_count, 0)::int AS item_count,
@@ -208,7 +211,7 @@ SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
 FROM (
   SELECT DISTINCT ON (t.chat_id)
          t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date,
-         t.end_date, t.chat_id, c.role,
+         t.end_date, t.chat_id, t.summary, c.role,
          count(*) OVER (PARTITION BY t.chat_id) AS version_count
   FROM trips t
   JOIN trip_collaborators c ON c.owner_id = t.user_id AND c.chat_id = t.chat_id
@@ -247,6 +250,7 @@ type ListLatestCollaboratedTripsForUserRow struct {
 	StartDate     pgtype.Date `json:"start_date"`
 	EndDate       pgtype.Date `json:"end_date"`
 	ChatID        *string     `json:"chat_id"`
+	Summary       *string     `json:"summary"`
 	Role          string      `json:"role"`
 	VersionCount  int64       `json:"version_count"`
 	Cities        []string    `json:"cities"`
@@ -264,6 +268,10 @@ type ListLatestCollaboratedTripsForUserRow struct {
 // role-agnostic. The owner list's insight fields (stays/packing/budget/
 // pins/next-transport/summary, specs/trips-page-insights) are DELIBERATELY
 // absent here — the owner's private planning state stays off shared rows.
+//
+// trips.summary IS selected, and is not one of those: it is the trip's own
+// description, rendered on every card and on the PUBLIC share page. Omitting it
+// only meant a co-planner's cards showed no blurb where the owner's did.
 func (q *Queries) ListLatestCollaboratedTripsForUser(ctx context.Context, userID uuid.UUID) ([]ListLatestCollaboratedTripsForUserRow, error) {
 	rows, err := q.db.Query(ctx, listLatestCollaboratedTripsForUser, userID)
 	if err != nil {
@@ -282,6 +290,7 @@ func (q *Queries) ListLatestCollaboratedTripsForUser(ctx context.Context, userID
 			&i.StartDate,
 			&i.EndDate,
 			&i.ChatID,
+			&i.Summary,
 			&i.Role,
 			&i.VersionCount,
 			&i.Cities,

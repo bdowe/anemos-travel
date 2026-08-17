@@ -124,6 +124,18 @@ func TestSystemPromptEnglishUnchanged(t *testing.T) {
 		if !strings.Contains(prompt, "the CALENDAR DAY BEFORE it lands") {
 			t.Errorf("Accept-Language %q: prompt lost the overnight-outbound instruction", header)
 		}
+		// A trip's description used to be write-once, so a blurb describing
+		// three cities outlived the trip growing to five. Both halves are
+		// pinned: the instruction to fix a stale one, and the boundary that
+		// stops the planner replacing prose the traveler wrote. Deleting the
+		// second while the tool stays registered is how "I rewrote your words"
+		// would come back.
+		if !strings.Contains(prompt, "call set_trip_description with reason 'traveler_asked'") {
+			t.Errorf("Accept-Language %q: prompt lost the trip-description instruction", header)
+		}
+		if !strings.Contains(prompt, "one the TRAVELER wrote is theirs") {
+			t.Errorf("Accept-Language %q: prompt lost the traveler-authored-description boundary", header)
+		}
 		// These requests are anonymous and not trip-bound, so the prompt is
 		// exactly basePrompt — it must still end on basePrompt's final
 		// sentence, proving nothing was appended.

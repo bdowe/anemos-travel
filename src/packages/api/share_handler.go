@@ -255,12 +255,15 @@ func duplicateSharedTripHandler(w http.ResponseWriter, r *http.Request) {
 	qtx := store.New(tx)
 
 	copyTrip, err := qtx.CreateTrip(ctx, store.CreateTripParams{
-		UserID:     user.ID,
-		Title:      src.Title + " (copy)",
-		ChatID:     &newChatID,
-		Summary:    src.Summary,
-		TravelMode: src.TravelMode,
-		Origin:     src.Origin,
+		UserID: user.ID,
+		Title:  src.Title + " (copy)",
+		ChatID: &newChatID,
+		// The description travels with the copy, and so does its author: whose
+		// words they are does not change by being duplicated.
+		Summary:       src.Summary,
+		SummarySource: src.SummarySource,
+		TravelMode:    src.TravelMode,
+		Origin:        src.Origin,
 		// The endpoints travel with the copy: a duplicate that silently
 		// reverted to the home airport would derive its legs wrong from birth.
 		OriginAirport: src.OriginAirport,

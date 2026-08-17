@@ -54,9 +54,13 @@ WHERE t.id = $1 AND (t.user_id = $2 OR c.id IS NOT NULL);
 -- role-agnostic. The owner list's insight fields (stays/packing/budget/
 -- pins/next-transport/summary, specs/trips-page-insights) are DELIBERATELY
 -- absent here — the owner's private planning state stays off shared rows.
+--
+-- trips.summary IS selected, and is not one of those: it is the trip's own
+-- description, rendered on every card and on the PUBLIC share page. Omitting it
+-- only meant a co-planner's cards showed no blurb where the owner's did.
 SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
        latest.title, latest.start_date, latest.end_date,
-       latest.chat_id, latest.role, latest.version_count,
+       latest.chat_id, latest.summary, latest.role, latest.version_count,
        COALESCE(c2.cities, ARRAY[]::text[])::text[] AS cities,
        COALESCE(u.display_name, '')::text AS owner_name,
        COALESCE(ic.item_count, 0)::int AS item_count,
@@ -65,7 +69,7 @@ SELECT latest.id, latest.user_id, latest.created_at, latest.updated_at,
 FROM (
   SELECT DISTINCT ON (t.chat_id)
          t.id, t.user_id, t.created_at, t.updated_at, t.title, t.start_date,
-         t.end_date, t.chat_id, c.role,
+         t.end_date, t.chat_id, t.summary, c.role,
          count(*) OVER (PARTITION BY t.chat_id) AS version_count
   FROM trips t
   JOIN trip_collaborators c ON c.owner_id = t.user_id AND c.chat_id = t.chat_id

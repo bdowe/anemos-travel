@@ -1403,7 +1403,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripLoadFailed => 'Could not load this trip';
 
   @override
-  String get tripEditTitle => 'Edit title';
+  String get tripEditDetails => 'Edit trip details';
+
+  @override
+  String get tripDetailsNameLabel => 'Name';
+
+  @override
+  String get tripDetailsNameRequired => 'A trip needs a name';
+
+  @override
+  String get tripDetailsDescriptionLabel => 'Description';
+
+  @override
+  String get tripDetailsDescriptionHint =>
+      'Ten days circling Sicily — Palermo\'s markets, the temples at Agrigento, then Catania.';
+
+  @override
+  String get tripDetailsDescriptionHelp =>
+      'Shown under the title on this trip. Leave it empty to remove it.';
 
   @override
   String get tripDeleteTitle => 'Delete trip?';
@@ -1853,9 +1870,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String tripAddedToPacking(String item) {
     return 'Added \"$item\" to packing';
   }
-
-  @override
-  String get tripRename => 'Rename';
 
   @override
   String get tripAddDates => 'Add dates';

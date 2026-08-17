@@ -200,6 +200,11 @@ type PatchTripRequest struct {
 	// TravelMode cannot be cleared back to NULL over PATCH (COALESCE update);
 	// 'mixed' is the effective unset.
 	TravelMode *string `json:"travel_mode"`
+	// Summary is the trip's description — the prose overview under its title
+	// (specs/trip-description). Unlike the fields above it does NOT go through
+	// UpdateTrip's COALESCE set but through applyTripSummary, which is what makes
+	// an explicit "" a real CLEAR rather than a silent no-op. nil = omitted.
+	Summary *string `json:"summary"`
 }
 
 // CreateTripRequest is the manual (non-AI) trip-creation body
@@ -417,9 +422,14 @@ func persistTrip(ctx context.Context, userID uuid.UUID, chatID, title, summary, 
 		}
 	}
 
-	var summaryPtr *string
+	var summaryPtr, summarySourcePtr *string
 	if summaryText != "" {
 		summaryPtr = &summaryText
+		// Every caller of persistTrip is a machine composing prose: the agent's
+		// create_itinerary, a paste-import extraction, the MCP create_trip tool.
+		// A person's words only ever arrive through applyTripSummary.
+		agent := summarySourceAgent
+		summarySourcePtr = &agent
 	}
 	var chatPtr *string
 	if c := strings.TrimSpace(chatID); c != "" {
@@ -440,6 +450,22 @@ func persistTrip(ctx context.Context, userID uuid.UUID, chatID, title, summary, 
 		case exists:
 			newLineage = false
 		}
+
+		// Every save INSERTs a new row, so a version save that supplies no
+		// description used to silently drop the one the lineage had — a trip
+		// losing its overview with no UPDATE statement existing anywhere. Carry
+		// the previous version's prose AND its author forward: a description the
+		// traveler wrote must survive the planner re-saving the itinerary, or the
+		// summary_source invariant would be quietly laundered back to 'agent'.
+		if !newLineage && summaryPtr == nil {
+			if prev, perr := q.GetLatestTripSummaryByChat(ctx, store.GetLatestTripSummaryByChatParams{
+				UserID: userID, ChatID: chatPtr,
+			}); perr == nil {
+				summaryPtr, summarySourcePtr = prev.Summary, prev.SummarySource
+			} else {
+				log.Printf("could not carry the trip's description forward: %v", perr)
+			}
+		}
 	}
 
 	// Runaway guard: a brand-new lineage counts against the per-user trip cap.
@@ -458,7 +484,8 @@ func persistTrip(ctx context.Context, userID uuid.UUID, chatID, title, summary, 
 
 	originPtr, originAirportPtr, returnAirportPtr := endpoints.columns()
 
-	trip, err := q.CreateTrip(ctx, store.CreateTripParams{UserID: userID, Title: finalTitle, ChatID: chatPtr, Summary: summaryPtr, TravelMode: modePtr,
+	trip, err := q.CreateTrip(ctx, store.CreateTripParams{UserID: userID, Title: finalTitle, ChatID: chatPtr,
+		Summary: summaryPtr, SummarySource: summarySourcePtr, TravelMode: modePtr,
 		Origin: originPtr, OriginAirport: originAirportPtr, ReturnAirport: returnAirportPtr})
 	if err != nil {
 		return "", false, err
@@ -1067,7 +1094,43 @@ func patchTripHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := store.New(dbPool)
+	if err := boundedOptional("summary", req.Summary, maxSummaryLen); err != nil {
+		writeJSONError(w, http.StatusBadRequest, summaryTooLongMessage())
+		return
+	}
+
+	// One transaction, because a dialog that edits the name and the description
+	// together must not be able to save half of itself. The description goes
+	// first so UpdateTrip's RETURNING * row — the one this handler responds with
+	// — already carries it, rather than the handler patching the response by
+	// hand and inventing a second place the post-state is computed.
+	tx, err := dbPool.Begin(r.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "could not update trip")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	q := store.New(tx)
+
+	if req.Summary != nil {
+		// Re-read under the row lock the write wants: `authorized` answered "may
+		// this caller edit it", not "what does it say right now".
+		locked, lerr := q.GetTripForUpdate(r.Context(), id)
+		if lerr != nil {
+			writeJSONError(w, http.StatusNotFound, "trip not found")
+			return
+		}
+		// The traveler is always allowed to overwrite the planner's words — the
+		// source check only ever constrains the planner (see applyTripSummary).
+		// The actor is the CALLER, not the owner: a co-planner's edit has to read
+		// as theirs in "Updated by".
+		caller, _ := userFromContext(r.Context())
+		if _, serr := applyTripSummary(r.Context(), q, locked, *req.Summary, summarySourceTraveler, caller.ID); serr != nil {
+			writeJSONError(w, http.StatusInternalServerError, "could not update trip")
+			return
+		}
+	}
+
 	trip, err := q.UpdateTrip(r.Context(), store.UpdateTripParams{
 		Title:      req.Title,
 		StartDate:  start,
@@ -1084,8 +1147,12 @@ func patchTripHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "could not update trip")
 		return
 	}
-	// Best-effort attribution: the patch itself already committed.
 	_ = q.TouchTrip(r.Context(), touchedBy(trip.ID, r))
+	if err := tx.Commit(r.Context()); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "could not update trip")
+		return
+	}
+	q = store.New(dbPool)
 	items, err := q.GetItineraryItemsByTrip(r.Context(), trip.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not load itinerary")

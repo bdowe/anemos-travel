@@ -4,8 +4,8 @@
 -- UpdateTrip's COALESCE set so PATCH cannot move them: a departure airport is
 -- not a field to be poked at, it is a change that has to travel with the trip's
 -- derived legs (see 00064 and TestPatchTripCannotSetOrigin).
-INSERT INTO trips (user_id, title, chat_id, summary, travel_mode, origin, origin_airport, return_airport, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $1)
+INSERT INTO trips (user_id, title, chat_id, summary, summary_source, travel_mode, origin, origin_airport, return_airport, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $1)
 RETURNING *;
 
 -- name: SetTripEndpoints :one
@@ -257,6 +257,31 @@ UPDATE trips SET travel_mode = $2 WHERE id = $1;
 -- ladder), same as SetTripTravelMode — no user_id scope here, so editor
 -- collaborators can shift a shared trip.
 UPDATE trips SET start_date = $2, end_date = $3 WHERE id = $1;
+
+-- name: SetTripSummary :exec
+-- The ONE writer of a saved trip's description after creation (00071,
+-- specs/trip-description) — called by applyTripSummary for both the trip page's
+-- PATCH and the chat's set_trip_description. Authorization happens in the
+-- callers (editableTrip / resolveDateShiftTrip), same as SetTripDates, so editor
+-- collaborators can write.
+--
+-- Plain narg rather than UpdateTrip's COALESCE, deliberately: COALESCE cannot
+-- carry "write NULL", so a description could be set and replaced but never
+-- CLEARED (the limitation PatchTripRequest.TravelMode's comment laments and
+-- query/preferences.sql's clear_home_airport flag was written to escape). The two
+-- columns move together — a description and whose words it is are one fact.
+UPDATE trips SET summary = sqlc.narg('summary'), summary_source = sqlc.narg('summary_source')
+WHERE id = sqlc.arg('id');
+
+-- name: GetLatestTripSummaryByChat :one
+-- The newest version's description in a chat lineage. persistTrip reads it to
+-- carry the prose forward when a version save supplies none: every save INSERTs
+-- a new row, so without this a re-save silently drops the description — reachable
+-- today with no UPDATE statement existing anywhere.
+SELECT summary, summary_source FROM trips
+WHERE user_id = $1 AND chat_id = $2
+ORDER BY created_at DESC
+LIMIT 1;
 
 -- name: DeleteTrip :execrows
 -- Deletes the trip and, when it belongs to a chat group, all its versions.

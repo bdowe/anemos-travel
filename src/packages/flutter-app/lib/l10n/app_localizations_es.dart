@@ -1415,7 +1415,24 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripLoadFailed => 'No se pudo cargar este viaje';
 
   @override
-  String get tripEditTitle => 'Editar título';
+  String get tripEditDetails => 'Editar detalles del viaje';
+
+  @override
+  String get tripDetailsNameLabel => 'Nombre';
+
+  @override
+  String get tripDetailsNameRequired => 'El viaje necesita un nombre';
+
+  @override
+  String get tripDetailsDescriptionLabel => 'Descripción';
+
+  @override
+  String get tripDetailsDescriptionHint =>
+      'Diez días recorriendo Sicilia: los mercados de Palermo, los templos de Agrigento y luego Catania.';
+
+  @override
+  String get tripDetailsDescriptionHelp =>
+      'Se muestra debajo del título de este viaje. Déjala vacía para quitarla.';
 
   @override
   String get tripDeleteTitle => '¿Eliminar el viaje?';
@@ -1866,9 +1883,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String tripAddedToPacking(String item) {
     return '\"$item\" añadido al equipaje';
   }
-
-  @override
-  String get tripRename => 'Cambiar nombre';
 
   @override
   String get tripAddDates => 'Añadir fechas';

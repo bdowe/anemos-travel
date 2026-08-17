@@ -2546,11 +2546,41 @@ abstract class AppLocalizations {
   /// **'Could not load this trip'**
   String get tripLoadFailed;
 
-  /// No description provided for @tripEditTitle.
+  /// No description provided for @tripEditDetails.
   ///
   /// In en, this message translates to:
-  /// **'Edit title'**
-  String get tripEditTitle;
+  /// **'Edit trip details'**
+  String get tripEditDetails;
+
+  /// No description provided for @tripDetailsNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get tripDetailsNameLabel;
+
+  /// No description provided for @tripDetailsNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'A trip needs a name'**
+  String get tripDetailsNameRequired;
+
+  /// No description provided for @tripDetailsDescriptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get tripDetailsDescriptionLabel;
+
+  /// No description provided for @tripDetailsDescriptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Ten days circling Sicily — Palermo\'s markets, the temples at Agrigento, then Catania.'**
+  String get tripDetailsDescriptionHint;
+
+  /// No description provided for @tripDetailsDescriptionHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown under the title on this trip. Leave it empty to remove it.'**
+  String get tripDetailsDescriptionHelp;
 
   /// No description provided for @tripDeleteTitle.
   ///
@@ -3271,12 +3301,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Added \"{item}\" to packing'**
   String tripAddedToPacking(String item);
-
-  /// No description provided for @tripRename.
-  ///
-  /// In en, this message translates to:
-  /// **'Rename'**
-  String get tripRename;
 
   /// No description provided for @tripAddDates.
   ///

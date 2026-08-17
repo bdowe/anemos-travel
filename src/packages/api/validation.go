@@ -23,6 +23,12 @@ const (
 	maxURLLen         = 2000 // search/booking links
 	maxNoteLen        = 5000 // price_note / free-text notes — the biggest sinks
 	maxDisplayNameLen = 60   // mirror the account-update cap (account_handler.go)
+	// maxSummaryLen bounds a trip's description (trips.summary). Tighter than
+	// maxNoteLen because this one is PROSE ABOUT the trip that renders in a
+	// two-line clamp on the trip page, on list cards and in the OG link preview
+	// — a novel here is a layout problem, not just a storage one. Mirrors the
+	// profile-notes field's cap, the app's only other multi-line prose input.
+	maxSummaryLen = 2000
 
 	// maxItineraryDay bounds a manually-set day number. A floor of >= 1 already
 	// exists in the item handlers; this is the missing ceiling. 366 covers a

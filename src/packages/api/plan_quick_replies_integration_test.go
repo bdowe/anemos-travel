@@ -81,10 +81,12 @@ func TestPlanSuggestRepliesEmitsEvent(t *testing.T) {
 	if err := json.Unmarshal(reqs[0], &body); err != nil {
 		t.Fatalf("unmarshal request body: %v", err)
 	}
-	// Anonymous session: the date/origin/mode tools are authed-gated and so
-	// never reach this shape. search_hotels is NOT gated — it is the one tool
-	// added since find_parking that lands on the anonymous array too, which is
-	// the deliberate one-time cache re-warm specs/hotel-search takes.
+	// Anonymous session: the date/origin/mode/description tools are authed-gated
+	// and so never reach this shape. search_hotels is NOT gated — it is the one
+	// tool added since find_parking that lands on the anonymous array too, which
+	// is the deliberate one-time cache re-warm specs/hotel-search takes. It
+	// remains the anonymous tail: set_trip_description was appended after it but
+	// gated, so this array is byte-identical again.
 	if n := len(body.Tools); n == 0 || body.Tools[n-1].Name != "search_hotels" {
 		t.Fatalf("tools tail = %+v, want search_hotels last", body.Tools)
 	}

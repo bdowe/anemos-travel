@@ -762,6 +762,11 @@ func runGetTripTool(ctx context.Context, authed bool, uid uuid.UUID, boundTripID
 	// which is how a request to fly out of ALB became a duplicate checklist
 	// item nobody asked for.
 	b.WriteString(". " + tripEndpointSummary(trip))
+	// The trip's own description, and whose words it is. Same reason as the line
+	// above: the model wrote this text at creation and then could neither read it
+	// back nor change it, so a blurb describing a trip that has since been
+	// reshaped was invisible to the only party able to fix it.
+	b.WriteString(" " + tripDescriptionSummary(trip))
 	fmt.Fprintf(&b, " %d places:\n", len(items))
 	for _, it := range items {
 		line := "- " + it.Name

@@ -313,6 +313,7 @@ type Trip struct {
 	Origin        *string     `json:"origin"`
 	OriginAirport *string     `json:"origin_airport"`
 	ReturnAirport *string     `json:"return_airport"`
+	SummarySource *string     `json:"summary_source"`
 }
 
 type TripBudget struct {

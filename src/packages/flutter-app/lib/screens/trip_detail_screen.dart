@@ -85,6 +85,7 @@ import '../widgets/source_links_card.dart';
 import '../widgets/status_pill.dart';
 import '../widgets/trip_actions_sheet.dart';
 import '../widgets/trip_airports_sheet.dart';
+import '../widgets/trip_details_dialog.dart';
 import '../widgets/trip_map.dart';
 import '../widgets/trip_refine_panel.dart';
 import '../widgets/wear_pack_sheet.dart';
@@ -1967,8 +1968,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     return firstLegKey;
   }
 
+  /// Every argument is null-means-omitted, EXCEPT that an empty [summary] is a
+  /// real instruction: it clears the trip's description.
   Future<void> _patch(
-      {String? title, String? startDate, String? endDate}) async {
+      {String? title,
+      String? startDate,
+      String? endDate,
+      String? summary}) async {
     if (_guardOffline()) return;
     final l10n = context.l10n;
     try {
@@ -1977,6 +1983,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             title: title,
             startDate: startDate,
             endDate: endDate,
+            summary: summary,
           );
       if (mounted) setState(() => _trip = updated);
       ref.read(tripsProvider.notifier).loadTrips(); // keep list in sync
@@ -1985,29 +1992,27 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
   }
 
-  Future<void> _editTitle() async {
+  /// The trip's name and description, edited together (specs/trip-description).
+  ///
+  /// Both fields are seeded from what is ON SCREEN — [_displayTitle] and
+  /// [_overviewText] — rather than from the raw columns, and on a legacy trip
+  /// those differ. Such a trip predates migration 00013, so its prose lives in
+  /// `title` and the header already shows a computed short title above it;
+  /// seeding the raw values would offer an empty description box underneath a
+  /// description the traveler can plainly read. Seeding the rendered ones makes
+  /// the first save promote the prose into `summary` and the computed name into
+  /// `title`, which is where they each belonged all along.
+  Future<void> _editTripDetails() async {
     if (_guardOffline()) return;
-    final l10n = context.l10n;
-    final controller = TextEditingController(text: _trip?.title ?? '');
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.tripEditTitle),
-        content: TextField(controller: controller, autofocus: true),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(l10n.commonCancel)),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: Text(l10n.commonSave),
-          ),
-        ],
-      ),
+    final trip = _trip;
+    if (trip == null) return;
+    final choice = await showTripDetailsDialog(
+      context,
+      title: _displayTitle(trip),
+      description: _overviewText(trip),
     );
-    if (result != null && result.isNotEmpty) {
-      await _patch(title: result);
-    }
+    if (choice == null || choice.title.isEmpty) return;
+    await _patch(title: choice.title, summary: choice.description);
   }
 
   Future<void> _editDates() async {
@@ -5686,8 +5691,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
             if (trip.canEdit)
               IconButton(
                 icon: const Icon(Icons.edit, size: 20),
-                tooltip: l10n.tripRename,
-                onPressed: _isOffline ? null : _editTitle,
+                tooltip: l10n.tripEditDetails,
+                onPressed: _isOffline ? null : _editTripDetails,
               ),
           ],
         ),
