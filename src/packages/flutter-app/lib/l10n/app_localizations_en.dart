@@ -1750,6 +1750,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'No bookings for this destination.';
 
   @override
+  String get tripBookingsAllBookedForDestination =>
+      'Nothing left to book here.';
+
+  @override
+  String get tripBookingsAllDestinations => 'All';
+
+  @override
   String get tripNoPlacesYet => 'No places yet';
 
   @override

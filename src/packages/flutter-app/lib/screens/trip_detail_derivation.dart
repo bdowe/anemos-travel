@@ -91,6 +91,94 @@ typedef GroupedBookings = ({
   List<TripSegment> residualSegments,
 });
 
+/// One booking as the traveler sees it: **one visible checkbox**. A todo, the
+/// confirmed record matched to it, or a confirmed record standing alone
+/// (viewers, and anything that matched no todo).
+///
+/// NOT one rendered widget — a todo plus its confirmed detail row is ONE
+/// booking rendered as two widgets. Counting widgets would double every
+/// confirmed booking.
+typedef BookingEntry = ({
+  BookingTodo? todo,
+  Accommodation? stay,
+  TripSegment? segment,
+});
+
+/// The entries a slot contributes, in render order. THE one enumeration of
+/// "what rows does this slot have" — the screen's `_bookingRowWidgets` builds
+/// from it and every count iterates it, so a row and its count can never
+/// disagree about what exists.
+///
+/// [departureOnly] splits the slot the way the screen renders it: the arrival
+/// flight + stay inline, and the flight home as a separate trailing call the
+/// screen makes for the LAST slot only.
+List<BookingEntry> bookingSlotEntries(BookingSlot slot,
+        {required bool departureOnly}) =>
+    departureOnly
+        ? [(todo: slot.departure, stay: null, segment: slot.departureMatch)]
+        : [
+            (todo: slot.arrival, stay: null, segment: slot.arrivalMatch),
+            (todo: slot.stay, stay: slot.stayMatch, segment: null),
+          ];
+
+/// The state of an entry's visible checkbox — THE one definition, shared by
+/// the "Not booked yet" filter and every count on the screen.
+///
+/// The todo's flag wins when a todo row drives the entry, the confirmed
+/// record's otherwise (PR #455: a ticked booking row IS booked). An entry with
+/// nothing in it reads booked so it never lands in the left-to-book list.
+bool bookingEntryBooked(BookingEntry e) =>
+    e.todo?.booked ?? e.stay?.booked ?? e.segment?.booked ?? true;
+
+/// True when the entry has anything to render at all.
+bool bookingEntryExists(BookingEntry e) =>
+    e.todo != null || e.stay != null || e.segment != null;
+
+/// booked/total per destination label, for the Bookings filter strip's chip
+/// counts. Mirrors the screen's `_allBookingRows` exactly — slot i belongs to
+/// `labels[i]`, the departure entry counts only on the LAST slot, and
+/// residuals count under [otherKey] alone — so a chip's count always equals
+/// what selecting that chip reveals. A revisited city has one entry here and
+/// one chip, summing both of its runs.
+///
+/// Counts ENTRIES, not todos: the Bookings tab's own pill counts booking todos
+/// only, so a trip with confirmed records that matched no todo sums higher
+/// here. That divergence is the tab pill's (it is load-bearing for
+/// specs/next-step-cta parity); these counts answer for the rows beneath them.
+Map<String, ({int booked, int total})> bookingDestinationCounts(
+  GroupedBookings grouped,
+  List<String> labels, {
+  required String otherKey,
+}) {
+  final counts = <String, ({int booked, int total})>{};
+  void add(String key, bool booked) {
+    final c = counts[key] ?? (booked: 0, total: 0);
+    counts[key] = (booked: c.booked + (booked ? 1 : 0), total: c.total + 1);
+  }
+
+  for (final (i, slot) in grouped.slots.indexed) {
+    if (i >= labels.length) continue;
+    final entries = [
+      ...bookingSlotEntries(slot, departureOnly: false),
+      if (i == grouped.slots.length - 1)
+        ...bookingSlotEntries(slot, departureOnly: true),
+    ];
+    for (final e in entries.where(bookingEntryExists)) {
+      add(labels[i], bookingEntryBooked(e));
+    }
+  }
+  for (final todo in grouped.residual) {
+    add(otherKey, todo.booked);
+  }
+  for (final a in grouped.residualStays) {
+    add(otherKey, a.booked);
+  }
+  for (final s in grouped.residualSegments) {
+    add(otherKey, s.booked);
+  }
+  return counts;
+}
+
 /// True for the AI's "city filler" placeholder — an item whose name is just
 /// the city it renders under (e.g. name 'Prague', city 'Prague'), emitted for
 /// days with no specific activities. Its text duplicates the city/day-trip

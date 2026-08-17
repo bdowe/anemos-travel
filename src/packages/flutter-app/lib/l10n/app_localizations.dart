@@ -3128,6 +3128,18 @@ abstract class AppLocalizations {
   /// **'No bookings for this destination.'**
   String get tripBookingsLensNoneForDestination;
 
+  /// No description provided for @tripBookingsAllBookedForDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing left to book here.'**
+  String get tripBookingsAllBookedForDestination;
+
+  /// The Bookings filter strip's pinned chip: clears the destination filter and shows every booking. Kept short — it sits beside city names in a one-line strip.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get tripBookingsAllDestinations;
+
   /// No description provided for @tripNoPlacesYet.
   ///
   /// In en, this message translates to:

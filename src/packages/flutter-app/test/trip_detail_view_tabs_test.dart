@@ -182,6 +182,19 @@ Future<void> _openBookingsTab(WidgetTester tester, [String? count]) async {
   await tester.pumpAndSettle();
 }
 
+/// Taps a destination chip in the Bookings filter strip. The strip scrolls
+/// horizontally (that is the point of it), so a chip past the fold has to be
+/// brought into view before it can be hit — exactly what a traveler does with
+/// a drag.
+Future<void> _tapDestination(WidgetTester tester, String label) async {
+  final chip = find.ancestor(
+      of: find.text(label), matching: find.byType(ChoiceChip));
+  await tester.ensureVisible(chip);
+  await tester.pumpAndSettle();
+  await tester.tap(chip);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets(
       'unbooked lens lists only unbooked booking rows and no item tiles',
@@ -399,7 +412,7 @@ void main() {
     expect(find.text("Everything's booked"), findsNothing);
   });
 
-  testWidgets('destination chips narrow the lens; re-tap returns to All',
+  testWidgets('destination chips narrow the lens; the All chip is the way back',
       (tester) async {
     _useTallViewport(tester);
     await _pump(tester, twoCityTrip());
@@ -410,15 +423,18 @@ void main() {
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Rome'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Rome'));
-    await tester.pumpAndSettle();
+    await _tapDestination(tester, 'Rome');
     expect(find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsNothing);
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Rome'), findsOneWidget);
 
-    // Tapping the selected chip clears back to All.
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Rome'));
-    await tester.pumpAndSettle();
+    // Re-tapping the selected chip is a dead gesture, not a hidden clear —
+    // the filter is still on Rome.
+    await _tapDestination(tester, 'Rome');
+    expect(find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsNothing);
+
+    // The All chip is the visible way back to every booking.
+    await _tapDestination(tester, 'All');
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
     expect(
@@ -449,16 +465,14 @@ void main() {
         find.widgetWithText(BookingTodoCard, 'Museum tickets'), findsOneWidget);
 
     // A destination chip hides the residual (it matched no destination)...
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Paris'));
-    await tester.pumpAndSettle();
+    await _tapDestination(tester, 'Paris');
     expect(find.widgetWithText(BookingTodoCard, 'Museum tickets'),
         findsNothing);
     expect(
         find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsOneWidget);
 
     // ...and the Other chip shows only residuals.
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Other bookings'));
-    await tester.pumpAndSettle();
+    await _tapDestination(tester, 'Other bookings');
     expect(
         find.widgetWithText(BookingTodoCard, 'Museum tickets'), findsOneWidget);
     expect(find.widgetWithText(BookingTodoRow, 'Stay in Paris'), findsNothing);

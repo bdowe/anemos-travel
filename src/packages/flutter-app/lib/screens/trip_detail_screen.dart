@@ -65,6 +65,7 @@ import '../widgets/app_map.dart';
 import '../services/api_client.dart' show ApiException;
 import '../widgets/booked_expense_prompt.dart';
 import '../widgets/booking_detail_row.dart';
+import '../widgets/booking_filter_bar.dart';
 import '../widgets/booking_sheets.dart';
 import '../widgets/booking_todo_card.dart';
 import '../widgets/budget_section.dart';
@@ -72,7 +73,6 @@ import '../widgets/budget_target_dialog.dart';
 import '../widgets/trip_health_sheet.dart';
 import '../widgets/trip_review_section.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/choice_chip_row.dart';
 import '../widgets/city_events_sheet.dart';
 import '../widgets/hover_reveal.dart';
 import '../widgets/local_rec_card.dart';
@@ -3479,26 +3479,23 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// [departureOnly] is false, the return-home flight when true. Each todo
   /// row is followed by its matched confirmed record's details; a match
   /// without a todo (viewers) renders as a standalone detail row.
-  /// [unbookedOnly] keeps only rows whose visible checkbox is unchecked (the
-  /// todo's flag when a todo row drives the entry, the record's otherwise) —
-  /// the "Not booked yet" lens.
+  /// [unbookedOnly] keeps only rows whose visible checkbox is unchecked — the
+  /// "Not booked yet" lens.
+  ///
+  /// The slot's entries and their checkbox state both come from the
+  /// derivation ([bookingSlotEntries] / [bookingEntryBooked]) rather than
+  /// being spelled out here, because the filter-strip counts iterate the same
+  /// two functions: a chip's count and the rows it reveals cannot disagree
+  /// about what a slot holds or about what "booked" means.
   List<Widget> _bookingRowWidgets(
     BookingSlot slot, {
     required bool departureOnly,
     bool unbookedOnly = false,
   }) {
     final l10n = context.l10n;
-    var entries = departureOnly
-        ? [(todo: slot.departure, stay: null as Accommodation?, segment: slot.departureMatch)]
-        : [
-            (todo: slot.arrival, stay: null as Accommodation?, segment: slot.arrivalMatch),
-            (todo: slot.stay, stay: slot.stayMatch, segment: null as TripSegment?),
-          ];
+    var entries = bookingSlotEntries(slot, departureOnly: departureOnly);
     if (unbookedOnly) {
-      entries = entries
-          .where((e) =>
-              !(e.todo?.booked ?? e.stay?.booked ?? e.segment?.booked ?? true))
-          .toList();
+      entries = entries.where((e) => !bookingEntryBooked(e)).toList();
     }
     return [
       for (final e in entries) ...[
@@ -3558,32 +3555,50 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// records that matched no city. Reuses the same row widgets (and the
   /// _setRowBooked writer) as the inline city view, so checking a box here
   /// behaves identically and the row leaves the lens on the rebuild.
-  List<Widget> _unbookedRows(GroupedBookings grouped) {
+  ///
+  /// [destination] narrows to one leg label exactly as [_allBookingRows] does
+  /// — the destination strip renders in BOTH scopes, so a chosen city has to
+  /// mean the same thing in both. Same discipline too: this filters the OUTPUT
+  /// of the one full-label partition, never a re-partition on a label subset.
+  List<Widget> _unbookedRows(
+    GroupedBookings grouped,
+    List<String> labels, {
+    String? destination,
+  }) {
     final l10n = context.l10n;
+    bool slotShown(int i) =>
+        destination == null ||
+        (i < labels.length && labels[i] == destination);
+    final showResiduals =
+        destination == null || destination == _kOtherPlaces;
     return [
-      for (final (i, slot) in grouped.slots.indexed) ...[
-        ..._bookingRowWidgets(slot, departureOnly: false, unbookedOnly: true),
-        if (i == grouped.slots.length - 1)
-          ..._bookingRowWidgets(slot, departureOnly: true, unbookedOnly: true),
-      ],
-      for (final todo in grouped.residual.where((t) => !t.booked))
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: BookingTodoCard(
-            todo: todo,
-            onBookedChanged: (v) => _setRowBooked(v, todo: todo),
-            onOpen: _openCallbackFor(todo),
-            openLabelOverride: _flightLegs.containsKey(todo.todoKey)
-                ? l10n.tripFindFlights
-                : null,
-            onEdit: todo.auto ? null : () => _editTodo(todo),
-            onDelete: todo.auto ? null : () => _deleteTodo(todo),
+      for (final (i, slot) in grouped.slots.indexed)
+        if (slotShown(i)) ...[
+          ..._bookingRowWidgets(slot, departureOnly: false, unbookedOnly: true),
+          if (i == grouped.slots.length - 1)
+            ..._bookingRowWidgets(slot,
+                departureOnly: true, unbookedOnly: true),
+        ],
+      if (showResiduals) ...[
+        for (final todo in grouped.residual.where((t) => !t.booked))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: BookingTodoCard(
+              todo: todo,
+              onBookedChanged: (v) => _setRowBooked(v, todo: todo),
+              onOpen: _openCallbackFor(todo),
+              openLabelOverride: _flightLegs.containsKey(todo.todoKey)
+                  ? l10n.tripFindFlights
+                  : null,
+              onEdit: todo.auto ? null : () => _editTodo(todo),
+              onDelete: todo.auto ? null : () => _deleteTodo(todo),
+            ),
           ),
-        ),
-      for (final a in grouped.residualStays.where((a) => !a.booked))
-        _detailRowFor(stay: a, segment: null, detailOnly: true),
-      for (final s in grouped.residualSegments.where((s) => !s.booked))
-        _detailRowFor(stay: null, segment: s, detailOnly: true),
+        for (final a in grouped.residualStays.where((a) => !a.booked))
+          _detailRowFor(stay: a, segment: null, detailOnly: true),
+        for (final s in grouped.residualSegments.where((s) => !s.booked))
+          _detailRowFor(stay: null, segment: s, detailOnly: true),
+      ],
     ];
   }
 
@@ -3641,30 +3656,109 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     ];
   }
 
-  /// Chip values for the 'bookings' lens destination filter: the leg labels
-  /// deduped in trip order (a revisited city gets ONE chip covering both its
-  /// runs — chips select by label equality, and run-suffixed chips would
-  /// leak the internal `#2` key grammar), plus the canonical 'Other places'
-  /// value when residual bookings exist and no real 'Other places' leg
-  /// already supplied it.
-  List<String> _bookingsLensChips(List<String> labels,
-      {required bool hasResiduals}) {
-    final chips = <String>[];
+  /// Chips for the Bookings destination filter: the leg labels deduped in trip
+  /// order (a revisited city gets ONE chip covering both its runs — chips
+  /// select by label equality, and run-suffixed chips would leak the internal
+  /// `#2` key grammar), plus the canonical 'Other places' value when residual
+  /// bookings exist and no real 'Other places' leg already supplied it. Each
+  /// carries its own booked count from [bookingDestinationCounts].
+  ///
+  /// A stale selection (leg labels change when the itinerary is edited) is
+  /// clamped HERE rather than in either view body, because both scopes render
+  /// the strip and both need the same clamp before they filter their rows.
+  /// We're already in build, so this frame renders the clamped value (the
+  /// _focusedLegKey clamp idiom).
+  List<BookingDestination> _bookingsLensDestinations(
+    GroupedBookings grouped,
+    List<String> labels,
+  ) {
+    final l10n = context.l10n;
+    final hasResiduals = grouped.residual.isNotEmpty ||
+        grouped.residualStays.isNotEmpty ||
+        grouped.residualSegments.isNotEmpty;
+    final values = <String>[];
     for (final l in labels) {
-      if (!chips.contains(l)) chips.add(l);
+      if (!values.contains(l)) values.add(l);
     }
-    if (hasResiduals && !chips.contains(_kOtherPlaces)) {
-      chips.add(_kOtherPlaces);
+    if (hasResiduals && !values.contains(_kOtherPlaces)) {
+      values.add(_kOtherPlaces);
     }
-    return chips;
+    if (_bookingsLensDestination != null &&
+        !values.contains(_bookingsLensDestination)) {
+      _bookingsLensDestination = null;
+    }
+    final counts =
+        bookingDestinationCounts(grouped, labels, otherKey: _kOtherPlaces);
+    return [
+      for (final v in values)
+        (
+          value: v,
+          label: v == _kOtherPlaces ? l10n.tripOtherBookings : v,
+          booked: counts[v]?.booked ?? 0,
+          total: counts[v]?.total ?? 0,
+        ),
+    ];
   }
 
-  /// The 'bookings' lens body: destination filter chips above the flat
-  /// all-bookings list. Returns [] when the trip has no bookings at all so
-  /// build can swap in the lens empty state. A stale chip selection (leg
-  /// labels change when the itinerary is edited) is clamped here — we're
-  /// already in build, so this frame renders the clamped value (the
-  /// _focusedLegKey clamp idiom).
+  /// The Bookings view's one filter row — scope chip + destination strip —
+  /// rendered by BOTH scopes so toggling "Not booked yet" doesn't change the
+  /// shape of the chrome above the rows. The destination deliberately SURVIVES
+  /// that toggle: it is a different question ("where"), and clearing it would
+  /// silently widen what the traveler is looking at.
+  Widget _bookingsFilterBar(List<BookingDestination> destinations) =>
+      BookingFilterBar(
+        unbookedOnly: _itemFilter == 'unbooked',
+        onUnbookedOnlyChanged: (v) =>
+            setState(() => _itemFilter = v ? 'unbooked' : 'bookings'),
+        destinations: destinations,
+        selected: _bookingsLensDestination,
+        onSelected: (v) => setState(() => _bookingsLensDestination = v),
+      );
+
+  /// The 'unbooked' scope body: the same filter row as the all-bookings lens
+  /// above the flat left-to-book list. Never returns [] — the filter row is
+  /// the way out of an empty state, so it renders above both arms.
+  ///
+  /// The two empty arms say different true things. With no destination
+  /// chosen, an empty list means the TRIP is fully booked (the celebration).
+  /// With one chosen it means only that city is, so it gets its own line —
+  /// the trip-wide copy would be a claim this list cannot support.
+  List<Widget> _unbookedViewBody(
+    GroupedBookings grouped,
+    List<String> labels,
+  ) {
+    final l10n = context.l10n;
+    final destinations = _bookingsLensDestinations(grouped, labels);
+    final rows = _unbookedRows(grouped, labels,
+        destination: _bookingsLensDestination);
+    return [
+      _bookingsFilterBar(destinations),
+      if (rows.isEmpty && _bookingsLensDestination == null)
+        SizedBox(
+          height: 260,
+          child: EmptyState(
+            icon: Icons.celebration_outlined,
+            title: l10n.tripFilterAllBooked,
+            message: l10n.tripFilterAllBookedMessage,
+          ),
+        )
+      else if (rows.isEmpty)
+        SizedBox(
+          height: 120,
+          child: EmptyState(
+            icon: Icons.celebration_outlined,
+            title: l10n.tripBookingsAllBookedForDestination,
+            compact: true,
+          ),
+        )
+      else
+        ...rows,
+    ];
+  }
+
+  /// The 'bookings' lens body: the filter row above the flat all-bookings
+  /// list. Returns [] when the trip has no bookings at all so build can swap
+  /// in the lens empty state.
   List<Widget> _bookingsLensBody(
     GroupedBookings grouped,
     List<String> labels,
@@ -3672,30 +3766,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     final l10n = context.l10n;
     final all = _allBookingRows(grouped, labels);
     if (all.isEmpty) return const [];
-    final hasResiduals = grouped.residual.isNotEmpty ||
-        grouped.residualStays.isNotEmpty ||
-        grouped.residualSegments.isNotEmpty;
-    final chips = _bookingsLensChips(labels, hasResiduals: hasResiduals);
-    if (_bookingsLensDestination != null &&
-        !chips.contains(_bookingsLensDestination)) {
-      _bookingsLensDestination = null;
-    }
+    // Builds the chips AND clamps a stale selection — so it runs before the
+    // rows below are filtered by that selection.
+    final destinations = _bookingsLensDestinations(grouped, labels);
     final rows = _bookingsLensDestination == null
         ? all
         : _allBookingRows(grouped, labels,
             destination: _bookingsLensDestination);
     return [
-      _bookingsScopeChip(),
-      Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: ChoiceChipRow(
-          options: chips,
-          selected: _bookingsLensDestination,
-          onSelected: (v) => setState(() => _bookingsLensDestination = v),
-          labelBuilder: (v) =>
-              v == _kOtherPlaces ? l10n.tripOtherBookings : v,
-        ),
-      ),
+      _bookingsFilterBar(destinations),
       if (rows.isEmpty)
         SizedBox(
           height: 120,
@@ -3709,25 +3788,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         ...rows,
     ];
   }
-
-  /// Booked-state scope for the Bookings view: off = every booking, on = the
-  /// left-to-book list. A moved entry point, not new behavior — it toggles
-  /// the same 'unbooked' state the filter menu used to own before the view
-  /// tabs landed.
-  Widget _bookingsScopeChip() => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: FilterChip(
-            label: Text(context.l10n.tripFilterUnbooked),
-            selected: _itemFilter == 'unbooked',
-            onSelected: (v) => setState(() {
-              _itemFilter = v ? 'unbooked' : 'bookings';
-              _bookingsLensDestination = null;
-            }),
-          ),
-        ),
-      );
 
   /// "+ Add booking" — the Bookings view's one add CTA (its "Add place").
   /// A single menu fans out to the three record kinds so the itinerary tail
@@ -6593,29 +6653,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                             )
                           else if (_itemFilter == 'unbooked')
                             // Bookings view, left-to-book scope: a flat list
-                            // in place of the city groups. The scope chip
+                            // in place of the city groups. The filter row
                             // renders above BOTH arms — selected atop the
                             // celebration it says why the list is empty
                             // and is the one-tap way back to every booking.
                             SliverPadding(
                               padding:
                                   EdgeInsets.fromLTRB(gutter, 4, gutter, 0),
-                              sliver: switch (_unbookedRows(grouped)) {
-                                [] => _boxSliver([
-                                    _bookingsScopeChip(),
-                                    SizedBox(
-                                      height: 260,
-                                      child: EmptyState(
-                                        icon: Icons.celebration_outlined,
-                                        title: l10n.tripFilterAllBooked,
-                                        message:
-                                            l10n.tripFilterAllBookedMessage,
-                                      ),
-                                    ),
-                                  ]),
-                                final rows => _boxSliver(
-                                    [_bookingsScopeChip(), ...rows]),
-                              },
+                              sliver: _boxSliver(
+                                  _unbookedViewBody(grouped, legLabels)),
                             )
                           else if (_itemFilter == 'bookings')
                             // All-bookings lens: the whole trip's bookings

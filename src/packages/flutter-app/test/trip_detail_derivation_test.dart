@@ -323,6 +323,59 @@ void main() {
       expect(grouped.residualSegments, isEmpty);
     });
 
+    // The Bookings filter strip's chip counts. The rule they must obey is the
+    // one PR #455 paid for on the Trip Health badge: a count answers for the
+    // rows it sits above, so it counts ENTRIES (one visible checkbox each)
+    // over exactly the slots that chip reveals.
+    test('bookingDestinationCounts: one entry per visible checkbox', () {
+      final todos = [
+        _todo('transport:home>>paris'),
+        _todo('stay:paris', kind: 'stay', booked: true),
+        _todo('transport:paris>>rome'),
+        _todo('stay:rome', kind: 'stay'),
+        _todo('transport:paris>>home'),
+        _todo('custom:helicopter', kind: 'other', booked: true),
+      ];
+      final d = _compute(bookingTodos: todos, stays: [_parisStay, _draftStay]);
+      final counts = bookingDestinationCounts(d.groupedBookings, d.legLabels,
+          otherKey: 'Other places');
+
+      // Paris' two runs sum into ONE entry: run 1 has an arrival + a booked
+      // stay; the revisited run has the flight home (departure counts only on
+      // the LAST slot) and no stay to re-claim.
+      expect(counts['Paris'], (booked: 1, total: 3));
+      expect(counts['Rome'], (booked: 0, total: 2));
+      // Residuals answer under Other, and only there.
+      expect(counts['Other places'], (booked: 1, total: 1));
+    });
+
+    test('bookingDestinationCounts: a stay match rides its todo, not a second '
+        'entry', () {
+      final todos = [_todo('stay:paris', kind: 'stay')];
+      final d = _compute(bookingTodos: todos, stays: [_parisStay]);
+      final grouped = d.groupedBookings;
+      // The confirmed stay filled the todo's slot...
+      expect(grouped.slots[0].stayMatch?.id, 'a1');
+      // ...so it is ONE booking, not two, and its checkbox is the todo's.
+      expect(
+          bookingDestinationCounts(grouped, d.legLabels, otherKey: 'Other')[
+              'Paris'],
+          (booked: 0, total: 1));
+    });
+
+    test('bookingEntryBooked: the todo wins, then the record', () {
+      const bookedStay = Accommodation(id: 'a9', name: 'X', booked: true);
+      expect(
+          bookingEntryBooked(
+              (todo: _todo('stay:x', kind: 'stay'), stay: bookedStay, segment: null)),
+          isFalse,
+          reason: 'an unticked todo row is unbooked whatever its match says');
+      expect(bookingEntryBooked((todo: null, stay: bookedStay, segment: null)),
+          isTrue);
+      expect(bookingEntryBooked((todo: null, stay: null, segment: null)), isTrue,
+          reason: 'nothing to book never lands in the left-to-book list');
+    });
+
     // A confirmed segment fills a leg's slot only when it connects BOTH of the
     // leg's endpoints — the rule the server has always applied in todoClaimed
     // (trip_review.go), now applied here too.

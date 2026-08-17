@@ -505,6 +505,8 @@
   "tripBookingsLensEmptyTitle": "Aún no hay reservas",
   "tripBookingsLensEmptyMessage": "Los vuelos, alojamientos y reservas de este viaje aparecerán aquí.",
   "tripBookingsLensNoneForDestination": "No hay reservas para este destino.",
+  "tripBookingsAllBookedForDestination": "Aquí no queda nada por reservar.",
+  "tripBookingsAllDestinations": "Todas",
   "tripNoPlacesYet": "Aún no hay lugares",
   "tripNoPlacesYetMessage": "Refina con IA o añade un lugar para empezar tu itinerario.",
   "tripNoMappedPlaces": "No hay lugares en el mapa",
