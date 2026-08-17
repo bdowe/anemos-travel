@@ -150,8 +150,16 @@ precisely the "five ways to group a leg" failure the doc was written after.
 - **Fallback, never mixed.** Trips with zero derived slots keep the old
   findings behavior verbatim. A *satisfied* walk never falls through to the
   findings: a checked checkbox with no accommodation row is the traveler
-  telling us they booked elsewhere. Trip Health still reports the gap — that is
-  its job, and the two surfaces are allowed to differ here.
+  telling us they booked elsewhere.
+  - **SUPERSEDED 2026-08-17.** This bullet used to end "Trip Health still
+    reports the gap — that is its job, and the two surfaces are allowed to
+    differ here." They are not. Dogfooding produced a trip whose stay rows were
+    all ticked, under a Trip Health banner reading *"No lodging booked for the
+    nights of Mon, Aug 24 – Fri, Aug 28 (5 nights)"* — the app contradicting
+    the traveler on one screen. `nightCovered` (`trip_review.go`) now counts a
+    booked lodging to-do as coverage, and `checkTransit` does the same for a
+    booked leg, so the walk's rule IS the shared rule. Nights no slot spans are
+    a different question and still surface (`firstUnslottedLodging`).
 - **Ladder 7 → 6.** `PlanProgress.Total` was already a wire field, so the UI
   renumbers itself with no client release.
 - **Convention now has three readers.** Derived todo titles/keys

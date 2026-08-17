@@ -103,6 +103,13 @@ class TripReviewSection extends ConsumerStatefulWidget {
   /// section) and "suggestions" (info and anything unrecognized, server order
   /// — the collapsed sheet section / neutral dot). The single
   /// severity-partition definition shared by the app-bar badge and the sheet.
+  ///
+  /// The attention sort is STABLE on the wire order, which the server has
+  /// already put in day order. `List.sort` is not stable in Dart, so comparing
+  /// severity alone let same-severity findings come out in any order — and now
+  /// that scheduling taste is `info`, this tier is almost entirely `warn`, so
+  /// that "any order" would be the whole list. A run of unbooked nights has to
+  /// read Aug before Sep.
   static ({List<TripFinding> attention, List<TripFinding> suggestions})
       partition(Iterable<TripFinding> findings) {
     final attention = <TripFinding>[];
@@ -111,9 +118,16 @@ class TripReviewSection extends ConsumerStatefulWidget {
       (_rankOf(f.severity) <= _severityRank['warn']! ? attention : suggestions)
           .add(f);
     }
-    attention
-        .sort((a, b) => _rankOf(a.severity).compareTo(_rankOf(b.severity)));
-    return (attention: attention, suggestions: suggestions);
+    final ranked = attention.indexed.toList()
+      ..sort((a, b) {
+        final bySeverity =
+            _rankOf(a.$2.severity).compareTo(_rankOf(b.$2.severity));
+        return bySeverity != 0 ? bySeverity : a.$1.compareTo(b.$1);
+      });
+    return (
+      attention: [for (final (_, f) in ranked) f],
+      suggestions: suggestions,
+    );
   }
 
   @override

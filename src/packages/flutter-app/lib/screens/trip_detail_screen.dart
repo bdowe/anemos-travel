@@ -479,6 +479,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           _computeTravelTimes(trip),
         syncTodosAfterPrefs(),
       ]);
+      // Trip Health is a SEPARATE fetch (GET /trips/{id}/review) behind a
+      // non-autoDispose provider, so nothing expires it on its own — leaving
+      // the screen and coming back re-reads the same cached answer. Every
+      // mutation on this screen ends here, so this is the one place that can
+      // promise the badge, the sheet and the Next Step card describe the trip
+      // that was just loaded. It used to be the caller's job, and eight of
+      // them didn't do it: adding a stay from the Bookings view left "no
+      // lodging booked" on screen next to the stay you had just added. The
+      // booking-todo sync's own invalidate was no help — it only fired when
+      // the DERIVED todo set changed, and a new accommodation changes no todo
+      // key and no booked flag.
+      if (mounted) _invalidateReview();
     } catch (e) {
       // Loud path: fall back to the cached copy and render it read-only for
       // network-level failures AND transient HTTP failures (429/502/503/504
@@ -599,11 +611,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         // current values on screen — no flash.
         ref.invalidate(budgetProvider(widget.tripId));
         ref.invalidate(expensesProvider(widget.tripId));
-        // Re-read the health review too: chat-driven mutations arrive through
-        // this refresh (trip_updated → onTripUpdated), and the health badge
-        // and Next Step card must advance behind an open panel — not on the
-        // next cold load. Also covers pull-to-refresh.
-        _invalidateReview();
+        // The health review rides along inside _load, which owns that
+        // invalidation for every path — including this one, so the badge and
+        // Next Step card advance behind an open panel rather than on the next
+        // cold load.
         await _load(silent: true);
       } while (mounted && _refreshQueued);
       // AFTER the loop, not inside it: a turn that writes three times in a
@@ -1060,7 +1071,6 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           .read(bookingTodosApiServiceProvider)
           .syncTodos(trip.id, _deriveTodos(trip));
       if (mounted) {
-        final changed = !_sameTodoState(_bookingTodos, todos);
         setState(() {
           _bookingTodos = todos;
           // Re-derive against the server's answer. A row's TAP TARGET comes
@@ -1071,26 +1081,10 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           // discarded here; the registries are the point.
           _deriveTodos(trip);
         });
-        // The server's Next Step "book everything" aggregate reads booking
-        // todos, which lag until this sync lands — re-read the review when
-        // the sync actually changed them (specs/next-step-cta).
-        if (changed) _invalidateReview();
       }
     } catch (_) {
       // Non-fatal: keep whatever booking todos came with the trip.
     }
-  }
-
-  /// Same todo set as far as the review cares: matching (todo_key, booked)
-  /// pairs in order. Anything else re-reads the review.
-  static bool _sameTodoState(List<BookingTodo> a, List<BookingTodo> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i].todoKey != b[i].todoKey || a[i].booked != b[i].booked) {
-        return false;
-      }
-    }
-    return true;
   }
 
   /// The trip's stated non-flight travel mode ('car'|'train'|'bus'|'ferry')
@@ -4902,12 +4896,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     }
   }
 
-  /// Reloads the trip payload and re-reads the health review so a resolved
-  /// finding disappears on the next fetch.
-  Future<void> _afterFix() async {
-    await _load();
-    _invalidateReview();
-  }
+  /// Reloads the trip payload — which re-reads the health review with it — so
+  /// a resolved finding disappears on the next fetch. Kept as a named step
+  /// because nine fix paths read better saying what they just finished than
+  /// saying "load".
+  Future<void> _afterFix() => _load();
 
   /// Invalidates both review variants (hours-off and hours-on) so whichever the
   /// section is showing re-fetches.

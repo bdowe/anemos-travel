@@ -66,6 +66,7 @@ class _FakeReviewApiService extends TripReviewApiService {
 
 class _FakeAccommodationsApiService extends AccommodationsApiService {
   final List<Map<String, dynamic>> patches = [];
+  final List<Map<String, dynamic>> added = [];
   _FakeAccommodationsApiService() : super(ApiClient(baseUrl: 'http://test'));
 
   @override
@@ -73,6 +74,13 @@ class _FakeAccommodationsApiService extends AccommodationsApiService {
       String tripId, String accId, Map<String, dynamic> body) async {
     patches.add({'id': accId, ...body});
     return Accommodation(id: accId, name: 'Stay');
+  }
+
+  @override
+  Future<Accommodation> add(String tripId, Map<String, dynamic> body) async {
+    added.add(body);
+    return Accommodation(
+        id: 'acc-new', name: body['name'] as String? ?? 'Stay');
   }
 }
 
@@ -391,5 +399,49 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('No budget yet'), findsOneWidget);
     expect(find.byTooltip('What to wear & pack'), findsOneWidget);
+  });
+
+  // The health review is a SEPARATE fetch behind a non-autoDispose provider,
+  // so only an explicit invalidation can move it. Adding a stay from the
+  // Bookings view (not from a health fix, which always refreshed) used to skip
+  // that: the badge kept reading "no lodging booked" next to the stay just
+  // added. _load owns the invalidation now, so every mutation that reloads the
+  // trip re-reads the review with it.
+  testWidgets('adding a stay from the Bookings view re-reads the review',
+      (tester) async {
+    final review = _FakeReviewApiService([
+      _finding('lodging', 'No lodging booked for the night of Sat, Aug 1',
+          const FindingFix(action: 'add_lodging', label: 'Add a stay')),
+    ]);
+    final accommodations = _FakeAccommodationsApiService();
+    await _pumpScreen(tester,
+        trip: _trip(),
+        review: review,
+        accommodations: accommodations,
+        openSheet: false);
+
+    await tester.tap(find.text('Bookings'));
+    await tester.pumpAndSettle();
+
+    final callsBefore = review.calls;
+    review.resolved = true; // the stay now covers the night
+
+    await tester.tap(find.text('Add booking'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Stay'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AddStaySheet), findsOneWidget);
+
+    await tester.enterText(
+        find.descendant(
+            of: find.byType(AddStaySheet), matching: find.byType(TextField).first),
+        'Hotel Ibis');
+    await tester.tap(find.widgetWithText(FilledButton, 'Add stay'));
+    await tester.pumpAndSettle();
+
+    expect(accommodations.added, hasLength(1));
+    expect(accommodations.added.single['name'], 'Hotel Ibis');
+    expect(review.calls, greaterThan(callsBefore),
+        reason: 'adding a stay must re-read the health review');
   });
 }
