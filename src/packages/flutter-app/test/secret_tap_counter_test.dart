@@ -26,6 +26,29 @@ void main() {
   int afterPause(int lastTapAt) =>
       lastTapAt + kSecretTapWindow.inMilliseconds + 1;
 
+  test('a human cadence fires — stated in milliseconds, not in the constant',
+      () {
+    // Every other test in this file is expressed in terms of
+    // kSecretTapWindow, so all of them stay green no matter how small it gets.
+    // That is exactly how a 700 ms window shipped and turned out to be
+    // unusable by hand: it was verified only by automation tapping every
+    // 145 ms, and a person tapping about once a second could never trigger it.
+    // This test states the human requirement in absolute time, so shrinking
+    // the window has to fail something.
+    for (final cadence in [500, 1000, 1500, 1800]) {
+      expect(
+        firesAt([for (var i = 0; i < kSecretTapCount; i++) i * cadence]),
+        isNotEmpty,
+        reason: 'a tap every ${cadence}ms must reach the egg',
+      );
+    }
+    // Still not something ordinary navigation can stumble into.
+    expect(
+      firesAt([for (var i = 0; i < kSecretTapCount; i++) i * 3000]),
+      isEmpty,
+    );
+  });
+
   test('the seventh rapid tap fires, and not the sixth', () {
     expect(firesAt(burst(kSecretTapCount)), [(kSecretTapCount - 1) * 100]);
     expect(firesAt(burst(kSecretTapCount - 1)), isEmpty);

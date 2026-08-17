@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/easter_egg_provider.dart';
 import '../utils/konami_detector.dart';
+import '../utils/rick_roll_audio_stub.dart'
+    if (dart.library.js_interop) '../utils/rick_roll_audio_web.dart';
 import 'rick_roll_overlay.dart';
 
 /// Listens for the Konami code everywhere in the app, and hosts the overlay it
@@ -45,6 +47,12 @@ class _KonamiListenerState extends ConsumerState<KonamiListener> {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_onKey);
+    // Mounted from MaterialApp.builder, so this runs once at app start — the
+    // earliest point that still precedes any interaction, which is the whole
+    // requirement. See primeRickRollAudio: the browser will only open an audio
+    // context inside a real gesture, and by the time the egg fires we are a
+    // frame past one.
+    primeRickRollAudio();
   }
 
   @override

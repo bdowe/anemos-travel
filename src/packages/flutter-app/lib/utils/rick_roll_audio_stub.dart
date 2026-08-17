@@ -12,3 +12,6 @@ import 'rick_roll_tune.dart';
 /// See rick_roll_audio_web.dart for the real implementation and
 /// rick_roll_tune.dart for the contract.
 RickRollPlayback playRickRollHook() => const SilentRickRollPlayback();
+
+/// Nothing to unlock without a browser audio policy to unlock it against.
+void primeRickRollAudio() {}
