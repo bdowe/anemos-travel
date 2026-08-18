@@ -29,9 +29,9 @@ class DestinationSuggestionCard extends StatelessWidget {
 
   final VoidCallback onTap;
 
-  /// Set by [DestinationSuggestionCarousel] from the real available width.
-  /// Passed in rather than read from `MediaQuery` because the cards sit inside
-  /// a `PageContainer` with padding, so the window is not the space they get.
+  /// Set by the hosting rail. Passed in rather than read from `MediaQuery`
+  /// because the cards sit inside padded, width-capped columns, so the
+  /// window is not the space they get.
   final double width;
 
   const DestinationSuggestionCard({
@@ -49,9 +49,9 @@ class DestinationSuggestionCard extends StatelessWidget {
   static double _imageHeightFor(double width) =>
       kPlaceCardImageHeight * (width / kPlaceCardWidth);
 
-  /// How tall a card of [width] renders. Public because the carousel has to
-  /// reserve the page height before the card exists — one derivation, so the
-  /// two cannot disagree and leave the card clipped or the page padded.
+  /// How tall a card of [width] renders. Public because the rails have to
+  /// reserve their row height before the cards exist — one derivation, so the
+  /// two cannot disagree and leave the card clipped or the row padded.
   ///
   /// [textScaler] scales the text band only (the two reserved lines of
   /// titleSmall; the photo keeps its aspect regardless) — pass the ambient
@@ -121,7 +121,7 @@ class DestinationSuggestionCard extends StatelessWidget {
                     ),
                     // Centred, not top-aligned: the text block reserves two
                     // lines so a long prompt or a longer locale never clips,
-                    // and on a carousel-width card most prompts take one —
+                    // and on a rail-width card most prompts take one —
                     // top-aligning left the title hanging over dead space.
                     child: Align(
                       alignment: Alignment.centerLeft,

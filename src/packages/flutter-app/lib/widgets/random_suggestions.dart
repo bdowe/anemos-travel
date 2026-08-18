@@ -26,8 +26,8 @@ class RandomSuggestions extends ConsumerStatefulWidget {
       BuildContext context, List<ResolvedSuggestion> prompts) builder;
 
   /// Which draw to make: [suggestionPickerProvider] for the home hero's
-  /// [kSuggestionCount] chips, [suggestionOrderProvider] for the agent
-  /// carousel's whole shuffled pool. Required, not defaulted: a surface's
+  /// [kSuggestionCount] chips, [suggestionOrderProvider] for the destination
+  /// rails' whole shuffled pool. Required, not defaulted: a surface's
   /// count is something it states, never something it inherits.
   final Provider<List<int> Function()> picker;
 

@@ -82,8 +82,9 @@ final suggestionPickerProvider = Provider<List<int> Function()>((ref) {
   return () => pickSuggestionIndices(random);
 });
 
-/// EVERY pool index, in random order — the agent empty state's carousel
-/// cycles the whole pool rather than a sample of it.
+/// EVERY pool index, in random order — the destination rails (the agent
+/// empty state's and the landing page's) carry the whole pool rather than
+/// a sample of it.
 ///
 /// A sibling of [suggestionPickerProvider] rather than a parameter on it: the
 /// home hero still shows [kSuggestionCount] chips it can fit, and the two
