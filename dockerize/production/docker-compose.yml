@@ -43,7 +43,7 @@ services:
       - travel-planner-network
 
   api:
-    image: ghcr.io/bdowe/goldentempo-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/golden-tempo/goldentempo-api:${IMAGE_TAG:-latest}
     expose:
       - "8080"
     # All runtime config reaches the api via env_file passthrough from .env:
@@ -90,7 +90,7 @@ services:
       - travel-planner-network
 
   gateway:
-    image: ghcr.io/bdowe/goldentempo-gateway:${IMAGE_TAG:-latest}
+    image: ghcr.io/golden-tempo/goldentempo-gateway:${IMAGE_TAG:-latest}
     # No ports: on purpose — the only way in is the cloudflared service on
     # the private compose network. Publishing 80/443 here would bypass the
     # tunnel AND the real-IP trust model in nginx/cloudflare-realip.conf.
