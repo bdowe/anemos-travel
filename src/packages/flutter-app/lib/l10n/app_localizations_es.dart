@@ -447,11 +447,17 @@ class AppLocalizationsEs extends AppLocalizations {
   String get landingSignIn => 'Iniciar sesión';
 
   @override
-  String get landingHeroTagline => 'Planifica menos. Viaja más.';
+  String get landingHeroHeadline => '¿Cuál es tu próximo destino?';
 
   @override
   String get landingHeroSubtitle =>
       'Tu compañero de viaje con IA: describe el viaje que quieres y recibe un itinerario completo, día a día, con rutas, lugares y vuelos.';
+
+  @override
+  String get landingPromptHint => 'Describe tu viaje…';
+
+  @override
+  String get landingPromptSubmit => 'Empezar a planificar';
 
   @override
   String get landingHaveAccount => 'Ya tengo una cuenta';
@@ -464,11 +470,80 @@ class AppLocalizationsEs extends AppLocalizations {
       'Todo lo que necesitas para planificar el viaje';
 
   @override
-  String get landingFeatureAgentTitle => 'Agente de viajes con IA';
+  String get landingFeatureChatTitle => 'Chat de itinerarios con IA';
 
   @override
-  String get landingFeatureAgentDescription =>
-      'Describe el viaje de tus sueños y recibe un itinerario completo en segundos.';
+  String get landingFeatureChatDescription =>
+      'Describe el viaje que quieres y recibe un plan día a día que puedes afinar conversando.';
+
+  @override
+  String get landingFeatureFlightsTitle => 'Búsqueda de vuelos en vivo';
+
+  @override
+  String get landingFeatureFlightsDescription =>
+      'Tarifas reales ordenadas por precio, duración o equilibrio, con tu equipaje incluido en el precio.';
+
+  @override
+  String get landingFeatureStaysTitle => 'Hoteles con precios reales';
+
+  @override
+  String get landingFeatureStaysDescription =>
+      'Precios por noche para tus fechas, de hoteles a alquileres vacacionales.';
+
+  @override
+  String get landingFeatureEventsTitle => 'Qué pasa cuando estés allí';
+
+  @override
+  String get landingFeatureEventsDescription =>
+      'Conciertos, partidos y eventos locales, consultados en vivo para tus fechas de viaje.';
+
+  @override
+  String get landingFeatureBudgetTitle => 'Un presupuesto que te sigue';
+
+  @override
+  String get landingFeatureBudgetDescription =>
+      'Planificado frente a pagado, estimaciones diarias de comida y todas tus reservas en un solo lugar.';
+
+  @override
+  String get landingFeatureMapTitle => 'Mapas y rutas inteligentes';
+
+  @override
+  String get landingFeatureMapDescription =>
+      'Cada parada en el mapa, con rutas diarias optimizadas para caminar menos y ver más.';
+
+  @override
+  String get landingDestinationsTitle => '¿Buscas inspiración?';
+
+  @override
+  String get landingDestinationsSubtitle =>
+      'Toca un destino para empezar a planificarlo.';
+
+  @override
+  String get landingHowTitle => 'Cómo funciona';
+
+  @override
+  String get landingHowStep1Title => 'Describe tu viaje';
+
+  @override
+  String get landingHowStep1Body =>
+      'Dile a Anemos dónde, cuándo y qué te gusta, con tus propias palabras.';
+
+  @override
+  String get landingHowStep2Title => 'Recibe un plan de verdad';
+
+  @override
+  String get landingHowStep2Body =>
+      'Un itinerario día a día con vuelos, alojamientos y lugares, creado en segundos.';
+
+  @override
+  String get landingHowStep3Title => 'Afínalo y viaja';
+
+  @override
+  String get landingHowStep3Body =>
+      'Ajusta lo que quieras en el chat, controla tu presupuesto y reserva cuando estés listo.';
+
+  @override
+  String get landingCtaTitle => 'Tu próximo viaje empieza con una frase.';
 
   @override
   String get landingCopyright => '© 2026 Golden Tempo LLC';

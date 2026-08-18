@@ -932,17 +932,29 @@ abstract class AppLocalizations {
   /// **'Sign in'**
   String get landingSignIn;
 
-  /// No description provided for @landingHeroTagline.
+  /// No description provided for @landingHeroHeadline.
   ///
   /// In en, this message translates to:
-  /// **'Plan less. Travel more.'**
-  String get landingHeroTagline;
+  /// **'Where to next?'**
+  String get landingHeroHeadline;
 
   /// No description provided for @landingHeroSubtitle.
   ///
   /// In en, this message translates to:
   /// **'Your AI travel companion — describe the trip you want and get a full day-by-day itinerary with routes, places, and flights.'**
   String get landingHeroSubtitle;
+
+  /// No description provided for @landingPromptHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe your trip…'**
+  String get landingPromptHint;
+
+  /// No description provided for @landingPromptSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Start planning'**
+  String get landingPromptSubmit;
 
   /// No description provided for @landingHaveAccount.
   ///
@@ -962,17 +974,137 @@ abstract class AppLocalizations {
   /// **'Everything you need to plan the trip'**
   String get landingFeaturesTitle;
 
-  /// No description provided for @landingFeatureAgentTitle.
+  /// No description provided for @landingFeatureChatTitle.
   ///
   /// In en, this message translates to:
-  /// **'AI Travel Agent'**
-  String get landingFeatureAgentTitle;
+  /// **'AI itinerary chat'**
+  String get landingFeatureChatTitle;
 
-  /// No description provided for @landingFeatureAgentDescription.
+  /// No description provided for @landingFeatureChatDescription.
   ///
   /// In en, this message translates to:
-  /// **'Describe your dream trip and get a complete itinerary in seconds.'**
-  String get landingFeatureAgentDescription;
+  /// **'Describe the trip you want and get a day-by-day plan you can refine in conversation.'**
+  String get landingFeatureChatDescription;
+
+  /// No description provided for @landingFeatureFlightsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Live flight search'**
+  String get landingFeatureFlightsTitle;
+
+  /// No description provided for @landingFeatureFlightsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Real fares ranked by cost, time, or balance — with your baggage counted in the price.'**
+  String get landingFeatureFlightsDescription;
+
+  /// No description provided for @landingFeatureStaysTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hotels with real rates'**
+  String get landingFeatureStaysTitle;
+
+  /// No description provided for @landingFeatureStaysDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Nightly prices for your dates, from hotels to vacation rentals.'**
+  String get landingFeatureStaysDescription;
+
+  /// No description provided for @landingFeatureEventsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s on when you\'re there'**
+  String get landingFeatureEventsTitle;
+
+  /// No description provided for @landingFeatureEventsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Concerts, games, and local events, looked up live for your travel dates.'**
+  String get landingFeatureEventsDescription;
+
+  /// No description provided for @landingFeatureBudgetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Budget that keeps up'**
+  String get landingFeatureBudgetTitle;
+
+  /// No description provided for @landingFeatureBudgetDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned vs. paid, daily food estimates, and every booking in one place.'**
+  String get landingFeatureBudgetDescription;
+
+  /// No description provided for @landingFeatureMapTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Maps & smart routes'**
+  String get landingFeatureMapTitle;
+
+  /// No description provided for @landingFeatureMapDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Every stop pinned, with day-by-day routes optimized so you walk less and see more.'**
+  String get landingFeatureMapDescription;
+
+  /// No description provided for @landingDestinationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Need inspiration?'**
+  String get landingDestinationsTitle;
+
+  /// No description provided for @landingDestinationsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a destination to start planning it.'**
+  String get landingDestinationsSubtitle;
+
+  /// No description provided for @landingHowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How it works'**
+  String get landingHowTitle;
+
+  /// No description provided for @landingHowStep1Title.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe your trip'**
+  String get landingHowStep1Title;
+
+  /// No description provided for @landingHowStep1Body.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell Anemos where, when, and what you love — in your own words.'**
+  String get landingHowStep1Body;
+
+  /// No description provided for @landingHowStep2Title.
+  ///
+  /// In en, this message translates to:
+  /// **'Get a real plan'**
+  String get landingHowStep2Title;
+
+  /// No description provided for @landingHowStep2Body.
+  ///
+  /// In en, this message translates to:
+  /// **'A day-by-day itinerary with flights, stays, and places — built in seconds.'**
+  String get landingHowStep2Body;
+
+  /// No description provided for @landingHowStep3Title.
+  ///
+  /// In en, this message translates to:
+  /// **'Refine and go'**
+  String get landingHowStep3Title;
+
+  /// No description provided for @landingHowStep3Body.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust anything in chat, track your budget, and book when you\'re ready.'**
+  String get landingHowStep3Body;
+
+  /// No description provided for @landingCtaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your next trip starts with a sentence.'**
+  String get landingCtaTitle;
 
   /// No description provided for @landingCopyright.
   ///

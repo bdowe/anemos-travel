@@ -443,11 +443,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get landingSignIn => 'Sign in';
 
   @override
-  String get landingHeroTagline => 'Plan less. Travel more.';
+  String get landingHeroHeadline => 'Where to next?';
 
   @override
   String get landingHeroSubtitle =>
       'Your AI travel companion — describe the trip you want and get a full day-by-day itinerary with routes, places, and flights.';
+
+  @override
+  String get landingPromptHint => 'Describe your trip…';
+
+  @override
+  String get landingPromptSubmit => 'Start planning';
 
   @override
   String get landingHaveAccount => 'I already have an account';
@@ -459,11 +465,80 @@ class AppLocalizationsEn extends AppLocalizations {
   String get landingFeaturesTitle => 'Everything you need to plan the trip';
 
   @override
-  String get landingFeatureAgentTitle => 'AI Travel Agent';
+  String get landingFeatureChatTitle => 'AI itinerary chat';
 
   @override
-  String get landingFeatureAgentDescription =>
-      'Describe your dream trip and get a complete itinerary in seconds.';
+  String get landingFeatureChatDescription =>
+      'Describe the trip you want and get a day-by-day plan you can refine in conversation.';
+
+  @override
+  String get landingFeatureFlightsTitle => 'Live flight search';
+
+  @override
+  String get landingFeatureFlightsDescription =>
+      'Real fares ranked by cost, time, or balance — with your baggage counted in the price.';
+
+  @override
+  String get landingFeatureStaysTitle => 'Hotels with real rates';
+
+  @override
+  String get landingFeatureStaysDescription =>
+      'Nightly prices for your dates, from hotels to vacation rentals.';
+
+  @override
+  String get landingFeatureEventsTitle => 'What\'s on when you\'re there';
+
+  @override
+  String get landingFeatureEventsDescription =>
+      'Concerts, games, and local events, looked up live for your travel dates.';
+
+  @override
+  String get landingFeatureBudgetTitle => 'Budget that keeps up';
+
+  @override
+  String get landingFeatureBudgetDescription =>
+      'Planned vs. paid, daily food estimates, and every booking in one place.';
+
+  @override
+  String get landingFeatureMapTitle => 'Maps & smart routes';
+
+  @override
+  String get landingFeatureMapDescription =>
+      'Every stop pinned, with day-by-day routes optimized so you walk less and see more.';
+
+  @override
+  String get landingDestinationsTitle => 'Need inspiration?';
+
+  @override
+  String get landingDestinationsSubtitle =>
+      'Tap a destination to start planning it.';
+
+  @override
+  String get landingHowTitle => 'How it works';
+
+  @override
+  String get landingHowStep1Title => 'Describe your trip';
+
+  @override
+  String get landingHowStep1Body =>
+      'Tell Anemos where, when, and what you love — in your own words.';
+
+  @override
+  String get landingHowStep2Title => 'Get a real plan';
+
+  @override
+  String get landingHowStep2Body =>
+      'A day-by-day itinerary with flights, stays, and places — built in seconds.';
+
+  @override
+  String get landingHowStep3Title => 'Refine and go';
+
+  @override
+  String get landingHowStep3Body =>
+      'Adjust anything in chat, track your budget, and book when you\'re ready.';
+
+  @override
+  String get landingCtaTitle => 'Your next trip starts with a sentence.';
 
   @override
   String get landingCopyright => '© 2026 Golden Tempo LLC';

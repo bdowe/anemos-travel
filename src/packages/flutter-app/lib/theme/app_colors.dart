@@ -30,6 +30,27 @@ abstract final class AppColors {
         ],
       );
 
+  // Landing dark-canvas family (specs/landing-redesign). The signed-out
+  // landing page commits to the dark brand look regardless of theme mode, so
+  // its surfaces are named here rather than borrowed from the dark scheme —
+  // the dark cardTheme's neutral grey fights the teal canvas.
+  /// Deep teal page field behind every landing section.
+  static final Color landingCanvas = Color.lerp(brandDark, Colors.black, 0.55)!;
+
+  /// Glass card fill on [landingCanvas] (feature grid, prompt field).
+  static final Color landingCard = Colors.white.withValues(alpha: 0.06);
+
+  /// Hairline borders on [landingCanvas].
+  static final Color landingHairline = Colors.white.withValues(alpha: 0.14);
+
+  /// Bottom band of the landing hero: dissolves the photo into
+  /// [landingCanvas] instead of ending on a hard edge.
+  static LinearGradient get landingHeroBlend => LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [landingCanvas.withValues(alpha: 0), landingCanvas],
+      );
+
   /// Translucent dark scrim behind text and controls overlaid on satellite
   /// imagery — the map day chips, TripMap's segment labels, and the map
   /// control buttons all share this one value so the over-map family can't
