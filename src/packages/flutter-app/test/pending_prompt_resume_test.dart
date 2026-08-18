@@ -191,6 +191,55 @@ void main() {
     expect(analytics.consumed, isEmpty);
   });
 
+  testWidgets('a pending connector consent defers the consume; the prompt '
+      'survives for the next sign-in', (tester) async {
+    await const PendingPromptStore().save('A week in Rome');
+    // An active connect flow ends in a full-page redirect — consuming now
+    // would strand the prompt in the dying page's memory.
+    final freshConnect =
+        DateTime.now().toUtc().millisecondsSinceEpoch;
+    SharedPreferences.setMockInitialValues({
+      'pending_prompt.text': 'A week in Rome',
+      'pending_prompt.saved_at': freshConnect,
+      'pending_connect.request_token': 'gt_rq_live',
+      'pending_connect.saved_at': freshConnect,
+    });
+    PendingPromptStore.resetMemoryForTest();
+    final (container, auth, analytics) = await pumpHost(tester);
+
+    auth.signIn(fakeUser());
+    await tester.pumpAndSettle();
+
+    expect(draftText(container), isEmpty);
+    expect(analytics.consumed, isEmpty);
+    // The prompt is still stored for the sign-in after the connect flow.
+    expect((await const PendingPromptStore().take())?.text, 'A week in Rome');
+  });
+
+  testWidgets('a boot target consumed in a PREVIOUS sign-in cycle does not '
+      'suppress the Plan-tab preselect after sign-out', (tester) async {
+    final (container, auth, _) = await pumpHost(tester);
+    container
+        .read(urlSyncProvider)
+        .registerBootTarget(const BootTarget(AppTab.trips, tripId: 't1'));
+
+    // Cycle 1: deep-linked sign-in consumes the boot target.
+    auth.signIn(fakeUser());
+    await tester.pumpAndSettle();
+    expect(container.read(navIndexProvider), AppTab.trips.index);
+
+    // Cycle 2: sign out, a fresh landing prompt, sign back in — the old
+    // deep link must not steal this cycle's tab.
+    auth.signOut();
+    await tester.pumpAndSettle();
+    await const PendingPromptStore().save('A week in Rome');
+    auth.signIn(fakeUser());
+    await tester.pumpAndSettle();
+
+    expect(draftText(container), 'A week in Rome');
+    expect(container.read(navIndexProvider), AppTab.plan.index);
+  });
+
   testWidgets('sign-out then a new submit consumes again in the same run',
       (tester) async {
     await const PendingPromptStore().save('first trip');

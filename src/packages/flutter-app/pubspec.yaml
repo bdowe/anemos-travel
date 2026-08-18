@@ -30,6 +30,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Grapheme-cluster truncation in PendingPromptStore (already pinned by
+  # Flutter itself; direct dependency so the import is honest).
+  characters: ^1.0.0
   # Path-style web URLs (usePathUrlStrategy in main.dart).
   flutter_web_plugins:
     sdk: flutter

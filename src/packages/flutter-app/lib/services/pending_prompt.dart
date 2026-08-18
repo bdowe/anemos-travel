@@ -1,3 +1,4 @@
+import 'package:characters/characters.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -67,8 +68,10 @@ class PendingPromptStore {
   Future<void> save(String text, {String? sourceId}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
-    final capped = trimmed.length > maxPromptLength
-        ? trimmed.substring(0, maxPromptLength)
+    // Grapheme clusters, not code units: the hero field's maxLength counts
+    // characters, and a substring cap could split a surrogate pair.
+    final capped = trimmed.characters.length > maxPromptLength
+        ? trimmed.characters.take(maxPromptLength).toString()
         : trimmed;
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
     _memory = PendingPrompt(text: capped, sourceId: sourceId, savedAtMs: now);
