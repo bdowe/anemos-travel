@@ -6,11 +6,11 @@ import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
 import '../providers/theme_mode_provider.dart';
 import '../services/account_api_service.dart';
+import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/legal_links.dart';
 import '../widgets/page_container.dart';
-import '../widgets/section_header.dart';
 import '../utils/errors.dart';
 import '../utils/trip_format.dart';
 import '../utils/snack.dart';
@@ -19,8 +19,27 @@ final accountApiServiceProvider = Provider<AccountApiService>((ref) {
   return AccountApiService(ref.watch(apiClientProvider));
 });
 
+/// Below this content width a row's control drops under its label instead of
+/// sharing the line — the widest control either language ships (the Spanish
+/// "Cerrar sesión en todas partes" button) plus a readable label column no
+/// longer fit side by side.
+const double _kRowBreakpoint = 440;
+
+/// Width of the compact dropdown controls (appearance / language). Wide
+/// enough for every English label; longer Spanish labels ellipsize closed and
+/// spell out in the open menu, which grows per item.
+const double _kPickerWidth = 240;
+
+/// Content width for the name/password editor dialogs — roomier than the
+/// AlertDialog minimum so their floating field labels render whole at rest.
+const double _kDialogFieldWidth = 360;
+
 /// Account self-service: display name, password change, sign-out-everywhere,
 /// account deletion (user-accounts spec follow-ups).
+///
+/// The page is a scannable index in grouped cards — label + description on
+/// the left, the control on the right — rather than a form waterfall; name
+/// and password edits open focused dialogs.
 class AccountSettingsScreen extends ConsumerStatefulWidget {
   const AccountSettingsScreen({super.key});
 
@@ -30,26 +49,7 @@ class AccountSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
-  late final TextEditingController _nameController;
-  final _currentPwController = TextEditingController();
-  final _newPwController = TextEditingController();
   bool _busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(
-      text: ref.read(authProvider).user?.displayName ?? '',
-    );
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _currentPwController.dispose();
-    _newPwController.dispose();
-    super.dispose();
-  }
 
   void _snack(String msg) {
     if (mounted) showSnack(context, msg);
@@ -68,10 +68,15 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     }
   }
 
-  Future<void> _saveName() {
+  Future<void> _editName() async {
+    final current = ref.read(authProvider).user?.displayName ?? '';
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => _EditNameDialog(initial: current),
+    );
+    if (name == null || !mounted) return;
     final l10n = context.l10n;
-    return _run(() async {
-      final name = _nameController.text.trim();
+    await _run(() async {
       final user =
           await ref.read(accountApiServiceProvider).updateDisplayName(name);
       ref.read(authProvider.notifier).setUser(user);
@@ -79,16 +84,18 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     });
   }
 
-  Future<void> _changePassword() {
+  Future<void> _changePassword() async {
+    final entered = await showDialog<(String, String)>(
+      context: context,
+      builder: (context) => const _ChangePasswordDialog(),
+    );
+    if (entered == null || !mounted) return;
     final l10n = context.l10n;
-    return _run(() async {
-      final res = await ref.read(accountApiServiceProvider).changePassword(
-            _currentPwController.text,
-            _newPwController.text,
-          );
+    await _run(() async {
+      final res = await ref
+          .read(accountApiServiceProvider)
+          .changePassword(entered.$1, entered.$2);
       await ref.read(authProvider.notifier).adoptSession(res.token, res.user);
-      _currentPwController.clear();
-      _newPwController.clear();
       _snack(l10n.settingsPasswordChanged);
     });
   }
@@ -167,6 +174,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final user = ref.watch(authProvider).user;
+    final displayName = user?.displayName.trim() ?? '';
 
     return Scaffold(
       appBar: GradientAppBar(title: l10n.settingsTitle),
@@ -189,157 +197,131 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SectionHeader(title: l10n.settingsProfileSection),
-                      const SizedBox(height: AppSpacing.md),
-                      if (user != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                          child: Text(user.email,
-                              style: theme.textTheme.bodyMedium),
+                      if (user != null) ...[
+                        _IdentityHeader(
+                          displayName: displayName,
+                          email: user.email,
                         ),
-                      TextField(
-                        controller: _nameController,
-                        decoration: InputDecoration(
-                          labelText: l10n.settingsDisplayName,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton(
-                          onPressed: _busy ? null : _saveName,
-                          child: Text(l10n.settingsSaveName),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      SectionHeader(title: l10n.settingsPasswordSection),
-                      const SizedBox(height: AppSpacing.md),
-                      AutofillGroup(
-                        child: Column(
-                          children: [
-                            TextField(
-                              controller: _currentPwController,
-                              obscureText: true,
-                              autofillHints: const [AutofillHints.password],
-                              decoration: InputDecoration(
-                                labelText: l10n.settingsCurrentPassword,
-                                border: const OutlineInputBorder(),
-                              ),
+                        const SizedBox(height: AppSpacing.xl),
+                      ],
+                      _SettingsCard(
+                        title: l10n.settingsAccountSection,
+                        children: [
+                          _SettingsRow(
+                            label: l10n.settingsDisplayName,
+                            subtitle: displayName.isEmpty ? null : displayName,
+                            control: TextButton(
+                              onPressed: _busy ? null : _editName,
+                              child: Text(l10n.settingsEditAction),
                             ),
-                            const SizedBox(height: AppSpacing.md),
-                            TextField(
-                              controller: _newPwController,
-                              obscureText: true,
-                              autofillHints: const [AutofillHints.newPassword],
-                              decoration: InputDecoration(
-                                labelText: l10n.settingsNewPassword,
-                                border: const OutlineInputBorder(),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton(
-                          onPressed: _busy ? null : _changePassword,
-                          child: Text(l10n.settingsChangePassword),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      SectionHeader(title: l10n.settingsSessionsSection),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        l10n.settingsSessionsHelp,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.logout),
-                          label: Text(l10n.settingsSignOutEverywhere),
-                          onPressed: _busy ? null : _logoutAll,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      SectionHeader(title: l10n.settingsConnectedAppsSection),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        l10n.settingsConnectedAppsHelp,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      const _ConnectedAppsList(),
-                      const SizedBox(height: AppSpacing.xl),
-                      // Both are device-presentation choices, and each is a
-                      // one-line dropdown, so they share a section rather
-                      // than costing two headers.
-                      SectionHeader(title: l10n.appearanceLanguageSectionTitle),
-                      const SizedBox(height: AppSpacing.md),
-                      const _AppearancePicker(),
-                      const SizedBox(height: AppSpacing.md),
-                      const _LanguagePicker(),
-                      const SizedBox(height: AppSpacing.xl),
-                      SectionHeader(title: l10n.settingsEmailPrefsSection),
-                      const SizedBox(height: AppSpacing.sm),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(l10n.settingsTripReminders),
-                        subtitle: Text(l10n.settingsTripRemindersSubtitle),
-                        value: user?.remindersEnabled ?? true,
-                        onChanged: _busy ? null : (v) => _setReminders(v),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(l10n.settingsWeeklyIdeas),
-                        subtitle: Text(l10n.settingsWeeklyIdeasSubtitle),
-                        value: user?.nudgesEnabled ?? true,
-                        onChanged: _busy ? null : (v) => _setNudges(v),
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      SectionHeader(title: l10n.settingsLegalSection),
-                      const SizedBox(height: AppSpacing.sm),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Wrap(
-                          spacing: AppSpacing.sm,
-                          children: [
-                            TextButton.icon(
-                              icon: const Icon(Icons.open_in_new, size: 18),
-                              label: Text(l10n.settingsPrivacyPolicy),
-                              onPressed: openPrivacyPolicy,
-                            ),
-                            TextButton.icon(
-                              icon: const Icon(Icons.open_in_new, size: 18),
-                              label: Text(l10n.settingsTermsOfService),
-                              onPressed: openTermsOfService,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      SectionHeader(title: l10n.settingsDangerZoneSection),
-                      const SizedBox(height: AppSpacing.sm),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: OutlinedButton.icon(
-                          icon: Icon(Icons.delete_forever,
-                              color: theme.colorScheme.error),
-                          label: Text(
-                            l10n.settingsDeleteAccount,
-                            style: theme.textTheme.labelLarge
-                                ?.copyWith(color: theme.colorScheme.error),
                           ),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: theme.colorScheme.error),
+                          const _RowDivider(),
+                          _SettingsRow(
+                            label: l10n.settingsPasswordSection,
+                            control: OutlinedButton(
+                              onPressed: _busy ? null : _changePassword,
+                              child: Text(l10n.settingsChangePassword),
+                            ),
                           ),
-                          onPressed: _busy ? null : _deleteAccount,
-                        ),
+                          const _RowDivider(),
+                          _SettingsRow(
+                            label: l10n.settingsSessionsSection,
+                            subtitle: l10n.settingsSessionsHelp,
+                            control: OutlinedButton.icon(
+                              icon: const Icon(Icons.logout, size: 18),
+                              label: Text(l10n.settingsSignOutEverywhere),
+                              onPressed: _busy ? null : _logoutAll,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      _SettingsCard(
+                        title: l10n.settingsConnectedAppsSection,
+                        description: l10n.settingsConnectedAppsHelp,
+                        children: const [_ConnectedAppsList()],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      _SettingsCard(
+                        title: l10n.appearanceLanguageSectionTitle,
+                        children: [
+                          _SettingsRow(
+                            label: l10n.appearanceSectionTitle,
+                            control: const SizedBox(
+                              width: _kPickerWidth,
+                              child: _AppearancePicker(),
+                            ),
+                          ),
+                          const _RowDivider(),
+                          // Saved trips and AI notes keep the language they
+                          // were written in; say so here rather than letting
+                          // it look like a bug.
+                          _SettingsRow(
+                            label: l10n.languageSectionTitle,
+                            subtitle: l10n.languageChangeNote,
+                            control: const SizedBox(
+                              width: _kPickerWidth,
+                              child: _LanguagePicker(),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      _SettingsCard(
+                        title: l10n.settingsEmailPrefsSection,
+                        children: [
+                          _SwitchRow(
+                            title: l10n.settingsTripReminders,
+                            subtitle: l10n.settingsTripRemindersSubtitle,
+                            value: user?.remindersEnabled ?? true,
+                            onChanged: _busy ? null : (v) => _setReminders(v),
+                          ),
+                          const _RowDivider(),
+                          _SwitchRow(
+                            title: l10n.settingsWeeklyIdeas,
+                            subtitle: l10n.settingsWeeklyIdeasSubtitle,
+                            value: user?.nudgesEnabled ?? true,
+                            onChanged: _busy ? null : (v) => _setNudges(v),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      _SettingsCard(
+                        title: l10n.settingsLegalSection,
+                        children: [
+                          _LinkRow(
+                            label: l10n.settingsPrivacyPolicy,
+                            onTap: openPrivacyPolicy,
+                          ),
+                          const _RowDivider(),
+                          _LinkRow(
+                            label: l10n.settingsTermsOfService,
+                            onTap: openTermsOfService,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      _SettingsCard(
+                        title: l10n.settingsDangerZoneSection,
+                        children: [
+                          _SettingsRow(
+                            subtitle: l10n.settingsDeleteAccountHelp,
+                            control: OutlinedButton.icon(
+                              icon: Icon(Icons.delete_forever,
+                                  size: 18, color: theme.colorScheme.error),
+                              label: Text(
+                                l10n.settingsDeleteAccount,
+                                style: theme.textTheme.labelLarge
+                                    ?.copyWith(color: theme.colorScheme.error),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side:
+                                    BorderSide(color: theme.colorScheme.error),
+                              ),
+                              onPressed: _busy ? null : _deleteAccount,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: AppSpacing.xxl),
                     ],
@@ -350,6 +332,406 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Who is signed in — the page opens with identity rather than a form. The
+/// avatar speaks the account menu's language (brand circle, white initial);
+/// the name is the page's one serif moment.
+class _IdentityHeader extends StatelessWidget {
+  final String displayName;
+  final String email;
+
+  const _IdentityHeader({required this.displayName, required this.email});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // A nameless account leads with its email instead of an empty line.
+    final title = displayName.isEmpty ? email : displayName;
+    final initial = displayName.isEmpty ? '?' : displayName[0].toUpperCase();
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 28,
+          backgroundColor: AppColors.brand,
+          child: Text(
+            initial,
+            style: theme.textTheme.titleLarge
+                ?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.lg),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.headlineSmall,
+              ),
+              if (displayName.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A settings group: quiet in-card title (+ optional description) over tight
+/// rows. Flat on purpose — hairline and tonal step instead of elevation, so a
+/// page of seven groups doesn't become a stack of seven shadows.
+class _SettingsCard extends StatelessWidget {
+  final String title;
+  final String? description;
+  final List<Widget> children;
+
+  const _SettingsCard({
+    required this.title,
+    this.description,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Text(title, style: theme.textTheme.titleMedium),
+          ),
+          if (description != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              description!,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.xs),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+/// Hairline between rows inside a [_SettingsCard].
+class _RowDivider extends StatelessWidget {
+  const _RowDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      thickness: 1,
+      color: Theme.of(context).colorScheme.outlineVariant,
+    );
+  }
+}
+
+/// One settings row: label + optional description on the left, the control on
+/// the right. Below [_kRowBreakpoint] of available width the control drops
+/// under the text block instead of squeezing it.
+class _SettingsRow extends StatelessWidget {
+  final String? label;
+  final String? subtitle;
+  final Widget control;
+
+  const _SettingsRow({this.label, this.subtitle, required this.control});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (label != null)
+          Text(
+            label!,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w500),
+          ),
+        if (subtitle != null) ...[
+          if (label != null) const SizedBox(height: AppSpacing.xs),
+          Text(
+            subtitle!,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ],
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < _kRowBreakpoint) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                textBlock,
+                const SizedBox(height: AppSpacing.sm),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: control,
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: textBlock),
+              const SizedBox(width: AppSpacing.lg),
+              control,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Switch row on the shared settings-row register. SwitchListTile keeps the
+/// whole-row tap target and toggle semantics; only the type register is ours.
+class _SwitchRow extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  const _SwitchRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(
+        title,
+        style:
+            theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTheme.bodySmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+      value: value,
+      onChanged: onChanged,
+    );
+  }
+}
+
+/// Full-row external link (legal pages): the whole row is the tap target and
+/// the trailing icon says it leaves the app.
+class _LinkRow extends StatelessWidget {
+  final String label;
+  final Future<void> Function() onTap;
+
+  const _LinkRow({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: kMinTouchTarget),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w500),
+              ),
+            ),
+            Icon(Icons.open_in_new,
+                size: 18, color: theme.colorScheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Focused editor for the display name. Pops the trimmed name on save, null
+/// on cancel; the controller's lifecycle follows the route (disposed after
+/// the exit animation), same as [_DeleteAccountDialog].
+class _EditNameDialog extends StatefulWidget {
+  final String initial;
+
+  const _EditNameDialog({required this.initial});
+
+  @override
+  State<_EditNameDialog> createState() => _EditNameDialogState();
+}
+
+class _EditNameDialogState extends State<_EditNameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initial);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return AlertDialog(
+      title: Text(l10n.settingsEditNameTitle),
+      // Wider than the AlertDialog minimum so the field's floating label
+      // renders whole at rest (the dialog otherwise hugs its two buttons).
+      content: SizedBox(
+        width: _kDialogFieldWidth,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: l10n.settingsDisplayName,
+            border: const OutlineInputBorder(),
+          ),
+          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.commonCancel),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: Text(l10n.settingsSaveName),
+        ),
+      ],
+    );
+  }
+}
+
+/// Focused editor for a password change. Pops (current, new) on submit, null
+/// on cancel; confirm stays disabled until both fields have content so the
+/// server round-trip can't start half-filled.
+class _ChangePasswordDialog extends StatefulWidget {
+  const _ChangePasswordDialog();
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _currentController = TextEditingController();
+  final _newController = TextEditingController();
+
+  @override
+  void dispose() {
+    _currentController.dispose();
+    _newController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_currentController.text.isEmpty || _newController.text.isEmpty) return;
+    Navigator.of(context).pop((_currentController.text, _newController.text));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return AlertDialog(
+      // Two focusable fields: let the dialog scroll when the keyboard
+      // shrinks it on small phones.
+      scrollable: true,
+      title: Text(l10n.settingsPasswordSection),
+      // Wider than the AlertDialog minimum so the long password labels
+      // ("New password (8+ characters)" and its Spanish sibling) render
+      // whole at rest instead of ellipsizing.
+      content: SizedBox(
+        width: _kDialogFieldWidth,
+        child: AutofillGroup(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _currentController,
+                obscureText: true,
+                autofocus: true,
+                autofillHints: const [AutofillHints.password],
+                decoration: InputDecoration(
+                  labelText: l10n.settingsCurrentPassword,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _newController,
+                obscureText: true,
+                autofillHints: const [AutofillHints.newPassword],
+                decoration: InputDecoration(
+                  labelText: l10n.settingsNewPassword,
+                  border: const OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => _submit(),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.commonCancel),
+        ),
+        ListenableBuilder(
+          listenable: Listenable.merge([_currentController, _newController]),
+          builder: (context, _) => FilledButton(
+            onPressed:
+                _currentController.text.isEmpty || _newController.text.isEmpty
+                    ? null
+                    : _submit,
+            child: Text(l10n.settingsChangePassword),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -454,7 +836,7 @@ class _AppearancePicker extends ConsumerWidget {
       // the touch target survives) — headroom for the long translations,
       // e.g. Spanish's "Usar la configuración del dispositivo".
       itemHeight: null,
-      decoration: InputDecoration(labelText: l10n.appearanceSectionTitle),
+      // The row's own label names the setting, so the field carries none.
       // The closed field ellipsizes to one line so a long label can never
       // grow the row; the open menu still spells each option out in full.
       selectedItemBuilder: (context) => [
@@ -490,48 +872,33 @@ class _LanguagePicker extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final theme = Theme.of(context);
     final state = ref.watch(localeProvider);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        DropdownButtonFormField<String>(
-          initialValue: state.language,
-          isExpanded: true,
-          itemHeight: null,
-          decoration: InputDecoration(labelText: l10n.languageSectionTitle),
-          selectedItemBuilder: (context) => [
-            for (final locale in kSupportedLocales)
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Text(
-                  languageDisplayName(l10n, locale.languageCode),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-          ],
-          items: [
-            for (final locale in kSupportedLocales)
-              DropdownMenuItem(
-                value: locale.languageCode,
-                child: Text(languageDisplayName(l10n, locale.languageCode)),
-              ),
-          ],
-          onChanged: (v) {
-            if (v != null) ref.read(localeProvider.notifier).setLanguage(v);
-          },
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        // Saved trips and AI notes keep the language they were written in;
-        // say so here rather than letting it look like a bug.
-        Text(
-          l10n.languageChangeNote,
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
+    return DropdownButtonFormField<String>(
+      initialValue: state.language,
+      isExpanded: true,
+      itemHeight: null,
+      selectedItemBuilder: (context) => [
+        for (final locale in kSupportedLocales)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              languageDisplayName(l10n, locale.languageCode),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
       ],
+      items: [
+        for (final locale in kSupportedLocales)
+          DropdownMenuItem(
+            value: locale.languageCode,
+            child: Text(languageDisplayName(l10n, locale.languageCode)),
+          ),
+      ],
+      onChanged: (v) {
+        if (v != null) ref.read(localeProvider.notifier).setLanguage(v);
+      },
     );
   }
 }
@@ -614,40 +981,73 @@ class _ConnectedAppsListState extends ConsumerState<_ConnectedAppsList> {
           );
         }
         if (snap.hasError) {
-          return Text(l10n.settingsConnectedAppsError,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error));
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Text(l10n.settingsConnectedAppsError,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.error)),
+          );
         }
         final apps = snap.data ?? const <ConnectedApp>[];
         if (apps.isEmpty) {
-          return Text(l10n.settingsConnectedAppsEmpty,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant));
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Text(l10n.settingsConnectedAppsEmpty,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          );
         }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final app in apps)
-              Card(
-                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: ListTile(
-                  leading: const Icon(Icons.smart_toy_outlined),
-                  title: Text(app.clientName),
-                  subtitle: Text(app.lastUsedAt != null
-                      ? l10n.settingsConnectedLastUsed(
-                          shortDate(app.lastUsedAt!.toIso8601String()))
-                      : l10n.settingsConnectedNeverUsed),
-                  trailing: _revoking == app.id
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : TextButton(
+            for (final (i, app) in apps.indexed) ...[
+              if (i > 0) const _RowDivider(),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: kMinTouchTarget),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  child: Row(
+                    children: [
+                      Icon(Icons.smart_toy_outlined,
+                          size: 20, color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              app.clientName,
+                              style: theme.textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              app.lastUsedAt != null
+                                  ? l10n.settingsConnectedLastUsed(shortDate(
+                                      app.lastUsedAt!.toIso8601String()))
+                                  : l10n.settingsConnectedNeverUsed,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      if (_revoking == app.id)
+                        const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                      else
+                        TextButton(
                           onPressed: () => _revoke(app),
                           child: Text(l10n.settingsRevokeAction),
                         ),
+                    ],
+                  ),
                 ),
               ),
+            ],
           ],
         );
       },

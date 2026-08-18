@@ -592,7 +592,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsProfileSection => 'Profile';
 
   @override
+  String get settingsAccountSection => 'Account';
+
+  @override
   String get settingsDisplayName => 'Display name';
+
+  @override
+  String get settingsEditAction => 'Edit';
+
+  @override
+  String get settingsEditNameTitle => 'Edit name';
 
   @override
   String get settingsSaveName => 'Save name';
@@ -664,6 +673,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsDangerZoneSection => 'Danger zone';
+
+  @override
+  String get settingsDeleteAccountHelp =>
+      'Permanently removes your account, trips and preferences.';
 
   @override
   String get settingsDeleteAccount => 'Delete account';

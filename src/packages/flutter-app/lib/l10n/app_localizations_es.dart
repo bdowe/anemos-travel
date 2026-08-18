@@ -598,7 +598,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsProfileSection => 'Perfil';
 
   @override
+  String get settingsAccountSection => 'Cuenta';
+
+  @override
   String get settingsDisplayName => 'Nombre visible';
+
+  @override
+  String get settingsEditAction => 'Editar';
+
+  @override
+  String get settingsEditNameTitle => 'Editar el nombre';
 
   @override
   String get settingsSaveName => 'Guardar nombre';
@@ -630,8 +639,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'Cierra tu sesión en todos los dispositivos, incluido este.';
 
   @override
-  String get settingsSignOutEverywhere =>
-      'Cerrar sesión en todos los dispositivos';
+  String get settingsSignOutEverywhere => 'Cerrar todas las sesiones';
 
   @override
   String get settingsSignOutEverywhereTitle =>
@@ -672,6 +680,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsDangerZoneSection => 'Zona de peligro';
+
+  @override
+  String get settingsDeleteAccountHelp =>
+      'Elimina de forma permanente tu cuenta, tus viajes y tus preferencias.';
 
   @override
   String get settingsDeleteAccount => 'Eliminar cuenta';
