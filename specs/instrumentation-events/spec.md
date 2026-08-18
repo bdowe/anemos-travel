@@ -44,6 +44,8 @@ Recorded from the client (the moments only the client can see):
 |---|---|---|
 | `booking_link_clicked` | user opens a booking handoff link | trip id, todo id, provider, kind |
 | `landing_viewed` | a signed-out visitor renders the landing page (once per app session) | — |
+| `landing_prompt_submitted` | a landing prompt handed to sign-up (specs/landing-prompt-handoff) | surface (`hero`\|`card`), kind (destination slug, cards only); never the prompt text |
+| `pending_prompt_consumed` | the stored landing prompt reached the signed-in composer | surface (`hero`\|`card`) |
 
 `booking_link_clicked` is the **attach-rate numerator** — the reason this
 feature exists. Completed bookings cannot be observed directly (affiliate
@@ -63,6 +65,7 @@ type must be a moment a signed-out visitor can actually produce:
 |---|---|
 | `landing_viewed` | the top of the funnel: landing-page views over signups is the first conversion number |
 | `booking_link_clicked` | signed-out booking handoffs (e.g. from future public surfaces) still count toward total clicks |
+| `landing_prompt_submitted` | the landing hero's prompt submit is by definition produced signed out; its consume-side sibling `pending_prompt_consumed` stays authed-only |
 
 There is intentionally **no** `plan_started_anonymous`: the Flutter app has no
 signed-out planning entry point (AuthGate routes signed-out visitors to the

@@ -30,6 +30,7 @@ import (
 // response (empty array included) so the client gets stable chart slots.
 var timeseriesEventTypes = []string{
 	"landing_viewed",
+	"landing_prompt_submitted",
 	"user_registered",
 	"trip_created",
 	"plan_session_started",

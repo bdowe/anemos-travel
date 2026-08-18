@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../navigation/app_nav.dart';
+import '../../providers/analytics_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/analytics_api_service.dart';
+import '../../services/pending_prompt.dart';
 import '../auth_screen.dart';
 
 /// What the landing page does with a visitor's first prompt: the hero's
@@ -19,18 +22,32 @@ typedef LandingPromptHandoff = void Function(
 
 /// Seam between the landing page UI and the prompt→sign-up→chat handoff
 /// (specs/landing-prompt-handoff). A provider rather than constructor
-/// plumbing so widget tests can override it to record calls, and so the
-/// handoff lane replaces exactly one default.
+/// plumbing so widget tests can override it to record calls.
 final landingPromptHandoffProvider =
     Provider<LandingPromptHandoff>((ref) => _defaultHandoff);
 
-// TODO(specs/landing-prompt-handoff): persist the prompt BEFORE navigation
-// (it must survive the SSO full-page reload) and seed the first chat after
-// auth. Until that lane lands, this degrades to the plain sign-up path and
-// the prompt is dropped.
-void _defaultHandoff(BuildContext context, String prompt, {String? sourceId}) {
-  // Same warm-up + push as the landing page's plain CTAs, so the two entry
-  // styles can't drift apart while the handoff lane is in flight.
+/// The real handoff: persist the prompt BEFORE any navigation — SSO is a
+/// full-page reload and in-memory state dies (the PendingConnectStore rule,
+/// connect_app_screen.dart) — then continue into sign-up exactly like the
+/// plain CTAs. `pendingPromptResumeProvider` consumes the store once the
+/// session is signed in and onboarded.
+Future<void> _defaultHandoff(BuildContext context, String prompt,
+    {String? sourceId}) async {
+  // Container read BEFORE the await (no context across the async gap).
+  AnalyticsApiService? analytics;
+  try {
+    analytics = ProviderScope.containerOf(context, listen: false)
+        .read(analyticsApiServiceProvider);
+  } catch (_) {}
+  await const PendingPromptStore().save(prompt, sourceId: sourceId);
+  try {
+    // Fire-and-forget, and never allowed to break the handoff — the same
+    // stance as the landing_viewed guard. The prompt TEXT never rides
+    // analytics; only which surface produced it.
+    analytics?.recordLandingPromptSubmitted(
+        surface: sourceId == null ? 'hero' : 'card', kind: sourceId);
+  } catch (_) {}
+  if (!context.mounted) return;
   warmSsoAvailability(context);
   pushOnce(
     context,
