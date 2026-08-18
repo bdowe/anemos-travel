@@ -41,7 +41,7 @@ jobs:
   # is still the authority: purge first, then merge.
   sw-manifest-bump-guard:
     name: SW manifest bump requires a clean edge
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -73,7 +73,7 @@ jobs:
 
   go:
     name: Go (fmt, vet, test, sqlc drift)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: src/packages/api
@@ -128,7 +128,7 @@ jobs:
 
   flutter:
     name: Flutter (analyze, test, build web)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: src/packages/flutter-app
@@ -180,7 +180,7 @@ jobs:
 
   migrations:
     name: Migrations apply from zero
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: src/packages/api
@@ -277,7 +277,7 @@ jobs:
 
   build-push:
     name: Build & push images (GHCR)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     # The gateway image includes a full Flutter web build (~several minutes).
     timeout-minutes: 30
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -288,8 +288,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@v1
+      - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
         with:
@@ -300,7 +299,7 @@ jobs:
       # Same context/dockerfile the deployment compose uses for the api
       # service (dockerize/deployment/docker-compose.yml).
       - name: Build & push api image
-        uses: useblacksmith/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           context: src/packages/api
           file: src/packages/api/Dockerfile
@@ -313,11 +312,13 @@ jobs:
             ghcr.io/golden-tempo/goldentempo-api:${{ github.sha }}
           build-args: |
             SENTRY_RELEASE=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
 
       # The gateway Dockerfile COPYs both src/packages/flutter-app/ and
       # dockerize/ paths, so its context is the repo root.
       - name: Build & push gateway image
-        uses: useblacksmith/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: dockerize/deployment/Dockerfile
@@ -328,16 +329,18 @@ jobs:
             ghcr.io/golden-tempo/goldentempo-gateway:${{ github.sha }}
           build-args: |
             GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=gateway
           # mode=max (export ALL stages) is deliberate for both scopes: the
           # layers worth caching are precisely the builder-stage ones (apt,
           # flutter clone, web-only precache, pub get / go mod download);
           # mode=min would export only the tiny final stages and force a full
           # toolchain rebuild every main push. The web-only precache keeps the
           # exported stage well inside the repo's 10 GB Actions cache budget.
+          cache-to: type=gha,mode=max,scope=gateway
 
   deploy:
     name: Deploy to production
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: build-push
     # Two ways in:
