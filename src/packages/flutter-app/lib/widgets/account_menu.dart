@@ -47,7 +47,8 @@ Widget _menuRow(Widget icon, String label, {Widget? trailing}) => Row(
       ],
     );
 
-void _onSelected(BuildContext context, WidgetRef ref, String value) {
+void _onSelected(BuildContext context, WidgetRef ref, String value,
+    {VoidCallback? openNotificationsPanel}) {
   if (value == 'logout') {
     ref.read(authProvider.notifier).logout();
   } else if (value == 'preferences') {
@@ -55,8 +56,15 @@ void _onSelected(BuildContext context, WidgetRef ref, String value) {
     pushOnActiveTab(ref, const PreferencesScreen(),
         location: utilityLocation(BootUtility.preferences));
   } else if (value == 'notifications') {
-    pushOnActiveTab(ref, const NotificationCenterScreen(),
-        location: utilityLocation(BootUtility.notifications));
+    // Two presentations, one row: the rail passes a panel-opener (the
+    // Midday-style popover anchored beside it), narrow layouts push the full
+    // page — the same split the bell/badge follows.
+    if (openNotificationsPanel != null) {
+      openNotificationsPanel();
+    } else {
+      pushOnActiveTab(ref, const NotificationCenterScreen(),
+          location: utilityLocation(BootUtility.notifications));
+    }
   } else if (value == 'retake_quiz') {
     // No location: a transient flow, not a page worth restoring on refresh.
     pushOnActiveTab(ref, const OnboardingQuizScreen(retake: true));
@@ -245,17 +253,41 @@ class AccountMenu extends ConsumerWidget {
   }
 }
 
-/// Account avatar for the nav rail's trailing slot (wide layouts). The rail is a
-/// light surface, so the avatar is teal-filled rather than white-on-teal.
-class RailAccountButton extends ConsumerWidget {
+/// Account cluster for the nav rail's trailing slot (wide layouts): the
+/// notifications bell over the account avatar. The rail is a light surface,
+/// so the avatar is teal-filled rather than white-on-teal.
+///
+/// The bell opens [NotificationsPanel] as a popover anchored here — wide
+/// layouts never leave the page to glance at notifications; narrow layouts
+/// (no rail, no anchor) push the full page from the account menu instead.
+/// The unread badge rides the bell, not the avatar: one signal, one place,
+/// on the affordance that answers it.
+class RailAccountButton extends ConsumerStatefulWidget {
   const RailAccountButton({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RailAccountButton> createState() => _RailAccountButtonState();
+}
+
+class _RailAccountButtonState extends ConsumerState<RailAccountButton> {
+  final MenuController _notifications = MenuController();
+
+  void _toggleNotifications() {
+    if (_notifications.isOpen) {
+      _notifications.close();
+    } else {
+      _notifications.open();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final user = ref.watch(authProvider).user;
     final unread = ref.watch(notificationsUnreadCountProvider).valueOrNull ?? 0;
+    final bell = Icon(Icons.notifications_none,
+        color: theme.colorScheme.onSurfaceVariant);
     final avatar = CircleAvatar(
       radius: 18,
       backgroundColor: AppColors.brand,
@@ -264,13 +296,44 @@ class RailAccountButton extends ConsumerWidget {
         style: _avatarLabelStyle(theme),
       ),
     );
-    return PopupMenuButton<String>(
-      tooltip: l10n.accountMenuTooltip,
-      constraints: _accountMenuConstraints,
-      icon: unread > 0 ? Badge.count(count: unread, child: avatar) : avatar,
-      onSelected: (v) => _onSelected(context, ref, v),
-      itemBuilder: (_) => _items(theme, l10n, user?.displayName, user?.email,
-          isAdmin: user?.isAdmin ?? false, unreadNotifications: unread),
+    return MenuAnchor(
+      controller: _notifications,
+      // Opening is the read action (fetch, then mark read, then refresh the
+      // badge) — the same contract as opening the full page.
+      onOpen: () => markNotificationsSeen(ref, alive: () => mounted),
+      consumeOutsideTap: true,
+      // The panel supplies its own edge-to-edge structure; the themed menu
+      // surface (menuTheme — the #490 card register) needs no inset padding.
+      // Anchored at the cluster's top edge so the panel opens upward-right
+      // from the rail's foot rather than off the bottom of the window.
+      style: const MenuStyle(
+        padding: WidgetStatePropertyAll(EdgeInsets.zero),
+        alignment: AlignmentDirectional.topEnd,
+      ),
+      menuChildren: [
+        NotificationsPanel(onClose: _notifications.close),
+      ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: l10n.notifTitle,
+            onPressed: _toggleNotifications,
+            icon: unread > 0 ? Badge.count(count: unread, child: bell) : bell,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          PopupMenuButton<String>(
+            tooltip: l10n.accountMenuTooltip,
+            constraints: _accountMenuConstraints,
+            icon: avatar,
+            onSelected: (v) => _onSelected(context, ref, v,
+                openNotificationsPanel: _toggleNotifications),
+            itemBuilder: (_) => _items(
+                theme, l10n, user?.displayName, user?.email,
+                isAdmin: user?.isAdmin ?? false, unreadNotifications: unread),
+          ),
+        ],
+      ),
     );
   }
 }

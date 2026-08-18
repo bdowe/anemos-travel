@@ -5090,11 +5090,17 @@ abstract class AppLocalizations {
   /// **'Notifications'**
   String get notifTitle;
 
-  /// No description provided for @notifMoreActions.
+  /// No description provided for @notifSectionNew.
   ///
   /// In en, this message translates to:
-  /// **'More options'**
-  String get notifMoreActions;
+  /// **'New'**
+  String get notifSectionNew;
+
+  /// No description provided for @notifSectionEarlier.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier'**
+  String get notifSectionEarlier;
 
   /// No description provided for @notifClearAll.
   ///
