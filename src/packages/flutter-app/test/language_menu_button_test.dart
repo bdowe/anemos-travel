@@ -123,10 +123,19 @@ class _FakeAuthNotifier extends StateNotifier<AuthState>
   Future<void> adoptSession(String token, UserModel user) async {}
 }
 
-bool _checkedOf(WidgetTester tester, String label) => tester
-    .widget<CheckedPopupMenuItem<String>>(
-        find.widgetWithText(CheckedPopupMenuItem<String>, label))
-    .checked;
+/// The menu marks the active language with a primary check icon inside the
+/// row (hand-rolled rows since the popup-menus redesign — no
+/// CheckedPopupMenuItem), so "checked" is asserted as that visible marker.
+bool _checkedOf(WidgetTester tester, String label) {
+  final row = find.ancestor(
+    of: find.text(label),
+    matching: find.byType(PopupMenuItem<String>),
+  );
+  return find
+      .descendant(of: row, matching: find.byIcon(Icons.check_rounded))
+      .evaluate()
+      .isNotEmpty;
+}
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -184,8 +193,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.language));
     await tester.pumpAndSettle();
-    await tester
-        .tap(find.widgetWithText(CheckedPopupMenuItem<String>, 'Español'));
+    await tester.tap(find.widgetWithText(PopupMenuItem<String>, 'Español'));
     await tester.pumpAndSettle();
 
     expect(ref.read(localeProvider).language, 'es');
