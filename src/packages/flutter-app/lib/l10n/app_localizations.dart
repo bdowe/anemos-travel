@@ -1202,11 +1202,29 @@ abstract class AppLocalizations {
   /// **'Profile'**
   String get settingsProfileSection;
 
+  /// No description provided for @settingsAccountSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get settingsAccountSection;
+
   /// No description provided for @settingsDisplayName.
   ///
   /// In en, this message translates to:
   /// **'Display name'**
   String get settingsDisplayName;
+
+  /// No description provided for @settingsEditAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get settingsEditAction;
+
+  /// No description provided for @settingsEditNameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit name'**
+  String get settingsEditNameTitle;
 
   /// No description provided for @settingsSaveName.
   ///
@@ -1339,6 +1357,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Danger zone'**
   String get settingsDangerZoneSection;
+
+  /// No description provided for @settingsDeleteAccountHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently removes your account, trips and preferences.'**
+  String get settingsDeleteAccountHelp;
 
   /// No description provided for @settingsDeleteAccount.
   ///
