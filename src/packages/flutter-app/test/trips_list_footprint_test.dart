@@ -21,12 +21,13 @@ import 'package:travel_route_planner/widgets/travel_footprint_card.dart';
 import 'support/l10n_test_app.dart';
 
 /// The "Your travels" section on the trips list (specs/trips-page-insights):
-/// the travel stat tiles plus the footprint map, gated at 2+ OWNED trips —
+/// the footprint map plus the travel stats that caption it, gated at 2+ OWNED
+/// trips —
 /// shared-with-me is someone else's travel and carries none of the fields.
 /// The map sub-band is gated separately on having pins; with none the card
 /// degrades to a bare stats strip rather than showing an empty globe.
 ///
-/// The tiles come in two labeled groups, traveled and planned, and **a group
+/// The stats come in two labeled groups, traveled and planned, and **a group
 /// with no trips does not render** — the rule that keeps a planner who has
 /// taken no trips yet from meeting a row of zeros, and the reason this card
 /// needs no second display mode. Groups are found by key, not by label, so the
@@ -99,7 +100,7 @@ Finder _inBand(Finder matching) => find.descendant(
     of: find.byType(TravelFootprintCard), matching: matching);
 
 /// Scopes a finder to ONE stat group — with two groups on screen, "2" and
-/// "Trips" both appear twice, so every tile assertion has to say which side.
+/// "trips" both appear twice, so every stat assertion has to say which side.
 Finder _inGroup(Key group, Finder matching) =>
     find.descendant(of: find.byKey(group), matching: matching);
 
@@ -210,19 +211,19 @@ void main() {
 
     expect(find.text('Traveled'), findsOneWidget);
     expect(_inGroup(kTraveledStatsKey, find.text('1')), findsOneWidget);
-    expect(_inGroup(kTraveledStatsKey, find.text('Trip')), findsOneWidget);
+    expect(_inGroup(kTraveledStatsKey, find.text('trip')), findsOneWidget);
     expect(_inGroup(kTraveledStatsKey, find.text('5')), findsOneWidget);
     expect(_inGroup(kTraveledStatsKey, find.text('2')), findsOneWidget);
-    expect(_inGroup(kTraveledStatsKey, find.text('Cities')), findsOneWidget);
+    expect(_inGroup(kTraveledStatsKey, find.text('cities')), findsOneWidget);
 
     expect(find.text('Planned'), findsOneWidget);
     expect(_inGroup(kPlannedStatsKey, find.text('1')), findsOneWidget);
     expect(_inGroup(kPlannedStatsKey, find.text('3')), findsOneWidget);
-    expect(_inGroup(kPlannedStatsKey, find.text('Travel days')), findsOneWidget);
+    expect(_inGroup(kPlannedStatsKey, find.text('travel days')), findsOneWidget);
     expect(_inGroup(kPlannedStatsKey, find.text('2')), findsOneWidget);
 
     // The old single all-time strip would have said 2 trips / 8 days / 3
-    // cities — no tile anywhere now claims travel that hasn't happened.
+    // cities — no stat anywhere now claims travel that hasn't happened.
     expect(_inBand(find.text('8')), findsNothing);
   });
 
@@ -276,7 +277,7 @@ void main() {
     expect(_inBand(find.text('0')), findsNothing);
   });
 
-  testWidgets('zero-valued segments drop out; the trips tile always stays',
+  testWidgets('zero-valued segments drop out; the trips stat always stays',
       (WidgetTester tester) async {
     // Undated, city-less legacy rows contribute no days and no cities — and
     // an undated draft is a plan, not travel taken.
@@ -288,9 +289,9 @@ void main() {
 
     expect(find.byKey(kTraveledStatsKey), findsNothing);
     expect(_inGroup(kPlannedStatsKey, find.text('2')), findsOneWidget);
-    expect(_inGroup(kPlannedStatsKey, find.text('Trips')), findsOneWidget);
-    expect(find.text('Travel days'), findsNothing);
-    expect(find.text('Cities'), findsNothing);
+    expect(_inGroup(kPlannedStatsKey, find.text('trips')), findsOneWidget);
+    expect(find.text('travel days'), findsNothing);
+    expect(find.text('cities'), findsNothing);
   });
 
   testWidgets('the map marks visited cities apart from planned ones',

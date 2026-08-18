@@ -2212,8 +2212,8 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'Viajes',
-      one: 'Viaje',
+      other: 'viajes',
+      one: 'viaje',
     );
     return '$_temp0';
   }
@@ -2223,8 +2223,8 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'Días de viaje',
-      one: 'Día de viaje',
+      other: 'días de viaje',
+      one: 'día de viaje',
     );
     return '$_temp0';
   }
@@ -2234,8 +2234,8 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'Ciudades',
-      one: 'Ciudad',
+      other: 'ciudades',
+      one: 'ciudad',
     );
     return '$_temp0';
   }

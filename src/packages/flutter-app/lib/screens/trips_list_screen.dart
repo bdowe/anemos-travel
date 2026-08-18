@@ -16,7 +16,6 @@ import '../widgets/continue_chats_section.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/live_trip_card.dart';
-import '../widgets/meta_chip.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/page_container.dart';
 import '../widgets/section_header.dart';
@@ -41,6 +40,24 @@ const kLogTripSectionActionKey = ValueKey('logTrip.entry.section');
 const kLogTripAppBarKey = ValueKey('logTrip.entry.appBar');
 const kLogTripEmptyStateKey = ValueKey('logTrip.entry.emptyState');
 
+/// The trips list, read as a journal index rather than a dashboard.
+///
+/// The page runs in narrative order — **what's next, what you're co-planning,
+/// where you've been, everywhere you've been** — so each section answers a
+/// question the one above it raises, and the retrospective closes the page
+/// instead of interrupting the run of plans. "Your travels" sat mid-page until
+/// the editorial pass, which put a second map (and a panel of lifetime totals)
+/// between a traveler and their own past trips.
+///
+/// Two treatments carry the whole page: the promoted hero — the one saturated
+/// object here — and a plain row whose hierarchy is typographic. Rows print
+/// their facts in three registers: the title, then the trip's dates in the
+/// row's second weight, then everything else quiet. A fact is a filled chip
+/// ONLY when it is state someone can act on (booked, packed, shared); context
+/// (stays, places) is muted text, which is the same rule [TripHeroCard]
+/// already followed. Before that split the rows carried up to seven filled
+/// chips of equal weight, and the ones that mattered were indistinguishable
+/// from the ones that didn't.
 class TripsListScreen extends ConsumerStatefulWidget {
   const TripsListScreen({super.key});
 
@@ -172,10 +189,8 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       ];
       // "Your travels" is over OWNED trips (shared-with-me is someone else's
       // travel, and its payload carries no pins anyway), split into what's
-      // been travelled and what's still planned — the band sits where the page
-      // turns from plans to history, so a number that silently mixed the two
-      // was reading as travel already taken. Gated at 2+: an aggregate of one
-      // trip only restates the hero.
+      // been travelled and what's still planned. Gated at 2+: an aggregate of
+      // one trip only restates the hero.
       final stats = travelStats(state.trips, now);
       final pins = footprintPins(state.trips, now);
       final showFootprint = state.trips.length >= 2;
@@ -186,7 +201,11 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           await ref.read(tripsProvider.notifier).loadTrips();
         },
         child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          // Bottom air on the ladder (xxl): the page now ENDS on the
+          // retrospective card, and a card that stops flush against the
+          // viewport floor reads as a page that got cut off.
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xxl),
           // Pull-to-refresh must arm even when the list is shorter than the
           // viewport (one or two trips is the common case) — clamping physics
           // would swallow the gesture on Android/web.
@@ -222,7 +241,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                   // Always-on section header — before it existed only next to
                   // a resumable-chats section, leaving the common case with
                   // bare cards under the app bar. "Upcoming" (not the app
-                  // bar's "My Trips" again) mirrors "Past trips" below, and
+                  // bar's "My trips" again) mirrors "Past trips" below, and
                   // its action is the populated list's one create affordance
                   // (the empty state keeps its own Plan-a-trip button).
                   if (state.trips.isNotEmpty)
@@ -250,19 +269,90 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                     ),
                   for (final t in upcomingCards)
                     _TripCard(trip: t, isAdmin: isAdmin),
-                  // "Your travels": the retrospective section, where the page
-                  // turns from plans to history. Its own titled section, not
-                  // a card in the Upcoming run — an unlabeled map over a
-                  // stats panel is the "Up next" hero's silhouette, so at the
-                  // 8px card gap it read as another upcoming trip. The header
-                  // and the card share one gate: a title with nothing under
-                  // it is worse than neither.
+                  // Trips others invited this user to co-plan, directly under
+                  // the traveler's own plans: "mine" then "ours" then "was",
+                  // which is the order someone actually asks these questions
+                  // in. Kept a separate section — "mine" vs "shared with me"
+                  // is the mental model, and the row shows the owner instead
+                  // of admin version chrome.
                   //
-                  // AppSpacing.xl is this page's section seam from here down —
-                  // Past trips and Shared with you use the same 24px, so the
-                  // three sections below Upcoming read as peers. Dropping any
-                  // one of them back to sm re-attaches that section to the one
-                  // above it.
+                  // AppSpacing.xl is this page's section seam from here down.
+                  // Dropping any one of them back to sm re-attaches that
+                  // section to the one above it.
+                  if (sharedOrdered.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.xs, AppSpacing.xl, 0, AppSpacing.sm),
+                      child: SectionHeader(title: l10n.tripsListSharedWithYou),
+                    ),
+                    for (final t in sharedOrdered)
+                      _TripCard(trip: t, isAdmin: false),
+                  ],
+                  // Finished trips. The group is still collapsed by default —
+                  // a trips page is about what's ahead — but it is no longer a
+                  // bare row floating between two card runs, which is how a
+                  // whole travel history came to be the easiest thing on the
+                  // page to miss. It now sits in a section card of its own
+                  // weight, and opens into a quiet index INSIDE that card:
+                  // one bounded object, not six more cards.
+                  if (groups.past.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xl),
+                      child: Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.lg,
+                              vertical: AppSpacing.xs),
+                          child: CollapsibleSection(
+                            title: l10n.tripsListPastTrips,
+                            icon: Icons.history,
+                            // Teases the latest finished trip rather than
+                            // aggregating: the lifetime aggregate lives in
+                            // "Your travels" below, and "where you just were"
+                            // is what earns the expand tap.
+                            summary: _pastSummary(groups.past.first, l10n),
+                            pill: StatusPill.custom(
+                              label: l10n
+                                  .tripsListPastTripsCount(groups.past.length),
+                              background:
+                                  theme.colorScheme.surfaceContainerHighest,
+                              foreground: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            expanded: _pastExpanded,
+                            onToggle: () =>
+                                setState(() => _pastExpanded = !_pastExpanded),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                for (var i = 0; i < groups.past.length; i++) ...[
+                                  // Hairlines between rows, never around them:
+                                  // the section card already draws the box, so
+                                  // a divider only has to separate siblings —
+                                  // and the first row needs none, its header
+                                  // is directly above it.
+                                  if (i > 0) const Divider(height: 1),
+                                  _TripCard(
+                                    trip: groups.past[i],
+                                    isAdmin: isAdmin,
+                                    isPast: true,
+                                    flat: true,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  // The retrospective closes the page: everywhere this
+                  // traveler has been, on one map, captioned by the numbers.
+                  // It used to sit between the upcoming run and the past
+                  // trips, where an unlabeled map over a stats panel was the
+                  // "Up next" hero's silhouette — and where it put a second
+                  // map in the middle of a scroll about plans. The header and
+                  // the card share one gate: a title with nothing under it is
+                  // worse than neither.
                   if (showFootprint) ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(
@@ -288,50 +378,6 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                       traveled: stats.traveled,
                       planned: stats.planned,
                     ),
-                  ],
-                  if (groups.past.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.xl),
-                      child: CollapsibleSection(
-                        title: l10n.tripsListPastTrips,
-                        icon: Icons.history,
-                        // Teases the latest finished trip rather than
-                        // aggregating: the lifetime aggregate now lives one
-                        // card up, and "where you just were" is what earns
-                        // the expand tap.
-                        summary: _pastSummary(groups.past.first, l10n),
-                        pill: StatusPill.custom(
-                          label: l10n
-                              .tripsListPastTripsCount(groups.past.length),
-                          background:
-                              theme.colorScheme.surfaceContainerHighest,
-                          foreground: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        expanded: _pastExpanded,
-                        onToggle: () =>
-                            setState(() => _pastExpanded = !_pastExpanded),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (final t in groups.past)
-                              _TripCard(
-                                  trip: t, isAdmin: isAdmin, isPast: true),
-                          ],
-                        ),
-                      ),
-                    ),
-                  // Trips others invited this user to co-plan. Kept as a
-                  // separate section: "mine" vs "shared with me" is the
-                  // mental model, and the card shows the owner instead of
-                  // admin version chrome.
-                  if (sharedOrdered.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.xs, AppSpacing.xl, 0, AppSpacing.sm),
-                      child: SectionHeader(title: l10n.tripsListSharedWithYou),
-                    ),
-                    for (final t in sharedOrdered)
-                      _TripCard(trip: t, isAdmin: false),
                   ],
                 ],
               ),
@@ -419,8 +465,24 @@ Future<void> _openTrip(
   unawaited(ref.read(tripsProvider.notifier).loadTrips());
 }
 
-/// A single trip in the list. Shows the latest version of its chat; for admins,
-/// when the chat produced multiple versions it expands to list the older ones.
+/// A single trip in the list, as an editorial row: title, then the trip's
+/// dates in the row's second weight, then everything else quiet.
+///
+/// The dates earned their own line by being the fact a list of trips is
+/// actually scanned for; they used to be the first of up to seven equal-weight
+/// filled chips. Duration joins them there rather than taking a chip of its
+/// own — "Aug 2 – Aug 20 · 19 days" is one thought — and the city COUNT is
+/// gone entirely, because the cities line below (or the headline itself) names
+/// them, and a card that says "3 cities" directly above "Lisbon, Porto &
+/// Madrid" is counting out loud for no one.
+///
+/// No leading glyph: every row in a list of trips is a trip, so the icon said
+/// nothing and cost the titles their shared left edge. The one thing it did
+/// carry — whose trip this is — is carried by words instead ("Planned with
+/// Ana" / "Shared by Ana"), under a section header that already said it.
+///
+/// For admins, when the chat produced multiple versions the row expands to
+/// list the older ones.
 class _TripCard extends ConsumerWidget {
   final Trip trip;
   final bool isAdmin;
@@ -429,18 +491,24 @@ class _TripCard extends ConsumerWidget {
   /// and the past group is the densest place to economize.
   final bool isPast;
 
+  /// Renders without its own [Card] — for the "Past trips" section, which is
+  /// one bounded card holding a quiet index. A card inside a card reads as a
+  /// mistake, and six of them read as the run of upcoming trips again.
+  final bool flat;
+
   const _TripCard({
     required this.trip,
     required this.isAdmin,
     this.isPast = false,
+    this.flat = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     final l10n = context.l10n;
     final versions = trip.versionCount ?? 1;
     final hasHistory = isAdmin && versions > 1 && trip.chatId != null;
-    final range = tripDateRange(trip.startDate, trip.endDate);
 
     final cities = citiesLabel(
       trip.cities,
@@ -452,168 +520,205 @@ class _TripCard extends ConsumerWidget {
     // when it isn't already the headline.
     final headline = tripHeadline(trip.title, cities);
     final showCitiesLine = cities != null && headline != cities;
-    // Payload-only facts: duration from the date span (0 without both dates,
-    // so undated trips naturally skip the chip) and hub-city count (a
-    // "1 city" chip is noise when the cities line/headline already names it).
+    // Payload-only facts: the date span (0 without both dates, so an undated
+    // trip naturally skips the duration) and, failing that, when the trip was
+    // created — a row always says WHEN something, or it is just a name.
+    final range = tripDateRange(trip.startDate, trip.endDate);
     final days = dayCount(trip.startDate, trip.endDate, const <int?>[]);
-    final cityCount = trip.cities?.length ?? 0;
+    final whenLine = range == null
+        ? l10n.tripsListCreated(shortDate(trip.createdAt))
+        : [range, if (days > 0) l10n.tripDurationDays(days)].join(' · ');
     // The AI's own blurb, suppressed when it IS the title (a long AI title
     // falls back to the cities headline, which would print it twice).
     final summary = (trip.summary ?? '').trim();
     final showSummary = summary.isNotEmpty && summary != trip.title;
+    final muted = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
 
-    final title = Text(
-      headline,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: Theme.of(context)
-          .textTheme
-          .titleMedium
-          ?.copyWith(fontWeight: FontWeight.w600),
-    );
+    // State first, context after — the same order the hero uses, so a trip
+    // reads the same whether it is promoted or listed. Everything here is
+    // null/zero-hiding: the server row is the one derivation for list display
+    // (old servers and stale offline snapshots simply say less).
+    final meta = <Widget>[
+      // Booking progress: a STATE pill (StatusPill, label-carrying per its
+      // colorblind doctrine), tonal-green once everything is booked.
+      if ((trip.bookingTotal ?? 0) > 0)
+        StatusPill.custom(
+          label: l10n.tripsListBookedCount(
+              trip.bookingBooked ?? 0, trip.bookingTotal!),
+          background: trip.bookingBooked == trip.bookingTotal
+              ? theme.colorScheme.secondaryContainer
+              : theme.colorScheme.surfaceContainerHighest,
+          foreground: trip.bookingBooked == trip.bookingTotal
+              ? theme.colorScheme.onSecondaryContainer
+              : theme.colorScheme.onSurfaceVariant,
+        ),
+      // Packing progress, same STATE-pill treatment as booking.
+      if (!isPast && (trip.packingTotal ?? 0) > 0)
+        StatusPill.custom(
+          label: l10n.tripsListPackedCount(
+              trip.packingDone ?? 0, trip.packingTotal!),
+          background: trip.packingDone == trip.packingTotal
+              ? theme.colorScheme.secondaryContainer
+              : theme.colorScheme.surfaceContainerHighest,
+          foreground: trip.packingDone == trip.packingTotal
+              ? theme.colorScheme.onSecondaryContainer
+              : theme.colorScheme.onSurfaceVariant,
+        ),
+      // Shared OUT (owner has co-planners): state, and the only pill a row
+      // carries that isn't progress.
+      if (trip.isOwner && trip.shared == true)
+        StatusPill.custom(
+          label: l10n.tripsListShared,
+          background: theme.colorScheme.surfaceContainerHighest,
+          foreground: theme.colorScheme.onSurfaceVariant,
+        ),
+      // Context: what the trip HAS, which nobody acts on from this page.
+      if ((trip.stayTotal ?? 0) > 0)
+        _Fact(
+            icon: Icons.hotel_outlined,
+            label: l10n.tripsListStaysCount(trip.stayTotal!)),
+      if ((trip.itemCount ?? 0) > 0)
+        _Fact(
+            icon: Icons.place_outlined,
+            label: l10n.tripsListPlaces(trip.itemCount!)),
+      if (!trip.isOwner && (trip.ownerName ?? '').isNotEmpty)
+        Text(
+          trip.canEdit
+              ? l10n.tripsListPlannedWith(trip.ownerName!)
+              : l10n.tripsListSharedBy(trip.ownerName!),
+          style: muted,
+        ),
+    ];
 
-    final subtitle = Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.xs,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              if (range != null)
-                MetaChip(label: range)
-              else
-                Text(l10n.tripsListCreated(shortDate(trip.createdAt))),
-              if (days > 0)
-                MetaChip(icon: Icons.schedule, label: l10n.tripDurationDays(days)),
-              if (cityCount >= 2)
-                MetaChip(
-                    icon: Icons.location_city_outlined,
-                    label: l10n.tripCitiesCount(cityCount)),
-              // Stays are CONTEXT (the payload carries confirmed stays, not a
-              // booked-progress denominator the booking pill doesn't already
-              // own), so a MetaChip — not another pill.
-              if ((trip.stayTotal ?? 0) > 0)
-                MetaChip(
-                    icon: Icons.hotel_outlined,
-                    label: l10n.tripsListStaysCount(trip.stayTotal!)),
-              // Booking progress: a STATE pill (StatusPill, label-carrying
-              // per its colorblind doctrine), tonal-green once everything is
-              // booked. Null fields (full views, old servers, stale offline
-              // snapshots) hide it — no local derivation.
-              if ((trip.bookingTotal ?? 0) > 0)
-                StatusPill.custom(
-                  label: l10n.tripsListBookedCount(
-                      trip.bookingBooked ?? 0, trip.bookingTotal!),
-                  background: trip.bookingBooked == trip.bookingTotal
-                      ? Theme.of(context).colorScheme.secondaryContainer
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  foreground: trip.bookingBooked == trip.bookingTotal
-                      ? Theme.of(context).colorScheme.onSecondaryContainer
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
+    Widget content({required bool chevron}) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    headline,
+                    // Two lines before it gives: a trip's name is the one
+                    // thing on the row that can't be re-derived from the rest
+                    // of it, and phone widths ellipsize a real title at one.
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
                 ),
-              // Packing progress, same STATE-pill treatment as booking (tonal
-              // green once everything is in the bag).
-              if (!isPast && (trip.packingTotal ?? 0) > 0)
-                StatusPill.custom(
-                  label: l10n.tripsListPackedCount(
-                      trip.packingDone ?? 0, trip.packingTotal!),
-                  background: trip.packingDone == trip.packingTotal
-                      ? Theme.of(context).colorScheme.secondaryContainer
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  foreground: trip.packingDone == trip.packingTotal
-                      ? Theme.of(context).colorScheme.onSecondaryContainer
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              // Shared OUT (owner has co-planners) — a labeled pill, not a
-              // bare icon: the group leading icon already means "shared
-              // WITH me" on received trips.
-              if (trip.isOwner && trip.shared == true)
-                StatusPill.custom(
-                  label: l10n.tripsListShared,
-                  background:
-                      Theme.of(context).colorScheme.surfaceContainerHighest,
-                  foreground: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              // Item count is context, not state: plain text like the
-              // planned-with/shared-by attributions, so the row isn't pill
-              // soup.
-              if ((trip.itemCount ?? 0) > 0)
-                Text(
-                  l10n.tripsListPlaces(trip.itemCount!),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
-              if (!trip.isOwner && (trip.ownerName ?? '').isNotEmpty)
-                Text(
-                  trip.canEdit
-                      ? l10n.tripsListPlannedWith(trip.ownerName!)
-                      : l10n.tripsListSharedBy(trip.ownerName!),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
-            ],
-          ),
-          if (showCitiesLine)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: Text(
-                cities,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
+                if (hasHistory) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  _VersionBadge(count: versions),
+                ],
+                if (chevron) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  Icon(Icons.chevron_right,
+                      size: 18, color: theme.colorScheme.onSurfaceVariant),
+                ],
+              ],
             ),
-          if (showSummary)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: Text(
-                summary,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              whenLine,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w500),
             ),
-        ],
-      ),
-    );
+            if (showCitiesLine)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(cities,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: muted),
+              ),
+            if (meta.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: meta,
+                ),
+              ),
+            // Prose last, after the factual lines have clustered.
+            if (showSummary)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Text(summary,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: muted),
+              ),
+          ],
+        );
 
-    if (!hasHistory) {
+    if (hasHistory) {
       return Card(
-        child: ListTile(
-          leading: Icon(trip.isOwner
-              ? Icons.map_outlined
-              : trip.canEdit
-                  ? Icons.group_outlined
-                  : Icons.visibility_outlined),
-          title: title,
-          subtitle: subtitle,
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => _openTrip(context, ref, trip.id),
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          // The expander's own chevron replaces the row's: two on one row
+          // would promise two different things.
+          title: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: content(chevron: false),
+          ),
+          childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          children: [
+            _VersionList(chatId: trip.chatId!, latestId: trip.id),
+          ],
         ),
       );
     }
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        leading: const Icon(Icons.map_outlined),
-        title: title,
-        subtitle: Row(
-          children: [
-            Expanded(child: subtitle),
-            _VersionBadge(count: versions),
-          ],
-        ),
-        childrenPadding: const EdgeInsets.only(bottom: 8),
-        children: [
-          _VersionList(chatId: trip.chatId!, latestId: trip.id),
-        ],
+    final row = InkWell(
+      onTap: () => _openTrip(context, ref, trip.id),
+      child: Padding(
+        // Flat rows take their horizontal padding from the section card that
+        // holds them, so the hairlines between them run the card's width.
+        padding: flat
+            ? const EdgeInsets.symmetric(vertical: AppSpacing.md)
+            : const EdgeInsets.all(AppSpacing.lg),
+        child: content(chevron: true),
       ),
+    );
+    return flat ? row : Card(clipBehavior: Clip.antiAlias, child: row);
+  }
+}
+
+/// A context fact on a row: a muted glyph and a muted label, no fill. The
+/// glyph is what separates one fact from the next, which is why these need no
+/// dots and no chip — a filled chip on this page means "state", and stays
+/// [StatusPill]'s alone.
+class _Fact extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _Fact({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: AppSpacing.xs),
+        // Flexible + ellipsis: a fact wider than the Wrap run it landed in
+        // has nowhere to wrap to, so it truncates rather than striping the
+        // card with a RenderFlex overflow.
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -626,10 +731,11 @@ class _VersionBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm, vertical: 2),
       decoration: BoxDecoration(
         color: theme.colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
         'v$count',
@@ -658,13 +764,13 @@ class _VersionList extends ConsumerWidget {
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Padding(
-            padding: EdgeInsets.all(16),
+            padding: EdgeInsets.all(AppSpacing.lg),
             child: Center(child: CircularProgressIndicator()),
           );
         }
         if (snap.hasError) {
           return Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Text(l10n.tripsListVersionsError,
                 style: theme.textTheme.bodySmall),
           );

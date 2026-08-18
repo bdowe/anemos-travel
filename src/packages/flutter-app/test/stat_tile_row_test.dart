@@ -3,15 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:travel_route_planner/widgets/stat_tile_row.dart';
 
-/// StatTileRow contract (specs/trips-page-insights): equal-width tiles of a
-/// pre-formatted value over a caller-supplied label. The widget formats and
-/// pluralizes NOTHING — values arrive pre-formatted and the l10n plural is
-/// resolved at the call site — so the assertions here are "what was passed is
-/// what renders". Any tile count from zero to three must lay out inside a
-/// phone-width column without overflowing.
+/// StatTileRow contract (specs/trips-page-insights, restated by the trips-page
+/// editorial redesign): a caption LINE of `value label` pairs — "12 trips ·
+/// 284 travel days · 37 cities" — not the grid of equal-width tiles it was
+/// until then. The pairs read left to right, a separator sits between them and
+/// never before the first, and the weight is on the number.
+///
+/// The widget formats and pluralizes NOTHING — values arrive pre-formatted and
+/// the l10n plural is resolved at the call site — so the assertions here are
+/// "what was passed is what renders". Any stat count from zero to three must
+/// lay out inside a phone-width column without overflowing.
 
 /// Hosts the row at a fixed width; [width] narrows to the 360px phone floor
-/// where three tiles are tightest.
+/// where three stats are tightest.
 Widget _host(List<StatTileData> tiles, {double width = 400}) => MaterialApp(
       home: Scaffold(
         body: Center(
@@ -21,7 +25,7 @@ Widget _host(List<StatTileData> tiles, {double width = 400}) => MaterialApp(
     );
 
 void main() {
-  testWidgets('renders every tile value over its label',
+  testWidgets('renders every value beside its own label',
       (WidgetTester tester) async {
     await tester.pumpWidget(_host(const [
       StatTileData(value: '12', label: 'Trips'),
@@ -32,10 +36,20 @@ void main() {
     for (final text in ['12', 'Trips', '284', 'Travel days', '37', 'Cities']) {
       expect(find.text(text), findsOneWidget);
     }
-    // Value above label, not beside it.
+    // Label beside its value and after it, sharing the line — the caption
+    // form. Stacked tiles put the label BELOW, which is the shape this row
+    // deliberately stopped being. Asserted as overlapping vertical extents
+    // rather than equal tops: the two are baseline-aligned at different sizes,
+    // so their boxes start at different y by design.
+    final value = tester.getRect(find.text('12'));
+    final label = tester.getRect(find.text('Trips'));
+    expect(label.left, greaterThan(value.left));
+    expect(label.top, lessThan(value.bottom));
+    expect(value.top, lessThan(label.bottom));
+    // ...and the next pair follows the previous one's label.
     expect(
-      tester.getTopLeft(find.text('12')).dy,
-      lessThan(tester.getTopLeft(find.text('Trips')).dy),
+      tester.getTopLeft(find.text('284')).dx,
+      greaterThan(label.left),
     );
   });
 
@@ -52,19 +66,27 @@ void main() {
     expect(find.text('Cities'), findsOneWidget);
   });
 
-  testWidgets('tiles share the width equally', (WidgetTester tester) async {
+  testWidgets('separators sit between stats, never before the first',
+      (WidgetTester tester) async {
+    // The dots are what make the line read as one caption instead of three
+    // loose facts — and a line that opens with a dot reads as a fragment of
+    // something above it.
     await tester.pumpWidget(_host(const [
       StatTileData(value: '1', label: 'Trip'),
       StatTileData(value: '284', label: 'Travel days'),
       StatTileData(value: '37', label: 'Cities'),
     ]));
 
-    final widths = tester
-        .widgetList<Column>(find.descendant(
-            of: find.byType(StatTileRow), matching: find.byType(Column)))
-        .map((c) => tester.getSize(find.byWidget(c)).width)
-        .toSet();
-    expect(widths, hasLength(1));
+    expect(find.text('·'), findsNWidgets(2));
+    expect(
+      tester.getTopLeft(find.text('1')).dx,
+      lessThan(tester.getTopLeft(find.text('·').first).dx),
+    );
+
+    // One stat is a caption of its own: nothing to separate.
+    await tester.pumpWidget(
+        _host(const [StatTileData(value: '1', label: 'Trip')]));
+    expect(find.text('·'), findsNothing);
   });
 
   testWidgets('empty, single, and three-tile rows all lay out without overflow',

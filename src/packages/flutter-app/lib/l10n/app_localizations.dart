@@ -3761,7 +3761,7 @@ abstract class AppLocalizations {
   /// No description provided for @tripsListTitle.
   ///
   /// In en, this message translates to:
-  /// **'My Trips'**
+  /// **'My trips'**
   String get tripsListTitle;
 
   /// No description provided for @tripsListErrorTitle.
@@ -3851,19 +3851,19 @@ abstract class AppLocalizations {
   /// No description provided for @tripsListStatTrips.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one{Trip} other{Trips}}'**
+  /// **'{count, plural, one{trip} other{trips}}'**
   String tripsListStatTrips(int count);
 
   /// No description provided for @tripsListStatTravelDays.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one{Travel day} other{Travel days}}'**
+  /// **'{count, plural, one{travel day} other{travel days}}'**
   String tripsListStatTravelDays(int count);
 
   /// No description provided for @tripsListStatCities.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one{City} other{Cities}}'**
+  /// **'{count, plural, one{city} other{cities}}'**
   String tripsListStatCities(int count);
 
   /// No description provided for @tripsListStaysCount.

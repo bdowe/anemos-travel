@@ -1411,7 +1411,7 @@
   "tripReorderPlaces": "Reorder places",
   "tripReorderHint": "Drag to change the visit order within this section.",
   "tripSaveOrder": "Save order",
-  "tripsListTitle": "My Trips",
+  "tripsListTitle": "My trips",
   "tripsListErrorTitle": "Could not load trips",
   "tripsListErrorMessage": "Check your connection and try again.",
   "tripsListEmptyTitle": "No trips yet",
@@ -1433,7 +1433,7 @@
   "tripsListTravelMap": "Your travel map",
   "tripsListStatsTraveled": "Traveled",
   "tripsListStatsPlanned": "Planned",
-  "tripsListStatTrips": "{count, plural, one{Trip} other{Trips}}",
+  "tripsListStatTrips": "{count, plural, one{trip} other{trips}}",
   "@tripsListStatTrips": {
     "placeholders": {
       "count": {
@@ -1441,7 +1441,7 @@
       }
     }
   },
-  "tripsListStatTravelDays": "{count, plural, one{Travel day} other{Travel days}}",
+  "tripsListStatTravelDays": "{count, plural, one{travel day} other{travel days}}",
   "@tripsListStatTravelDays": {
     "placeholders": {
       "count": {
@@ -1449,7 +1449,7 @@
       }
     }
   },
-  "tripsListStatCities": "{count, plural, one{City} other{Cities}}",
+  "tripsListStatCities": "{count, plural, one{city} other{cities}}",
   "@tripsListStatCities": {
     "placeholders": {
       "count": {
