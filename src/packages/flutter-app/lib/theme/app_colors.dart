@@ -37,11 +37,38 @@ abstract final class AppColors {
   /// Deep teal page field behind every landing section.
   static final Color landingCanvas = Color.lerp(brandDark, Colors.black, 0.55)!;
 
-  /// Glass card fill on [landingCanvas] (feature grid, prompt field).
+  /// Glass card fill on [landingCanvas] (the feature grid's cards).
   static final Color landingCard = Colors.white.withValues(alpha: 0.06);
+
+  // The glass ladder: every raised fill on the canvas is white at a named
+  // strength — card 6% < wellFaint 8% < field 10% < well 12% — so a new
+  // landing surface picks a rung instead of minting another alpha.
+  /// Recessed well on [landingCanvas] (the how-it-works step circles).
+  static final Color landingWellFaint = Colors.white.withValues(alpha: 0.08);
+
+  /// Input fill on [landingCanvas] (the hero prompt field).
+  static final Color landingField = Colors.white.withValues(alpha: 0.10);
+
+  /// Raised well on [landingCanvas] (prefill chips, feature-icon chips).
+  static final Color landingWell = Colors.white.withValues(alpha: 0.12);
 
   /// Hairline borders on [landingCanvas].
   static final Color landingHairline = Colors.white.withValues(alpha: 0.14);
+
+  // The ink ladder: white text and strokes on the canvas, again by role, so
+  // the landing's whole dark-canvas system reads from this one block.
+  /// Disabled control fill on [landingCanvas] (the hero submit at rest).
+  static final Color landingInkDisabled = Colors.white.withValues(alpha: 0.35);
+
+  /// Faint ink — placeholder/hint text on [landingCanvas].
+  static final Color landingInkFaint = Colors.white.withValues(alpha: 0.6);
+
+  /// Muted ink — secondary copy and focus strokes on [landingCanvas].
+  static final Color landingInkMuted = Colors.white.withValues(alpha: 0.7);
+
+  /// Strong ink — emphasized secondary copy on [landingCanvas] (hero
+  /// subtitle).
+  static final Color landingInkStrong = Colors.white.withValues(alpha: 0.85);
 
   /// Bottom band of the landing hero: dissolves the photo into
   /// [landingCanvas] instead of ending on a hard edge.

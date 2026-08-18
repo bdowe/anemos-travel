@@ -178,6 +178,28 @@ void main() {
     );
   });
 
+  testWidgets('the CTA label paints brandDark on its white button',
+      (tester) async {
+    // Regression pin for the invisible-label class: under the route's
+    // forced dark Theme, an unstated text color on a titleMedium/labelLarge
+    // base resolves to the dark scheme's near-white onSurface — unreadable
+    // on the CTA's white FilledButton. The color must be stated outright.
+    await _pump(tester, surface: const Size(1200, 900));
+    await tester.scrollUntilVisible(find.byType(LandingCtaBand), 400,
+        scrollable: find.byType(Scrollable).first);
+
+    final label = tester.widget<Text>(
+      find.descendant(
+        of: find.descendant(
+          of: find.byType(LandingCtaBand),
+          matching: find.byType(FilledButton),
+        ),
+        matching: find.byType(Text),
+      ),
+    );
+    expect(label.style?.color, AppColors.brandDark);
+  });
+
   testWidgets('chips prefill the field and never call the handoff',
       (tester) async {
     final recorder = _HandoffRecorder();

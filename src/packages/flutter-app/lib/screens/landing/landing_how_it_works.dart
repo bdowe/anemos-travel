@@ -69,7 +69,7 @@ class _HowStep extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withValues(alpha: 0.08),
+        color: AppColors.landingWellFaint,
         border: Border.all(color: AppColors.landingHairline),
       ),
       child: Text(
@@ -87,7 +87,7 @@ class _HowStep extends StatelessWidget {
     final body = Text(
       step.body,
       style: theme.textTheme.bodySmall
-          ?.copyWith(color: Colors.white.withValues(alpha: 0.7)),
+          ?.copyWith(color: AppColors.landingInkMuted),
     );
 
     if (layout == _HowStepLayout.column) {

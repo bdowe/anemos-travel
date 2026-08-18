@@ -53,8 +53,15 @@ class LandingCtaBand extends StatelessWidget {
               ),
               child: Text(
                 l10n.landingGetStarted,
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                // labelLarge (the button's own slot) sized up to the CTA
+                // tier. Color stated outright: M3's titleMedium/labelLarge
+                // carry inherit:false + onSurface, so an unstated color
+                // paints the dark theme's near-white over this white button.
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.brandDark,
+                    ),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
