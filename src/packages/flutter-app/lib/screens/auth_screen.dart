@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,9 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
 import '../services/auth_service.dart';
-import '../theme/app_colors.dart';
-import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
+import '../widgets/auth_photo_panel.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/language_menu_button.dart';
 import '../widgets/page_container.dart';
@@ -17,26 +15,6 @@ import '../widgets/sso_buttons.dart';
 import '../widgets/legal_links.dart';
 import '../utils/errors.dart';
 import '../utils/snack.dart';
-
-/// The landing family's established wide switch: at 900px and up the photo
-/// becomes a full-height pane beside the form.
-const double _kWideBreakpoint = 900;
-
-/// The form pane's clamp on wide layouts. The floor is the 420px auth column
-/// plus its two xl gutters, so the column never compresses; the cap keeps the
-/// photograph dominant on ultrawide windows.
-const double _kFormPaneMinWidth = 468;
-const double _kFormPaneMaxWidth = 560;
-
-/// Below the wide switch, the photo band appears only when the viewport is at
-/// least this tall, so small phones and keyboard-up viewports keep the
-/// pre-photo layout with the form fully in reach.
-const double _kBandMinViewportHeight = 620;
-
-/// The band takes 22% of the viewport within these bounds: enough photo to
-/// set the scene, never enough to bury the fields.
-const double _kBandMinHeight = 140;
-const double _kBandMaxHeight = 220;
 
 class AuthScreen extends ConsumerStatefulWidget {
   /// Whether the form opens in sign-in (true) or create-account (false) mode.
@@ -211,14 +189,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     // must follow the box this route was given — constraints, never
     // MediaQuery.sizeOf.
     return LayoutBuilder(builder: (context, constraints) {
-      final wide = constraints.maxWidth >= _kWideBreakpoint;
+      final wide = constraints.maxWidth >= kAuthWideBreakpoint;
       // The pinned band earns its place only when the viewport is tall
       // enough to keep the form comfortably reachable below it. Deliberate
       // side effect: opening the keyboard shrinks maxHeight below the
       // threshold and the band yields its space to the form — form first
       // when typing. Not a bug to "fix" with MediaQuery.sizeOf.
       final showBand =
-          !wide && constraints.maxHeight >= _kBandMinViewportHeight;
+          !wide && constraints.maxHeight >= kAuthBandMinViewportHeight;
       final hasPhoto = wide || showBand;
 
       return Scaffold(
@@ -253,7 +231,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ? Row(
                 children: [
                   const Expanded(
-                    child: _AuthPhotoPanel(
+                    child: AuthPhotoPanel(
                       key: Key('auth-photo-panel'),
                       wide: true,
                     ),
@@ -263,8 +241,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     // field), floored so the 420px column and its gutters
                     // never compress, capped so the photo stays dominant
                     // on ultrawide screens.
-                    width: (constraints.maxWidth * 0.45)
-                        .clamp(_kFormPaneMinWidth, _kFormPaneMaxWidth),
+                    width: authFormPaneWidth(constraints.maxWidth),
                     // The transparent bar floats over this pane; give
                     // scroll-to-top room to clear it.
                     child: _formScroller(topInset: kToolbarHeight),
@@ -275,9 +252,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 ? Column(
                     children: [
                       SizedBox(
-                        height: (constraints.maxHeight * 0.22)
-                            .clamp(_kBandMinHeight, _kBandMaxHeight),
-                        child: const _AuthPhotoPanel(
+                        height: authBandHeight(constraints.maxHeight),
+                        child: const AuthPhotoPanel(
                           key: Key('auth-photo-panel'),
                           wide: false,
                         ),
@@ -468,92 +444,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         ),
       ),
     );
-  }
-}
-
-/// The destination photograph that gives sign-in its atmosphere: a
-/// full-height pane on wide layouts, a pinned top band on narrow ones.
-/// The landing hero's photo stack — gradient fallback, cover photo,
-/// heroScrim — without a logo: the form column already carries the brand,
-/// and the landing hero records why a surface brands only once.
-class _AuthPhotoPanel extends StatelessWidget {
-  /// Pane vs band — decides the tagline's scale and padding.
-  final bool wide;
-
-  const _AuthPhotoPanel({super.key, required this.wide});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          // Branded gradient behind the photo: visible until the image
-          // decodes and whenever it fails to load, so the scrim and the
-          // tagline always sit on a dark branded surface.
-          DecoratedBox(
-            decoration: BoxDecoration(gradient: AppColors.brandGradient),
-          ),
-          Image.asset(
-            'assets/images/hero_santorini.jpg',
-            fit: BoxFit.cover,
-            // Decorative — the form column carries the screen's meaning.
-            excludeFromSemantics: true,
-            // Bound the decode to the panel, not the window: on wide
-            // layouts this pane is roughly half the window. Quantized to
-            // 320px buckets so a continuous resize reuses the cached
-            // decode instead of minting one per pixel of width.
-            cacheWidth: math.min(
-              1600,
-              ((constraints.maxWidth *
-                          MediaQuery.devicePixelRatioOf(context)) /
-                      320)
-                  .ceil() *
-                  320,
-            ),
-            // Hold the previous frame while a new bucket decodes
-            // mid-resize.
-            gaplessPlayback: true,
-            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-              if (wasSynchronouslyLoaded) return child;
-              return AnimatedOpacity(
-                opacity: frame == null ? 0 : 1,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOut,
-                child: child,
-              );
-            },
-            // The gradient underneath is the fallback.
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(gradient: AppColors.heroScrim),
-          ),
-          // The scrim is bottomLeft-darkest — the tagline sits exactly
-          // there.
-          Align(
-            alignment: Alignment.bottomLeft,
-            child: Padding(
-              padding: EdgeInsets.all(wide ? AppSpacing.xl : AppSpacing.lg),
-              child: Text(
-                context.l10n.authTagline,
-                style: TextStyle(
-                  // Marcellus ships only w400 — always stated, or web
-                  // synthesizes faux-bold. Display sizes stated locally,
-                  // the landing-hero precedent: 38 suits the half-window
-                  // pane, 24 the band.
-                  fontFamily: AppFonts.display,
-                  fontWeight: FontWeight.w400,
-                  fontSize: wide ? 38 : 24,
-                  height: 1.15,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    });
   }
 }
 
