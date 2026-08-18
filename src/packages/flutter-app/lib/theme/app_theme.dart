@@ -82,7 +82,7 @@ abstract final class AppTheme {
       cardTheme: CardThemeData(
         elevation: 3,
         color: isDark ? colorScheme.surfaceContainerHigh : null,
-        shadowColor: Colors.black.withValues(alpha: isDark ? 0.5 : 0.16),
+        shadowColor: _raisedShadow(isDark),
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
       ),
@@ -90,18 +90,61 @@ abstract final class AppTheme {
       // most of them didn't and took raw M3 instead — including the trip's
       // own `⋮`, which then opened as a panel OVERLAPPING the gradient app
       // bar and inheriting its white foreground. Stated once here:
-      // `under` clears the bar, and the surface/elevation/radius match
+      // `under` clears the bar, and the surface/elevation/radius/shadow match
       // cardTheme so a menu reads like every other raised thing in the app.
       // Dark takes the same explicit tonal step cardTheme does, for the same
       // reason: a `surface`-colored menu floating over a `surface`-colored
       // page is a hairline border away from invisible, and the tint that
       // would otherwise separate it is deliberately off everywhere.
+      //
+      // Row text is the READING register, not the button one: our labelLarge
+      // carries w600 for buttons, and menus inherit labelLarge by default, so
+      // every row shouted equally. bodyMedium at w500 sits menu rows on the
+      // Inter weight ladder below titles (hierarchy is weight, not size) and
+      // leaves w600 free to mean something inside a menu — the selected
+      // language, a row a widget chooses to emphasize. Disabled keeps M3's
+      // onSurface-at-38% so items a consumer disables still read disabled.
       popupMenuTheme: PopupMenuThemeData(
         color: isDark ? colorScheme.surfaceContainerHigh : colorScheme.surface,
         elevation: 3,
+        shadowColor: _raisedShadow(isDark),
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
         position: PopupMenuPosition.under,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final style = _menuRowStyle(textTheme, colorScheme);
+          if (states.contains(WidgetState.disabled)) {
+            return style?.copyWith(
+              color: colorScheme.onSurface.withValues(alpha: 0.38),
+            );
+          }
+          return style;
+        }),
+      ),
+      // MenuAnchor menus (the Bookings view's "+ Add booking") are a second
+      // menu system with its own M3 defaults — surfaceContainer fill, tonal
+      // tint, 4px corners — so without this block they read as a stranger
+      // next to every popup menu. Same card treatment, same row register,
+      // stated once for both systems via the shared helpers above.
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(
+            isDark ? colorScheme.surfaceContainerHigh : colorScheme.surface,
+          ),
+          elevation: const WidgetStatePropertyAll(3),
+          shadowColor: WidgetStatePropertyAll(_raisedShadow(isDark)),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shape: const WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+          ),
+        ),
+      ),
+      menuButtonTheme: MenuButtonThemeData(
+        style: ButtonStyle(
+          textStyle: WidgetStatePropertyAll(
+            _menuRowStyle(textTheme, colorScheme),
+          ),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         border: const OutlineInputBorder(borderRadius: AppRadius.smAll),
@@ -137,4 +180,20 @@ abstract final class AppTheme {
       ),
     );
   }
+
+  /// The one shadow color every raised surface casts (cards, popup menus,
+  /// MenuAnchor menus). Light is a soft 16% black; dark goes 50% because the
+  /// shadow only grounds the surface there — the tonal step does the
+  /// separating.
+  static Color _raisedShadow(bool isDark) =>
+      Colors.black.withValues(alpha: isDark ? 0.5 : 0.16);
+
+  /// Menu-row text for BOTH menu systems (popup menus and MenuAnchor items),
+  /// so the two can't drift apart: Inter at bodyMedium size, w500 — below
+  /// titles on the weight ladder, above body. See popupMenuTheme's comment.
+  static TextStyle? _menuRowStyle(TextTheme textTheme, ColorScheme scheme) =>
+      textTheme.bodyMedium?.copyWith(
+        fontWeight: FontWeight.w500,
+        color: scheme.onSurface,
+      );
 }

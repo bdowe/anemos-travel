@@ -20,20 +20,30 @@ String _initialFor(String displayName) {
   return t.isEmpty ? '?' : t[0].toUpperCase();
 }
 
+/// Width floor for the account panel (the 280px popup cap stays the max).
+/// Short names would otherwise hug to a strip; a floored panel reads as a
+/// designed surface and keeps its geometry stable across users.
+const BoxConstraints _accountMenuConstraints = BoxConstraints(minWidth: 240);
+
 /// One style for the avatar initial everywhere it renders, so the popup
 /// header, app-bar avatar and rail avatar can't drift apart.
 TextStyle? _avatarLabelStyle(ThemeData theme) => theme.textTheme.labelLarge
     ?.copyWith(color: Colors.white, fontWeight: FontWeight.w600);
 
-/// Icon + label row for the popup actions. `Flexible` + ellipsis keeps long
-/// translations inside the 280px popup cap instead of overflowing the row.
-Widget _menuRow(Widget icon, String label) => Row(
+/// Icon + label row for the popup actions. `Expanded` + ellipsis keeps long
+/// translations inside the 280px popup cap instead of overflowing the row,
+/// and gives [trailing] (the unread count) a stable right edge to sit on.
+Widget _menuRow(Widget icon, String label, {Widget? trailing}) => Row(
       children: [
         icon,
         const SizedBox(width: AppSpacing.md),
-        Flexible(
+        Expanded(
           child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
+        if (trailing != null) ...[
+          const SizedBox(width: AppSpacing.sm),
+          trailing,
+        ],
       ],
     );
 
@@ -75,13 +85,21 @@ List<PopupMenuEntry<String>> _items(
   return [
     if (displayName != null) ...[
       // Identity, not an action — styled explicitly so the disabled item
-      // doesn't read as greyed-out.
+      // doesn't read as greyed-out. The header is the menu's anchor: a 40px
+      // avatar and a titleMedium name give "who am I" real presence (the
+      // Etsy/Hootsuite identity-block move), and the extra vertical padding
+      // is what separates a designed panel from a list that happens to
+      // start with a name.
       PopupMenuItem<String>(
         enabled: false,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
         child: Row(
           children: [
             CircleAvatar(
-              radius: 16,
+              radius: 20,
               backgroundColor: AppColors.brand,
               child: Text(
                 _initialFor(displayName),
@@ -89,7 +107,7 @@ List<PopupMenuEntry<String>> _items(
               ),
             ),
             const SizedBox(width: AppSpacing.md),
-            Flexible(
+            Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -98,7 +116,7 @@ List<PopupMenuEntry<String>> _items(
                     displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
+                    style: theme.textTheme.titleMedium?.copyWith(
                       color: theme.colorScheme.onSurface,
                     ),
                   ),
@@ -119,6 +137,9 @@ List<PopupMenuEntry<String>> _items(
       ),
       const PopupMenuDivider(),
     ],
+    // "How I travel" first (the quiz rebuilds the profile, so it sits with
+    // it), then account plumbing. One group — four rows don't need divider
+    // chrome between them.
     PopupMenuItem<String>(
       value: 'preferences',
       child: _menuRow(
@@ -127,25 +148,25 @@ List<PopupMenuEntry<String>> _items(
       ),
     ),
     PopupMenuItem<String>(
-      value: 'notifications',
-      child: _menuRow(
-        unreadNotifications > 0
-            ? Badge.count(
-                count: unreadNotifications,
-                child: Icon(Icons.notifications_none,
-                    size: 20, color: theme.colorScheme.onSurfaceVariant),
-              )
-            : Icon(Icons.notifications_none,
-                size: 20, color: theme.colorScheme.onSurfaceVariant),
-        l10n.accountMenuNotifications,
-      ),
-    ),
-    PopupMenuItem<String>(
       value: 'retake_quiz',
       child: _menuRow(
         Icon(Icons.refresh,
             size: 20, color: theme.colorScheme.onSurfaceVariant),
         l10n.accountMenuRetakeQuiz,
+      ),
+    ),
+    PopupMenuItem<String>(
+      value: 'notifications',
+      child: _menuRow(
+        Icon(Icons.notifications_none,
+            size: 20, color: theme.colorScheme.onSurfaceVariant),
+        l10n.accountMenuNotifications,
+        // The count sits at the row's end as its own quiet figure instead of
+        // riding the icon — the row stays scannable and the number reads at
+        // a glance.
+        trailing: unreadNotifications > 0
+            ? Badge.count(count: unreadNotifications)
+            : null,
       ),
     ),
     PopupMenuItem<String>(
@@ -215,6 +236,7 @@ class AccountMenu extends ConsumerWidget {
       // Surface, elevation, radius and the below-the-bar position now come
       // from `popupMenuTheme` (app_theme.dart) — stated once for every menu
       // in the app rather than per call site.
+      constraints: _accountMenuConstraints,
       icon: unread > 0 ? Badge.count(count: unread, child: avatar) : avatar,
       onSelected: (v) => _onSelected(context, ref, v),
       itemBuilder: (_) => _items(theme, l10n, user?.displayName, user?.email,
@@ -244,6 +266,7 @@ class RailAccountButton extends ConsumerWidget {
     );
     return PopupMenuButton<String>(
       tooltip: l10n.accountMenuTooltip,
+      constraints: _accountMenuConstraints,
       icon: unread > 0 ? Badge.count(count: unread, child: avatar) : avatar,
       onSelected: (v) => _onSelected(context, ref, v),
       itemBuilder: (_) => _items(theme, l10n, user?.displayName, user?.email,
