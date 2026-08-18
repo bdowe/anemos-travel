@@ -308,8 +308,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/bdowe/goldentempo-api:latest
-            ghcr.io/bdowe/goldentempo-api:${{ github.sha }}
+            ghcr.io/golden-tempo/goldentempo-api:latest
+            ghcr.io/golden-tempo/goldentempo-api:${{ github.sha }}
           build-args: |
             SENTRY_RELEASE=${{ github.sha }}
           cache-from: type=gha,scope=api
@@ -325,8 +325,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/bdowe/goldentempo-gateway:latest
-            ghcr.io/bdowe/goldentempo-gateway:${{ github.sha }}
+            ghcr.io/golden-tempo/goldentempo-gateway:latest
+            ghcr.io/golden-tempo/goldentempo-gateway:${{ github.sha }}
           build-args: |
             GIT_SHA=${{ github.sha }}
           cache-from: type=gha,scope=gateway
