@@ -1911,6 +1911,14 @@
       }
     }
   },
+  "mapShowHomeAirport": "Show home airport",
+  "@mapShowHomeAirport": {
+    "description": "Tooltip on the trip map's home-airport toggle button while the overlay (the flight_takeoff pin and its dashed journey legs) is hidden; tapping shows it. Named map*HomeAirport to sit beside mapHomeAirport, the pin tooltip this button shows and hides — deliberately not mapToggle*: the tooltip states the action, not the mechanism."
+  },
+  "mapHideHomeAirport": "Hide home airport",
+  "@mapHideHomeAirport": {
+    "description": "Tooltip on the same toggle button while the overlay is shown; tapping hides it, tightening the camera on the destinations instead of the leg home."
+  },
   "accountMenuTooltip": "Account",
   "accountMenuTravelProfile": "Travel profile",
   "accountMenuNotifications": "Notifications",

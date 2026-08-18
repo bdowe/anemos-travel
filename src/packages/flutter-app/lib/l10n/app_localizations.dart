@@ -4778,6 +4778,18 @@ abstract class AppLocalizations {
   /// **'Home airport ({code})'**
   String mapHomeAirport(String code);
 
+  /// Tooltip on the trip map's home-airport toggle button while the overlay (the flight_takeoff pin and its dashed journey legs) is hidden; tapping shows it. Named map*HomeAirport to sit beside mapHomeAirport, the pin tooltip this button shows and hides — deliberately not mapToggle*: the tooltip states the action, not the mechanism.
+  ///
+  /// In en, this message translates to:
+  /// **'Show home airport'**
+  String get mapShowHomeAirport;
+
+  /// Tooltip on the same toggle button while the overlay is shown; tapping hides it, tightening the camera on the destinations instead of the leg home.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide home airport'**
+  String get mapHideHomeAirport;
+
   /// No description provided for @accountMenuTooltip.
   ///
   /// In en, this message translates to:

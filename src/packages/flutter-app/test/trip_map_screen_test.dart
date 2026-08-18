@@ -9,6 +9,7 @@ import 'package:travel_route_planner/models/accommodation.dart';
 import 'package:travel_route_planner/models/itinerary_item.dart';
 import 'package:travel_route_planner/providers/flights_provider.dart';
 import 'package:travel_route_planner/screens/trip_map_screen.dart';
+import 'package:travel_route_planner/widgets/app_map.dart';
 import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
@@ -152,6 +153,17 @@ void main() {
     final firstCity = LatLng(_items.first.latitude, _items.first.longitude);
     final lastCity = LatLng(_items.last.latitude, _items.last.longitude);
 
+    // The toggle button reuses the pin's icon, so positive assertions scope
+    // to where each lives: markers inside FlutterMap, the control outside it.
+    final homePin = find.descendant(
+      of: find.byType(FlutterMap),
+      matching: find.byIcon(Icons.flight_takeoff),
+    );
+    final homeToggle = find.descendant(
+      of: find.byType(MapControlButton),
+      matching: find.byIcon(Icons.flight_takeoff),
+    );
+
     Widget appWithHome() => _app(
           homeAirport: 'EWR',
           firstCityPoint: firstCity,
@@ -169,20 +181,72 @@ void main() {
         await tester.pumpAndSettle();
 
         // Unfocused overview: both legs → home pin present.
-        expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+        expect(homePin, findsOneWidget);
 
-        // Mid-trip leg: neither home leg belongs to it → no orphan pin.
+        // Mid-trip leg: neither home leg belongs to it → no orphan pin, and
+        // no toggle either (unscoped on purpose: with no candidates the
+        // control would be a dead button).
         await _tapChip(tester, 'Rome');
         expect(find.byIcon(Icons.flight_takeoff), findsNothing);
 
         // The first leg carries the outbound leg, the last leg the return.
         await _tapChip(tester, 'Paris');
-        expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+        expect(homePin, findsOneWidget);
         await _tapChip(tester, 'Berlin');
-        expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+        expect(homePin, findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
+
+    testWidgets('wide window defaults the overlay on; the toggle hides it', (
+      tester,
+    ) async {
+      // Default 800x600 surface: at kRailBreakpoint, the wide default.
+      await tester.pumpWidget(appWithHome());
+      await tester.pumpAndSettle();
+
+      expect(homePin, findsOneWidget);
+      expect(homeToggle, findsOneWidget);
+      Tooltip tooltipOf(Finder f) => tester
+          .widget<Tooltip>(find.ancestor(of: f, matching: find.byType(Tooltip)));
+      expect(tooltipOf(homeToggle).message, 'Hide home airport');
+
+      await tester.tap(homeToggle);
+      await tester.pumpAndSettle();
+      expect(homePin, findsNothing);
+      expect(homeToggle, findsOneWidget); // the way back on survives
+      expect(tooltipOf(homeToggle).message, 'Show home airport');
+
+      await tester.tap(homeToggle);
+      await tester.pumpAndSettle();
+      expect(homePin, findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('narrow window defaults the overlay off; the toggle shows it', (
+      tester,
+    ) async {
+      // The default is a WINDOW question (MediaQuery), so shrink the view —
+      // setSurfaceSize only resizes layout, not MediaQuery.sizeOf.
+      tester.view.physicalSize = const Size(360, 690);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(appWithHome());
+      await tester.pumpAndSettle();
+
+      // Phone default: tight city framing — no pin, but a dimmed way in.
+      expect(homePin, findsNothing);
+      expect(homeToggle, findsOneWidget);
+      expect(tester.widget<Icon>(homeToggle).color, Colors.white38);
+
+      await tester.tap(homeToggle);
+      await tester.pumpAndSettle();
+      expect(homePin, findsOneWidget);
+      expect(tester.widget<Icon>(homeToggle).color, Colors.white);
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('unresolved home airport renders the map as before', (
       tester,

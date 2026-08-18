@@ -301,11 +301,17 @@ class MapControlButton extends StatelessWidget {
   final String? tooltip;
   final VoidCallback onTap;
 
+  /// Icon color; callers dim a toggle's off state with Colors.white38 (the
+  /// muted-over-scrim value MapLegChips uses) instead of a selection ring —
+  /// on these maps a ring means "focused on this city".
+  final Color iconColor;
+
   const MapControlButton({
     super.key,
     required this.icon,
     this.tooltip,
     required this.onTap,
+    this.iconColor = Colors.white,
   });
 
   @override
@@ -330,7 +336,7 @@ class MapControlButton extends StatelessWidget {
                   side: BorderSide(color: Colors.white24),
                 ),
               ),
-              child: Icon(icon, size: 20, color: Colors.white),
+              child: Icon(icon, size: 20, color: iconColor),
             ),
           ),
         ),

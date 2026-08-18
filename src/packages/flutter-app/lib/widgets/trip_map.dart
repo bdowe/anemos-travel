@@ -180,6 +180,21 @@ class TripMap extends StatefulWidget {
   /// the control stack exactly as before.
   final VoidCallback? onExpand;
 
+  /// Flips the traveler's show/hide choice for the [home] overlay. Non-null
+  /// renders the toggle as the leftmost bottom-right control when
+  /// [interactive]; null — the default, and what hosts pass whenever the
+  /// trip has nothing to toggle (ground trip, no resolvable airport, a
+  /// mid-trip leg focus, shared views) — renders no button, the [onExpand]
+  /// pattern.
+  final VoidCallback? onToggleHome;
+
+  /// The toggle's current state: whether the host is showing the overlay
+  /// (lit icon, "Hide…" tooltip) or has it hidden (dimmed icon, "Show…").
+  /// Deliberately not inferred from [home]: an empty list means either
+  /// "hidden by choice" or "nothing survived gating", and the button must
+  /// only dim for the first. Meaningless while [onToggleHome] is null.
+  final bool homeShown;
+
   const TripMap({
     super.key,
     required this.items,
@@ -197,6 +212,8 @@ class TripMap extends StatefulWidget {
     this.home = const [],
     this.destinations,
     this.onExpand,
+    this.onToggleHome,
+    this.homeShown = true,
   });
 
   /// Whether [a] would render as a stay pin: geocoded (null means "not
@@ -864,6 +881,21 @@ class _TripMapState extends State<TripMap> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+                    if (widget.onToggleHome != null) ...[
+                      MapControlButton(
+                        icon: Icons.flight_takeoff,
+                        // Dimmed = hidden; no selection ring — on these maps
+                        // the ring means "focused on this city".
+                        iconColor: widget.homeShown
+                            ? Colors.white
+                            : Colors.white38,
+                        tooltip: widget.homeShown
+                            ? l10n.mapHideHomeAirport
+                            : l10n.mapShowHomeAirport,
+                        onTap: widget.onToggleHome!,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     if (widget.onExpand != null) ...[
                       MapControlButton(
                         icon: Icons.fullscreen,
