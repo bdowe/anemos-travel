@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-18T00:00:00Z",
+  "title": "Design System: Anemos",
+  "extensions": {
+    "colorMeta": {
+      "aegean-teal": {
+        "role": "primary",
+        "displayName": "Aegean Teal",
+        "canonical": "#00796B",
+        "tonalRamp": ["#004D40", "#00695C", "#00796B", "#00897B", "#009688", "#26A69A", "#4DB6AC", "#80CBC4", "#B2DFDB", "#E0F2F1"]
+      },
+      "harbor-light": {
+        "role": "primary",
+        "displayName": "Harbor Light",
+        "canonical": "#00897B"
+      },
+      "harbor-dark": {
+        "role": "primary",
+        "displayName": "Harbor Dark",
+        "canonical": "#004D40"
+      },
+      "shallows-tint": {
+        "role": "primary",
+        "displayName": "Shallows Tint",
+        "canonical": "#E0F2F1"
+      },
+      "heritage-gold": {
+        "role": "secondary",
+        "displayName": "Heritage Gold",
+        "canonical": "#E8C452"
+      },
+      "heritage-gold-deep": {
+        "role": "secondary",
+        "displayName": "Heritage Gold (deep)",
+        "canonical": "#B98B1E"
+      },
+      "midnight-harbor": {
+        "role": "secondary",
+        "displayName": "Midnight Harbor",
+        "canonical": "#00231D"
+      },
+      "map-scrim": {
+        "role": "neutral",
+        "displayName": "Map Scrim",
+        "canonical": "rgba(0, 0, 0, 0.6)"
+      },
+      "paper-fill": {
+        "role": "neutral",
+        "displayName": "Paper Fill",
+        "canonical": "#FAFAFA"
+      }
+    },
+    "typographyMeta": {
+      "wordmark": { "displayName": "Wordmark (Cinzel)", "purpose": "The ANEMOS wordmark only, via BrandWordmark; small caps, per-surface measured tracking. Never retyped." },
+      "headline": { "displayName": "Headline (Marcellus)", "purpose": "Page and section headings, app-bar titles. One weight (w400), sentence case, sizes 34/30/26." },
+      "title": { "displayName": "Title (Inter)", "purpose": "Card titles and row headers; w700 large, w600 medium/small — hierarchy by weight." },
+      "body": { "displayName": "Body (Inter)", "purpose": "Prose and transcripts; regular weight." },
+      "label": { "displayName": "Label (Inter)", "purpose": "Buttons, chips, field labels; w600, sentence case. Every number in the app is Inter." }
+    },
+    "shadows": [
+      { "name": "soft", "value": "0 3px 10px rgba(0,0,0,0.10)", "purpose": "Custom raised containers outside the Material Card." },
+      { "name": "card-light", "value": "0 3px 6px rgba(0,0,0,0.16)", "purpose": "Card theme, light mode (elevation 3, surface tint off)." },
+      { "name": "brand-card", "value": "0 4px 10px rgba(0,77,64,0.30)", "purpose": "Under brand-gradient cards — hero strips, recent/live trip cards." },
+      { "name": "hero", "value": "0 6px 16px rgba(0,77,64,0.40)", "purpose": "Full-bleed landing heroes. All shadows offset downward — light from above." }
+    ],
+    "motion": [],
+    "breakpoints": [
+      { "name": "auth-band", "value": "620px" },
+      { "name": "split-pane", "value": "900px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action per surface — filled scheme primary seeded from Aegean Teal, card radius.",
+      "html": "<button class=\"ds-btn-primary\">Plan a trip</button>",
+      "css": ".ds-btn-primary { background: #00796B; color: #fff; font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 600; padding: 12px 24px; border: none; border-radius: 12px; cursor: pointer; transition: background 0.2s; } .ds-btn-primary:hover { background: #00695C; } .ds-btn-primary:focus-visible { outline: 2px solid #00796B; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Raised secondary action — white surface, teal foreground, input radius, soft downward shadow.",
+      "html": "<button class=\"ds-btn-secondary\">See all</button>",
+      "css": ".ds-btn-secondary { background: #fff; color: #00796B; font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 600; padding: 12px 24px; border: none; border-radius: 8px; box-shadow: 0 3px 10px rgba(0,0,0,0.10); cursor: pointer; transition: box-shadow 0.2s; } .ds-btn-secondary:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.14); } .ds-btn-secondary:focus-visible { outline: 2px solid #00796B; outline-offset: 2px; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The standard raised surface — 12px radius, real downward shadow, no Material tonal tint.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">4 nights in Naxos</div><div class=\"ds-card-body\">Old Town stay, ferry to Santorini on Friday morning.</div></div>",
+      "css": ".ds-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 3px 6px rgba(0,0,0,0.16); max-width: 320px; } .ds-card-title { font-family: Inter, system-ui, sans-serif; font-size: 16px; font-weight: 700; color: #191c1c; margin-bottom: 8px; } .ds-card-body { font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 400; line-height: 1.43; color: #3f4947; }"
+    },
+    {
+      "name": "Brand Hero Card",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Brand-gradient field (Harbor Light → Harbor Dark, top-left → bottom-right) with white type and the Harbor Dark shadow — the app bar and hero-card treatment.",
+      "html": "<div class=\"ds-hero-card\"><div class=\"ds-hero-eyebrow\">Naxos, Greece</div><div class=\"ds-hero-title\">Island hopping, September</div></div>",
+      "css": ".ds-hero-card { background: linear-gradient(135deg, #00897B, #004D40); border-radius: 20px; padding: 24px; box-shadow: 0 4px 10px rgba(0,77,64,0.30); max-width: 360px; } .ds-hero-eyebrow { font-family: Inter, system-ui, sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.85); margin-bottom: 8px; } .ds-hero-title { font-family: Marcellus, Georgia, serif; font-size: 26px; font-weight: 400; line-height: 1.2; color: #fff; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Outlined, filled field — paper fill, 8px radius, primary outline on focus, no glow.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Where to?\" />",
+      "css": ".ds-input { background: #FAFAFA; border: 1px solid #6f7977; border-radius: 8px; padding: 12px 16px; font-family: Inter, system-ui, sans-serif; font-size: 14px; color: #191c1c; width: 260px; transition: border-color 0.2s; } .ds-input::placeholder { color: #6f7977; } .ds-input:focus { outline: none; border: 2px solid #00796B; padding: 11px 15px; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Fully-rounded chip; chip rows are the entire secondary navigation on list screens. Selected takes the brand tint family.",
+      "html": "<span class=\"ds-chip\">Flights</span> <span class=\"ds-chip ds-chip-selected\">Stays</span>",
+      "css": ".ds-chip { display: inline-block; font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 500; color: #3f4947; background: transparent; border: 1px solid #bec9c6; border-radius: 999px; padding: 8px 16px; cursor: pointer; transition: background 0.2s; } .ds-chip:hover { background: rgba(0,121,107,0.06); } .ds-chip-selected { background: #E0F2F1; border-color: #E0F2F1; color: #004D40; font-weight: 600; }"
+    },
+    {
+      "name": "Wordmark",
+      "kind": "custom",
+      "refersTo": "wordmark",
+      "description": "The ANEMOS wordmark — Cinzel 600 small caps, measured tracking. A component (BrandWordmark), never retyped in product code.",
+      "html": "<div class=\"ds-wordmark\">ANEMOS</div>",
+      "css": ".ds-wordmark { font-family: Cinzel, Georgia, serif; font-size: 19px; font-weight: 600; letter-spacing: 0.053em; color: #004D40; }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "custom",
+      "refersTo": "chip",
+      "description": "Translucent semantic container pair — the pill-on-card register (the solid marks register is for status strips).",
+      "html": "<span class=\"ds-pill-success\">Booked</span> <span class=\"ds-pill-warning\">Needs dates</span>",
+      "css": ".ds-pill-success { display: inline-block; font-family: Inter, system-ui, sans-serif; font-size: 12px; font-weight: 600; color: #2E7D32; background: rgba(76,175,80,0.15); border-radius: 999px; padding: 4px 12px; } .ds-pill-warning { display: inline-block; font-family: Inter, system-ui, sans-serif; font-size: 12px; font-weight: 600; color: #FF6F00; background: rgba(255,193,7,0.20); border-radius: 999px; padding: 4px 12px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Aegean Journal",
+    "overview": "Anemos is a polished travel product that reads like a luxury travel journal: the product craft of Airbnb, Hopper, and Flighty carrying the editorial restraint of Aman, Belmond, and Cereal. Aegean, not tropical. Engraved, not shouted. One deep-teal spine runs through everything; surfaces stay quiet like sun-bleached plaster; photography of real places in real light does the emotional work; and a design earns attention by making the space around the important thing quieter, not by making the thing bigger.\n\nThe interface vocabulary is deliberately small — cards, bottom sheets, chips, and pills at comfortable density — extended rather than added to. Restraint is enforced, not aspirational: Material 3's surface tint is off everywhere, separation between surfaces is always an explicit color choice, and every non-teal color must earn its place by meaning exactly one thing.",
+    "keyCharacteristics": [
+      "One teal spine; every other color earned and single-meaning",
+      "Editorial serif headings at one weight; hierarchy below them is weight, not size",
+      "Photography-forward, always behind a scrim when text sits on it",
+      "Flat-calm surfaces, light from above, no tonal tint",
+      "Card-and-sheet vocabulary, comfortable density, 48px touch floor"
+    ],
+    "rules": [
+      { "name": "The Earned Color Rule", "body": "Every non-teal color means exactly one thing and appears at chip-and-pin scale, never as a field. Color is never decoration.", "section": "colors" },
+      { "name": "The Gold-in-the-Mark Rule", "body": "Heritage Gold enters a screen only inside the wind-rose mark. Anywhere else it is a finding.", "section": "colors" },
+      { "name": "The One Dark Exception Rule", "body": "Midnight Harbor exists only on the signed-out landing. Everywhere else, surfaces are the neutral scheme and dark mode is the same build with brightness flipped.", "section": "colors" },
+      { "name": "The One Weight Rule", "body": "Marcellus ships in exactly one weight; every style naming it states w400 explicitly, or the web synthesizes faux-bold and smears the serif.", "section": "typography" },
+      { "name": "The Weight-Not-Size Rule", "body": "Below the headline line, hierarchy is built with Inter's weight ladder (400/500/600/700), not with size steps.", "section": "typography" },
+      { "name": "The One Eyebrow Rule", "body": "Capitals belong to the wordmark and to ONE display device: the letterspaced small-caps place eyebrow on destination surfaces (the Amanzoe move). No other kickers or eyebrows exist.", "section": "typography" },
+      { "name": "The Light-From-Above Rule", "body": "Every shadow offsets downward. A zero-offset colored halo is never ours.", "section": "elevation" },
+      { "name": "The No-Tint Rule", "body": "Surface separation is a color someone chose, never an implicit function of elevation.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do build only with tokens — AppColors, AppFonts/textTheme, AppSpacing, AppRadius, AppShadows, BrandLogo/BrandWordmark; a value that isn't a token becomes one in lib/theme/ first.",
+      "Do keep photography real — real places in real light, credited in CREDITS.md/LICENSES.md — and put a scrim under any text on it.",
+      "Do check both themes; the gradient bar staying teal in dark is correct.",
+      "Do state w400 on every Marcellus style and set numbers in Inter.",
+      "Do run .claude/skills/brand-guidelines/scripts/check.sh on touched Dart files before shipping."
+    ],
+    "donts": [
+      "Don't put a plate, tile, or container behind the wind rose, or redraw the mark \"close enough\".",
+      "Don't use gradient text, colored glows, zero-offset halos, teal-tinted photos, purple-blue AI gradients, or glassmorphism as decoration.",
+      "Don't add a fourth typeface, load google_fonts (prod CSP blocks it), or let emoji stand in for icons.",
+      "Don't use off-ladder spacing, radii outside 8/12/20/full, ad-hoc BoxShadows, or raw hex in widgets (sanctioned exceptions: app_map.dart canvas, the easter egg).",
+      "Don't ship kickers/eyebrows (except the one destination place eyebrow), Title Case Headings, section-number decoration, same-size icon-card grids as page structure, or the hero-metric template."
+    ]
+  }
+}
