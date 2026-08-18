@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/l10n.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_shadows.dart';
+import '../../theme/app_typography.dart';
 import '../../theme/spacing.dart';
-import '../../widgets/page_container.dart';
 
-/// Closing CTA: the one intentionally lighter-teal surface on the landing
-/// canvas, so the last thing the page says pops. Plain sign-up entry — the
+/// Closing CTA: the page's last word, set directly on the landing canvas.
+/// Every other section sits bare on Midnight Harbor, so the close does too —
+/// the emptiness around one Marcellus line and one action is the emphasis
+/// (the Aman move), not a raised field. Plain sign-up entry — the
 /// prompt-carrying paths live in the hero and the destination rail.
 class LandingCtaBand extends StatelessWidget {
   final VoidCallback onGetStarted;
@@ -21,24 +22,32 @@ class LandingCtaBand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = context.l10n;
-    return PageContainer(
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.xl + AppSpacing.sm),
-        decoration: BoxDecoration(
-          gradient: AppColors.brandGradient,
-          borderRadius: AppRadius.lgAll,
-          boxShadow: AppShadows.brandCard,
-        ),
+    return LayoutBuilder(builder: (context, constraints) {
+      // Same self-measured threshold as the hero: the section reads its own
+      // box, not the window.
+      final narrow = constraints.maxWidth < 600;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              l10n.landingCtaTitle,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.headlineSmall
-                  ?.copyWith(color: Colors.white),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: Text(
+                l10n.landingCtaTitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  // Marcellus ships one weight; the explicit w400 keeps a
+                  // theme bold from asking for a face that doesn't exist.
+                  // One tier above the section titles (26) — the closing
+                  // line outranks a chapter heading, stays under the hero.
+                  fontFamily: AppFonts.display,
+                  fontWeight: FontWeight.w400,
+                  fontSize: narrow ? 30 : 34,
+                  height: 1.2,
+                  color: Colors.white,
+                ),
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
             FilledButton(
@@ -46,7 +55,12 @@ class LandingCtaBand extends StatelessWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: AppColors.brandDark,
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                // Intrinsic width, centered: a button sized by its label is
+                // an action; edge-to-edge white is a field.
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xxl,
+                  vertical: AppSpacing.lg,
+                ),
                 shape: const RoundedRectangleBorder(
                   borderRadius: AppRadius.mdAll,
                 ),
@@ -68,14 +82,16 @@ class LandingCtaBand extends StatelessWidget {
             TextButton(
               onPressed: onSignIn,
               style: TextButton.styleFrom(
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                // The muted ink rung, not white: beside the one white button
+                // the alternate path is secondary copy, and the ladder
+                // already names that role.
+                foregroundColor: AppColors.landingInkMuted,
               ),
               child: Text(l10n.landingHaveAccount),
             ),
           ],
         ),
-      ),
-    );
+      );
+    });
   }
 }
