@@ -244,7 +244,6 @@ class _OnboardingQuizScreenState extends ConsumerState<OnboardingQuizScreen> {
           actions: [
             TextButton(
               onPressed: _submitting ? null : _skip,
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
               child: Text(l10n.quizSkip),
             ),
           ],

@@ -150,7 +150,7 @@ void main() {
     await _pumpList(tester, service);
     await tester.pumpAndSettle();
 
-    expect(find.text('HAPPENING NOW'), findsOneWidget);
+    expect(find.byType(LiveTripCard), findsOneWidget);
     expect(find.text('Day 2 of 3'), findsOneWidget);
     expect(find.text('Live'), findsOneWidget);
   });
@@ -240,7 +240,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(LiveTripCard), findsNothing);
-    expect(find.text('HAPPENING NOW'), findsNothing);
   });
 
   testWidgets('live card still renders from the offline cache',

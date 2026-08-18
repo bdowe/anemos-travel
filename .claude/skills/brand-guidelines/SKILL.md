@@ -57,7 +57,11 @@ Paths below are relative to `src/packages/flutter-app/` unless rooted.
   (ramp: tint `#E0F2F1` · teal-100 `#B2DFDB` · light `#00897B` · brand
   `#00796B` · platform `#00695C` · dark `#004D40`; teal-100 and platform
   live in the SVGs/web shell, not `AppColors`). Both themes share the
-  seed; the gradient app bar stays teal in dark mode by design.
+  seed. **Chrome is neutral since v1.4** (the de-gradient pass): the app
+  bar is flat `surface` under a hairline in both themes, the brand riding
+  in the wordmark's ink (`wordmarkInk` — brandDark light / primary dark)
+  and the dark-cut rose; `brandGradient` is no longer a sanctioned brand
+  surface and survives only on the boot splash pending phase 2.
 - **Proportion**: surfaces neutral (warm, plaster-leaning); teal is
   identity + the primary action; tool accents and status colors appear at
   chip-and-pin scale, **never as fields**. ONE recorded exception (doc
@@ -106,9 +110,10 @@ Paths below are relative to `src/packages/flutter-app/` unless rooted.
 
 - **No plate, tile, chip, or container around the mark anywhere in the
   app.** The only question a surface may ask is *which cut*: dark
-  `BrandLogo.mark` on neutral/scrimmed surfaces, `BrandLogo.markLight`
-  on teal `brandGradient` fields. The three baked-plate exceptions
-  (og-card, maskable icon, print header) are closed — don't add a fourth.
+  `BrandLogo.mark` on neutral/scrimmed surfaces (the app bar and nav rail
+  included, v1.4), `BrandLogo.markLight` on the boot splash's teal field.
+  The three baked-plate exceptions (og-card, maskable icon, print header)
+  are closed — don't add a fourth.
 - Never recolor, stretch, rotate, or redraw; never hand-edit the rendered
   PNGs (`scripts/brand-render.sh` owns every raster); never load
   `lockup.svg` as a plain `<img>`.
@@ -165,8 +170,10 @@ Each is an instant finding in review:
 - Off-scale magic values: spacing not on the 4/8/12/16/24/32 ladder,
   radii other than 8/12/20/full, ad-hoc `BoxShadow`s.
 - Teal-tinted photos, purple-blue "AI gradients", or any hue used as a
-  large field that isn't the brand gradient (one recorded exception:
-  `landingCanvas` on the signed-out landing — doc v1.2).
+  large field at all — since v1.4 the only recorded teal-field survivors
+  are the boot splash's gradient (pending phase 2) and `landingCanvas`
+  on the signed-out landing (doc v1.2), plus the continue-trip hero's
+  flat `brandDark` imagery fallback.
 - M3 defaults where the theme already decided: surface tint, default
   card shadows, `ColorScheme` roles bypassed by raw `Colors.*`.
 
@@ -182,7 +189,8 @@ Each is an instant finding in review:
       sentence case.
 - [ ] Text over any photo has a scrim under it.
 - [ ] Both themes checked — the change reads correctly in light AND dark
-      (the gradient bar staying teal is correct, not a bug).
+      (the bar is `surface` in both; the splash staying teal is correct,
+      not a bug).
 - [ ] Nothing from the generic-AI guard above crept in.
 - [ ] If a guideline rule changed: doc + PDF updated and version-bumped
       in this PR.

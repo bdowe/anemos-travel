@@ -5,7 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import '../theme/spacing.dart';
 import '../utils/trip_days.dart';
-import 'trip_hero_card.dart';
+import 'status_pill.dart';
 import 'trip_map_band.dart';
 
 /// Home's "Continue where you left off" hero: the trip to pick back up as a
@@ -16,9 +16,11 @@ import 'trip_map_band.dart';
 /// The imagery is the trip's OWN route ([TripMapBand], cache-only), never a
 /// stock destination photo: a wrong photo on the wrong trip is worse than no
 /// photo, and the billed /places/photo gate is not for decoration. When the
-/// band has nothing to show (cache miss, unmappable trip) the
-/// [AppColors.brandGradient] beneath carries the same text block — an honest
-/// fallback already in the card family's language.
+/// band has nothing to show (cache miss, unmappable trip) a flat
+/// [AppColors.brandDark] field beneath carries the same text block — the one
+/// surviving teal field after the de-gradient pass, because the white text
+/// and its scrim need a guaranteed dark ground and this card is the app's
+/// photographic hero, not its chrome.
 ///
 /// Two scaling rules keep the overlay honest at accessibility text sizes:
 /// the card's height grows by the text scaler's effect on the text band
@@ -60,6 +62,27 @@ class ContinueTripHero extends StatelessWidget {
     required this.onTap,
   });
 
+  /// A STATE pill on the scrim: white-tinted so it sits on imagery. This
+  /// used to be `TripHeroCard.heroPill`, back when the heroes were teal
+  /// fields; the flat heroes took the surface register and the over-imagery
+  /// pair stayed here, where the imagery is.
+  static Widget _scrimPill(String label) => StatusPill.custom(
+        label: label,
+        background: Colors.white.withValues(alpha: 0.22),
+        foreground: Colors.white,
+      );
+
+  /// A CONTEXT fact on the scrim: plain white text, [_scrimPill]'s non-pill
+  /// twin, so the meta row isn't pill soup.
+  static Widget _scrimFact(BuildContext context, String label) => Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.85),
+            ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -85,9 +108,10 @@ class ContinueTripHero extends StatelessWidget {
             children: [
               // Fallback field beneath the band: shows whenever the band
               // collapses (its own contract), so the text below always sits
-              // on a dark branded surface.
+              // on a dark branded surface. Flat brandDark, not the retired
+              // gradient — see the class doc.
               DecoratedBox(
-                decoration: BoxDecoration(gradient: AppColors.brandGradient),
+                decoration: BoxDecoration(color: AppColors.brandDark),
               ),
               // The hero clips the whole stack at the hero radius above, so
               // the band's own corner clip is switched off — an inner
@@ -137,14 +161,15 @@ class ContinueTripHero extends StatelessWidget {
                                 runSpacing: AppSpacing.xs,
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
-                                  // The shared over-gradient meta treatments,
-                                  // so this card can't drift from the trip
-                                  // heroes.
-                                  if (range != null)
-                                    TripHeroCard.heroFact(context, range),
+                                  // The over-IMAGERY meta register: white on
+                                  // the scrim, by construction. It lives in
+                                  // this file now — the flat trip heroes
+                                  // moved to the surface register, and this
+                                  // card is the one still setting meta on a
+                                  // dark photographic ground.
+                                  if (range != null) _scrimFact(context, range),
                                   if (days != null)
-                                    TripHeroCard.heroPill(
-                                        l10n.upNextStartsIn(days)),
+                                    _scrimPill(l10n.upNextStartsIn(days)),
                                 ],
                               ),
                             ],

@@ -1535,7 +1535,6 @@
     }
   },
   "tripsListShared": "Shared",
-  "upNextEyebrow": "UP NEXT",
   "upNextStartsIn": "{days, plural, =0{Starts today} =1{Starts tomorrow} other{Starts in {days} days}}",
   "@upNextStartsIn": {
     "placeholders": {
@@ -1886,7 +1885,6 @@
   "reviewHoursChecked": "Opening hours checked",
   "reviewCheckHours": "Also check opening hours",
   "reviewHoursCheckFailed": "Couldn't check opening hours — try again.",
-  "liveTripEyebrow": "HAPPENING NOW",
   "liveTripStatusLive": "Live",
   "liveTripDay": "Day {day}",
   "@liveTripDay": {

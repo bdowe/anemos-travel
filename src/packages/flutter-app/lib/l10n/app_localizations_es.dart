@@ -2320,9 +2320,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tripsListShared => 'Compartido';
 
   @override
-  String get upNextEyebrow => 'PRÓXIMO VIAJE';
-
-  @override
   String upNextStartsIn(int days) {
     String _temp0 = intl.Intl.pluralLogic(
       days,
@@ -2875,9 +2872,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get reviewHoursCheckFailed =>
       'No se pudieron comprobar los horarios — inténtalo de nuevo.';
-
-  @override
-  String get liveTripEyebrow => 'SUCEDIENDO AHORA';
 
   @override
   String get liveTripStatusLive => 'En curso';

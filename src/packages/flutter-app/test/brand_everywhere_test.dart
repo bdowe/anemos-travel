@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:travel_route_planner/constants/app_info.dart';
 import 'package:travel_route_planner/navigation/shell_scope.dart';
+import 'package:travel_route_planner/theme/app_colors.dart';
 import 'package:travel_route_planner/theme/app_theme.dart';
 import 'package:travel_route_planner/widgets/brand_logo.dart';
 import 'package:travel_route_planner/widgets/gradient_app_bar.dart';
@@ -516,14 +517,15 @@ void main() {
     }
   });
 
-  testWidgets('the bar floats the REVERSED mark on its teal gradient',
+  testWidgets('the bar floats the DARK mark on its neutral surface',
       (tester) async {
-    // The bar's field is AppColors.brandGradient, where the dark teal/gold
-    // rose is teal-on-teal — unreadable, which is what the retired white
-    // plate existed to fix. Since v3 of the plate policy nothing sits behind
-    // the rose, so the cut is load-bearing: swapping this back to
-    // BrandLogo.mark makes the brand vanish into the header rather than
-    // merely look wrong. Mirrors splash_screen_test's identical assertion.
+    // The bar's field is the neutral surface (the de-gradient pass, doc
+    // v1.4), where the reversed white/teal-100 cut would wash out — the
+    // exact inverse of the teal-on-teal problem that cut solved on the old
+    // gradient. Nothing sits behind the rose (plate policy v3), so the cut
+    // is load-bearing: swap this back to markLight and the brand vanishes
+    // into the header. The rail pins the same artwork; the splash keeps the
+    // reversed cut on its sanctioned teal field (splash_screen_test).
     await _pumpBar(tester, width: 700);
 
     final image = tester.widget<Image>(
@@ -531,8 +533,52 @@ void main() {
     );
     expect(
       (image.image as AssetImage).assetName,
-      'assets/images/anemos_mark_light.png',
+      'assets/images/anemos_mark.png',
     );
+  });
+
+  testWidgets('the bar is flat surface under a hairline, in both themes',
+      (tester) async {
+    // The de-gradient doctrine, pinned: a surface field in light AND dark
+    // (the teal-in-dark exception is retired), separation by hairline
+    // rather than elevation, and the wordmark carrying the brand ink
+    // instead of the bar's foreground. Self-contained pump because
+    // _pumpBar deliberately fixes AppTheme.light.
+    for (final theme in [AppTheme.light, AppTheme.dark]) {
+      tester.view.physicalSize = const Size(700, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: testLocalizationsDelegates,
+            supportedLocales: const [Locale('en'), Locale('es')],
+            theme: theme,
+            home: ShellScope(
+              child: Scaffold(
+                appBar: const GradientAppBar(),
+                body: const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final bar = tester.widget<AppBar>(find.byType(AppBar));
+      final scheme = theme.colorScheme;
+      expect(bar.backgroundColor, scheme.surface,
+          reason: 'the bar is surface in ${scheme.brightness}');
+      expect(bar.shape, isA<Border>());
+      expect((bar.shape as Border).bottom.color, scheme.outlineVariant,
+          reason: 'separation is the hairline, not elevation');
+      expect(bar.elevation, 0);
+
+      final wordmark = tester.widget<Text>(find.text(AppInfo.name));
+      expect(wordmark.style?.color, AppColors.wordmarkInk(scheme),
+          reason: 'the wordmark carries the brand ink in ${scheme.brightness}');
+    }
   });
 
   testWidgets('at rail widths the leading slot empties — but keeps its width',

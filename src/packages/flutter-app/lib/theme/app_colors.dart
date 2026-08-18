@@ -163,4 +163,12 @@ abstract final class AppColors {
   // Blue-grey reads as the universal "P" signage family; distinct from
   // toolFlights blue and toolFerries cyan.
   static Color get toolParking => Colors.blueGrey.shade700;
+
+  /// The wordmark's ink on the neutral app bar (the de-gradient pass): Harbor
+  /// Dark on light surfaces — the exact ink DESIGN.md records for the
+  /// wordmark — and the scheme's light-teal primary on dark, where teal-900
+  /// sinks into the surface. A function of the scheme rather than a constant
+  /// pair so the dark value tracks the seed.
+  static Color wordmarkInk(ColorScheme scheme) =>
+      scheme.brightness == Brightness.dark ? scheme.primary : brandDark;
 }

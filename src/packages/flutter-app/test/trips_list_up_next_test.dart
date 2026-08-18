@@ -158,7 +158,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(UpNextTripCard), findsOneWidget);
-    expect(find.text('UP NEXT'), findsOneWidget);
     expect(find.text('Starts in 10 days'), findsOneWidget);
     // Hero replaces the card: the promoted title renders exactly once, the
     // non-promoted trip keeps its plain card.

@@ -98,7 +98,6 @@ class _LandingScreenState extends State<LandingScreen> {
             const LanguageMenuButton(),
             TextButton(
               onPressed: () => _openAuth(context, isLogin: true),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
               child: Text(l10n.landingSignIn),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -107,8 +106,8 @@ class _LandingScreenState extends State<LandingScreen> {
         body: SafeArea(
           child: SingleChildScrollView(
             // Full-bleed sections own their padding; the hero runs
-            // edge-to-edge under the opaque bar's gradient, which ends on the
-            // same brandDark the hero scrim starts from.
+            // edge-to-edge under the opaque bar (dark surface here — this
+            // screen forces AppTheme.dark), separated by the bar's hairline.
             padding: EdgeInsets.zero,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

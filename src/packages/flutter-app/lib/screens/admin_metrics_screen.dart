@@ -52,11 +52,9 @@ class _AdminMetricsScreenState extends ConsumerState<AdminMetricsScreen> {
           title: 'Metrics',
           bottom: TabBar(
             isScrollable: true,
-            // The gradient is dark, so the tabs carry their own light palette
-            // rather than inheriting the surface-toned M3 defaults.
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.white,
+            // The bar is a neutral surface now, so the surface-toned M3
+            // defaults are exactly right (the explicit white palette left
+            // with the gradient).
             tabs: [
               Tab(text: 'Overview'),
               Tab(text: 'Trends'),

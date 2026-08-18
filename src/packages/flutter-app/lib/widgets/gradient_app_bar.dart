@@ -24,10 +24,10 @@ const double _leadingSlot = kToolbarHeight;
 ///
 /// 36, not the 28 it was while plated, and measured rather than guessed: the
 /// rose radiates from a small hub, so most of its box is empty and its optical
-/// size runs well under its layout size. At 28 the reversed cut's gold
-/// intercardinals antialias away against the gradient and it reads as a thin
-/// white star; 32 is the floor and 36 reads as the wind rose it is. It is also
-/// what the nav rail paints, so the brand is one size wherever it appears.
+/// size runs well under its layout size. Below 32 the intercardinals antialias
+/// away and it reads as a thin star; 36 reads as the wind rose it is. It is
+/// also what the nav rail paints, so the brand is one size wherever it
+/// appears.
 const double _markSize = 36;
 
 /// The rose's tap box, centred inside the [_leadingSlot].
@@ -50,9 +50,14 @@ const double _separatorSlot = AppSpacing.sm * 2 + 8;
 /// body — trip detail does, deliberately.
 const double _minTitleWidth = 56;
 
-/// App bar painted with [AppColors.brandGradient] — the same teal pair used by
-/// the home hero banner. Use in place of [AppBar] so every screen shares one
-/// header look.
+/// The house app bar: flat [ColorScheme.surface] in both themes under a
+/// hairline [ColorScheme.outlineVariant] bottom border. The brand rides in the
+/// wordmark's ink ([AppColors.wordmarkInk]) and the rose — never in a colored
+/// field. It painted [AppColors.brandGradient] until the de-gradient pass
+/// unsanctioned that as the brand surface (DESIGN.md § Colors); the file and
+/// class names are historical and rename in a follow-up, once the lanes
+/// holding call sites still have merged. Use in place of [AppBar] so every
+/// screen shares one header look.
 ///
 /// **This bar carries the brand.** Every screen that uses it shows the ANEMOS
 /// wordmark without doing anything, and no future screen can forget to: the
@@ -118,11 +123,13 @@ const double _minTitleWidth = 56;
 /// browser against real Cinzel, not computed — the numbers here are easy to get
 /// wrong and the comment is load-bearing.
 ///
-/// The rose floats bare, as it does everywhere: this bar just takes the
-/// reversed cut ([BrandLogo.markLight]) because its field is the teal gradient
-/// and the dark artwork would be teal-on-teal. The white plate that used to
-/// sit behind it is retired — see [BrandLogo]'s class doc for the policy and
-/// why, and re-litigate it there rather than reintroducing a plate here.
+/// The rose floats bare, as it does everywhere: this bar takes the dark cut
+/// ([BrandLogo.mark]) — the same artwork the nav rail already paints on this
+/// same neutral surface in both themes, so the brand is one artwork wherever
+/// it stands on chrome. (The reversed cut now belongs to the splash's teal
+/// field alone.) The white plate that used to sit behind it is retired — see
+/// [BrandLogo]'s class doc for the policy and why, and re-litigate it there
+/// rather than reintroducing a plate here.
 class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
   /// The page's own title. Null where the brand stands alone.
   ///
@@ -168,13 +175,15 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
   /// The page title is a heading, so it takes the display face — a trip name
   /// reads the same here as it does in the header below it.
   ///
-  /// Handed to [AppBar.titleTextStyle] rather than to
-  /// `AppBarTheme.titleTextStyle` because AppBar folds `foregroundColor` into
-  /// the *defaults* branch only (`widget.titleTextStyle ??
-  /// appBarTheme.titleTextStyle ?? defaults.titleTextStyle?.copyWith(color:
-  /// foregroundColor)`): a themed style without a color would quietly paint
-  /// every title onSurface — dark text on the teal gradient. Hence the
-  /// explicit white.
+  /// Deliberately colorless: the color is applied at build
+  /// (`copyWith(color: onSurface)`) because it is a theme answer, and handed
+  /// to [AppBar.titleTextStyle] rather than to `AppBarTheme.titleTextStyle`
+  /// because AppBar folds `foregroundColor` into the *defaults* branch only
+  /// (`widget.titleTextStyle ?? appBarTheme.titleTextStyle ??
+  /// defaults.titleTextStyle?.copyWith(color: foregroundColor)`) — a themed
+  /// style without a color silently drops the bar's own foreground. Width
+  /// measurement doesn't care about color, so [titleWidthIn] uses this const
+  /// as-is.
   ///
   /// Size holds at 22 despite the face change: Marcellus sets ~9% narrower than
   /// Inter Bold, so the longest trip titles gain room here, not lose it.
@@ -183,7 +192,6 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
     fontWeight: FontWeight.w400,
     fontSize: 22,
     letterSpacing: 0.2,
-    color: Colors.white,
   );
 
   /// How wide [text] will actually paint as a page title in [context].
@@ -207,6 +215,7 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
     final inShell = ShellScope.of(context);
     final onTap = onBrandTap ?? (inShell ? () => goHome(ref) : null);
 
@@ -261,14 +270,21 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
       actions: actions,
       centerTitle: centerTitle ?? false,
       bottom: bottom,
-      backgroundColor: Colors.transparent,
-      foregroundColor: Colors.white,
+      // The flat chrome bar: surface in BOTH themes (dark mode is the same
+      // build with brightness flipped — no more teal-in-dark exception), with
+      // a hairline bottom border doing the separating. Elevation is zeroed and
+      // the tint pinned transparent so separation stays an explicit color
+      // choice (the No-Tint Rule) — never a scroll side effect.
+      backgroundColor: scheme.surface,
+      foregroundColor: scheme.onSurface,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
+      shape: Border(bottom: BorderSide(color: scheme.outlineVariant)),
       // Rationale on [titleStyle] itself, which is also what the ladder
-      // measures against.
-      titleTextStyle: titleStyle,
-      flexibleSpace: Container(
-        decoration: BoxDecoration(gradient: AppColors.brandGradient),
-      ),
+      // measures against; the color joins here because it is the theme's
+      // answer, not the style's.
+      titleTextStyle: titleStyle.copyWith(color: scheme.onSurface),
     );
   }
 }
@@ -297,14 +313,13 @@ class _LeadingSlot extends ConsumerWidget {
     // so an empty child still holds it open.
     if (!showMark) return const SizedBox.shrink();
 
-    // markLight, not mark: this field is the teal brand gradient, where the
-    // dark rose is teal-on-teal — its cardinals all but disappear and it reads
-    // as a gold asterisk. Retiring the plate is what made the reversed cut
-    // necessary here.
+    // The dark cut, exactly as the nav rail paints it: the field is the
+    // neutral surface now, where the reversed cut would wash out. One artwork
+    // on all chrome, in both themes — the rail is the precedent.
     Widget mark = const SizedBox(
       width: _leadingTapBox,
       height: _leadingTapBox,
-      child: Center(child: BrandLogo.markLight(size: _markSize)),
+      child: Center(child: BrandLogo.mark(size: _markSize)),
     );
 
     if (onTap != null) {
@@ -435,9 +450,14 @@ class _BrandTitle extends ConsumerWidget {
           showTitle = false;
         }
 
-        Widget brand = const Padding(
-          padding: EdgeInsets.all(AppSpacing.xs),
-          child: BrandWordmark(),
+        // The wordmark takes the brand ink, not the bar's onSurface
+        // foreground: on the neutral field the ink IS where the teal
+        // survives (Harbor Dark in light, scheme primary in dark).
+        Widget brand = Padding(
+          padding: const EdgeInsets.all(AppSpacing.xs),
+          child: BrandWordmark(
+            color: AppColors.wordmarkInk(Theme.of(context).colorScheme),
+          ),
         );
 
         // The wordmark is the literal word, so its Text node already announces
