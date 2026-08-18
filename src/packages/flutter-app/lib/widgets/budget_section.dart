@@ -12,6 +12,7 @@ import '../providers/budget_provider.dart';
 import '../theme/spacing.dart';
 import '../utils/daily_spend.dart';
 import '../utils/money_format.dart';
+import '../utils/trip_legs.dart';
 import 'budget_amounts.dart';
 import 'budget_categories.dart';
 import 'budget_target_dialog.dart';
@@ -34,11 +35,19 @@ class BudgetSection extends ConsumerStatefulWidget {
   final bool canEdit;
   final bool isOffline;
 
+  /// The trip's city legs in itinerary order — the screen derivation's
+  /// `legChips`, the same list the map strip renders. Required, not defaulted:
+  /// an empty default would let the mount site silently lose the whole
+  /// spend-per-city view. Keys are canonical `RenderLeg.Key` spellings
+  /// (`Rome`, `Rome#2`); labels/qualifiers are display text.
+  final List<({String key, String label, String? qualifier})> legChips;
+
   const BudgetSection({
     super.key,
     required this.tripId,
     required this.canEdit,
     required this.isOffline,
+    required this.legChips,
   });
 
   @override
@@ -49,20 +58,23 @@ class BudgetSection extends ConsumerStatefulWidget {
 // with the booked-flip expense prompt; the planned-vs-paid row vocabulary
 // lives in budget_amounts.dart.
 
-/// What the edit dialog came back with. A record of the four editable things,
+/// What the edit dialog came back with. A record of the editable things,
 /// so the caller can tell "left empty" (null) from "set to zero" — a plan of
-/// zero is real data.
+/// zero is real data. [legKey] null means "no city" (00072); the caller
+/// compares it against the expense to decide whether to PATCH at all.
 class _ExpenseEdit {
   final String category;
   final String label;
   final double? planned;
   final double? paid;
+  final String? legKey;
 
   const _ExpenseEdit({
     required this.category,
     required this.label,
     required this.planned,
     required this.paid,
+    required this.legKey,
   });
 }
 
@@ -288,6 +300,11 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     final draftNow = ref.read(key);
     final category = draftNow.category;
     final planned = draftNow.planned;
+    // Same stale-key resolution the picker renders with: a draft city the
+    // trip no longer has posts as "no city", never as a 400.
+    final legKey = _cityOptions.any((c) => c.key == draftNow.legKey)
+        ? draftNow.legKey
+        : null;
     // Captured before the await: this row can be unmounted mid-save (tab away
     // while the POST is in flight), and by the time it returns the controllers
     // are disposed and `ref` throws. The draft outlives both, so clearing it
@@ -301,6 +318,7 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
             label: label,
             amount: amount,
             planned: planned,
+            legKey: legKey,
           );
       if (mounted) {
         _labelController.clear();
@@ -329,6 +347,16 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     final paidController = TextEditingController(
         text: paidBefore == null ? '' : _trimAmount(paidBefore));
     var category = normalizeExpenseCategory(expense.category);
+    final cityOptions = _cityOptions;
+    // Resolved against the CURRENT legs: a key the trip no longer renders
+    // seeds as "No city" (and, unchanged, never posts).
+    final legKeyBefore =
+        cityOptions.any((c) => c.key == expense.legKey) ? expense.legKey : null;
+    var legKey = legKeyBefore;
+    var planCityLabel = expense.legKey ?? '';
+    for (final c in cityOptions) {
+      if (c.key == expense.legKey) planCityLabel = c.label;
+    }
     final result = await showDialog<_ExpenseEdit>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -353,6 +381,38 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
                 autofocus: true,
                 decoration: InputDecoration(labelText: l10n.budgetLabelField),
               ),
+              if (cityOptions.isNotEmpty) ...[
+                // Disabled-but-present on a plan row, not absent: "this line
+                // is Rome's daily plan" is exactly what the traveler needs to
+                // know when the control won't move (the server 409s the write
+                // anyway — a plan slot's city is fixed, 00072).
+                DropdownButtonFormField<String?>(
+                  key: const Key('budget-edit-city'),
+                  initialValue: legKey,
+                  decoration:
+                      InputDecoration(labelText: l10n.budgetCityLabel),
+                  onChanged: expense.legPlan
+                      ? null
+                      : (v) => setLocal(() => legKey = v),
+                  items: [
+                    DropdownMenuItem<String?>(
+                        value: null, child: Text(l10n.budgetCityNone)),
+                    for (final c in cityOptions)
+                      DropdownMenuItem<String?>(
+                          value: c.key,
+                          child: Text(c.qualifier == null
+                              ? c.label
+                              : '${c.label} · ${c.qualifier}')),
+                  ],
+                ),
+                if (expense.legPlan) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    l10n.budgetCityPlanLocked(planCityLabel),
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ],
+              ],
               TextField(
                 controller: plannedController,
                 keyboardType:
@@ -399,7 +459,8 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
                     category: category,
                     label: label,
                     planned: planned,
-                    paid: paid));
+                    paid: paid,
+                    legKey: legKey));
               },
               child: Text(l10n.commonSave),
             ),
@@ -419,6 +480,12 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
         'label': result.label,
         if (result.planned != null && result.planned != plannedBefore)
           'planned_amount': result.planned,
+        // Only on change, and against the RESOLVED before-value, so opening
+        // and saving an untouched dialog sends no leg_key at all. null →
+        // the wire's ''-clears sentinel (see updateExpense's doc); a plan
+        // row's dropdown is disabled, so this can never fire for one.
+        if (result.legKey != legKeyBefore)
+          'leg_key': result.legKey ?? '',
       };
       await api.updateExpense(widget.tripId, expense.id, patch);
       if (result.paid != paidBefore) {
@@ -485,6 +552,7 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           ),
         ] else ...[
           _buildHeadline(theme, budget),
+          if (_cityOptions.isNotEmpty) _buildGroupControl(theme),
           ..._buildGroups(theme, expenses, currency),
           _buildTotals(theme, budget, expenses),
         ],
@@ -498,7 +566,7 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
             isOffline: widget.isOffline,
             onAdd: _addDailySpend,
           ),
-          _buildModeControl(theme),
+          _buildAddOptions(theme),
           _buildAddRow(theme),
         ],
       ],
@@ -522,6 +590,9 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           amount: total,
           planned: true,
           legKey: city.legKey,
+          // The flag, not the mere presence of legKey, is what makes this the
+          // city's plan slot since 00072.
+          legPlan: true,
         ));
     if (!mounted) return;
     messenger.showSnackBar(
@@ -703,7 +774,122 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     );
   }
 
+  /// The pickable cities: the trip's legs minus the "Other places" run, which
+  /// names no city. Filtered on the KEY, never the label — the label is
+  /// localized, the key is canonical.
+  List<({String key, String label, String? qualifier})> get _cityOptions => [
+        for (final c in widget.legChips)
+          if (c.key != kOtherPlacesLabel) c
+      ];
+
+  /// The Group-by toggle. Labelled, and above the list rather than below it,
+  /// for the reason [_buildAddOptions] documents in reverse: an unlabelled
+  /// pill sitting BELOW the receipt was read as a filter over the list above.
+  /// This one really does act on the list, so it sits at its head and says
+  /// what it does. It never hides a line — every expense appears in exactly
+  /// one group in both modes, and the group subtotals sum to the same total
+  /// either way (the property the widget test pins).
+  ///
+  /// Shown to viewers too, unlike every other control here: it is a way of
+  /// reading the receipt, not a write.
+  Widget _buildGroupControl(ThemeData theme) {
+    return Consumer(builder: (context, ref, _) {
+      final grouping = ref.watch(budgetGroupingProvider(widget.tripId));
+      final l10n = context.l10n;
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.sm),
+        child: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            Text(
+              l10n.budgetGroupBy,
+              style: theme.textTheme.labelMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            SegmentedButton<BudgetGrouping>(
+              key: const Key('budget-group-by'),
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                textStyle: WidgetStatePropertyAll(theme.textTheme.labelMedium),
+              ),
+              segments: [
+                ButtonSegment(
+                  value: BudgetGrouping.category,
+                  label: Text(l10n.budgetGroupByCategory),
+                ),
+                ButtonSegment(
+                  value: BudgetGrouping.city,
+                  label: Text(l10n.budgetGroupByCity),
+                ),
+              ],
+              selected: {grouping},
+              onSelectionChanged: (picked) => ref
+                  .read(budgetGroupingProvider(widget.tripId).notifier)
+                  .state = picked.first,
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
   List<Widget> _buildGroups(
+          ThemeData theme, List<Expense> expenses, String currency) =>
+      ref.watch(budgetGroupingProvider(widget.tripId)) == BudgetGrouping.city
+          ? _buildCityGroups(theme, expenses, currency)
+          : _buildCategoryGroups(theme, expenses, currency);
+
+  /// One group header: icon + label + the hollow "still has planned money"
+  /// mark + ONE subtotal — the projected one, which is the only subtotal that
+  /// stays continuous across a trip (it equals the plan before departure and
+  /// the spend after it). A second column here would turn the section into a
+  /// spreadsheet; the hollow mark says "not all of this has left yet" without
+  /// spending a word or a line. Shared by both groupings so their subtotals
+  /// cannot diverge.
+  Widget _buildGroupHeader(ThemeData theme,
+      {required Key key,
+      required IconData icon,
+      required String label,
+      required List<Expense> group,
+      required String currency}) {
+    final subtotal = groupProjectedSubtotal(group);
+    final hasPlanned = groupHasPlanned(group);
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.labelLarge
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+          if (hasPlanned) ...[
+            Tooltip(
+              message: context.l10n.budgetPlanGroupHasPlanned,
+              child: Icon(Icons.radio_button_unchecked,
+                  size: 12, color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+          ],
+          Text(
+            formatMoney(subtotal, currency),
+            style: theme.textTheme.labelLarge
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildCategoryGroups(
       ThemeData theme, List<Expense> expenses, String currency) {
     final byCategory = <String, List<Expense>>{};
     for (final e in expenses) {
@@ -713,44 +899,12 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     for (final cat in kExpenseCategories) {
       final group = byCategory[cat];
       if (group == null || group.isEmpty) continue;
-      // ONE number per group — the projected one, which is the only subtotal
-      // that stays continuous across a trip (it equals the plan before
-      // departure and the spend after it). A second column here would turn
-      // the section into a spreadsheet; the hollow mark says "not all of this
-      // has left yet" without spending a word or a line.
-      final subtotal = groupProjectedSubtotal(group);
-      final hasPlanned = groupHasPlanned(group);
-      widgets.add(Padding(
-        padding:
-            const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
-        child: Row(
-          children: [
-            Icon(kExpenseCategoryIcons[cat],
-                size: 16, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: AppSpacing.xs),
-            Expanded(
-              child: Text(
-                expenseCategoryLabel(context.l10n, cat),
-                style: theme.textTheme.labelLarge
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-            ),
-            if (hasPlanned) ...[
-              Tooltip(
-                message: context.l10n.budgetPlanGroupHasPlanned,
-                child: Icon(Icons.radio_button_unchecked,
-                    size: 12, color: theme.colorScheme.onSurfaceVariant),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-            ],
-            Text(
-              formatMoney(subtotal, currency),
-              style: theme.textTheme.labelLarge
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ));
+      widgets.add(_buildGroupHeader(theme,
+          key: Key('budget-group-$cat'),
+          icon: kExpenseCategoryIcons[cat] ?? Icons.receipt_long_outlined,
+          label: expenseCategoryLabel(context.l10n, cat),
+          group: group,
+          currency: currency));
       for (final e in group) {
         widgets.add(_buildRow(theme, e, currency));
       }
@@ -758,7 +912,59 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     return widgets;
   }
 
-  Widget _buildRow(ThemeData theme, Expense expense, String currency) {
+  /// The spend-per-city view (00072): the same lines bucketed by
+  /// [Expense.legKey], in the trip's own leg order, with everything unfiled —
+  /// no key, or a key the trip no longer renders — under a trailing "Rest of
+  /// trip". A line whose city is gone falls there rather than vanishing or
+  /// minting a ghost header: 00070's snapshot promise, rendered. Rows keep a
+  /// small category icon because the header no longer says what kind of spend
+  /// a line is.
+  List<Widget> _buildCityGroups(
+      ThemeData theme, List<Expense> expenses, String currency) {
+    final cities = _cityOptions;
+    final known = {for (final c in cities) c.key};
+    final byLeg = <String, List<Expense>>{};
+    final rest = <Expense>[];
+    for (final e in expenses) {
+      final key = e.legKey;
+      if (key != null && known.contains(key)) {
+        byLeg.putIfAbsent(key, () => []).add(e);
+      } else {
+        rest.add(e);
+      }
+    }
+    final widgets = <Widget>[];
+    void emit(Key key, String label, List<Expense> group) {
+      widgets.add(_buildGroupHeader(theme,
+          key: key,
+          icon: Icons.place_outlined,
+          label: label,
+          group: group,
+          currency: currency));
+      for (final e in group) {
+        widgets.add(_buildRow(theme, e, currency, showCategoryIcon: true));
+      }
+    }
+
+    for (final c in cities) {
+      final group = byLeg[c.key];
+      if (group == null || group.isEmpty) continue;
+      final label =
+          c.qualifier == null ? c.label : '${c.label} · ${c.qualifier}';
+      emit(Key('budget-group-city-${c.key}'), label, group);
+    }
+    if (rest.isNotEmpty) {
+      emit(const Key('budget-group-rest'), context.l10n.budgetGroupRestOfTrip,
+          rest);
+    }
+    return widgets;
+  }
+
+  /// [showCategoryIcon] restores the category signal in the city grouping,
+  /// where the header no longer carries it. Defaults false so the category
+  /// view renders byte-identically to before the split.
+  Widget _buildRow(ThemeData theme, Expense expense, String currency,
+      {bool showCategoryIcon = false}) {
     final l10n = context.l10n;
     final paid = expenseIsPaid(expense);
     // A booking-created line is a mirror of its booking: its payment is the
@@ -780,6 +986,15 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
                 ? null
                 : () => paid ? _unpay(expense) : _markPaid(expense, currency),
           ),
+          if (showCategoryIcon) ...[
+            Icon(
+                kExpenseCategoryIcons[
+                        normalizeExpenseCategory(expense.category)] ??
+                    Icons.receipt_long_outlined,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: AppSpacing.xs),
+          ],
           Expanded(
             child: Text(
               expense.label,
@@ -951,7 +1166,13 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
   /// The pick is read from the draft, so it survives the remount that changing
   /// header tab or opening the chat panel causes — a choice, like the category
   /// beside it.
-  Widget _buildModeControl(ThemeData theme) {
+  ///
+  /// Since 00072 the line also carries the CITY picker — deliberately here
+  /// and not in [_buildAddRow]: that row is measured against
+  /// [_addRowFixedWidth] and a third fixed control would move every one of
+  /// the 8-widths × 2-locales assertions, while this line is a [Wrap] with
+  /// slack, right at every width and locale by construction.
+  Widget _buildAddOptions(ThemeData theme) {
     return Consumer(builder: (context, ref, _) {
       final planned = ref
           .watch(expenseDraftProvider(widget.tripId).select((d) => d.planned));
@@ -1004,6 +1225,71 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
                       .read(expenseDraftProvider(widget.tripId).notifier)
                       .setPlanned(picked.first),
             ),
+            if (_cityOptions.isNotEmpty) _buildCityPicker(theme),
+          ],
+        ),
+      );
+    });
+  }
+
+  /// The add row's city pick (00072): which leg the next line is filed under.
+  /// A popup menu, not a DropdownButton, for [_buildCategoryTrigger]'s reason
+  /// (a dropdown's menu is constrained to its trigger's width) — but with a
+  /// TEXT trigger, unlike the category's icon: this control has no width
+  /// pressure on its Wrap line, and an icon cannot say "Rome".
+  ///
+  /// The selected key is resolved against [_cityOptions] before rendering, so
+  /// a stale draft key — the trip lost a city since it was picked — displays
+  /// and posts as "No city" instead of a 400.
+  Widget _buildCityPicker(ThemeData theme) {
+    return Consumer(builder: (context, ref, _) {
+      final draftKey = ref
+          .watch(expenseDraftProvider(widget.tripId).select((d) => d.legKey));
+      final l10n = context.l10n;
+      final options = _cityOptions;
+      ({String key, String label, String? qualifier})? selected;
+      for (final c in options) {
+        if (c.key == draftKey) selected = c;
+      }
+      final muted = theme.colorScheme.onSurfaceVariant;
+      return PopupMenuButton<String>(
+        key: const Key('budget-add-city'),
+        tooltip: l10n.budgetCityLabel,
+        enabled: !widget.isOffline,
+        // '' is the menu's "No city" value (a PopupMenuItem value can't be
+        // null); it reaches the draft as null via setLegKey.
+        onSelected: (v) => ref
+            .read(expenseDraftProvider(widget.tripId).notifier)
+            .setLegKey(v.isEmpty ? null : v),
+        itemBuilder: (_) => [
+          CheckedPopupMenuItem<String>(
+            value: '',
+            checked: selected == null,
+            child: Text(l10n.budgetCityNone),
+          ),
+          for (final c in options)
+            CheckedPopupMenuItem<String>(
+              value: c.key,
+              checked: c.key == selected?.key,
+              child: Text(c.qualifier == null
+                  ? c.label
+                  : '${c.label} · ${c.qualifier}'),
+            ),
+        ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.place_outlined, size: 18, color: muted),
+            const SizedBox(width: 2),
+            Text(
+              selected == null
+                  ? l10n.budgetCityNone
+                  : (selected.qualifier == null
+                      ? selected.label
+                      : '${selected.label} · ${selected.qualifier}'),
+              style: theme.textTheme.labelMedium?.copyWith(color: muted),
+            ),
+            Icon(Icons.arrow_drop_down, size: 18, color: muted),
           ],
         ),
       );

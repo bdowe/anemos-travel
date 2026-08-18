@@ -130,11 +130,19 @@ type ExpenseResponse struct {
 	// prompt and to find the row to remove on unbook.
 	SourceKind *string `json:"source_kind"`
 	SourceID   *string `json:"source_id"`
-	// LegKey is the city leg this line plans for (00070), nil for every other
-	// expense. It rides the wire so the daily-spend card can find ITS OWN line
-	// by identity instead of by matching the label it generated — the label
-	// being the key is what 00064 was written to undo.
+	// LegKey is the city leg this money belongs to (00070, generalized by
+	// 00072), nil when the line isn't filed under a city. It is the Budget
+	// tab's spend-per-city grouping key and — together with LegPlan — the
+	// identity the daily-spend card finds ITS OWN line by, instead of by
+	// matching the label it generated (the label being the key is what 00064
+	// was written to undo).
 	LegKey *string `json:"leg_key"`
+	// LegPlan is true on the one row that IS this city's per-day plan slot
+	// for its category (00072) — STATED rather than left for the client to
+	// re-derive (the Purchased/`chosen` treatment), because since 00072 any
+	// line can carry a leg_key and "has a city" no longer implies "is the
+	// plan".
+	LegPlan bool `json:"leg_plan"`
 }
 
 func toExpenseResponse(e store.TripExpense) ExpenseResponse {
@@ -150,6 +158,7 @@ func toExpenseResponse(e store.TripExpense) ExpenseResponse {
 		Auto:          e.Auto,
 		SourceKind:    e.SourceKind,
 		LegKey:        e.LegKey,
+		LegPlan:       e.LegPlan,
 	}
 	if e.SourceID.Valid {
 		id := uuid.UUID(e.SourceID.Bytes).String()
@@ -331,12 +340,21 @@ type AddExpenseRequest struct {
 	// contract). Plain manual adds omit them, byte-identical to before.
 	SourceKind *string `json:"source_kind"`
 	SourceID   *string `json:"source_id"`
-	// LegKey binds this line to ONE city leg of the trip (00070) — the daily
-	// food & drink guide's "add to plan". It makes the POST an
-	// upsert-by-leg so a double tap returns the existing plan instead of
-	// filing a second one. Unlike SourceKind it does NOT mark the row auto:
-	// this is the traveler's own plan, not a mirror of a booking.
+	// LegKey files this line under ONE city leg of the trip (00070,
+	// generalized by 00072) — the spend-per-city grouping. Unlike SourceKind
+	// it does NOT mark the row auto: which city money belongs to is the
+	// traveler's own organization, not a mirror of a booking. Empty-string is
+	// a 400 here; on PATCH the same spelling means "clear the tag" — that
+	// asymmetry is intentional (POST empty = junk in, PATCH empty = remove),
+	// so don't "fix" either side to match the other.
 	LegKey *string `json:"leg_key"`
+	// LegPlan marks this add as the city's plan SLOT (00072) — the daily
+	// food & drink guide's "add to plan". It is what makes the POST an
+	// upsert-by-leg (one per city per category, the partial unique index) so
+	// a double tap returns the existing plan instead of filing a second one.
+	// Requires LegKey; refused without it rather than silently downgraded.
+	// Only the daily-spend card sends it; the city picker sends LegKey alone.
+	LegPlan *bool `json:"leg_plan"`
 }
 
 // resolveAddAmounts maps the request's three money fields onto the two columns.
@@ -411,11 +429,21 @@ func addExpenseHandler(w http.ResponseWriter, r *http.Request) {
 
 	q := store.New(dbPool)
 
-	// A city plan and a booking mirror are different things with different
-	// owners (00070 vs 00061), and a row that was both would have two rules for
-	// what unbooking does to it. Refuse rather than pick one.
+	// A client-CHOSEN city and a booking mirror are different things with
+	// different owners (00070/00072 vs 00061), and a row that was both would
+	// have two rules for what unbooking does to it. Refuse rather than pick
+	// one. (A stay-linked add still gets a city — stamped server-side below,
+	// where the trip decides, not the client.)
 	if req.LegKey != nil && req.SourceKind != nil {
 		writeJSONError(w, http.StatusBadRequest, "leg_key and source_kind cannot be combined")
+		return
+	}
+	legPlan := req.LegPlan != nil && *req.LegPlan
+	if legPlan && req.LegKey == nil {
+		// A plan slot with no city has no identity to upsert on; refuse
+		// rather than quietly filing an ordinary line the daily-spend card
+		// could then never find.
+		writeJSONError(w, http.StatusBadRequest, "leg_plan requires leg_key")
 		return
 	}
 	var legKey *string
@@ -442,6 +470,15 @@ func addExpenseHandler(w http.ResponseWriter, r *http.Request) {
 		legKey = &key
 	}
 
+	// A stay-linked expense gets its city stamped by the SERVER (00072): the
+	// stay knows which leg it sits in, so the lodging line lands under its
+	// city with no one typing anything. Best-effort by design — a failed
+	// resolution leaves the line untagged (the traveler can tag it by hand);
+	// the money is the point and is never held hostage to a grouping.
+	if req.SourceKind != nil && *req.SourceKind == "accommodation" {
+		legKey = stayLegKeyByID(r.Context(), q, trip, uuid.UUID(sourceID.Bytes))
+	}
+
 	expense, outcome, err := upsertLinkedExpense(r.Context(), q, linkedExpense{
 		TripID:        trip.ID,
 		Category:      category,
@@ -451,6 +488,7 @@ func addExpenseHandler(w http.ResponseWriter, r *http.Request) {
 		SourceKind:    req.SourceKind,
 		SourceID:      sourceID,
 		LegKey:        legKey,
+		LegPlan:       legPlan,
 	})
 	if err != nil {
 		if errors.Is(err, errExpenseLimitReached) {
@@ -486,7 +524,7 @@ func addExpenseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PatchExpenseRequest is a partial update: recategorize, relabel, restate the
-// plan, reposition.
+// plan, reposition, re-file under a city.
 //
 // Note what is deliberately NOT here:
 //
@@ -507,6 +545,18 @@ type PatchExpenseRequest struct {
 	// re-classifying the line.
 	Amount   *float64 `json:"amount"`
 	Position *int     `json:"position"`
+	// LegKey re-files the line under another city (00072). Three shapes:
+	// nil = omitted, keep; "" = clear the tag; "Rome" = tag (canonicalized
+	// against the trip's real legs, 400 on an unknown key). Empty-means-clear
+	// rather than a null (00067's argument: an old client serializing absent
+	// fields as null would silently untag everything it touched) and rather
+	// than a verb pair (the thing at risk is a grouping, not money — a
+	// mistaken clear costs a subtotal and one tap). NOTE the deliberate
+	// asymmetry with POST, where "" is a 400: empty in is junk, empty on an
+	// existing row is a removal. Refused outright on a leg_plan row — a plan
+	// slot's city is fixed at creation (00070's rule, narrowed to the rows it
+	// was written for).
+	LegKey *string `json:"leg_key"`
 }
 
 func patchExpenseHandler(w http.ResponseWriter, r *http.Request) {
@@ -525,9 +575,9 @@ func patchExpenseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Category == nil && req.Label == nil && req.Amount == nil &&
-		req.PlannedAmount == nil && req.Position == nil {
+		req.PlannedAmount == nil && req.Position == nil && req.LegKey == nil {
 		writeJSONError(w, http.StatusBadRequest,
-			"pass at least one field to change (category, label, planned_amount, amount, or position)")
+			"pass at least one field to change (category, label, planned_amount, amount, position, or leg_key)")
 		return
 	}
 	// Two writers for one column: `amount` resolves to planned_amount on an
@@ -576,6 +626,40 @@ func patchExpenseHandler(w http.ResponseWriter, r *http.Request) {
 		p := int32(*req.Position)
 		params.Position = &p
 	}
+	q := store.New(dbPool)
+	if req.LegKey != nil {
+		// Re-filing needs the row first: a plan slot's city is fixed at
+		// creation (00070), so the refusal has to know what it is refusing.
+		// This read only happens on the leg_key path — every other PATCH
+		// stays one statement.
+		existing, err := q.GetExpense(r.Context(), store.GetExpenseParams{ID: expenseID, TripID: trip.ID})
+		if err != nil {
+			writeJSONError(w, http.StatusNotFound, "expense not found")
+			return
+		}
+		if existing.LegPlan {
+			writeJSONError(w, http.StatusConflict,
+				"this line is a city's daily plan — its city is fixed; delete the line instead")
+			return
+		}
+		if key := strings.TrimSpace(*req.LegKey); key == "" {
+			params.ClearLegKey = true
+		} else {
+			// The 00064 rule, same as the POST: the server confirms the key
+			// against the trip's real legs so a stale tab cannot re-file a
+			// line onto a leg that no longer exists.
+			known, err := tripLegKeyExists(r.Context(), q, trip, key)
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, "could not save expense")
+				return
+			}
+			if !known {
+				writeJSONError(w, http.StatusBadRequest, "leg_key is not a city on this trip")
+				return
+			}
+			params.LegKey = &key
+		}
+	}
 	// Server rule (never a request field): editing the CONTENT of an
 	// auto-created expense is a manual takeover — the row stops mirroring
 	// its booking's booked state (unbook then leaves it; see the 00061
@@ -588,12 +672,16 @@ func patchExpenseHandler(w http.ResponseWriter, r *http.Request) {
 	// system-generated and never system-clobbered. So writing in the field you
 	// own is not a takeover: a planned_amount-only PATCH leaves auto alone,
 	// which is also what stops unbook from stranding a stale payment.
+	//
+	// leg_key is likewise the traveler's field on every row (00072): filing a
+	// booking's line under a city is organization, not authorship, so a
+	// leg_key-only PATCH leaves auto alone — flipping it would strand the
+	// payment the system still owes the row on unbook.
 	if req.Category != nil || req.Label != nil || req.Amount != nil {
 		autoFalse := false
 		params.Auto = &autoFalse
 	}
 
-	q := store.New(dbPool)
 	expense, err := q.UpdateExpense(r.Context(), params)
 	if err != nil {
 		writeJSONError(w, http.StatusNotFound, "expense not found")
@@ -781,10 +869,18 @@ type linkedExpense struct {
 	ActualAmount  *float64
 	SourceKind    *string
 	SourceID      pgtype.UUID
-	// LegKey is the OTHER identity a line can carry (00070) — the city leg it
-	// plans for. Mutually exclusive with the source link, and deliberately NOT
-	// an auto marker: the booking paths own a payment, this owns a plan.
+	// LegKey is the city leg this money belongs to (00070, generalized by
+	// 00072). Deliberately NOT an auto marker: where a line is filed is the
+	// traveler's organization. A CLIENT-chosen key is mutually exclusive with
+	// the source link (the handler refuses the pair); a stay-linked add still
+	// arrives here with a key because the SERVER stamped it from the stay's
+	// own leg.
 	LegKey *string
+	// LegPlan marks the one row that IS the city's per-day plan slot for its
+	// category (00072) — the upsert-by-leg identity. A stay's server-stamped
+	// LegKey rides with LegPlan false, which is why a hotel and a food plan
+	// can share a city.
+	LegPlan bool
 }
 
 // upsertLinkedExpense is the ONE implementation of "record this booking's price
@@ -812,11 +908,19 @@ func upsertLinkedExpense(ctx context.Context, q *store.Queries, in linkedExpense
 				return existing, expenseUntouched, nil
 			}
 			autoTrue := true
+			// The city stamp is a fill-in, never an overwrite (00072): if the
+			// traveler has since re-filed this hotel under another city, a
+			// re-book must not move it back — the same "never clobber a
+			// manual takeover" rule the !Auto branch above obeys for content.
+			var legKey *string
+			if existing.LegKey == nil {
+				legKey = in.LegKey
+			}
 			updated, err := q.UpdateExpense(ctx, store.UpdateExpenseParams{
 				ID: existing.ID, TripID: in.TripID,
 				Category: &in.Category, Label: &in.Label,
 				PlannedAmount: in.PlannedAmount, ActualAmount: in.ActualAmount,
-				Auto: &autoTrue,
+				Auto: &autoTrue, LegKey: legKey,
 			})
 			if err != nil {
 				return store.TripExpense{}, expenseUntouched, err
@@ -825,12 +929,14 @@ func upsertLinkedExpense(ctx context.Context, q *store.Queries, in linkedExpense
 		}
 	}
 
-	// Leg-keyed adds are an upsert-by-leg (the 00070 partial unique index).
-	// Found -> return it UNTOUCHED, always: unlike the booking mirror above
-	// there is no "still auto" case to refresh, because the number on this line
-	// is the traveler's plan the moment it exists. A second tap on a city
-	// already in the plan must not quietly restate it at today's tier.
-	if in.SourceKind == nil && in.LegKey != nil {
+	// Plan-slot adds are an upsert-by-leg (the 00070 partial unique index,
+	// narrowed by 00072 to leg_plan rows — an ordinary city-tagged add always
+	// creates; twenty dinners can share a city). Found -> return it UNTOUCHED,
+	// always: unlike the booking mirror above there is no "still auto" case to
+	// refresh, because the number on this line is the traveler's plan the
+	// moment it exists. A second tap on a city already in the plan must not
+	// quietly restate it at today's tier.
+	if in.SourceKind == nil && in.LegKey != nil && in.LegPlan {
 		if existing, err := q.GetExpenseByLegKey(ctx, store.GetExpenseByLegKeyParams{
 			TripID: in.TripID, LegKey: in.LegKey, Category: in.Category,
 		}); err == nil {
@@ -855,6 +961,7 @@ func upsertLinkedExpense(ctx context.Context, q *store.Queries, in linkedExpense
 		SourceKind:    in.SourceKind,
 		SourceID:      in.SourceID,
 		LegKey:        in.LegKey,
+		LegPlan:       in.LegPlan,
 	})
 	if err != nil {
 		// Concurrent POSTs can race past either lookup; the partial unique
@@ -869,7 +976,10 @@ func upsertLinkedExpense(ctx context.Context, q *store.Queries, in linkedExpense
 					return existing, expenseUntouched, nil
 				}
 			}
-			if in.LegKey != nil {
+			// Only a plan-slot create can land on the leg index since 00072
+			// (it no longer covers ordinary tagged lines), so only that path
+			// has a row to recover.
+			if in.LegKey != nil && in.LegPlan {
 				if existing, lookupErr := q.GetExpenseByLegKey(ctx, store.GetExpenseByLegKeyParams{
 					TripID: in.TripID, LegKey: in.LegKey, Category: in.Category,
 				}); lookupErr == nil {

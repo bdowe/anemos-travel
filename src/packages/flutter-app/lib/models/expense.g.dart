@@ -19,6 +19,7 @@ Expense _$ExpenseFromJson(Map<String, dynamic> json) => Expense(
       sourceKind: json['source_kind'] as String?,
       sourceId: json['source_id'] as String?,
       legKey: json['leg_key'] as String?,
+      legPlan: json['leg_plan'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$ExpenseToJson(Expense instance) => <String, dynamic>{
@@ -34,4 +35,5 @@ Map<String, dynamic> _$ExpenseToJson(Expense instance) => <String, dynamic>{
       'source_kind': instance.sourceKind,
       'source_id': instance.sourceId,
       'leg_key': instance.legKey,
+      'leg_plan': instance.legPlan,
     };

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"os"
@@ -22,25 +21,8 @@ import (
 // section. A suggestion that cannot be produced is not an error the traveler
 // did anything to cause.
 
-// tripLegKeyExists reports whether key names one of the trip's CURRENT rendered
-// legs. It is the canonicalization boundary for the leg-keyed expense POST: the
-// client proposes a key, the server confirms it against computeTripLegs, and an
-// unrecognized one is refused rather than stored. Without this a stale bundle
-// could file "Rome#2" against a trip that no longer has one, and the plan would
-// sit in the list forever with no card able to claim it.
-func tripLegKeyExists(ctx context.Context, q *store.Queries, trip store.Trip, key string) (bool, error) {
-	items, err := q.GetItineraryItemsByTrip(ctx, trip.ID)
-	if err != nil {
-		return false, err
-	}
-	stays, _ := q.ListAccommodationsByTrip(ctx, trip.ID)
-	for _, l := range computeTripLegs(trip, items, stays) {
-		if l.Key == key {
-			return true, nil
-		}
-	}
-	return false, nil
-}
+// tripLegKeyExists moved to expense_leg_key.go when 00072 made leg tagging a
+// budget-wide concern rather than a daily-spend one.
 
 func dailySpendHandler(w http.ResponseWriter, r *http.Request) {
 	trip, ok := editableTrip(w, r)

@@ -362,6 +362,7 @@ type TripExpense struct {
 	PlannedAmount *float64    `json:"planned_amount"`
 	ActualAmount  *float64    `json:"actual_amount"`
 	LegKey        *string     `json:"leg_key"`
+	LegPlan       bool        `json:"leg_plan"`
 }
 
 type TripInvite struct {

@@ -908,6 +908,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get budgetCategoryLabel => 'Category';
 
   @override
+  String get budgetGroupBy => 'Group by';
+
+  @override
+  String get budgetGroupByCategory => 'Category';
+
+  @override
+  String get budgetGroupByCity => 'City';
+
+  @override
+  String get budgetGroupRestOfTrip => 'Rest of trip';
+
+  @override
+  String get budgetCityLabel => 'City';
+
+  @override
+  String get budgetCityNone => 'No city';
+
+  @override
+  String budgetCityPlanLocked(String city) {
+    return 'This is $city\'s daily plan — its city can\'t be changed.';
+  }
+
+  @override
   String get budgetLabelField => 'Label';
 
   @override

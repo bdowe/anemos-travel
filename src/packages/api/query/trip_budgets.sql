@@ -22,14 +22,18 @@ SELECT * FROM trip_expenses WHERE id = $1 AND trip_id = $2;
 -- name: CreateExpense :one
 -- auto/source_kind/source_id: the booking-autopopulate link (00061). The
 -- handler sets auto=true iff a source link is present — never the client.
--- leg_key: the city leg this line plans for (00070); NULL on every other path.
--- It is deliberately NOT part of the auto contract — a leg-keyed row is the
--- traveler's own plan, not a mirror of a booking.
+-- leg_key: the city leg this money belongs to (00070, generalized by 00072);
+-- NULL when the line isn't filed under a city. It is deliberately NOT part of
+-- the auto contract — where a line is filed is the traveler's organization,
+-- not a mirror of a booking.
+-- leg_plan: marks the ONE row per city per category that IS that city's
+-- per-day plan slot (00072) — the daily food & drink card's identity, guarded
+-- by the partial unique index. Ordinary city-tagged lines carry false.
 -- `amount` is deliberately absent from the column list: set_expense_amount()
 -- (00067) computes it as COALESCE(actual_amount, planned_amount). One
 -- definition, in the database, on every write path.
-INSERT INTO trip_expenses (trip_id, category, label, planned_amount, actual_amount, position, auto, source_kind, source_id, leg_key)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO trip_expenses (trip_id, category, label, planned_amount, actual_amount, position, auto, source_kind, source_id, leg_key, leg_plan)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: GetExpenseBySource :one
@@ -39,11 +43,14 @@ SELECT * FROM trip_expenses
 WHERE trip_id = $1 AND source_kind = $2 AND source_id = $3;
 
 -- name: GetExpenseByLegKey :one
--- The leg-keyed lookup (00070): at most one plan per city per category
--- (partial unique index idx_trip_expenses_leg). Category is in the key because
--- a city may carry more than one kind of per-day plan; food is the first.
+-- The PLAN-SLOT lookup (00070/00072), not a leg lookup: at most one plan per
+-- city per category (partial unique index idx_trip_expenses_leg). Category is
+-- in the key because a city may carry more than one kind of per-day plan;
+-- food is the first. `leg_plan` is load-bearing since 00072 — without it this
+-- would find one of the many ordinary lines the traveler merely tagged with
+-- the same city.
 SELECT * FROM trip_expenses
-WHERE trip_id = $1 AND leg_key = $2 AND category = $3;
+WHERE trip_id = $1 AND leg_key = $2 AND category = $3 AND leg_plan;
 
 -- name: UpdateExpense :one
 -- Partial update (COALESCE sqlc.narg idiom, see query/trip_checklist_items.sql
@@ -65,13 +72,25 @@ WHERE trip_id = $1 AND leg_key = $2 AND category = $3;
 --     re-classifying the line.
 --  3. `amount` is never listed. The trigger recomputes it; writing it by hand
 --     raises.
---  4. `leg_key` is never listed either (00070). Which city a plan belongs to is
---     fixed at creation and canonicalized against the trip's real legs by the
---     one writer; an edit that could re-point it would let a stale client move
---     a line onto a leg the server never agreed to.
+--  4. `leg_key` is writable since 00072 — which city a line belongs to is the
+--     traveler's organization, and organizing is an edit. Clearing needs a
+--     signal COALESCE cannot carry, so it rides the `clear_leg_key` flag, the
+--     same escape hatch query/preferences.sql uses for clear_home_airport and
+--     for the same reason. NOT a null-means-clear JSON convention (00067's
+--     verb-pair argument) and NOT a verb pair either: the thing at risk is a
+--     grouping, not money, so a mistaken clear costs a subtotal and one tap —
+--     which is the whole reason actual_amount needed a verb and this does not.
+--     The handler still canonicalizes every non-nil key against the trip's
+--     real legs (tripLegKeyExists) and refuses the write outright on a
+--     leg_plan row: a plan slot's city is fixed at creation, as 00070 said.
+--  5. `leg_plan` is deliberately absent: a plan slot is minted at CREATE,
+--     never converted from (or to) an ordinary line.
 UPDATE trip_expenses
 SET category = COALESCE(sqlc.narg('category'), category),
     label    = COALESCE(sqlc.narg('label'), label),
+    leg_key  = CASE
+        WHEN sqlc.arg('clear_leg_key')::boolean THEN NULL
+        ELSE COALESCE(sqlc.narg('leg_key'), leg_key) END,
     planned_amount = CASE
         WHEN sqlc.narg('legacy_amount')::float8 IS NOT NULL AND actual_amount IS NULL
             THEN sqlc.narg('legacy_amount')::float8

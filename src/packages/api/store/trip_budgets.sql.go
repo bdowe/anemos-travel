@@ -37,9 +37,9 @@ func (q *Queries) ClearExpenseActualAmount(ctx context.Context, arg ClearExpense
 }
 
 const createExpense = `-- name: CreateExpense :one
-INSERT INTO trip_expenses (trip_id, category, label, planned_amount, actual_amount, position, auto, source_kind, source_id, leg_key)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key
+INSERT INTO trip_expenses (trip_id, category, label, planned_amount, actual_amount, position, auto, source_kind, source_id, leg_key, leg_plan)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key, leg_plan
 `
 
 type CreateExpenseParams struct {
@@ -53,13 +53,18 @@ type CreateExpenseParams struct {
 	SourceKind    *string     `json:"source_kind"`
 	SourceID      pgtype.UUID `json:"source_id"`
 	LegKey        *string     `json:"leg_key"`
+	LegPlan       bool        `json:"leg_plan"`
 }
 
 // auto/source_kind/source_id: the booking-autopopulate link (00061). The
 // handler sets auto=true iff a source link is present — never the client.
-// leg_key: the city leg this line plans for (00070); NULL on every other path.
-// It is deliberately NOT part of the auto contract — a leg-keyed row is the
-// traveler's own plan, not a mirror of a booking.
+// leg_key: the city leg this money belongs to (00070, generalized by 00072);
+// NULL when the line isn't filed under a city. It is deliberately NOT part of
+// the auto contract — where a line is filed is the traveler's organization,
+// not a mirror of a booking.
+// leg_plan: marks the ONE row per city per category that IS that city's
+// per-day plan slot (00072) — the daily food & drink card's identity, guarded
+// by the partial unique index. Ordinary city-tagged lines carry false.
 // `amount` is deliberately absent from the column list: set_expense_amount()
 // (00067) computes it as COALESCE(actual_amount, planned_amount). One
 // definition, in the database, on every write path.
@@ -75,6 +80,7 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (T
 		arg.SourceKind,
 		arg.SourceID,
 		arg.LegKey,
+		arg.LegPlan,
 	)
 	var i TripExpense
 	err := row.Scan(
@@ -92,6 +98,7 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (T
 		&i.PlannedAmount,
 		&i.ActualAmount,
 		&i.LegKey,
+		&i.LegPlan,
 	)
 	return i, err
 }
@@ -132,7 +139,7 @@ func (q *Queries) GetBudgetByTrip(ctx context.Context, tripID uuid.UUID) (TripBu
 }
 
 const getExpense = `-- name: GetExpense :one
-SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key FROM trip_expenses WHERE id = $1 AND trip_id = $2
+SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key, leg_plan FROM trip_expenses WHERE id = $1 AND trip_id = $2
 `
 
 type GetExpenseParams struct {
@@ -158,13 +165,14 @@ func (q *Queries) GetExpense(ctx context.Context, arg GetExpenseParams) (TripExp
 		&i.PlannedAmount,
 		&i.ActualAmount,
 		&i.LegKey,
+		&i.LegPlan,
 	)
 	return i, err
 }
 
 const getExpenseByLegKey = `-- name: GetExpenseByLegKey :one
-SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key FROM trip_expenses
-WHERE trip_id = $1 AND leg_key = $2 AND category = $3
+SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key, leg_plan FROM trip_expenses
+WHERE trip_id = $1 AND leg_key = $2 AND category = $3 AND leg_plan
 `
 
 type GetExpenseByLegKeyParams struct {
@@ -173,9 +181,12 @@ type GetExpenseByLegKeyParams struct {
 	Category string    `json:"category"`
 }
 
-// The leg-keyed lookup (00070): at most one plan per city per category
-// (partial unique index idx_trip_expenses_leg). Category is in the key because
-// a city may carry more than one kind of per-day plan; food is the first.
+// The PLAN-SLOT lookup (00070/00072), not a leg lookup: at most one plan per
+// city per category (partial unique index idx_trip_expenses_leg). Category is
+// in the key because a city may carry more than one kind of per-day plan;
+// food is the first. `leg_plan` is load-bearing since 00072 — without it this
+// would find one of the many ordinary lines the traveler merely tagged with
+// the same city.
 func (q *Queries) GetExpenseByLegKey(ctx context.Context, arg GetExpenseByLegKeyParams) (TripExpense, error) {
 	row := q.db.QueryRow(ctx, getExpenseByLegKey, arg.TripID, arg.LegKey, arg.Category)
 	var i TripExpense
@@ -194,12 +205,13 @@ func (q *Queries) GetExpenseByLegKey(ctx context.Context, arg GetExpenseByLegKey
 		&i.PlannedAmount,
 		&i.ActualAmount,
 		&i.LegKey,
+		&i.LegPlan,
 	)
 	return i, err
 }
 
 const getExpenseBySource = `-- name: GetExpenseBySource :one
-SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key FROM trip_expenses
+SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key, leg_plan FROM trip_expenses
 WHERE trip_id = $1 AND source_kind = $2 AND source_id = $3
 `
 
@@ -229,12 +241,13 @@ func (q *Queries) GetExpenseBySource(ctx context.Context, arg GetExpenseBySource
 		&i.PlannedAmount,
 		&i.ActualAmount,
 		&i.LegKey,
+		&i.LegPlan,
 	)
 	return i, err
 }
 
 const listExpensesByTrip = `-- name: ListExpensesByTrip :many
-SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key FROM trip_expenses
+SELECT id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key, leg_plan FROM trip_expenses
 WHERE trip_id = $1
 ORDER BY position ASC, created_at ASC
 `
@@ -263,6 +276,7 @@ func (q *Queries) ListExpensesByTrip(ctx context.Context, tripID uuid.UUID) ([]T
 			&i.PlannedAmount,
 			&i.ActualAmount,
 			&i.LegKey,
+			&i.LegPlan,
 		); err != nil {
 			return nil, err
 		}
@@ -280,7 +294,7 @@ SET actual_amount = COALESCE($1::float8, planned_amount),
     auto = false
 WHERE id = $2 AND trip_id = $3
   AND ($1::float8 IS NOT NULL OR planned_amount IS NOT NULL)
-RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key
+RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key, leg_plan
 `
 
 type PurchaseExpenseParams struct {
@@ -317,6 +331,7 @@ func (q *Queries) PurchaseExpense(ctx context.Context, arg PurchaseExpenseParams
 		&i.PlannedAmount,
 		&i.ActualAmount,
 		&i.LegKey,
+		&i.LegPlan,
 	)
 	return i, err
 }
@@ -325,7 +340,7 @@ const unpurchaseExpense = `-- name: UnpurchaseExpense :one
 UPDATE trip_expenses
 SET actual_amount = NULL, auto = false
 WHERE id = $1 AND trip_id = $2 AND planned_amount IS NOT NULL
-RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key
+RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key, leg_plan
 `
 
 type UnpurchaseExpenseParams struct {
@@ -358,6 +373,7 @@ func (q *Queries) UnpurchaseExpense(ctx context.Context, arg UnpurchaseExpensePa
 		&i.PlannedAmount,
 		&i.ActualAmount,
 		&i.LegKey,
+		&i.LegPlan,
 	)
 	return i, err
 }
@@ -366,23 +382,28 @@ const updateExpense = `-- name: UpdateExpense :one
 UPDATE trip_expenses
 SET category = COALESCE($1, category),
     label    = COALESCE($2, label),
+    leg_key  = CASE
+        WHEN $3::boolean THEN NULL
+        ELSE COALESCE($4, leg_key) END,
     planned_amount = CASE
-        WHEN $3::float8 IS NOT NULL AND actual_amount IS NULL
-            THEN $3::float8
-        ELSE COALESCE($4, planned_amount) END,
+        WHEN $5::float8 IS NOT NULL AND actual_amount IS NULL
+            THEN $5::float8
+        ELSE COALESCE($6, planned_amount) END,
     actual_amount = CASE
-        WHEN $3::float8 IS NOT NULL AND actual_amount IS NOT NULL
-            THEN $3::float8
-        ELSE COALESCE($5, actual_amount) END,
-    position = COALESCE($6, position),
-    auto     = COALESCE($7, auto)
-WHERE id = $8 AND trip_id = $9
-RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key
+        WHEN $5::float8 IS NOT NULL AND actual_amount IS NOT NULL
+            THEN $5::float8
+        ELSE COALESCE($7, actual_amount) END,
+    position = COALESCE($8, position),
+    auto     = COALESCE($9, auto)
+WHERE id = $10 AND trip_id = $11
+RETURNING id, trip_id, category, label, amount, position, auto, created_at, updated_at, source_kind, source_id, planned_amount, actual_amount, leg_key, leg_plan
 `
 
 type UpdateExpenseParams struct {
 	Category      *string   `json:"category"`
 	Label         *string   `json:"label"`
+	ClearLegKey   bool      `json:"clear_leg_key"`
+	LegKey        *string   `json:"leg_key"`
 	LegacyAmount  *float64  `json:"legacy_amount"`
 	PlannedAmount *float64  `json:"planned_amount"`
 	ActualAmount  *float64  `json:"actual_amount"`
@@ -411,14 +432,25 @@ type UpdateExpenseParams struct {
 //     re-classifying the line.
 //  3. `amount` is never listed. The trigger recomputes it; writing it by hand
 //     raises.
-//  4. `leg_key` is never listed either (00070). Which city a plan belongs to is
-//     fixed at creation and canonicalized against the trip's real legs by the
-//     one writer; an edit that could re-point it would let a stale client move
-//     a line onto a leg the server never agreed to.
+//  4. `leg_key` is writable since 00072 — which city a line belongs to is the
+//     traveler's organization, and organizing is an edit. Clearing needs a
+//     signal COALESCE cannot carry, so it rides the `clear_leg_key` flag, the
+//     same escape hatch query/preferences.sql uses for clear_home_airport and
+//     for the same reason. NOT a null-means-clear JSON convention (00067's
+//     verb-pair argument) and NOT a verb pair either: the thing at risk is a
+//     grouping, not money, so a mistaken clear costs a subtotal and one tap —
+//     which is the whole reason actual_amount needed a verb and this does not.
+//     The handler still canonicalizes every non-nil key against the trip's
+//     real legs (tripLegKeyExists) and refuses the write outright on a
+//     leg_plan row: a plan slot's city is fixed at creation, as 00070 said.
+//  5. `leg_plan` is deliberately absent: a plan slot is minted at CREATE,
+//     never converted from (or to) an ordinary line.
 func (q *Queries) UpdateExpense(ctx context.Context, arg UpdateExpenseParams) (TripExpense, error) {
 	row := q.db.QueryRow(ctx, updateExpense,
 		arg.Category,
 		arg.Label,
+		arg.ClearLegKey,
+		arg.LegKey,
 		arg.LegacyAmount,
 		arg.PlannedAmount,
 		arg.ActualAmount,
@@ -443,6 +475,7 @@ func (q *Queries) UpdateExpense(ctx context.Context, arg UpdateExpenseParams) (T
 		&i.PlannedAmount,
 		&i.ActualAmount,
 		&i.LegKey,
+		&i.LegPlan,
 	)
 	return i, err
 }

@@ -94,7 +94,8 @@ class _FakeBudgetApiService extends BudgetApiService {
       bool planned = false,
       String? sourceKind,
       String? sourceId,
-      String? legKey}) async {
+      String? legKey,
+      bool legPlan = false}) async {
     if (addGate != null) await addGate!.future;
     addCount++;
     adds.add({
@@ -103,13 +104,16 @@ class _FakeBudgetApiService extends BudgetApiService {
       'amount': amount,
       'planned': planned,
       if (legKey != null) 'leg_key': legKey,
+      if (legPlan) 'leg_plan': true,
     });
-    // Upsert-by-leg, mirrored from the server (00070): a second add for a city
-    // already in the plan returns the existing row untouched. Mirroring it here
-    // is what makes "a double tap can't duplicate" a real widget assertion.
-    if (legKey != null) {
+    // Upsert-by-leg, mirrored from the server (00070, narrowed by 00072 to
+    // plan-slot adds — an ordinary city-tagged add always creates): a second
+    // plan add for a city already in the plan returns the existing row
+    // untouched. Mirroring it here is what makes "a double tap can't
+    // duplicate" a real widget assertion.
+    if (legKey != null && legPlan) {
       final existing = expenses.indexWhere(
-          (e) => e.legKey == legKey && e.category == category);
+          (e) => e.legPlan && e.legKey == legKey && e.category == category);
       if (existing >= 0) return expenses[existing];
     }
     final e = Expense(
@@ -123,7 +127,8 @@ class _FakeBudgetApiService extends BudgetApiService {
         auto: sourceKind != null, // server rule mirrored
         sourceKind: sourceKind,
         sourceId: sourceId,
-        legKey: legKey);
+        legKey: legKey,
+        legPlan: legPlan);
     expenses.add(e);
     return e;
   }
@@ -255,6 +260,9 @@ Future<_FakeBudgetApiService> _pump(
   bool isOffline = false,
   Locale? locale,
   DailySpendGuide? dailySpend,
+  // The trip's city legs (00072). Defaults empty so every pre-existing case
+  // renders exactly the tab it rendered before — no toggle, no picker.
+  List<({String key, String label, String? qualifier})> legChips = const [],
   // Width the section is laid out at, when a case is about the add row's
   // shape. Applied only when passed, so every existing call stays
   // byte-identical (and keeps the full surface width it always had).
@@ -282,7 +290,10 @@ Future<_FakeBudgetApiService> _pump(
             width,
             SingleChildScrollView(
               child: BudgetSection(
-                  tripId: 't1', canEdit: canEdit, isOffline: isOffline),
+                  tripId: 't1',
+                  canEdit: canEdit,
+                  isOffline: isOffline,
+                  legChips: legChips),
             ),
           ),
         ),
@@ -299,7 +310,8 @@ Future<_FakeBudgetApiService> _pump(
 /// banner does to that widget reduces to this.
 class _Mountable extends StatefulWidget {
   final String tripId;
-  const _Mountable({super.key, this.tripId = 't1'});
+  final List<({String key, String label, String? qualifier})> legChips;
+  const _Mountable({super.key, this.tripId = 't1', this.legChips = const []});
 
   @override
   State<_Mountable> createState() => _MountableState();
@@ -321,7 +333,11 @@ class _MountableState extends State<_Mountable> {
               child: const Text('toggle'),
             ),
             if (_shown)
-              BudgetSection(tripId: _tripId, canEdit: true, isOffline: false),
+              BudgetSection(
+                  tripId: _tripId,
+                  canEdit: true,
+                  isOffline: false,
+                  legChips: widget.legChips),
           ],
         ),
       );
@@ -334,6 +350,7 @@ Future<_FakeBudgetApiService> _pumpMountable(
   WidgetTester tester,
   List<Expense> expenses, {
   List<String> tripIds = const ['t1'],
+  List<({String key, String label, String? qualifier})> legChips = const [],
   GlobalKey<_MountableState>? hostKey,
 }) async {
   final fake = _FakeBudgetApiService(expenses);
@@ -349,7 +366,9 @@ Future<_FakeBudgetApiService> _pumpMountable(
               for (final id in tripIds)
                 Expanded(
                   child: _Mountable(
-                      key: id == tripIds.first ? hostKey : null, tripId: id),
+                      key: id == tripIds.first ? hostKey : null,
+                      tripId: id,
+                      legChips: legChips),
                 ),
             ],
           ),
@@ -936,7 +955,10 @@ void main() {
             home: const Scaffold(
               body: SingleChildScrollView(
                 child: BudgetSection(
-                    tripId: 't1', canEdit: true, isOffline: false),
+                    tripId: 't1',
+                    canEdit: true,
+                    isOffline: false,
+                    legChips: []),
               ),
             ),
           ),
@@ -1270,6 +1292,9 @@ void main() {
         'amount': 200.0,
         'planned': true,
         'leg_key': 'Lisbon',
+        // The slot marker (00072): the flag, not the key, is what makes the
+        // POST an upsert.
+        'leg_plan': true,
       });
       // Planned, not paid: the money hasn't left yet, so "Total spent" must not
       // move while "Total planned" does.
@@ -1290,6 +1315,7 @@ void main() {
         plannedAmount: 260, // the traveler edited it up from 200
         purchased: false,
         legKey: 'Lisbon',
+        legPlan: true, // the slot flag, not the key, is the identity (00072)
       );
       await _pump(tester, [planned], targetAmount: 2000, dailySpend: guide);
 
@@ -1332,6 +1358,26 @@ void main() {
       expect(find.byKey(const ValueKey('dailySpendInPlan_Lisbon')), findsNothing);
     });
 
+    testWidgets('a manually tagged food line is not the plan', (tester) async {
+      // Since 00072 an ordinary dinner can carry the SAME legKey and
+      // category as the plan slot — only legPlan separates them. Without the
+      // flag in _planFor the card would adopt the traveler's dinner as its
+      // plan and never offer the button.
+      const dinner = Expense(
+        id: 'e1',
+        category: 'food',
+        label: 'Dinner at Ramiro',
+        amount: 60,
+        plannedAmount: 60,
+        purchased: false,
+        legKey: 'Lisbon',
+      );
+      await _pump(tester, [dinner], targetAmount: 2000, dailySpend: guide);
+
+      expect(find.byKey(const ValueKey('dailySpendAdd_Lisbon')), findsOneWidget);
+      expect(find.byKey(const ValueKey('dailySpendInPlan_Lisbon')), findsNothing);
+    });
+
     testWidgets('fits a 360px phone in Spanish', (tester) async {
       tester.view.physicalSize = const Size(360, 900);
       tester.view.devicePixelRatio = 1.0;
@@ -1344,6 +1390,227 @@ void main() {
       expect(find.text('Lisbon · 4 noches'), findsOneWidget);
       expect(find.text('Añadir al plan'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('spend per city', () {
+    const legs = <({String key, String label, String? qualifier})>[
+      (key: 'Rome', label: 'Rome', qualifier: null),
+      (key: 'Lisbon', label: 'Lisbon', qualifier: null),
+      (key: 'Rome#2', label: 'Rome', qualifier: '2nd visit'),
+    ];
+
+    /// A receipt spanning tagged, untagged and stale-tagged lines.
+    List<Expense> mixed() => [
+          const Expense(
+              id: 'a',
+              category: 'lodging',
+              label: 'Hotel Roma',
+              amount: 400,
+              actualAmount: 400,
+              purchased: true,
+              legKey: 'Rome'),
+          const Expense(
+              id: 'b',
+              category: 'food',
+              label: 'Dinner at Ramiro',
+              amount: 60,
+              actualAmount: 60,
+              purchased: true,
+              legKey: 'Lisbon'),
+          _exp('c', 'flights', 'JFK→FCO', 700), // untagged
+          const Expense(
+              id: 'd',
+              category: 'food',
+              label: 'Old plan',
+              amount: 90,
+              plannedAmount: 90,
+              purchased: false,
+              legKey: 'Naples'), // a city the trip no longer renders
+        ];
+
+    testWidgets('the toggle exists only when the trip has city legs',
+        (tester) async {
+      await _pump(tester, mixed(), targetAmount: 2000);
+      expect(find.byKey(const Key('budget-group-by')), findsNothing);
+      expect(find.byKey(const Key('budget-add-city')), findsNothing);
+
+      await _pump(tester, mixed(), targetAmount: 2000, legChips: legs);
+      expect(find.byKey(const Key('budget-group-by')), findsOneWidget);
+      expect(find.byKey(const Key('budget-add-city')), findsOneWidget);
+    });
+
+    testWidgets(
+        'city mode groups by leg in trip order, banks the rest, and hides nothing',
+        (tester) async {
+      await _pump(tester, mixed(), targetAmount: 2000, legChips: legs);
+
+      // Category mode first: every line renders once.
+      expect(find.byKey(const ValueKey('a')), findsOneWidget);
+      expect(find.byKey(const ValueKey('d')), findsOneWidget);
+
+      await tester.tap(find.text('City'));
+      await tester.pumpAndSettle();
+
+      // The same four lines — the toggle is a grouping, never a filter.
+      for (final id in ['a', 'b', 'c', 'd']) {
+        expect(find.byKey(ValueKey(id)), findsOneWidget,
+            reason: 'line $id must survive the regroup');
+      }
+      // One header per city that HAS lines, in leg order; empty legs
+      // (Rome#2) get no header; the untagged flight and the stale Naples
+      // plan share the trailing Rest of trip.
+      expect(find.byKey(const Key('budget-group-city-Rome')), findsOneWidget);
+      expect(find.byKey(const Key('budget-group-city-Lisbon')), findsOneWidget);
+      expect(find.byKey(const Key('budget-group-city-Rome#2')), findsNothing);
+      expect(find.byKey(const Key('budget-group-rest')), findsOneWidget);
+      expect(find.text('Rest of trip'), findsOneWidget);
+      final romeY =
+          tester.getTopLeft(find.byKey(const Key('budget-group-city-Rome'))).dy;
+      final lisbonY = tester
+          .getTopLeft(find.byKey(const Key('budget-group-city-Lisbon')))
+          .dy;
+      final restY =
+          tester.getTopLeft(find.byKey(const Key('budget-group-rest'))).dy;
+      expect(romeY, lessThan(lisbonY));
+      expect(lisbonY, lessThan(restY));
+
+      // Per-city subtotals are the same projected arithmetic category mode
+      // uses ($400 Rome, $60 Lisbon, $700 + $90 rest — total unchanged).
+      expect(find.text('\$400'), findsWidgets);
+      expect(find.text('\$790'), findsOneWidget);
+
+      // Back to category mode: the original headers return.
+      await tester.tap(find.text('Category'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('budget-group-lodging')), findsOneWidget);
+      expect(find.byKey(const Key('budget-group-rest')), findsNothing);
+    });
+
+    testWidgets('the picker files the next add under the picked city',
+        (tester) async {
+      final fake =
+          await _pump(tester, [], targetAmount: 2000, legChips: legs);
+
+      await tester.tap(find.byKey(const Key('budget-add-city')));
+      await tester.pumpAndSettle();
+      // Every leg plus the "No city" way out (the trigger itself reads
+      // "No city" too while nothing is picked); the revisit is qualified.
+      expect(find.text('No city'), findsNWidgets(2));
+      expect(find.text('Rome · 2nd visit'), findsOneWidget);
+      await tester.tap(find.text('Lisbon').last);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, 'Fado night');
+      await tester.enterText(find.byType(TextField).at(1), '35');
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.add));
+      await tester.pumpAndSettle();
+
+      expect(fake.adds.single['leg_key'], 'Lisbon');
+      // An ordinary tagged add, never a plan slot.
+      expect(fake.adds.single.containsKey('leg_plan'), isFalse);
+    });
+
+    testWidgets('the picked city survives the remount, like the category',
+        (tester) async {
+      final fake = await _pumpMountable(tester, [], legChips: legs);
+
+      await tester.tap(find.byKey(const Key('budget-add-city')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rome').last);
+      await tester.pumpAndSettle();
+
+      await _remount(tester);
+
+      await tester.enterText(find.byType(TextField).first, 'Trevi coins');
+      await tester.enterText(find.byType(TextField).at(1), '2');
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.add));
+      await tester.pumpAndSettle();
+      expect(fake.adds.single['leg_key'], 'Rome');
+    });
+
+    testWidgets('the edit dialog re-files and un-files a line',
+        (tester) async {
+      final fake =
+          await _pump(tester, mixed(), targetAmount: 2000, legChips: legs);
+      // The hotel's own menu, not `.first` — category order puts flights
+      // above lodging, so the first ⋮ on screen belongs to another row.
+      final hotelMenu = find.descendant(
+          of: find.byKey(const ValueKey('a')),
+          matching: find.byIcon(Icons.more_vert));
+
+      // Re-file the Rome hotel under Lisbon.
+      await tester.tap(hotelMenu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('budget-edit-city')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lisbon').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(fake.patches.single['id'], 'a');
+      expect(fake.patches.single['leg_key'], 'Lisbon');
+
+      // Un-file it: "No city" travels as the ''-clears sentinel.
+      fake.patches.clear();
+      await tester.tap(hotelMenu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('budget-edit-city')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('No city').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(fake.patches.single['leg_key'], '');
+    });
+
+    testWidgets('an untouched dialog PATCHes no leg_key', (tester) async {
+      final fake =
+          await _pump(tester, mixed(), targetAmount: 2000, legChips: legs);
+
+      await tester.tap(find.byIcon(Icons.more_vert).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(fake.patches.single.containsKey('leg_key'), isFalse);
+    });
+
+    testWidgets("a plan row's city control is locked and says why",
+        (tester) async {
+      const plan = Expense(
+        id: 'p1',
+        category: 'food',
+        label: 'Food & drink · Rome',
+        amount: 200,
+        plannedAmount: 200,
+        purchased: false,
+        legKey: 'Rome',
+        legPlan: true,
+      );
+      final fake =
+          await _pump(tester, [plan], targetAmount: 2000, legChips: legs);
+
+      await tester.tap(find.byIcon(Icons.more_vert).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+
+      final dropdown = tester.widget<DropdownButtonFormField<String?>>(
+          find.byKey(const Key('budget-edit-city')));
+      expect(dropdown.onChanged, isNull,
+          reason: 'a plan slot\'s city is fixed (the server 409s the write)');
+      expect(find.textContaining("Rome's daily plan"), findsOneWidget);
+
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(fake.patches.single.containsKey('leg_key'), isFalse);
     });
   });
 }
