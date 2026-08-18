@@ -39,7 +39,8 @@ class LandingDestinationRail extends ConsumerWidget {
         // scroll, so it shows the full range of destinations.
         picker: suggestionOrderProvider,
         builder: (context, prompts) => SizedBox(
-          height: DestinationSuggestionCard.heightFor(_cardWidth),
+          height: DestinationSuggestionCard.heightFor(
+              _cardWidth, MediaQuery.textScalerOf(context)),
           child: ScrollConfiguration(
             // Without this a mouse cannot drag the rail on web/desktop — the
             // same reason the destination carousel and photo strips set it.

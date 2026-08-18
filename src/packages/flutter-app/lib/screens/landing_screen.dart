@@ -91,9 +91,9 @@ class _LandingScreenState extends State<LandingScreen> {
         backgroundColor: AppColors.landingCanvas,
         appBar: GradientAppBar(
           // No page title: the landing page's title is the brand. The bar's
-          // own lockup (plated mark + wordmark) comes from GradientAppBar —
-          // this screen sits outside the shell, so it keeps the mark at every
-          // width.
+          // own lockup (bare mark + wordmark, plate policy v3) comes from
+          // GradientAppBar — this screen sits outside the shell, so it keeps
+          // the mark at every width.
           actions: [
             const LanguageMenuButton(),
             TextButton(

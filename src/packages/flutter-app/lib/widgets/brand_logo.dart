@@ -12,7 +12,7 @@ import '../theme/spacing.dart';
 ///   PNG's art sits off-centre on a square canvas, so reintroducing it hangs
 ///   ~7pt of dead space below the mark.
 /// - [BrandLogo.mark] — the rose icon only, for tight spots (nav rail,
-///   landing hero).
+///   auth screen).
 /// - [BrandLogo.markLight] — the reversed rose (white/teal-100 cardinals),
 ///   for teal fields (the boot splash, the gradient app bar).
 ///
@@ -20,8 +20,8 @@ import '../theme/spacing.dart';
 ///
 /// **Plate policy, v3: the rose always floats bare.** No plate is drawn
 /// anywhere in the app; the only question a surface asks is which cut of the
-/// rose it needs. Page surfaces and scrimmed imagery (auth screen, nav rail,
-/// landing hero) take the dark [BrandLogo.mark]; the teal
+/// rose it needs. Page surfaces (auth screen, nav rail) take the dark
+/// [BrandLogo.mark]; the teal
 /// `AppColors.brandGradient` fields (the splash, the gradient app bar) take
 /// [BrandLogo.markLight], because the dark artwork is teal-on-teal there.
 ///
@@ -90,7 +90,7 @@ class BrandLogo extends StatelessWidget {
 /// The invariants — family, weight, and the string itself — live here. The
 /// tuned values are parameters because caps run wide and each surface was
 /// measured separately: tracking opens up as the size grows (app bar 19/1.0,
-/// landing hero 24–40/1.5).
+/// boot splash 22/3).
 ///
 /// [color] defaults to **inherited**. Every gradient app bar already sets
 /// `foregroundColor: Colors.white`, so those are white for free, while the
@@ -101,7 +101,7 @@ class BrandWordmark extends StatelessWidget {
   static const double appBarFontSize = 19;
 
   /// The default tracking. Caps run wide, so callers using a larger size open
-  /// this up — the landing hero and the splash both do.
+  /// this up — the boot splash does.
   static const double defaultLetterSpacing = 1.0;
 
   final double fontSize;

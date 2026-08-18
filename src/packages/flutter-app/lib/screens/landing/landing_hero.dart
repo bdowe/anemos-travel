@@ -93,10 +93,19 @@ class _LandingHeroState extends ConsumerState<LandingHero> {
               // Decorative: the headline carries the message.
               excludeFromSemantics: true,
               // Bound the decode to the viewport; the source is 1600px wide.
+              // Quantized to 320px buckets so a continuous window resize
+              // reuses the cached decode instead of minting a new ImageCache
+              // entry per pixel of width.
               cacheWidth: math.min(
                 1600,
-                (media.width * MediaQuery.devicePixelRatioOf(context)).round(),
+                ((media.width * MediaQuery.devicePixelRatioOf(context)) / 320)
+                        .ceil() *
+                    320,
               ),
+              // Hold the previous frame while a new bucket decodes — without
+              // this the photo drops to the gradient for the whole resize
+              // gesture and fades back in afterwards.
+              gaplessPlayback: true,
               frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
                 if (wasSynchronouslyLoaded) return child;
                 return AnimatedOpacity(
