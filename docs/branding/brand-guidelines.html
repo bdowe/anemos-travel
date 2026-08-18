@@ -1,0 +1,877 @@
+<!doctype html>
+<!--
+  Anemos Brand Guidelines — the human-readable contract for the brand.
+  Source of truth for every value quoted here:
+    lib/theme/app_colors.dart · app_typography.dart · app_theme.dart ·
+    spacing.dart · app_shadows.dart · lib/widgets/brand_logo.dart ·
+    docs/branding/{mark,mark-light,lockup}.svg · docs/branding/README.md
+
+  View locally:   open docs/branding/brand-guidelines.html
+  Regenerate PDF: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+                    --headless=new --disable-gpu --no-pdf-header-footer \
+                    --print-to-pdf="$(pwd)/docs/branding/anemos-brand-guidelines.pdf" \
+                    "file://$(pwd)/docs/branding/brand-guidelines.html"
+
+  Fonts and photos are referenced relatively from the repo's own assets —
+  nothing here loads from the network.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anemos Brand Guidelines</title>
+<style>
+  /* ── Faces: the app's own subsetted files, three faces, three jobs ────── */
+  @font-face {
+    font-family: 'Cinzel';
+    src: url('../../src/packages/flutter-app/assets/fonts/Cinzel-SemiBold.ttf') format('truetype');
+    font-weight: 600; font-style: normal; font-display: block;
+  }
+  @font-face {
+    font-family: 'Marcellus';
+    src: url('../../src/packages/flutter-app/assets/fonts/Marcellus-Regular.ttf') format('truetype');
+    font-weight: 400; font-style: normal; font-display: block;
+  }
+  @font-face { font-family: 'Inter'; src: url('../../src/packages/flutter-app/assets/fonts/Inter-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Inter'; src: url('../../src/packages/flutter-app/assets/fonts/Inter-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Inter'; src: url('../../src/packages/flutter-app/assets/fonts/Inter-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Inter'; src: url('../../src/packages/flutter-app/assets/fonts/Inter-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+
+  /* ── Document tokens ──────────────────────────────────────────────────── */
+  :root {
+    --teal-50:  #E0F2F1;
+    --teal-100: #B2DFDB;
+    --teal-600: #00897B;
+    --teal-700: #00796B;
+    --teal-800: #00695C;
+    --teal-900: #004D40;
+    --gold:      #E8C452;
+    --gold-dark: #B98B1E;
+    --paper:     #FBF9F4;   /* the warm ground this guideline argues for */
+    --paper-2:   #F4F0E7;
+    --ink:       #23282A;
+    --ink-2:     #5A625F;
+    --line:      #E2DCCE;
+    --map-night: #0A0F1A;
+    --serif: 'Marcellus', 'Iowan Old Style', Georgia, serif;
+    --sans: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --caps: 'Cinzel', 'Iowan Old Style', Georgia, serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scrollbar-color: var(--teal-700) var(--paper-2); }
+  body {
+    font-family: var(--sans);
+    font-size: 16px; line-height: 1.6;
+    color: var(--ink); background: var(--paper);
+    caret-color: var(--teal-700);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  ::selection { background: var(--teal-100); color: var(--teal-900); }
+  a { color: var(--teal-700); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:hover { color: var(--teal-900); }
+  :focus-visible { outline: 2px solid var(--teal-700); outline-offset: 3px; border-radius: 2px; }
+
+  h1, h2, h3 { font-family: var(--serif); font-weight: 400; color: var(--ink); text-wrap: balance; }
+  h2 { font-size: 34px; line-height: 1.2; margin: 0 0 10px; }
+  h3 { font-size: 23px; line-height: 1.25; margin: 44px 0 8px; }
+  p  { max-width: 68ch; }
+  p + p { margin-top: 12px; }
+  .lede { font-size: 17.5px; color: var(--ink); max-width: 62ch; margin-bottom: 8px; }
+  .muted { color: var(--ink-2); }
+  .small { font-size: 13.5px; line-height: 1.55; }
+  code {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.88em; background: var(--paper-2);
+    padding: 1px 5px; border-radius: 4px; color: var(--teal-900);
+    overflow-wrap: anywhere;
+  }
+  .el { font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; } /* Greek falls back to system — the subsets carry no Greek */
+
+  /* ── Page scaffolding ─────────────────────────────────────────────────── */
+  .sheet { max-width: 1020px; margin: 0 auto; padding: 88px 48px 48px; }
+  .rule-title { display: flex; align-items: baseline; gap: 18px; margin-bottom: 34px; }
+  .rule-title::after { content: ''; flex: 1; height: 1px; background: var(--line); transform: translateY(-8px); }
+  .sub { color: var(--ink-2); font-size: 15px; max-width: 68ch; }
+
+  figure { margin: 0; }
+  figcaption { font-size: 13px; color: var(--ink-2); margin-top: 10px; max-width: 70ch; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th { font-weight: 600; text-align: left; color: var(--ink-2); font-size: 12.5px; letter-spacing: 0.4px; text-transform: none; border-bottom: 1px solid var(--ink); padding: 0 14px 8px 0; }
+  td { border-bottom: 1px solid var(--line); padding: 9px 14px 9px 0; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  .note {
+    border: 1px solid var(--line); border-radius: 12px;
+    background: #FFFFFF; padding: 18px 22px; margin: 26px 0;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+  }
+  .note strong { font-weight: 600; }
+
+  /* ── Cover ────────────────────────────────────────────────────────────── */
+  .cover {
+    min-height: 100vh; display: flex; flex-direction: column;
+    background: linear-gradient(135deg, var(--teal-600), var(--teal-900));
+    color: #fff; padding: 56px 64px;
+  }
+  .cover-top { display: flex; justify-content: space-between; align-items: center; font-size: 13px; letter-spacing: 0.6px; color: var(--teal-100); }
+  .cover-main { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 0; animation: rise 0.9s cubic-bezier(0.16,1,0.3,1) both; }
+  .cover-main svg { width: 168px; height: 168px; margin-bottom: 40px; }
+  .cover-word { font-family: var(--caps); font-weight: 600; font-size: 64px; letter-spacing: 10px; line-height: 1.1; text-indent: 10px; text-shadow: 0 2px 8px rgba(0,0,0,0.26); }
+  .cover-sub { font-family: var(--serif); font-size: 26px; color: #fff; margin-top: 14px; }
+  .cover-tag { font-size: 15px; color: var(--teal-100); margin-top: 22px; letter-spacing: 0.4px; }
+  .cover-bottom { display: flex; justify-content: space-between; font-size: 13px; color: var(--teal-100); }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  /* ── Contents ─────────────────────────────────────────────────────────── */
+  .toc { columns: 2; column-gap: 48px; margin-top: 26px; max-width: 760px; }
+  .toc a { display: block; padding: 9px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink); font-size: 15px; break-inside: avoid; }
+  .toc a:hover { color: var(--teal-700); }
+  .toc .n { color: var(--teal-700); font-weight: 600; font-size: 12.5px; margin-right: 12px; font-variant-numeric: tabular-nums; }
+
+  /* ── Foundation ───────────────────────────────────────────────────────── */
+  .founding { display: grid; grid-template-columns: 200px 1fr; gap: 52px; align-items: start; }
+  .founding svg { width: 200px; height: 200px; }
+  .fact-list { margin-top: 28px; }
+  .fact-list dt { font-weight: 600; font-size: 13px; color: var(--ink-2); letter-spacing: 0.3px; }
+  .fact-list dd { margin: 2px 0 14px; font-size: 15px; }
+
+  /* ── Market ───────────────────────────────────────────────────────────── */
+  .cluster { border-top: 1px solid var(--ink); padding: 20px 0 26px; display: grid; grid-template-columns: 250px 1fr; gap: 36px; break-inside: avoid; }
+  .cluster h3 { margin: 0 0 6px; font-size: 21px; }
+  .cluster .who { font-size: 13.5px; color: var(--ink-2); line-height: 1.7; }
+  .chipstrip { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+  .cchip { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 11px 4px 5px; color: var(--ink); }
+  .cchip i { width: 18px; height: 18px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.08); }
+  .cchip a { text-decoration: none; color: inherit; }
+  .cchip a:hover { color: var(--teal-700); }
+  .verdict {
+    background: linear-gradient(135deg, var(--teal-600), var(--teal-900));
+    color: #fff; border-radius: 20px; padding: 40px 46px; margin-top: 40px;
+    box-shadow: 0 6px 16px rgba(0,77,64,0.35); break-inside: avoid;
+  }
+  .verdict h3 { color: #fff; font-size: 30px; margin: 0 0 12px; }
+  .verdict p { color: #ECF6F4; }
+  .verdict p strong { color: #fff; }
+  .verdict .gold { color: var(--gold); }
+
+  /* ── Logo ─────────────────────────────────────────────────────────────── */
+  .cutgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 8px; }
+  .cut { border-radius: 20px; padding: 46px 30px 30px; text-align: center; break-inside: avoid; }
+  .cut svg { width: 132px; height: 132px; }
+  .cut.on-paper { background: #fff; border: 1px solid var(--line); }
+  .cut.on-grad { background: linear-gradient(135deg, var(--teal-600), var(--teal-900)); box-shadow: 0 4px 10px rgba(0,77,64,0.3); }
+  .cut .cap { margin-top: 24px; font-size: 13px; line-height: 1.55; }
+  .cut.on-paper .cap { color: var(--ink-2); }
+  .cut.on-grad .cap { color: var(--teal-100); }
+  .cut .cap b { display: block; font-weight: 600; font-size: 13.5px; }
+  .cut.on-paper .cap b { color: var(--ink); }
+  .cut.on-grad .cap b { color: #fff; }
+
+  .anatomy { display: grid; grid-template-columns: 240px 1fr; gap: 48px; align-items: center; margin-top: 10px; }
+  .anatomy svg { width: 240px; height: 240px; }
+  .legend { list-style: none; }
+  .legend li { display: flex; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 14.5px; align-items: baseline; }
+  .legend li:last-child { border-bottom: none; }
+  .legend .dots { white-space: nowrap; }
+  .legend .dots i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: -2px; border: 1px solid rgba(0,0,0,0.1); }
+
+  .clearspace { display: flex; gap: 48px; align-items: center; flex-wrap: wrap; }
+  .cs-box { border: 1.5px dashed var(--teal-600); border-radius: 8px; padding: 33px; background: #fff; }
+  .cs-box svg { width: 132px; height: 132px; display: block; }
+
+  .dodont { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 10px; }
+  .dd { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; break-inside: avoid; }
+  .dd .art { height: 130px; display: flex; align-items: center; justify-content: center; }
+  .dd .art svg { width: 76px; height: 76px; }
+  .dd .lab { display: flex; gap: 9px; align-items: flex-start; padding: 12px 14px; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); border-top: 1px solid var(--line); }
+  .dd .lab svg { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+
+  .wm-demo { background: linear-gradient(135deg, var(--teal-600), var(--teal-900)); border-radius: 20px; padding: 46px 40px; text-align: center; color: #fff; break-inside: avoid; }
+  .wm-demo .wm { font-family: var(--caps); font-weight: 600; font-size: 40px; letter-spacing: 6px; text-indent: 6px; line-height: 1.1; text-shadow: 0 2px 8px rgba(0,0,0,0.26); }
+  .wm-demo .at19 { font-family: var(--caps); font-weight: 600; font-size: 19px; letter-spacing: 1px; margin-top: 26px; color: #fff; }
+  .wm-demo .cap { color: var(--teal-100); font-size: 12.5px; margin-top: 6px; }
+
+  /* ── Color ────────────────────────────────────────────────────────────── */
+  .ramp { display: grid; grid-template-columns: repeat(6, 1fr); border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.10); break-inside: avoid; }
+  .ramp .step { padding: 84px 14px 14px; font-size: 11.5px; line-height: 1.5; }
+  .ramp .step b { display: block; font-size: 12.5px; font-weight: 600; }
+  .swatchcards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 22px; }
+  .sw { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; break-inside: avoid; }
+  .sw .chip { height: 84px; }
+  .sw .meta { padding: 12px 14px; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); }
+  .sw .meta b { display: block; color: var(--ink); font-weight: 600; font-size: 13.5px; }
+  .gradband { border-radius: 14px; height: 120px; display: flex; align-items: flex-end; padding: 16px 20px; color: #fff; font-size: 13px; box-shadow: 0 4px 10px rgba(0,77,64,0.3); break-inside: avoid; }
+
+  .accentrow { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; }
+  .accent { display: flex; align-items: center; gap: 10px; font-size: 13px; border: 1px solid var(--line); border-radius: 999px; background: #fff; padding: 6px 14px 6px 7px; }
+  .accent i { width: 22px; height: 22px; border-radius: 50%; }
+  .accent code { background: none; padding: 0; color: var(--ink-2); }
+
+  .pillpair { display: inline-flex; align-items: center; border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 600; }
+
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.4px; border-radius: 999px; padding: 2px 9px; }
+  .badge.aa { background: var(--teal-700); color: #fff; }
+  .badge.aal { background: #fff; color: var(--teal-900); border: 1px solid var(--teal-700); }
+  .badge.rev { background: #fff; color: #B3261E; border: 1px solid #B3261E; }
+
+  /* ── Typography ───────────────────────────────────────────────────────── */
+  .face { border-top: 1px solid var(--ink); padding: 26px 0 30px; display: grid; grid-template-columns: 250px 1fr; gap: 36px; break-inside: avoid; }
+  .face .who h3 { margin: 0 0 6px; font-size: 21px; }
+  .face .who p { font-size: 13.5px; color: var(--ink-2); }
+  .spec-caps { font-family: var(--caps); font-weight: 600; font-size: 44px; letter-spacing: 5px; line-height: 1.2; color: var(--teal-900); }
+  .spec-serif { font-family: var(--serif); font-size: 38px; line-height: 1.25; }
+  .spec-serif .alpha { font-size: 20px; color: var(--ink-2); display: block; margin-top: 10px; letter-spacing: 0.5px; }
+  .spec-sans div { line-height: 1.5; font-size: 19px; }
+
+  /* ── Space & shape ────────────────────────────────────────────────────── */
+  .threecol { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px; align-items: start; }
+  .spacebars { list-style: none; }
+  .spacebars li { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 14px; padding: 7px 0; font-size: 13px; }
+  .spacebars i { background: var(--teal-700); height: 14px; border-radius: 3px; display: block; }
+  .spacebars span { color: var(--ink-2); }
+  .radii { display: flex; gap: 18px; align-items: flex-end; }
+  .radii figure { text-align: center; font-size: 12.5px; color: var(--ink-2); }
+  .radii .sq { width: 84px; height: 84px; background: var(--teal-50); border: 1.5px solid var(--teal-700); margin-bottom: 8px; }
+  .shadowchips { display: flex; gap: 22px; flex-wrap: wrap; }
+  .shadowchips figure { text-align: center; font-size: 12.5px; color: var(--ink-2); }
+  .shadowchips .chipdemo { width: 108px; height: 72px; border-radius: 12px; background: #fff; margin-bottom: 12px; }
+
+  /* ── Imagery ──────────────────────────────────────────────────────────── */
+  .heroimg { position: relative; border-radius: 20px; overflow: hidden; box-shadow: 0 6px 16px rgba(0,77,64,0.4); break-inside: avoid; }
+  .heroimg img { width: 100%; height: 340px; object-fit: cover; display: block; }
+  .heroimg .scrim { position: absolute; inset: 0; background: linear-gradient(to top right, rgba(0,77,64,0.88), rgba(0,77,64,0.35)); }
+  .heroimg .txt { position: absolute; left: 30px; bottom: 26px; color: #fff; }
+  .heroimg .txt .h { font-family: var(--serif); font-size: 30px; line-height: 1.2; }
+  .heroimg .txt .s { font-size: 14px; color: var(--teal-100); margin-top: 4px; }
+  .photostrip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; }
+  .photostrip img { width: 100%; height: 130px; object-fit: cover; border-radius: 12px; display: block; }
+
+  /* ── Voice ────────────────────────────────────────────────────────────── */
+  .tagline { font-family: var(--serif); font-size: 46px; line-height: 1.15; color: var(--teal-900); margin: 8px 0 30px; }
+
+  /* ── Footer ───────────────────────────────────────────────────────────── */
+  .endcap { background: var(--teal-900); color: var(--teal-100); margin-top: 72px; }
+  .endcap .sheet { padding: 44px 48px; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+  .endcap svg { width: 44px; height: 44px; }
+  .endcap .w { font-family: var(--caps); font-weight: 600; letter-spacing: 3px; font-size: 17px; color: #fff; }
+  .endcap .small { color: var(--teal-100); }
+
+  /* ── Print ────────────────────────────────────────────────────────────── */
+  @page { size: letter; margin: 0.62in 0.65in; }
+  @page :first { margin: 0; }
+  @media print {
+    body { font-size: 12.5px; }
+    .cover { min-height: auto; height: 11in; page-break-after: always; padding: 0.7in 0.75in; }
+    .cover-main { animation: none; }
+    .sheet { max-width: none; padding: 0; }
+    section.sheet { break-before: page; padding-top: 0.1in; }
+    section.sheet:first-of-type { break-before: auto; }
+    h2 { font-size: 27px; }
+    h3 { font-size: 18px; margin-top: 26px; break-after: avoid-page; }
+    .toc-wrap { break-before: page; }
+    .threecol { grid-template-columns: 1fr 1fr; }
+    .threecol > div { break-inside: avoid; }
+    .accentrow { break-inside: avoid; }
+    .spec-serif .alpha { font-size: 12.5px; }
+    .keep { break-inside: avoid; }
+    .lede { font-size: 14px; }
+    .heroimg img { height: 250px; }
+    .photostrip img { height: 100px; }
+    .toc { columns: 2; }
+    a { color: var(--teal-900); text-decoration: none; }
+    .note, .dd, .sw, .cut, .verdict, .cluster, .face, .ramp, .gradband, .heroimg, .wm-demo, table, .anatomy, .clearspace, figure { break-inside: avoid; }
+    .endcap { margin-top: 0.4in; }
+    .endcap .sheet { padding: 0.3in 0.35in; }
+  }
+
+  @media screen and (max-width: 760px) {
+    .sheet { padding: 56px 22px 22px; }
+    .cover { padding: 36px 24px; }
+    .cover-main svg { width: 128px; height: 128px; margin-bottom: 28px; }
+    .cover-sub { font-size: 21px; }
+    .wm-demo { padding: 32px 20px; }
+    .wm-demo .wm { font-size: 27px; letter-spacing: 4px; text-indent: 4px; }
+    .spec-caps { font-size: 30px; letter-spacing: 3px; }
+    .spec-serif { font-size: 30px; }
+    .tagline { font-size: 34px; }
+    table { display: block; overflow-x: auto; }
+    .founding, .cluster, .face, .anatomy { grid-template-columns: 1fr; gap: 20px; }
+    .cutgrid { grid-template-columns: 1fr; }
+    .dodont { grid-template-columns: 1fr; }
+    .swatchcards { grid-template-columns: 1fr 1fr; }
+    .threecol { grid-template-columns: 1fr; }
+    .ramp { grid-template-columns: repeat(3, 1fr); }
+    .cover-word { font-size: 40px; letter-spacing: 6px; }
+    .photostrip { grid-template-columns: 1fr 1fr; }
+    .toc { columns: 1; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══ Cover ═══ -->
+<header class="cover">
+  <div class="cover-top">
+    <span>Brand guidelines</span>
+    <span>Version 1.0 · August 2026</span>
+  </div>
+  <div class="cover-main">
+    <svg viewBox="0 0 540 540" role="img" aria-label="Anemos wind-rose mark, light cut">
+      <g transform="translate(270,270)">
+        <g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+        <g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+        <g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+        <g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g></g>
+        <g><g><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g>
+        <g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g>
+        <g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g>
+        <g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g></g>
+        <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
+      </g>
+    </svg>
+    <div class="cover-word">ANEMOS</div>
+    <div class="cover-sub">Brand guidelines</div>
+    <div class="cover-tag">Plan less. Travel more.</div>
+  </div>
+  <div class="cover-bottom">
+    <span>anemos.travel</span>
+    <span>docs/branding</span>
+  </div>
+</header>
+
+<!-- ═══ 1 · Foundation ═══ -->
+<section class="sheet" id="foundation">
+  <div class="rule-title"><h2>The brand in one page</h2></div>
+  <div class="founding">
+    <svg viewBox="0 0 540 540" role="img" aria-label="Anemos wind-rose mark">
+      <g transform="translate(270,270)">
+        <g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+        <g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+        <g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+        <g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g></g>
+        <g><g><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+        <g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+        <g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+        <g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g></g>
+        <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
+      </g>
+    </svg>
+    <div>
+      <p class="lede">Anemos — <span class="el">άνεμος</span>, Greek for <em>wind</em>, the thing every journey rides on — is an AI travel companion: describe the trip you want and get a full day-by-day itinerary with routes, places, and flights.</p>
+      <p>The mark is an eight-point wind rose off a portolan chart: long cardinal points in the brand's deep teal, short intercardinal points in heritage gold, each point split into a light left half and a dark right half. It replaced the horse-in-horseshoe mark that retired with the Golden Tempo name; the chat persona <strong>Ferdinand</strong> keeps the equine nod.</p>
+      <p>The brand voice of the product is Aegean and editorial — engraved serif headings, deep sea-teal, real photography — while the interface underneath stays calm, modern, and utilitarian.</p>
+      <dl class="fact-list">
+        <dt>Product name</dt><dd>Anemos (wordmark renders as small-caps ANEMOS — Cinzel has no lowercase)</dd>
+        <dt>Tagline</dt><dd>Plan less. Travel more.</dd>
+        <dt>Domain</dt><dd>anemos.travel</dd>
+        <dt>Personality</dt><dd>Calm · knowledgeable · Mediterranean · editorial · precise</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="toc-wrap">
+  <h3>Contents</h3>
+  <nav class="toc" aria-label="Contents">
+    <a href="#market"><span class="n">1</span>Market position &amp; the teal verdict</a>
+    <a href="#logo"><span class="n">2</span>Logo</a>
+    <a href="#color"><span class="n">3</span>Color</a>
+    <a href="#type"><span class="n">4</span>Typography</a>
+    <a href="#space"><span class="n">5</span>Space, shape &amp; elevation</a>
+    <a href="#imagery"><span class="n">6</span>Imagery</a>
+    <a href="#voice"><span class="n">7</span>Voice</a>
+    <a href="#index"><span class="n">8</span>Token &amp; asset index</a>
+  </nav>
+  </div>
+</section>
+
+<!-- ═══ 2 · Market ═══ -->
+<section class="sheet" id="market">
+  <div class="rule-title"><h2>Market position &amp; the teal verdict</h2></div>
+  <p class="lede">Before codifying the palette, we asked whether teal is the right ground at all. The competitive field (surveyed on Mobbin, August 2026, across trip-planner home screens, AI travel chat, and onboarding) splits into three clusters.</p>
+  <p class="small muted" style="margin:8px 0 28px">Competitor swatches are observed from screen captures and approximate — they are reference points, not tokens. App names link to representative Mobbin screens.</p>
+
+  <div class="cluster">
+    <div class="who">
+      <h3>The blue wall</h3>
+      <p>OTAs and airlines. Trust-blue is the category default — and therefore generic. Wearing blue means looking like everyone's booking engine.</p>
+    </div>
+    <div>
+      <div class="chipstrip">
+        <span class="cchip"><i style="background:#003B95"></i><a href="https://mobbin.com/screens/ad13adc7-09a9-4964-8496-e0700b6e4bb4">Booking.com</a></span>
+        <span class="cchip"><i style="background:#1668E3"></i><a href="https://mobbin.com/screens/44d6f574-76ae-4365-ac12-829cc5c60a3c">Expedia</a></span>
+        <span class="cchip"><i style="background:#287DFA"></i><a href="https://mobbin.com/screens/c986f236-5533-4051-85b4-63dcf98a74c1">Trip.com</a></span>
+        <span class="cchip"><i style="background:#223668"></i><a href="https://mobbin.com/screens/e26f26e4-cbe9-4525-b11a-129a9e4188b2">Vrbo</a></span>
+        <span class="cchip"><i style="background:#1D66DC"></i><a href="https://mobbin.com/screens/70bedca1-6d20-4d84-83ad-10b41b0101bc">Agoda</a></span>
+        <span class="cchip"><i style="background:#0078D2"></i><a href="https://mobbin.com/screens/d79d23d5-ad9b-4385-9f90-5afb6ec1d933">American</a></span>
+        <span class="cchip"><i style="background:#011E41"></i><a href="https://mobbin.com/screens/6baa9d25-412d-4ea0-98f7-b1fd30cd545e">Singapore Airlines</a></span>
+      </div>
+      <p class="small">Every one of these leads with a saturated blue on white. The cluster owns "transactional trust" — and none of it is distinctive.</p>
+    </div>
+  </div>
+
+  <div class="cluster">
+    <div class="who">
+      <h3>The warm editorial set</h3>
+      <p>The newest AI-first planners. Cream and sand surfaces, serif display type, photography doing the emotional work. This is where premium is moving.</p>
+    </div>
+    <div>
+      <div class="chipstrip">
+        <span class="cchip"><i style="background:#F4F0E9"></i><a href="https://mobbin.com/screens/545e9d16-8adc-49d7-ad7d-716bcd6dc459">Mozi</a></span>
+        <span class="cchip"><i style="background:#EFEAE1"></i><a href="https://mobbin.com/screens/d544ccf0-7579-4244-b370-a95537dd7482">Places</a></span>
+        <span class="cchip"><i style="background:#F1ECE4"></i><a href="https://mobbin.com/screens/fe51a8ef-153c-4c68-be04-e7cfbfa0226f">Weather Channel Travel</a></span>
+        <span class="cchip"><i style="background:#F3EDE3"></i><a href="https://mobbin.com/screens/c60d41a6-e568-44a5-afa8-0e8506f30caa">Microsoft Copilot</a></span>
+      </div>
+      <p class="small">No strong brand hue at all — the identity is the paper, the serif, and the photograph. Confident, but easily anonymous without a color to own.</p>
+    </div>
+  </div>
+
+  <div class="cluster">
+    <div class="who">
+      <h3>The warm-accent indies</h3>
+      <p>Indie trip planners differentiating with a single hot accent on neutral ground.</p>
+    </div>
+    <div>
+      <div class="chipstrip">
+        <span class="cchip"><i style="background:#F1753F"></i><a href="https://mobbin.com/screens/1e05bd83-7c08-4879-80b9-438fabfd7534">Tripsy</a></span>
+        <span class="cchip"><i style="background:#E5485F"></i><a href="https://mobbin.com/screens/d60c80a7-fe07-4bf7-b0d6-1187b6555918">Polarsteps</a></span>
+        <span class="cchip"><i style="background:#F96A2C"></i><a href="https://mobbin.com/screens/d88f4063-64d0-4234-9afc-433ca89af1be">Canopi</a></span>
+        <span class="cchip"><i style="background:#2E4A7D"></i><a href="https://mobbin.com/screens/7c313cef-50c9-40ac-8934-53d4a651ba31">Wanderlog</a></span>
+        <span class="cchip"><i style="background:#19C1F0"></i><a href="https://mobbin.com/screens/430c31d2-b130-42bb-8bcf-a067ff971a69">Pangea</a></span>
+        <span class="cchip"><i style="background:#34E0A1"></i><a href="https://mobbin.com/screens/c1c92cfb-6228-4215-85b1-4625a570e770">Tripadvisor</a></span>
+      </div>
+      <p class="small">Orange and crimson dominate. The only teal-adjacent players anywhere in the field: <a href="https://mobbin.com/screens/8b5f7878-bc77-4f3e-abe8-95b6f68224c1">Viator</a> (tour marketplace, emerald <span style="white-space:nowrap">≈ #328764</span>) and <a href="https://mobbin.com/screens/ca77769a-31fb-4ffd-8fe7-f72aef6a7658">IHG's concierge</a> (hotel loyalty, slate teal). Neither is a trip planner.</p>
+    </div>
+  </div>
+
+  <div class="verdict">
+    <h3>Verdict: teal stays.</h3>
+    <p><strong>Deep sea-teal is the right ground for Anemos, and nobody in the AI-planner space owns it.</strong> It sits adjacent to travel-trust blue without dissolving into the blue wall; it reads Aegean — the sea the wind rose was drawn for — which the name, the mark, and the Greece-first features all reinforce; and it carries the calm, capable tone an agent that books real trips needs.</p>
+    <p style="margin-top:14px"><span class="gold">The refinement, not the replacement:</span> lean into the warm ground. Keep teal as identity and action; let surfaces read like sun-bleached plaster (paper, sand, cream — the ground this document itself stands on) and let photography carry the heat. The house design direction already names this target — the market only confirms it: teal on warm paper is a combination none of the three clusters occupies.</p>
+  </div>
+</section>
+
+<!-- ═══ 3 · Logo ═══ -->
+<section class="sheet" id="logo">
+  <div class="rule-title"><h2>Logo</h2></div>
+  <p class="lede">One mark, two cuts, one policy: <strong>the rose always floats bare.</strong></p>
+
+  <h3>Anatomy</h3>
+  <div class="anatomy">
+    <svg viewBox="0 0 540 540" role="img" aria-label="Wind-rose anatomy">
+      <g transform="translate(270,270)">
+        <g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+        <g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+        <g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+        <g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g></g>
+        <g><g><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+        <g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+        <g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+        <g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g></g>
+        <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
+      </g>
+    </svg>
+    <ul class="legend">
+      <li><span class="dots"><i style="background:#00796B"></i><i style="background:#004D40"></i></span><span><strong>Cardinal points</strong> — long, in brand teal. Each point splits light-left / dark-right, classic portolan-chart shading.</span></li>
+      <li><span class="dots"><i style="background:#E8C452"></i><i style="background:#B98B1E"></i></span><span><strong>Intercardinal points</strong> — short, in heritage gold. Gold lives in the mark and nowhere else.</span></li>
+      <li><span class="dots"><i style="background:#FFFFFF;border-color:#004D40"></i></span><span><strong>Hub</strong> — white dot with a teal-900 ring.</span></li>
+      <li><span class="dots"></span><span><strong>Source of truth</strong> — <code>docs/branding/mark.svg</code>. Every raster is generated by <code>scripts/brand-render.sh</code>; edit the SVGs, never the PNGs. A geometry change in <code>mark.svg</code> must be mirrored in <code>mark-light.svg</code>.</span></li>
+    </ul>
+  </div>
+
+  <div class="keep">
+  <h3>The two cuts</h3>
+  <p>The only question a surface may ask is <em>which cut it needs</em> — never whether to add a plate.</p>
+  <div class="cutgrid">
+    <div class="cut on-paper">
+      <svg viewBox="0 0 540 540" aria-hidden="true">
+        <g transform="translate(270,270)">
+          <g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g></g>
+          <g><g><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+          <g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+          <g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+          <g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g></g>
+          <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
+        </g>
+      </svg>
+      <p class="cap"><b>Dark cut — mark.svg</b>Neutral page surfaces and scrimmed imagery: auth screen, nav rail, landing hero, favicon.</p>
+    </div>
+    <div class="cut on-grad">
+      <svg viewBox="0 0 540 540" aria-hidden="true">
+        <g transform="translate(270,270)">
+          <g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g></g>
+          <g><g><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g>
+          <g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g>
+          <g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g>
+          <g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g></g>
+          <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
+        </g>
+      </svg>
+      <p class="cap"><b>Light cut — mark-light.svg</b>Teal brandGradient fields: the boot splash and the gradient app bar, where the dark cut would be teal-on-teal.</p>
+    </div>
+  </div>
+  </div>
+
+  <div class="note">
+    <p><strong>Plate policy, v3 — the rose always floats bare.</strong> No plate is drawn anywhere in the app. v2 kept a white plate on gradient app bars; because that gradient never changes with theme, the plate stayed white in dark mode and became the brightest object on screen. Exactly three artifacts outside the app keep a baked plate on purpose: <code>web/og-card.png</code> (lands on arbitrary social backgrounds), <code>web/icons/Icon-maskable-512.png</code> (the maskable spec requires an opaque field), and the print packet header. The policy lives in <code>lib/widgets/brand_logo.dart</code> — re-litigate it there, not at a call site.</p>
+  </div>
+
+  <h3>Wordmark</h3>
+  <p>The wordmark is <strong>live text, never an image</strong>: Cinzel SemiBold (a static w600 instance, subsetted). Cinzel has no true lowercase, so the string stays "Anemos" and paints as small-caps ANEMOS. Tracking opens as size grows — caps run wide, and each surface was measured separately.</p>
+  <div class="wm-demo" style="margin-top:18px">
+    <div class="wm">ANEMOS</div>
+    <p class="cap">Landing hero · 24–40&nbsp;px · letter-spacing 1.5 · line-height 1.1 · white with a black-26 shadow (blur 8, offset 0,2)</p>
+    <div class="at19">ANEMOS</div>
+    <p class="cap">App bar · 19&nbsp;px · letter-spacing 1.0 · inherits the bar's white foreground</p>
+  </div>
+
+  <h3>Clear space &amp; minimum sizes</h3>
+  <div class="clearspace">
+    <div class="cs-box">
+      <svg viewBox="0 0 540 540" aria-hidden="true">
+        <g transform="translate(270,270)">
+          <g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g></g>
+          <g><g><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+          <g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+          <g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g>
+          <g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g></g>
+          <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
+        </g>
+      </svg>
+    </div>
+    <div class="small" style="max-width:380px">
+      <p><strong>Clear space:</strong> keep at least 25% of the mark's height free on every side (the dashed frame). Nothing enters it — not the wordmark's descenders, not badge counts, not card edges.</p>
+      <p style="margin-top:10px"><strong>Sizes in product:</strong> 36&nbsp;px standard in chrome (app bar, nav rail) · 28&nbsp;px default (<code>BrandLogo.mark</code>) · 52 / 96&nbsp;px landing hero · legible down to 16&nbsp;px (the favicon is the floor).</p>
+    </div>
+  </div>
+
+  <h3>Never</h3>
+  <div class="dodont">
+    <div class="dd">
+      <div class="art" style="background:linear-gradient(135deg,#00897B,#004D40)">
+        <div style="background:#fff;border-radius:14px;padding:12px">
+          <svg viewBox="0 0 540 540" style="display:block"><g transform="translate(270,270) scale(0.9)"><g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g><g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g><g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g><g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g></g><g><g><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g><g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g><g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g><g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g></g><circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/></g></svg>
+        </div>
+      </div>
+      <div class="lab"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#B3261E" stroke-width="2"/><path d="M8 8l8 8M16 8l-8 8" stroke="#B3261E" stroke-width="2" stroke-linecap="round"/></svg><span>No plates. The rose floats bare on every in-app surface — pick the right cut instead.</span></div>
+    </div>
+    <div class="dd">
+      <div class="art" style="background:linear-gradient(135deg,#00897B,#004D40)">
+        <svg viewBox="0 0 540 540"><g transform="translate(270,270)"><g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g><g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g><g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g><g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g></g><g><g><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g><g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g><g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g><g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g></g><circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/></g></svg>
+      </div>
+      <div class="lab"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#B3261E" stroke-width="2"/><path d="M8 8l8 8M16 8l-8 8" stroke="#B3261E" stroke-width="2" stroke-linecap="round"/></svg><span>Never the dark cut on a teal field — it reads teal-on-teal. Teal fields take mark-light.</span></div>
+    </div>
+    <div class="dd">
+      <div class="art" style="background:#fff">
+        <svg viewBox="0 0 540 540"><g transform="translate(270,270)"><g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E5485F"/><polygon points="0,-166 32,-56 0,0" fill="#9E2F40"/></g><g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E5485F"/><polygon points="0,-166 32,-56 0,0" fill="#9E2F40"/></g><g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E5485F"/><polygon points="0,-166 32,-56 0,0" fill="#9E2F40"/></g><g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E5485F"/><polygon points="0,-166 32,-56 0,0" fill="#9E2F40"/></g></g><g><g><polygon points="0,-252 -44,-68 0,0" fill="#3F51B5"/><polygon points="0,-252 44,-68 0,0" fill="#1A237E"/></g><g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#3F51B5"/><polygon points="0,-252 44,-68 0,0" fill="#1A237E"/></g><g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#3F51B5"/><polygon points="0,-252 44,-68 0,0" fill="#1A237E"/></g><g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#3F51B5"/><polygon points="0,-252 44,-68 0,0" fill="#1A237E"/></g></g><circle r="34" fill="#FFFFFF" stroke="#1A237E" stroke-width="13"/></g></svg>
+      </div>
+      <div class="lab"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#B3261E" stroke-width="2"/><path d="M8 8l8 8M16 8l-8 8" stroke="#B3261E" stroke-width="2" stroke-linecap="round"/></svg><span>Never recolor. Teal cardinals, gold intercardinals — the two cuts are the only palettes.</span></div>
+    </div>
+    <div class="dd">
+      <div class="art" style="background:#fff">
+        <svg viewBox="0 0 540 540" style="transform:scaleX(1.55)"><g transform="translate(270,270)"><g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g><g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g><g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g><g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g></g><g><g><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g><g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g><g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g><g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#00796B"/><polygon points="0,-252 44,-68 0,0" fill="#004D40"/></g></g><circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/></g></svg>
+      </div>
+      <div class="lab"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#B3261E" stroke-width="2"/><path d="M8 8l8 8M16 8l-8 8" stroke="#B3261E" stroke-width="2" stroke-linecap="round"/></svg><span>Never stretch, rotate, or redraw. The mark renders square, upright, from the source SVGs.</span></div>
+    </div>
+    <div class="dd">
+      <div class="art" style="background:#fff">
+        <span style="font-family:var(--serif);font-weight:400;font-size:clamp(15px,5.5vw,26px);letter-spacing:2px;-webkit-text-stroke:0.6px #23282A;color:#23282A">ANEMOS</span>
+      </div>
+      <div class="lab"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#B3261E" stroke-width="2"/><path d="M8 8l8 8M16 8l-8 8" stroke="#B3261E" stroke-width="2" stroke-linecap="round"/></svg><span>Never fake the wordmark — no substitute faces, no synthesized bold. Cinzel SemiBold or nothing.</span></div>
+    </div>
+    <div class="dd">
+      <div class="art" style="background:#fff">
+        <div style="text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#5A625F;line-height:1.8">anemos_mark.png<br>anemos_logo.png<br>og-card.png</div>
+      </div>
+      <div class="lab"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#B3261E" stroke-width="2"/><path d="M8 8l8 8M16 8l-8 8" stroke="#B3261E" stroke-width="2" stroke-linecap="round"/></svg><span>Never hand-edit rendered PNGs, and never load <code>lockup.svg</code> as a plain image — every raster comes from <code>scripts/brand-render.sh</code>.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 4 · Color ═══ -->
+<section class="sheet" id="color">
+  <div class="rule-title"><h2>Color</h2></div>
+  <p class="lede">The teal family is the spine of the app: the entire Material&nbsp;3 scheme is seeded from <code>AppColors.brand</code>. Every value below is a token in <code>lib/theme/app_colors.dart</code> unless noted.</p>
+
+  <h3>Brand ramp</h3>
+  <div class="ramp">
+    <div class="step" style="background:#E0F2F1;color:#004D40"><b>brandTint</b>#E0F2F1<br>teal 50 · selected fills</div>
+    <div class="step" style="background:#B2DFDB;color:#004D40"><b>teal 100</b>#B2DFDB<br>mark-light cardinals</div>
+    <div class="step" style="background:#00897B;color:#FFFFFF"><b>brandLight</b>#00897B<br>gradient start</div>
+    <div class="step" style="background:#00796B;color:#FFFFFF"><b>brand</b>#00796B<br>the seed · primary</div>
+    <div class="step" style="background:#00695C;color:#FFFFFF"><b>platform</b>#00695C<br>splash · theme-color</div>
+    <div class="step" style="background:#004D40;color:#FFFFFF"><b>brandDark</b>#004D40<br>gradient end · scrims</div>
+  </div>
+  <figcaption>Tokens resolve to Material teal shades 50 / 100 / 600 / 700 / 800 / 900. <code>#00695C</code> lives in <code>web/index.html</code>, <code>manifest.json</code>, and the native splash config rather than Dart.</figcaption>
+
+  <h3>The gradient &amp; its scrims</h3>
+  <div class="gradband" style="background:linear-gradient(135deg,#00897B,#004D40)">brandGradient · top-left → bottom-right · #00897B → #004D40 · app bar, hero, recent-trip card</div>
+  <div class="swatchcards">
+    <div class="sw">
+      <div class="chip" style="background:linear-gradient(to top right,rgba(0,77,64,0.88),rgba(0,77,64,0.35)),url() ,#8FA6A0"></div>
+      <div class="meta"><b>heroScrim</b>brandDark 88% → 35%, bottom-left → top-right. Darkest where text and buttons sit; the photo shows through above.</div>
+    </div>
+    <div class="sw">
+      <div class="chip" style="background:rgba(0,0,0,0.6)"></div>
+      <div class="meta"><b>mapScrim</b>Black at 60%. The one value behind every control drawn over satellite imagery — day chips, segment labels, map buttons.</div>
+    </div>
+    <div class="sw">
+      <div class="chip" style="background:#0A0F1A"></div>
+      <div class="meta"><b>appMapBackground</b>#0A0F1A. The space-dark canvas behind map tiles (<code>app_map.dart</code>).</div>
+    </div>
+  </div>
+
+  <h3>Heritage gold</h3>
+  <div class="accentrow">
+    <span class="accent"><i style="background:#E8C452"></i>light&nbsp;gold <code>#E8C452</code></span>
+    <span class="accent"><i style="background:#B98B1E"></i>dark&nbsp;gold <code>#B98B1E</code></span>
+    <span class="accent" style="border-style:dashed"><span class="small muted">the mark's intercardinal points — never a UI color, never text, never a button</span></span>
+  </div>
+
+  <div class="keep">
+  <h3>Semantic status</h3>
+  <p class="small muted" style="margin-bottom:14px">Two registers, deliberately separate: translucent <em>container pairs</em> for pills on cards, and solid brightness-aware <em>marks</em> for the uptime strip (alpha fills vanish at 3&nbsp;px). "No data" has no token — it takes <code>outlineVariant</code> so absence can never read as a fourth severity.</p>
+  <table>
+    <thead><tr><th>Role</th><th>Token</th><th>Value</th><th>Sample</th></tr></thead>
+    <tbody>
+      <tr><td>Positive / booked / published</td><td><code>successContainer</code> + <code>onSuccessContainer</code></td><td>green 15% · green-800 #2E7D32</td><td><span class="pillpair" style="background:#E4F3E5;color:#2E7D32">Booked</span></td></tr>
+      <tr><td>Attention / pending / draft</td><td><code>warningContainer</code> + <code>onWarningContainer</code></td><td>amber 20% · amber-900 #FF6F00</td><td><span class="pillpair" style="background:#FFF3CD;color:#FF6F00">Draft</span></td></tr>
+      <tr><td>On-gradient badge (solid)</td><td><code>warningSolid</code> + <code>onWarningSolid</code></td><td>#FFB300 · black-87</td><td><span class="pillpair" style="background:#FFB300;color:rgba(0,0,0,0.87)">2 issues</span></td></tr>
+      <tr><td>Neutral on-gradient badge</td><td><code>neutralSolid</code> + <code>onNeutralSolid</code></td><td>#FFFFFF · brandDark</td><td><span class="pillpair" style="background:#fff;color:#004D40;border:1px solid #E2DCCE">All set</span></td></tr>
+      <tr><td>Uptime marks — up</td><td><code>upMark(brightness)</code></td><td>light #43A047 · dark #66BB6A</td><td><i style="display:inline-block;width:34px;height:8px;border-radius:2px;background:#43A047"></i>&nbsp;<i style="display:inline-block;width:34px;height:8px;border-radius:2px;background:#66BB6A"></i></td></tr>
+      <tr><td>Uptime marks — degraded</td><td><code>degradedMark(brightness)</code></td><td>light #FFA000 · dark #FFCA28</td><td><i style="display:inline-block;width:34px;height:8px;border-radius:2px;background:#FFA000"></i>&nbsp;<i style="display:inline-block;width:34px;height:8px;border-radius:2px;background:#FFCA28"></i></td></tr>
+      <tr><td>Uptime marks — down</td><td><code>downMark(brightness)</code></td><td>light #E53935 · dark #EF5350</td><td><i style="display:inline-block;width:34px;height:8px;border-radius:2px;background:#E53935"></i>&nbsp;<i style="display:inline-block;width:34px;height:8px;border-radius:2px;background:#EF5350"></i></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Planning-toolkit accents</h3>
+  <p class="small muted" style="margin-bottom:12px">One hue per tool, used small — home-screen tiles and map pins. Category accents: restaurant → deep orange, attraction → scheme primary, everything else → scheme secondary.</p>
+  <div class="accentrow">
+    <span class="accent"><i style="background:#F4511E"></i>route <code>#F4511E</code></span>
+    <span class="accent"><i style="background:#1976D2"></i>flights <code>#1976D2</code></span>
+    <span class="accent"><i style="background:#D81B60"></i>stays <code>#D81B60</code></span>
+    <span class="accent"><i style="background:#8E24AA"></i>events <code>#8E24AA</code></span>
+    <span class="accent"><i style="background:#0097A7"></i>ferries <code>#0097A7</code></span>
+    <span class="accent"><i style="background:#FF8F00"></i>local <code>#FF8F00</code></span>
+    <span class="accent"><i style="background:#455A64"></i>parking <code>#455A64</code></span>
+  </div>
+
+  <h3>Proportion</h3>
+  <p>Surfaces stay neutral — white cards on quiet ground, warm where the direction section leads. Teal is identity and primary action: the app bar, the hero, the one filled button that matters on a screen. Gold belongs to the mark. Tool accents and status colors appear at chip-and-pin scale, never as fields. Both themes are seeded from the same <code>brand</code>; the gradient app bar deliberately stays teal in dark mode.</p>
+
+  <div class="keep">
+  <h3>Contrast, measured</h3>
+  <table>
+    <thead><tr><th>Pair</th><th>Ratio</th><th>WCAG</th></tr></thead>
+    <tbody>
+      <tr><td>brandDark #004D40 on white</td><td>9.83 : 1</td><td><span class="badge aa">AA</span></td></tr>
+      <tr><td>brandDark #004D40 on brandTint #E0F2F1</td><td>8.49 : 1</td><td><span class="badge aa">AA</span></td></tr>
+      <tr><td>teal-100 #B2DFDB on brandDark #004D40</td><td>6.78 : 1</td><td><span class="badge aa">AA</span></td></tr>
+      <tr><td>gold #E8C452 on brandDark #004D40</td><td>5.83 : 1</td><td><span class="badge aa">AA</span></td></tr>
+      <tr><td>brand #00796B on white (and reversed)</td><td>5.32 : 1</td><td><span class="badge aa">AA</span></td></tr>
+      <tr><td>success #2E7D32 on white</td><td>5.13 : 1</td><td><span class="badge aa">AA</span></td></tr>
+      <tr><td>brand #00796B on brandTint #E0F2F1</td><td>4.60 : 1</td><td><span class="badge aa">AA</span></td></tr>
+      <tr><td>black on warningSolid #FFB300</td><td>11.70 : 1</td><td><span class="badge aa">AA</span></td></tr>
+      <tr><td>white on brandLight #00897B (gradient start)</td><td>4.32 : 1</td><td><span class="badge aal">AA large</span></td></tr>
+      <tr><td>gold #E8C452 on brand #00796B</td><td>3.15 : 1</td><td><span class="badge aal">AA large / graphics</span></td></tr>
+      <tr><td>dark gold #B98B1E on white</td><td>3.10 : 1</td><td><span class="badge aal">graphics only</span></td></tr>
+      <tr><td>success #2E7D32 on its container</td><td>4.46 : 1</td><td><span class="badge aal">AA large — 0.04 short of AA</span></td></tr>
+      <tr><td>onWarning #FF6F00 on its container</td><td>2.52 : 1</td><td><span class="badge rev">review</span></td></tr>
+    </tbody>
+  </table>
+  <figcaption>Ratios computed against WCAG 2.x relative luminance; container rows use the alpha fill flattened onto white. The amber pair is the one open finding: fine for icon-weight accents, below AA for small text — prefer the solid pair, or darken toward brown, where small warning text matters.</figcaption>
+  </div>
+</section>
+
+<!-- ═══ 5 · Typography ═══ -->
+<section class="sheet" id="type">
+  <div class="rule-title"><h2>Typography</h2></div>
+  <p class="lede">Three faces, three jobs — declared once in <code>app_typography.dart</code> and bundled as subsetted TTFs. Never Google Fonts at runtime; production CSP blocks it.</p>
+
+  <div class="face">
+    <div class="who">
+      <h3>Cinzel — the wordmark</h3>
+      <p>SemiBold 600, a static instance of the variable font. The wordmark, and only the wordmark. No true lowercase: "Anemos" paints as small-caps ANEMOS. The one face baked into rasters (og-card, lockup).</p>
+    </div>
+    <div><div class="spec-caps">ANEMOS</div></div>
+  </div>
+
+  <div class="face">
+    <div class="who">
+      <h3>Marcellus — headings</h3>
+      <p>Roman inscriptional shapes like Cinzel, but with a true lowercase — headings read engraved rather than shouted. Ships in its one weight, 400: every style naming it must say w400, or the web synthesizes faux-bold. Sentence case, always.</p>
+    </div>
+    <div>
+      <div class="spec-serif">Ten days across the Cyclades
+        <span class="alpha">A B C D E F G H I J — a b c d e f g h i j — 0 1 2 3 4 5 6 7 8 9</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="face">
+    <div class="who">
+      <h3>Inter — everything else</h3>
+      <p>Body, labels, buttons, and every number — including the big values in stat tiles, which opt out of the heading face on purpose. Weights 400 / 500 / 600 / 700. Below the headline line, hierarchy is weight, not size.</p>
+    </div>
+    <div class="spec-sans">
+      <div style="font-weight:400">Regular 400 — Your itinerary is ready to review.</div>
+      <div style="font-weight:500">Medium 500 — 4 nights in Naxos · 2 travelers</div>
+      <div style="font-weight:600">SemiBold 600 — Flights from $412 round trip</div>
+      <div style="font-weight:700">Bold 700 — Book by Friday</div>
+    </div>
+  </div>
+
+  <h3>Scale</h3>
+  <table>
+    <thead><tr><th>Style</th><th>Face</th><th>Size / spacing</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Wordmark — hero</td><td>Cinzel 600</td><td>24–40&nbsp;px · ls 1.5 · lh 1.1</td><td>Landing hero (white, black-26 shadow)</td></tr>
+      <tr><td>Wordmark — app bar</td><td>Cinzel 600</td><td>19&nbsp;px · ls 1.0</td><td>Every gradient app bar</td></tr>
+      <tr><td>headlineLarge</td><td>Marcellus 400</td><td>34&nbsp;px · lh 1.2</td><td>Page-scale headings</td></tr>
+      <tr><td>headlineMedium</td><td>Marcellus 400</td><td>30&nbsp;px · lh 1.2</td><td>Section heads</td></tr>
+      <tr><td>headlineSmall</td><td>Marcellus 400</td><td>26&nbsp;px · lh 1.2</td><td>Card-scale heads</td></tr>
+      <tr><td>App-bar page title</td><td>Marcellus 400</td><td>22&nbsp;px · ls 0.2</td><td>Gradient app bar, explicit white</td></tr>
+      <tr><td>titleLarge / Medium / Small</td><td>Inter 700 / 600 / 600</td><td>M3 default sizes (22 / 16 / 14)</td><td>List titles, tiles, dialogs</td></tr>
+      <tr><td>body / label</td><td>Inter 400 · labels 600</td><td>M3 defaults (16 / 14 / 12)</td><td>Everything else</td></tr>
+    </tbody>
+  </table>
+  <figcaption>Marcellus headline sizes run 2&nbsp;px larger than the Inter sizes they replaced — Marcellus has a smaller x-height (0.500&nbsp;em vs 0.546), so equal point sizes would read smaller. The subsets carry Latin only: Greek strings (<span class="el">άνεμος</span>) fall back to system faces by design.</figcaption>
+</section>
+
+<!-- ═══ 6 · Space, shape & elevation ═══ -->
+<section class="sheet" id="space">
+  <div class="rule-title"><h2>Space, shape &amp; elevation</h2></div>
+  <div class="threecol">
+    <div>
+      <h3 style="margin-top:0">Spacing</h3>
+      <ul class="spacebars">
+        <li><span>xs&nbsp;4</span><i style="width:4px"></i></li>
+        <li><span>sm&nbsp;8</span><i style="width:8px"></i></li>
+        <li><span>md&nbsp;12</span><i style="width:12px"></i></li>
+        <li><span>lg&nbsp;16</span><i style="width:16px"></i></li>
+        <li><span>xl&nbsp;24</span><i style="width:24px"></i></li>
+        <li><span>xxl&nbsp;32</span><i style="width:32px"></i></li>
+      </ul>
+      <p class="small muted" style="margin-top:12px"><code>AppSpacing</code> — the six stops. Buttons pad xl&nbsp;/&nbsp;md. Touch targets never fall below <strong>48&nbsp;px</strong> (<code>kMinTouchTarget</code>).</p>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Radius</h3>
+      <div class="radii">
+        <figure><div class="sq" style="border-radius:8px"></div>sm 8<br><span class="small">inputs, badges</span></figure>
+        <figure><div class="sq" style="border-radius:12px"></div>md 12<br><span class="small">cards, menus</span></figure>
+        <figure><div class="sq" style="border-radius:20px"></div>lg 20<br><span class="small">heroes; chips go full-round</span></figure>
+      </div>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Shadow</h3>
+      <div class="shadowchips">
+        <figure><div class="chipdemo" style="box-shadow:0 3px 10px rgba(0,0,0,0.10)"></div>soft<br><span class="small">black 10 · blur 10 · y 3</span></figure>
+        <figure><div class="chipdemo" style="background:linear-gradient(135deg,#00897B,#004D40);box-shadow:0 4px 10px rgba(0,77,64,0.30)"></div>brandCard<br><span class="small">brandDark 30 · blur 10 · y 4</span></figure>
+        <figure><div class="chipdemo" style="background:linear-gradient(135deg,#00897B,#004D40);box-shadow:0 6px 16px rgba(0,77,64,0.40)"></div>hero<br><span class="small">brandDark 40 · blur 16 · y 6</span></figure>
+      </div>
+      <p class="small muted" style="margin-top:12px">Light always from above — every shadow offsets downward. Cards sit at elevation 3 with <em>transparent surface tint</em>: separation is an explicit color choice, never an implicit overlay.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 7 · Imagery ═══ -->
+<section class="sheet" id="imagery">
+  <div class="rule-title"><h2>Imagery</h2></div>
+  <p class="lede">Photography is the brand's warmth — real places in real light, never illustration, never stock-abstract. Text sits on photos only over a scrim.</p>
+  <figure class="heroimg">
+    <img src="../../src/packages/flutter-app/assets/images/hero_santorini.jpg" alt="Santorini caldera at dusk with the heroScrim overlay">
+    <div class="scrim"></div>
+    <div class="txt">
+      <div class="h">Where does the wind take you?</div>
+      <div class="s">heroScrim in place: brandDark 88% at the text corner, thinning to 35% so the photo breathes</div>
+    </div>
+  </figure>
+  <div class="photostrip">
+    <img src="../../src/packages/flutter-app/assets/images/destinations/greece.webp" alt="Greece destination card photo">
+    <img src="../../src/packages/flutter-app/assets/images/destinations/amalfi.webp" alt="Amalfi destination card photo">
+    <img src="../../src/packages/flutter-app/assets/images/destinations/lisbon.webp" alt="Lisbon destination card photo">
+    <img src="../../src/packages/flutter-app/assets/images/destinations/tokyo.webp" alt="Tokyo destination card photo">
+  </div>
+  <figcaption>The destination set (12 cities, <code>assets/images/destinations/</code>). Warm hour, saturated sea and stone, a human scale somewhere in frame. Every photo is credited — <code>CREDITS.md</code> sits beside the set and <code>LICENSES.md</code> beside the heroes; new photography joins those files or doesn't ship.</figcaption>
+  <div class="note">
+    <p><strong>Rules of the frame.</strong> Place text over photography only with <code>heroScrim</code> (brand surfaces) or <code>mapScrim</code> (satellite imagery) underneath. Cards crop photos at md radius; heroes at lg. Never tint a photo teal — the scrim is the only brand layer a photo carries. Product screenshots ride on the real UI, not mockup chrome.</p>
+  </div>
+</section>
+
+<!-- ═══ 8 · Voice ═══ -->
+<section class="sheet" id="voice">
+  <div class="rule-title"><h2>Voice</h2></div>
+  <p class="tagline">Plan less. Travel more.</p>
+  <p class="lede">Anemos speaks like a well-traveled friend with the map already open: plain, confident, second person, specific.</p>
+  <h3>The register, in the strings we ship</h3>
+  <table>
+    <thead><tr><th>Surface</th><th>Copy</th></tr></thead>
+    <tbody>
+      <tr><td>Tagline</td><td>"Plan less. Travel more."</td></tr>
+      <tr><td>Hero subtitle</td><td>"Your AI travel companion — describe the trip you want and get a full day-by-day itinerary with routes, places, and flights."</td></tr>
+      <tr><td>Meta description</td><td>"Plan trips and build day-by-day itineraries with an AI travel assistant."</td></tr>
+      <tr><td>Agent persona</td><td>Ferdinand — knowledgeable, unhurried, cites locals by name when a recommendation is theirs.</td></tr>
+    </tbody>
+  </table>
+  <h3>Principles</h3>
+  <p><strong>Sentence case everywhere.</strong> Only the wordmark is capitals, and only because Cinzel makes it so. <strong>Short sentences, concrete nouns.</strong> Say "4 nights in Naxos," not "your accommodation window." <strong>No exclamation inflation.</strong> The product's confidence is quiet; one period does the work. <strong>Credit real people.</strong> Local recommendations carry their source's name — attribution is a feature, not a footnote.</p>
+</section>
+
+<!-- ═══ 9 · Index ═══ -->
+<section class="sheet" id="index">
+  <div class="rule-title"><h2>Token &amp; asset index</h2></div>
+  <table>
+    <thead><tr><th>What</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Color tokens</td><td><code>src/packages/flutter-app/lib/theme/app_colors.dart</code></td></tr>
+      <tr><td>Faces &amp; roles</td><td><code>lib/theme/app_typography.dart</code> · text theme in <code>lib/theme/app_theme.dart</code></td></tr>
+      <tr><td>Spacing / radius / touch</td><td><code>lib/theme/spacing.dart</code></td></tr>
+      <tr><td>Shadows</td><td><code>lib/theme/app_shadows.dart</code></td></tr>
+      <tr><td>Light &amp; dark themes</td><td><code>lib/theme/app_theme.dart</code> — one <code>_build(Brightness)</code>, every divergence an explicit conditional</td></tr>
+      <tr><td>Mark, wordmark &amp; plate policy</td><td><code>lib/widgets/brand_logo.dart</code></td></tr>
+      <tr><td>Source artwork</td><td><code>docs/branding/mark.svg</code> · <code>mark-light.svg</code> · <code>lockup.svg</code> (+ <code>README.md</code> for the full story)</td></tr>
+      <tr><td>Raster pipeline</td><td><code>scripts/brand-render.sh</code> → every PNG (marks, favicons, splash, icons, og-card). Add a brand asset? Add its row to the README table.</td></tr>
+      <tr><td>Font files &amp; licenses</td><td><code>src/packages/flutter-app/assets/fonts/</code> — Cinzel, Marcellus, Inter, all SIL OFL, subsetted (Latin only)</td></tr>
+      <tr><td>Photo credits</td><td><code>assets/images/LICENSES.md</code> · <code>assets/images/destinations/CREDITS.md</code></td></tr>
+      <tr><td>Taste &amp; references</td><td><code>.claude/skills/design-inspiration/</code> — the aesthetic direction ("Aegean, not tropical. Engraved, not shouted.") and the annotated reference library; taste lives there, values live in <code>lib/theme/</code></td></tr>
+      <tr><td>This document</td><td><code>docs/branding/brand-guidelines.html</code> — regen PDF with the headless-Chrome one-liner in the file header</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted" style="margin-top:22px">Competitor observations: Mobbin, August 2026 — iOS captures of Booking.com, Expedia, Trip.com, Vrbo, Agoda, American Airlines, Singapore Airlines, Mozi, Places, The Weather Channel, Microsoft Copilot, Tripsy, Polarsteps, Canopi, Wanderlog, Pangea, Tripadvisor, Viator, IHG. Their marks and colors belong to their owners; swatches are approximations for positioning only.</p>
+</section>
+
+<footer class="endcap">
+  <div class="sheet">
+    <div style="display:flex;align-items:center;gap:16px">
+      <svg viewBox="0 0 540 540" aria-hidden="true">
+        <g transform="translate(270,270)">
+          <g><g transform="rotate(45)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(135)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(225)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g>
+          <g transform="rotate(315)"><polygon points="0,-166 -32,-56 0,0" fill="#E8C452"/><polygon points="0,-166 32,-56 0,0" fill="#B98B1E"/></g></g>
+          <g><g><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g>
+          <g transform="rotate(90)"><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g>
+          <g transform="rotate(180)"><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g>
+          <g transform="rotate(270)"><polygon points="0,-252 -44,-68 0,0" fill="#FFFFFF"/><polygon points="0,-252 44,-68 0,0" fill="#B2DFDB"/></g></g>
+          <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
+        </g>
+      </svg>
+      <span class="w">ANEMOS</span>
+    </div>
+    <div class="small" style="text-align:right">Brand guidelines · v1.0 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
+  </div>
+</footer>
+
+</body>
+</html>

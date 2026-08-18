@@ -1,0 +1,20 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "dark-glow",
+        "value": "0 6px 16px rgba(0,77,64,0.35)",
+        "createdAt": "2026-08-18T00:29:29.783Z",
+        "reason": "AppShadows.brandCard/hero convention from lib/theme/app_shadows.dart: brandDark-tinted shadow with downward offset, cast by brand-gradient cards on light surfaces in the shipped app; this doc documents that token"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-08-18T00:47:41.746Z",
+        "reason": "Inter is the shipped brand UI face: declared in lib/theme/app_typography.dart (AppFonts.ui), bundled as subsetted TTFs, set as ThemeData.fontFamily app-wide; the brand-guidelines doc documents the incumbent type system"
+      }
+    ]
+  }
+}
