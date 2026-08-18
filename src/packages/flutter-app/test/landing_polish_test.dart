@@ -15,6 +15,7 @@ import 'package:travel_route_planner/screens/landing/landing_layout.dart';
 import 'package:travel_route_planner/screens/landing_screen.dart';
 import 'package:travel_route_planner/services/analytics_api_service.dart';
 import 'package:travel_route_planner/services/api_client.dart';
+import 'package:travel_route_planner/theme/app_colors.dart';
 import 'package:travel_route_planner/widgets/destination_suggestion_card.dart';
 
 import 'support/l10n_test_app.dart';
@@ -126,15 +127,46 @@ void main() {
     expect(find.text('Terms of Service'), findsOneWidget);
   });
 
-  testWidgets('all landing sections are present in order', (tester) async {
+  testWidgets('all landing sections are present, top to bottom',
+      (tester) async {
     await _pump(tester, surface: const Size(1200, 900));
 
-    expect(find.byType(LandingHero), findsOneWidget);
-    expect(find.byType(LandingFeatureGrid), findsOneWidget);
-    expect(find.byType(LandingDestinationRail), findsOneWidget);
-    expect(find.byType(LandingHowItWorks), findsOneWidget);
-    expect(find.byType(LandingCtaBand), findsOneWidget);
-    expect(find.byType(LandingFooter), findsOneWidget);
+    // The scroll view lays out every section at pump time, so vertical
+    // positions pin the ORDER, not just presence — a shuffled Column fails.
+    final sections = [
+      find.byType(LandingHero),
+      find.byType(LandingFeatureGrid),
+      find.byType(LandingDestinationRail),
+      find.byType(LandingHowItWorks),
+      find.byType(LandingCtaBand),
+      find.byType(LandingFooter),
+    ];
+    var previousTop = double.negativeInfinity;
+    for (final section in sections) {
+      expect(section, findsOneWidget);
+      final top = tester.getTopLeft(section).dy;
+      expect(top, greaterThan(previousTop), reason: '$section out of order');
+      previousTop = top;
+    }
+  });
+
+  testWidgets('the page is dark-committed regardless of the app theme',
+      (tester) async {
+    // localizedTestApp uses the stock LIGHT theme — the exact production
+    // condition the Theme wrap must override.
+    await _pump(tester, surface: const Size(1200, 900));
+
+    final context = tester.element(find.byType(LandingFeatureGrid));
+    expect(Theme.of(context).brightness, Brightness.dark);
+    expect(
+      tester
+          .widget<Scaffold>(find
+              .ancestor(
+                  of: find.byType(LandingHero), matching: find.byType(Scaffold))
+              .first)
+          .backgroundColor,
+      AppColors.landingCanvas,
+    );
   });
 
   testWidgets('chips prefill the field and never call the handoff',
@@ -177,6 +209,27 @@ void main() {
     expect(recorder.calls, hasLength(1));
     expect(recorder.calls.single.prompt, 'A week in Rome in May');
     expect(recorder.calls.single.sourceId, isNull);
+  });
+
+  testWidgets('keyboard go submits the trimmed prompt; whitespace stays inert',
+      (tester) async {
+    final recorder = _HandoffRecorder();
+    await _pump(tester, surface: const Size(800, 900), overrides: [
+      landingPromptHandoffProvider.overrideWithValue(recorder.call),
+    ]);
+
+    // onSubmitted bypasses the button's disabled state, so the whitespace
+    // guard inside the submit handler carries this case alone.
+    await tester.enterText(promptField, '   ');
+    await tester.testTextInput.receiveAction(TextInputAction.go);
+    await tester.pump();
+    expect(recorder.calls, isEmpty);
+
+    await tester.enterText(promptField, '  Ferry-hop the Cyclades  ');
+    await tester.testTextInput.receiveAction(TextInputAction.go);
+    await tester.pump();
+    expect(recorder.calls, hasLength(1));
+    expect(recorder.calls.single.prompt, 'Ferry-hop the Cyclades');
   });
 
   testWidgets('a destination card hands its prompt to the handoff',

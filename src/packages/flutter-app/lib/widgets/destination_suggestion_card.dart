@@ -51,8 +51,15 @@ class DestinationSuggestionCard extends StatelessWidget {
   /// How tall a card of [width] renders. Public because the carousel has to
   /// reserve the page height before the card exists — one derivation, so the
   /// two cannot disagree and leave the card clipped or the page padded.
-  static double heightFor(double width) =>
-      _imageHeightFor(width) + (kPlaceCardHeight - kPlaceCardImageHeight);
+  ///
+  /// [textScaler] scales the text band only (the two reserved lines of
+  /// titleSmall; the photo keeps its aspect regardless) — pass the ambient
+  /// `MediaQuery.textScalerOf(context)` so accessibility text sizes don't
+  /// clip the prompt's second line under the card's antialias clip.
+  static double heightFor(double width,
+          [TextScaler textScaler = TextScaler.noScaling]) =>
+      _imageHeightFor(width) +
+      textScaler.scale(kPlaceCardHeight - kPlaceCardImageHeight);
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +68,7 @@ class DestinationSuggestionCard extends StatelessWidget {
 
     return SizedBox(
       width: width,
-      height: heightFor(width),
+      height: heightFor(width, MediaQuery.textScalerOf(context)),
       child: Card(
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
