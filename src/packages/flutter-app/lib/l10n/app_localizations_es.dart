@@ -4129,4 +4129,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get rickRollDismissHint => 'toca donde sea para salir';
+
+  @override
+  String get splashLoading => 'Cargando';
 }

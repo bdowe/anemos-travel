@@ -6811,6 +6811,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'tap anywhere to escape'**
   String get rickRollDismissHint;
+
+  /// Screen-reader label on the boot splash's breathing-dots loading signal. The dots themselves are decorative; this is the only text the loading state speaks.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading'**
+  String get splashLoading;
 }
 
 class _AppLocalizationsDelegate
