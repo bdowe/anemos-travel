@@ -17,11 +17,20 @@ const kTraveledStatsKey = ValueKey('travelStats.traveled');
 const kPlannedStatsKey = ValueKey('travelStats.planned');
 
 /// The body of the "Your travels" section on the trips list: a world map
-/// pinning every hub city across the user's owned trips, with the travel stat
-/// tiles beneath. One merged card (not separate stats + map bands) so the
+/// pinning every hub city across the user's owned trips, captioned by the
+/// travel stats. One merged card (not separate stats + map bands) so the
 /// sparse one-trip-each-way page gains a single substantial scroll stop, and
 /// so the whole block shares one gating story: with no located cities the map
 /// sub-band collapses and the card degrades to a bare stats strip.
+///
+/// **Map, then caption** — the editorial redesign's shape for this card. The
+/// stats used to be a 2×3 grid of big centered numbers under the map, which
+/// was both the brand doc's banned hero-metric template and the reason the
+/// card read flat: an image with a dashboard bolted to it. They are now two
+/// quiet caption lines ([StatTileRow]), so the map is the card's one statement
+/// and the numbers annotate it — and the card gets materially shorter, which
+/// is the other half of the answer to "maps dominate this page". The map's own
+/// height is unchanged: the fix was never to grow the image.
 ///
 /// **Traveled and planned are separate, labeled groups**, and the map says
 /// which pins are which (filled = been there, hollow = still ahead). The band
@@ -105,12 +114,13 @@ class TravelFootprintCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (var i = 0; i < groups.length; i++) ...[
-                  // xl, not md: an eyebrow sits ~26px above its own numbers,
-                  // so a 12px seam left it equidistant between the two groups
-                  // and it read as floating between them rather than heading
-                  // the one below. A group label has to be nearer its group
-                  // than its neighbour by a visible margin.
-                  if (i > 0) const SizedBox(height: AppSpacing.xl),
+                  // A group label has to be nearer its own line than its
+                  // neighbour's by a visible margin, or it reads as floating
+                  // between the two. lg between groups against xs inside one
+                  // is that margin — a 4:1 ratio the eye resolves without
+                  // help. (It was xl while each group was a 50px-tall tile
+                  // grid; the caption lines need less air to stay grouped.)
+                  if (i > 0) const SizedBox(height: AppSpacing.lg),
                   _StatGroup(
                     key: groups[i].key,
                     label: groups[i].label,
@@ -126,13 +136,16 @@ class TravelFootprintCard extends StatelessWidget {
   }
 }
 
-/// One labeled side of the split: a quiet eyebrow over the shared stat tiles.
+/// One labeled side of the split: a quiet title over the group's stat line.
 ///
-/// The eyebrow borrows UpNextTripCard's treatment but stays **sentence case**
-/// where that one is caps — the same l10n string labels the map's pin tooltips
-/// ("Kraków · Planned"), and one string beats a second key plus a
+/// The label is **sentence case** — the same l10n string labels the map's pin
+/// tooltips ("Kraków · Planned"), and one string beats a second key plus a
 /// locale-unsafe toUpperCase(). It must also read quieter than the page-level
-/// "Your travels" SectionHeader above the card: header > eyebrow > tile label.
+/// "Your travels" SectionHeader above the card: header > group label > stats.
+/// It carried UpNextTripCard's letterspaced treatment until the editorial
+/// pass; a letterspaced label above a heading is an eyebrow in everything but
+/// name, and the brand rulebook allows exactly one of those (the place eyebrow
+/// on destination surfaces). Weight does the work here instead.
 class _StatGroup extends StatelessWidget {
   final String label;
   final TravelStats stats;
@@ -169,10 +182,9 @@ class _StatGroup extends StatelessWidget {
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall?.copyWith(
+          style: theme.textTheme.labelMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w600,
-            letterSpacing: 0.8,
           ),
         ),
         const SizedBox(height: AppSpacing.xs),

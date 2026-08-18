@@ -2140,7 +2140,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripSaveOrder => 'Save order';
 
   @override
-  String get tripsListTitle => 'My Trips';
+  String get tripsListTitle => 'My trips';
 
   @override
   String get tripsListErrorTitle => 'Could not load trips';
@@ -2198,8 +2198,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'Trips',
-      one: 'Trip',
+      other: 'trips',
+      one: 'trip',
     );
     return '$_temp0';
   }
@@ -2209,8 +2209,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'Travel days',
-      one: 'Travel day',
+      other: 'travel days',
+      one: 'travel day',
     );
     return '$_temp0';
   }
@@ -2220,8 +2220,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'Cities',
-      one: 'City',
+      other: 'cities',
+      one: 'city',
     );
     return '$_temp0';
   }

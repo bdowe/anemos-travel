@@ -18,8 +18,9 @@ import 'support/l10n_test_app.dart';
 
 /// The always-on "Upcoming" section chrome: header + "New trip" action
 /// regardless of resumable-chats state (before, the header only rendered
-/// beside a Continue section), the payload-only stat chips on plain cards,
-/// and the aggregate stats line that appears from two upcoming trips on.
+/// beside a Continue section), what a plain row prints of its own payload,
+/// and the aggregate stats that live in the "Your travels" band from two
+/// owned trips on.
 class _FixedTripsApiService extends TripsApiService {
   final List<Trip> trips;
 
@@ -146,11 +147,16 @@ void main() {
     expect(find.text('Shared Trip'), findsOneWidget);
   });
 
-  testWidgets('plain cards carry duration and city-count chips',
+  testWidgets('a plain row prints its span on the date line, not as a chip',
       (WidgetTester tester) async {
+    // The editorial redesign gave the dates their own weighted line and
+    // folded the duration into it — "Sep 27 – Oct 30 · 34 days" is one
+    // thought, and it was two filled chips in a run of seven. The city COUNT
+    // went with them: the cities line under the title names the cities, and a
+    // row that says "9 cities" directly above them is counting out loud.
     await _pumpList(tester, trips: [
-      // Soonest → promoted to the hero; the chip assertions target the
-      // second trip's plain card.
+      // Soonest → promoted to the hero; the assertions target the
+      // second trip's plain row.
       _trip('hero', 'Weekend Hop', start: _rel(5), end: _rel(6)),
       _trip('t2', 'Big Summer Adventure',
           start: _rel(40),
@@ -162,8 +168,12 @@ void main() {
     ]);
     await tester.pumpAndSettle();
 
-    expect(find.text('34 days'), findsOneWidget);
-    expect(find.text('9 cities'), findsOneWidget);
+    // The span rides the date line, so it is never a Text of its own...
+    expect(find.textContaining('· 34 days'), findsOneWidget);
+    expect(find.text('34 days'), findsNothing);
+    // ...and the count is gone, with the cities themselves still named.
+    expect(find.text('9 cities'), findsNothing);
+    expect(find.textContaining('Prague'), findsOneWidget);
   });
 
   testWidgets('a single-city trip shows no city-count chip',
@@ -194,9 +204,9 @@ void main() {
 
     expect(find.textContaining('upcoming trip'), findsNothing);
     // The all-time band carries the aggregate now: 2 trips, 5 travel days,
-    // 2 cities — as tiles (value and label are separate Texts).
+    // 2 cities — as a caption line whose value and label are separate Texts.
     expect(find.text('Your travels'), findsOneWidget);
     expect(find.text('5'), findsOneWidget);
-    expect(find.text('Travel days'), findsOneWidget);
+    expect(find.text('travel days'), findsOneWidget);
   });
 }
