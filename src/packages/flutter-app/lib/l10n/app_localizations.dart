@@ -3944,12 +3944,6 @@ abstract class AppLocalizations {
   /// **'Shared'**
   String get tripsListShared;
 
-  /// No description provided for @upNextEyebrow.
-  ///
-  /// In en, this message translates to:
-  /// **'UP NEXT'**
-  String get upNextEyebrow;
-
   /// No description provided for @upNextStartsIn.
   ///
   /// In en, this message translates to:
@@ -4843,12 +4837,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t check opening hours — try again.'**
   String get reviewHoursCheckFailed;
-
-  /// No description provided for @liveTripEyebrow.
-  ///
-  /// In en, this message translates to:
-  /// **'HAPPENING NOW'**
-  String get liveTripEyebrow;
 
   /// No description provided for @liveTripStatusLive.
   ///

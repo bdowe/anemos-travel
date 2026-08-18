@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:travel_route_planner/models/trip.dart';
@@ -49,8 +50,9 @@ Future<void> _pump(WidgetTester tester, Widget card,
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('the up-next hero raises the booking nudge',
+  testWidgets('the up-next hero raises the booking nudge and the date square',
       (WidgetTester tester) async {
+    final start = DateTime.now().add(const Duration(days: 10));
     await _pump(
       tester,
       UpNextTripCard(
@@ -61,8 +63,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('UP NEXT'), findsOneWidget);
     expect(find.textContaining('Book transport'), findsOneWidget);
+    // The Circle date square: the departure day and short month render as
+    // their own standalone texts (the when-line's "Sep 14 – 17" is one
+    // string, so these exact-matches can only hit the square).
+    expect(find.text('${start.day}'), findsOneWidget);
+    expect(find.text(DateFormat.MMM('en').format(start)), findsOneWidget);
   });
 
   testWidgets('a started trip never nudges — the copy is pre-departure',
@@ -81,7 +87,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('HAPPENING NOW'), findsOneWidget);
     expect(find.text('Live'), findsOneWidget);
     expect(find.textContaining('Book transport'), findsNothing);
   });
@@ -91,8 +96,8 @@ void main() {
     // The hero took on the plain card's whole fact set, so its meta row can
     // now run to nine labels. This is the density guard: a Wrap run that
     // overflowed would fail the pump outright, and es is the long-string
-    // locale. Dark mode rides along — the pills are alpha-white on the
-    // gradient either way, and this catches a theme-dependent regression.
+    // locale. Dark mode rides along — the flat card's pills read from the
+    // scheme, so this catches a theme-dependent regression.
     await tester.binding.setSurfaceSize(const Size(360, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -126,7 +131,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('SUCEDIENDO AHORA'), findsOneWidget);
     expect(find.text('En curso'), findsOneWidget);
     expect(find.text('5/18 reservados'), findsOneWidget);
     expect(find.text('12/20 en la maleta'), findsOneWidget);

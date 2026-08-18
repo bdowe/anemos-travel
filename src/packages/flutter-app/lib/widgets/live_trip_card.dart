@@ -47,14 +47,14 @@ class LiveTripCard extends StatelessWidget {
 
     return TripHeroCard(
       trip: trip,
-      eyebrow: l10n.liveTripEyebrow,
-      icon: Icons.near_me,
+      // No date square: the Live pill leads, and today's date is filler —
+      // the pre-trip hero is the one anchored to a calendar day.
       // "Day 2 of 5" already names the span, so the card's own duration label
       // would be a second total saying the same thing.
       showDuration: false,
       showMap: showMap,
       leadingMeta: [
-        TripHeroCard.heroPill(l10n.liveTripStatusLive),
+        TripHeroCard.heroPill(context, l10n.liveTripStatusLive),
         if (progress != null) TripHeroCard.heroFact(context, progress),
       ],
       onTap: onTap,

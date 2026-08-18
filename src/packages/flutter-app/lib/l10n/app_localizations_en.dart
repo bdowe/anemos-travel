@@ -2307,9 +2307,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripsListShared => 'Shared';
 
   @override
-  String get upNextEyebrow => 'UP NEXT';
-
-  @override
   String upNextStartsIn(int days) {
     String _temp0 = intl.Intl.pluralLogic(
       days,
@@ -2858,9 +2855,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get reviewHoursCheckFailed =>
       'Couldn\'t check opening hours — try again.';
-
-  @override
-  String get liveTripEyebrow => 'HAPPENING NOW';
 
   @override
   String get liveTripStatusLive => 'Live';

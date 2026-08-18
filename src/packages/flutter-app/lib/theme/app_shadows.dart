@@ -16,8 +16,12 @@ abstract final class AppShadows {
         ),
       ];
 
-  /// Shadow under brand-gradient cards (hero strips, recent/live trip cards) —
-  /// the brandDark pair those cards were each declaring inline.
+  /// Shadow that sat under the brand-gradient cards. Zero users since the
+  /// de-gradient pass took the hero cards to the standard card treatment;
+  /// kept in place only because parallel lanes hold this file append-only —
+  /// delete it in the post-wave cleanup, don't adopt it.
+  @Deprecated('The brand-gradient card treatment is retired (de-gradient '
+      'phase 1); heroes use the cardTheme shadow.')
   static List<BoxShadow> get brandCard => [
         BoxShadow(
           color: AppColors.brandDark.withValues(alpha: 0.3),

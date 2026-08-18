@@ -11,18 +11,18 @@ import '../theme/spacing.dart';
 ///   unused: the wordmark is live text ([BrandWordmark]) everywhere, and this
 ///   PNG's art sits off-centre on a square canvas, so reintroducing it hangs
 ///   ~7pt of dead space below the mark.
-/// - [BrandLogo.mark] — the rose icon only, for tight spots (nav rail,
-///   auth screen).
+/// - [BrandLogo.mark] — the rose icon only, for neutral chrome and page
+///   surfaces (the app bar, nav rail, auth screen).
 /// - [BrandLogo.markLight] — the reversed rose (white/teal-100 cardinals),
-///   for teal fields (the boot splash, the gradient app bar).
+///   for teal fields (the boot splash — the last one standing after the
+///   de-gradient pass took the app bar to neutral surface).
 ///
 /// The word itself is [BrandWordmark], not part of this class — see there.
 ///
 /// **Plate policy, v3: the rose always floats bare.** No plate is drawn
 /// anywhere in the app; the only question a surface asks is which cut of the
-/// rose it needs. Page surfaces (auth screen, nav rail) take the dark
-/// [BrandLogo.mark]; the teal
-/// `AppColors.brandGradient` fields (the splash, the gradient app bar) take
+/// rose it needs. Neutral chrome and page surfaces (app bar, nav rail, auth
+/// screen) take the dark [BrandLogo.mark]; the splash's teal field takes
 /// [BrandLogo.markLight], because the dark artwork is teal-on-teal there.
 ///
 /// v2 kept a white `BrandBadge` plate on gradient app bars. v3 retired it: the
@@ -55,7 +55,7 @@ class BrandLogo extends StatelessWidget {
         _isLight = false;
 
   /// Reversed wind-rose mark (white/teal-100 cardinals) for teal fields — the
-  /// splash and the gradient app bar — rendered as a [size]×[size] square.
+  /// boot splash — rendered as a [size]×[size] square.
   const BrandLogo.markLight({super.key, double size = 28})
       : _asset = _markLightAsset,
         _height = size,

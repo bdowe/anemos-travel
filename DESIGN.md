@@ -117,11 +117,16 @@ surfaces; accents at chip-and-pin scale only.
 - **Aegean Teal** (#00796B): the brand seed (`AppColors.brand`, teal-700). The
   entire M3 `ColorScheme` in both light and dark derives from it. Identity and
   the primary action — nothing else.
-- **Harbor Light** (#00897B) and **Harbor Dark** (#004D40): the ends of
-  `brandGradient` (top-left → bottom-right), the one sanctioned teal field —
-  the app bar and brand hero cards. The gradient bar stays teal in dark mode
-  by design. Harbor Dark also anchors `heroScrim` (0.88 alpha lower-left →
-  0.35 upper-right) — the layer under any text on a photo.
+- **Harbor Light** (#00897B) and **Harbor Dark** (#004D40): the deep ends of
+  the teal ramp. Harbor Dark is the wordmark's ink on light chrome
+  (`wordmarkInk` — dark mode takes the scheme primary), the anchor of
+  `heroScrim` (0.88 alpha lower-left → 0.35 upper-right — the layer under any
+  text on a photo), and the flat fallback field under the continue-trip
+  hero's imagery. **`brandGradient` is no longer a sanctioned brand surface**
+  (the de-gradient pass, 2026-08): chrome and hero cards are neutral
+  surfaces whose brand is the wordmark's ink, the rose, typography, and
+  imagery; the gradient survives only on the boot splash and the signed-out
+  photo/guide panels until phase 2 flattens or retires each.
 - **Shallows Tint** (#E0F2F1): the faint teal wash (`brandTint`) for selected
   and brand-touched surfaces at rest.
 
@@ -227,10 +232,12 @@ shadow only grounds the card.
 - **Soft** (`0 3px 10px rgba(0,0,0,0.10)`): custom raised containers outside
   the Material `Card`.
 - **Card theme** (elevation 3, shadow black 16% light / 50% dark): the
-  standard card and menu treatment.
-- **Brand card** (`0 4px 10px` Harbor Dark 30%): under brand-gradient cards —
-  hero strips, recent/live trip cards.
-- **Hero** (`0 6px 16px` Harbor Dark 40%): full-bleed landing heroes.
+  standard card and menu treatment — the promoted trip heroes included,
+  since the de-gradient pass made them ordinary cards. (The old brand-card
+  Harbor Dark shadow is retired; its token is deprecated in place until the
+  post-wave cleanup.)
+- **Hero** (`0 6px 16px` Harbor Dark 40%): full-bleed photographic heroes
+  (landing, the continue-trip card).
 
 ### Named Rules
 **The Light-From-Above Rule.** Every shadow offsets downward. A zero-offset
@@ -247,7 +254,8 @@ are fully rounded. Nothing else. Borders are hairlines when they exist at all
 (the landing's white-14% hairline; `outlineVariant` elsewhere). The wind-rose
 mark always floats bare — no plate, tile, chip, or container behind it,
 anywhere (plate policy v3); the only per-surface question is which cut: dark
-mark on neutral or scrimmed fields, light mark on teal gradient fields.
+mark on neutral or scrimmed fields (the app bar and nav rail included), light
+mark on the boot splash's teal field.
 
 ## Components
 
@@ -268,10 +276,12 @@ mark on neutral or scrimmed fields, light mark on teal gradient fields.
 
 ### Cards / Containers
 - **Corner Style:** 12px.
-- **Background:** surface (light) / `surfaceContainerHigh` (dark); brand hero
-  cards take `brandGradient`.
+- **Background:** surface (light) / `surfaceContainerHigh` (dark) — the
+  promoted trip heroes included: a hero is a photo-led flat card (route-map
+  band on top, serif title, Circle-style date square, state pills), promoted
+  by imagery and typography rather than by a colored field.
 - **Shadow Strategy:** card theme elevation 3, tint transparent (see
-  Elevation); brand cards take the Harbor Dark shadow.
+  Elevation).
 - **Internal Padding:** 16px.
 - **Photo-led cards** (place/hotel/event rails): the image owns the card top,
   text is a few quiet rows where only the key figure carries weight; fixed
@@ -284,9 +294,12 @@ mark on neutral or scrimmed fields, light mark on teal gradient fields.
 - **Focus:** scheme primary outline; no glow.
 
 ### Navigation
-- **App bar:** the teal `brandGradient` in both themes, centered title in
-  Marcellus, `BrandWordmark` as the persistent brand anchor (left-aligned,
-  measured tracking). White foreground throughout.
+- **App bar:** flat `surface` in both themes under a hairline
+  `outlineVariant` bottom border — the brand rides in the wordmark's ink
+  (`wordmarkInk`: Harbor Dark light / scheme primary dark) and the dark-cut
+  rose, never in a colored field. Title in Marcellus, `BrandWordmark` as the
+  persistent brand anchor (left-aligned, measured tracking), `onSurface`
+  foreground.
 - **Menus:** open below the bar (`position: under`), styled to match cards
   (12px radius, elevation 3, tint off) so every raised thing reads the same.
 - **Mobile:** bottom sheets are the phone's overflow vocabulary; the wordmark
@@ -313,7 +326,8 @@ gradient never carries text.
   value that isn't a token becomes one in `lib/theme/` first.
 - **Do** keep photography real — real places in real light, credited in
   `CREDITS.md`/`LICENSES.md` — and put a scrim under any text on it.
-- **Do** check both themes; the gradient bar staying teal in dark is correct.
+- **Do** check both themes; the bar is `surface` in both — dark mode is the
+  same build with brightness flipped, chrome included.
 - **Do** state `w400` on every Marcellus style and set numbers in Inter.
 - **Do** run `.claude/skills/brand-guidelines/scripts/check.sh` on touched
   Dart files before shipping.

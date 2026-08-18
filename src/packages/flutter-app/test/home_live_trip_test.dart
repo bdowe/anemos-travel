@@ -112,7 +112,6 @@ void main() {
     await _pumpHome(tester, _liveTrip('t1'));
 
     expect(find.byType(LiveTripCard), findsOneWidget);
-    expect(find.text('HAPPENING NOW'), findsOneWidget);
     expect(find.text('Day 2 of 3'), findsOneWidget);
   });
 

@@ -25,10 +25,12 @@ editorial restraint. Aegean, not tropical. Engraved, not shouted.
   thing bigger. A destination surface may open with the Amanzoe move: a
   letterspaced small-caps place eyebrow above the heading, prose held to a
   narrow centered measure.
-- **Aegean palette.** One deep-teal spine (teal-700 seed; the
-  teal-600→teal-900 gradient on brand fields), surfaces like sun-bleached
-  plaster, heritage gold only where the wind-rose mark brings it. Every
-  non-teal color is earned and means exactly one thing (semantic
+- **Aegean palette.** One deep-teal spine (teal-700 seed) carried as ink
+  and action — the wordmark's Harbor Dark, the primary button, selected
+  states — never as a decorative field since the de-gradient pass (the
+  boot splash's gradient is the recorded survivor). Surfaces like
+  sun-bleached plaster; heritage gold only where the wind-rose mark brings
+  it. Every non-teal color is earned and means exactly one thing (semantic
   success/warning pairs, tool accents) — color is never decoration.
 - **Photography-forward.** Heroes are full-bleed travel photography in the
   Santorini register (caldera blues, white walls) under the brandDark
