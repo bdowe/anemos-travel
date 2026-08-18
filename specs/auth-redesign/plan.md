@@ -88,9 +88,11 @@ decision, so its LayoutBuilder must wrap the whole Scaffold, while the
 siblings' bars are layout-independent and `AuthPhotoBody` measures the body
 box below them (band threshold therefore reads ~56px conservative there,
 deliberately — the question is whether the form under the chrome breathes).
-`reset_password_screen.dart` and `verify_email_screen.dart` wrap their
-existing bodies in `AuthPhotoBody`; columns, bars, and logic untouched.
-Tests: `test/auth_family_photo_test.dart`.
+`reset_password_screen.dart`, `verify_email_screen.dart`, and
+`sso_callback_screen.dart` wrap their existing bodies in `AuthPhotoBody`;
+columns, bars, and logic untouched.
+Tests: `test/auth_family_photo_test.dart` (SSO cases pump `code: 'error'`,
+the synchronous OAuth-declined path — no service fake needed).
 
 ## Verification
 

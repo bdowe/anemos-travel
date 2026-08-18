@@ -58,20 +58,21 @@ None.
 
 ## Family pass (second wave)
 
-The deep-link siblings — reset password and verify email — wear the same
-photo composition. They differ from sign-in deliberately: as deep-link
+The deep-link siblings — reset password, verify email, and the SSO
+callback's outcome states — wear the same photo composition. They differ
+from sign-in deliberately: as deep-link
 landing pages they keep their gradient title bar (the landing page is the
 precedent for the bar sitting atop a photograph), with the photo starting
 below it.
 
-- [ ] Reset password and verify email show the photo pane beside their
-      unchanged column on wide screens, the band above it on tall phones,
-      and exactly their pre-photo layout on short viewports.
+- [ ] Reset password, verify email, and the SSO callback show the photo
+      pane beside their unchanged column on wide screens, the band above it
+      on tall phones, and exactly their pre-photo layout on short
+      viewports.
 - [ ] Their gradient title bars, form logic, outcome states, and copy are
       unchanged.
 
 ## Out of Scope
 
-- The SSO-error screen keeps its current treatment.
 - Any change to form fields, validation, copy other than the new tagline, or
   the onboarding quiz.
