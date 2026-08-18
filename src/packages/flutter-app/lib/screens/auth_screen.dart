@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
 import '../services/auth_service.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/language_menu_button.dart';
@@ -14,6 +17,26 @@ import '../widgets/sso_buttons.dart';
 import '../widgets/legal_links.dart';
 import '../utils/errors.dart';
 import '../utils/snack.dart';
+
+/// The landing family's established wide switch: at 900px and up the photo
+/// becomes a full-height pane beside the form.
+const double _kWideBreakpoint = 900;
+
+/// The form pane's clamp on wide layouts. The floor is the 420px auth column
+/// plus its two xl gutters, so the column never compresses; the cap keeps the
+/// photograph dominant on ultrawide windows.
+const double _kFormPaneMinWidth = 468;
+const double _kFormPaneMaxWidth = 560;
+
+/// Below the wide switch, the photo band appears only when the viewport is at
+/// least this tall, so small phones and keyboard-up viewports keep the
+/// pre-photo layout with the form fully in reach.
+const double _kBandMinViewportHeight = 620;
+
+/// The band takes 22% of the viewport within these bounds: enough photo to
+/// set the scene, never enough to bury the fields.
+const double _kBandMinHeight = 140;
+const double _kBandMaxHeight = 220;
 
 class AuthScreen extends ConsumerStatefulWidget {
   /// Whether the form opens in sign-in (true) or create-account (false) mode.
@@ -183,184 +206,354 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // One LayoutBuilder decides the whole composition: the AppBar's icon
+    // colors and the body have to agree on where the photo is, and layout
+    // must follow the box this route was given — constraints, never
+    // MediaQuery.sizeOf.
+    return LayoutBuilder(builder: (context, constraints) {
+      final wide = constraints.maxWidth >= _kWideBreakpoint;
+      // The pinned band earns its place only when the viewport is tall
+      // enough to keep the form comfortably reachable below it. Deliberate
+      // side effect: opening the keyboard shrinks maxHeight below the
+      // threshold and the band yields its space to the form — form first
+      // when typing. Not a bug to "fix" with MediaQuery.sizeOf.
+      final showBand =
+          !wide && constraints.maxHeight >= _kBandMinViewportHeight;
+      final hasPhoto = wide || showBand;
+
+      return Scaffold(
+        // The photo reaches the top edge whenever it exists; without it,
+        // this is exactly the pre-photo chrome.
+        extendBodyBehindAppBar: hasPhoto,
+        // Transparent AppBar so the implied back arrow gives a way back to
+        // the landing page underneath (this screen is always pushed on top
+        // of it).
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          // The back arrow sits over the photo in both photo layouts (left
+          // pane on wide, top band on narrow); the globe is over the photo
+          // only in the band layout — on wide it sits over the form pane's
+          // own surface and keeps the theme color.
+          iconTheme:
+              hasPhoto ? const IconThemeData(color: Colors.white) : null,
+          // A null actionsIconTheme FALLS BACK to iconTheme, so on wide the
+          // white leading slot would leak onto the globe over the light form
+          // pane — restate M3's own actions default (onSurfaceVariant) there.
+          actionsIconTheme: showBand
+              ? const IconThemeData(color: Colors.white)
+              : wide
+                  ? IconThemeData(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)
+                  : null,
+          actions: const [LanguageMenuButton()],
+        ),
+        body: wide
+            ? Row(
+                children: [
+                  const Expanded(
+                    child: _AuthPhotoPanel(
+                      key: Key('auth-photo-panel'),
+                      wide: true,
+                    ),
+                  ),
+                  SizedBox(
+                    // 45% of the window (the split-pane proportion of the
+                    // field), floored so the 420px column and its gutters
+                    // never compress, capped so the photo stays dominant
+                    // on ultrawide screens.
+                    width: (constraints.maxWidth * 0.45)
+                        .clamp(_kFormPaneMinWidth, _kFormPaneMaxWidth),
+                    // The transparent bar floats over this pane; give
+                    // scroll-to-top room to clear it.
+                    child: _formScroller(topInset: kToolbarHeight),
+                  ),
+                ],
+              )
+            : showBand
+                ? Column(
+                    children: [
+                      SizedBox(
+                        height: (constraints.maxHeight * 0.22)
+                            .clamp(_kBandMinHeight, _kBandMaxHeight),
+                        child: const _AuthPhotoPanel(
+                          key: Key('auth-photo-panel'),
+                          wide: false,
+                        ),
+                      ),
+                      Expanded(child: _formScroller()),
+                    ],
+                  )
+                : _formScroller(),
+      );
+    });
+  }
+
+  /// Today's auth body, verbatim — every layout shares it, so the form
+  /// column (and the tests pinning its geometry) never changes shape.
+  Widget _formScroller({double topInset = 0}) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final auth = ref.watch(authProvider);
 
-    return Scaffold(
-      // Transparent AppBar so the implied back arrow gives a way back to the
-      // landing page underneath (this screen is always pushed on top of it).
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        actions: const [LanguageMenuButton()],
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          // The auth family's shared 420px column (see also reset/verify/SSO
-          // screens) — PageContainer inside the scroll view, house pattern.
-          child: PageContainer(
-            maxWidth: 420,
-            child: Form(
-              key: _formKey,
-              // AutofillGroup makes Flutter web expose the fields as a DOM
-              // <form> with autocomplete attributes, which is what browser
-              // password managers (1Password etc.) hook into.
-              child: AutofillGroup(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const BrandLogo.mark(size: 72),
-                    const SizedBox(height: AppSpacing.sm),
-                    // Neutral surface, so the wordmark takes the theme's own
-                    // text color rather than the app bars' white — the plate
-                    // policy in brand_logo.dart, applied to type.
-                    const ExcludeSemantics(
-                      // The mark's Image already carries the "Anemos" label.
+    return Center(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.xl + topInset,
+            AppSpacing.xl, AppSpacing.xl),
+        // The auth family's shared 420px column (see also reset/verify/SSO
+        // screens) — PageContainer inside the scroll view, house pattern.
+        child: PageContainer(
+          maxWidth: 420,
+          child: Form(
+            key: _formKey,
+            // AutofillGroup makes Flutter web expose the fields as a DOM
+            // <form> with autocomplete attributes, which is what browser
+            // password managers (1Password etc.) hook into.
+            child: AutofillGroup(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const BrandLogo.mark(size: 72),
+                  const SizedBox(height: AppSpacing.sm),
+                  // Neutral surface, so the wordmark takes the theme's own
+                  // text color rather than the app bars' white — the plate
+                  // policy in brand_logo.dart, applied to type.
+                  const ExcludeSemantics(
+                    // The mark's Image already carries the "Anemos" label.
+                    // Centered explicitly: the stretch column otherwise
+                    // paints the text run from the left edge, splitting it
+                    // from the centered mark above (latent on the old flat
+                    // screen; the pane composition exposed it).
+                    child: Center(
                       child: BrandWordmark(fontSize: 26, letterSpacing: 1.5),
                     ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    _isLogin
+                        ? l10n.authWelcomeBack
+                        : l10n.authCreateAccountTitle,
+                    style: theme.textTheme.headlineSmall,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  // One-tap sign-in first: position alone marks it the
+                  // default path. The block owns the "or" divider that
+                  // separates it from the email form below.
+                  const SsoButtons(),
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    // Mobile keyboards advance to the password field
+                    // instead of dismissing.
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [
+                      AutofillHints.username,
+                      AutofillHints.email,
+                    ],
+                    decoration: InputDecoration(
+                      labelText: l10n.authEmailLabel,
+                    ),
+                    validator: (v) {
+                      final value = (v ?? '').trim();
+                      if (value.isEmpty) return l10n.authEmailRequired;
+                      if (!value.contains('@') || !value.contains('.')) {
+                        return l10n.authEmailInvalid;
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    autofillHints: [
+                      _isLogin
+                          ? AutofillHints.password
+                          : AutofillHints.newPassword,
+                    ],
+                    // Last field when signing in; sign-up still has the
+                    // display name below.
+                    textInputAction: _isLogin
+                        ? TextInputAction.done
+                        : TextInputAction.next,
+                    onFieldSubmitted: (_) {
+                      if (_isLogin) _submit();
+                    },
+                    decoration: InputDecoration(
+                      labelText: l10n.authPasswordLabel,
+                    ),
+                    validator: (v) {
+                      if ((v ?? '').isEmpty) return l10n.authPasswordRequired;
+                      if (!_isLogin && v!.length < 8) {
+                        return l10n.authPasswordTooShort;
+                      }
+                      return null;
+                    },
+                  ),
+                  if (!_isLogin) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    TextFormField(
+                      controller: _displayNameController,
+                      autofillHints: const [AutofillHints.name],
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _submit(),
+                      decoration: InputDecoration(
+                        labelText: l10n.authDisplayNameLabel,
+                      ),
+                    ),
+                  ],
+                  if (auth.error != null) ...[
                     const SizedBox(height: AppSpacing.lg),
                     Text(
-                      _isLogin
-                          ? l10n.authWelcomeBack
-                          : l10n.authCreateAccountTitle,
-                      style: theme.textTheme.headlineSmall,
+                      friendlyError(l10n, auth.error),
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: theme.colorScheme.error),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: AppSpacing.xl),
-                    // One-tap sign-in first: position alone marks it the
-                    // default path. The block owns the "or" divider that
-                    // separates it from the email form below.
-                    const SsoButtons(),
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      autocorrect: false,
-                      // Mobile keyboards advance to the password field
-                      // instead of dismissing.
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [
-                        AutofillHints.username,
-                        AutofillHints.email,
-                      ],
-                      decoration: InputDecoration(
-                        labelText: l10n.authEmailLabel,
-                      ),
-                      validator: (v) {
-                        final value = (v ?? '').trim();
-                        if (value.isEmpty) return l10n.authEmailRequired;
-                        if (!value.contains('@') || !value.contains('.')) {
-                          return l10n.authEmailInvalid;
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      autofillHints: [
-                        _isLogin
-                            ? AutofillHints.password
-                            : AutofillHints.newPassword,
-                      ],
-                      // Last field when signing in; sign-up still has the
-                      // display name below.
-                      textInputAction: _isLogin
-                          ? TextInputAction.done
-                          : TextInputAction.next,
-                      onFieldSubmitted: (_) {
-                        if (_isLogin) _submit();
-                      },
-                      decoration: InputDecoration(
-                        labelText: l10n.authPasswordLabel,
-                      ),
-                      validator: (v) {
-                        if ((v ?? '').isEmpty) return l10n.authPasswordRequired;
-                        if (!_isLogin && v!.length < 8) {
-                          return l10n.authPasswordTooShort;
-                        }
-                        return null;
-                      },
-                    ),
-                    if (!_isLogin) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      TextFormField(
-                        controller: _displayNameController,
-                        autofillHints: const [AutofillHints.name],
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => _submit(),
-                        decoration: InputDecoration(
-                          labelText: l10n.authDisplayNameLabel,
-                        ),
-                      ),
-                    ],
-                    if (auth.error != null) ...[
-                      const SizedBox(height: AppSpacing.lg),
-                      Text(
-                        friendlyError(l10n, auth.error),
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: theme.colorScheme.error),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.lg),
-                    if (!_isLogin) ...[
-                      LegalConsentCheckbox(
-                        value: _agreedToTerms,
-                        onChanged: (v) => setState(() => _agreedToTerms = v),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                    ],
-                    FilledButton(
-                      onPressed: auth.loading || (!_isLogin && !_agreedToTerms)
-                          ? null
-                          : _submit,
-                      style: FilledButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                      ),
-                      child: auth.loading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(
-                              _isLogin
-                                  ? l10n.authSignIn
-                                  : l10n.authCreateAccount,
-                            ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    TextButton(
-                      onPressed: auth.loading ? null : _toggleMode,
-                      child: Text(
-                        _isLogin
-                            ? l10n.authNoAccountPrompt
-                            : l10n.authHaveAccountPrompt,
-                      ),
-                    ),
-                    if (_isLogin)
-                      TextButton(
-                        onPressed: auth.loading ? null : _forgotPassword,
-                        child: Text(l10n.authForgotPassword),
-                      ),
-                    // Sign-in only: sign-up already states the terms in the
-                    // blocking LegalConsentCheckbox above the button, and two
-                    // copies on one screen read as boilerplate.
-                    if (_isLogin) const SsoLegalAgreement(),
                   ],
-                ),
+                  const SizedBox(height: AppSpacing.lg),
+                  if (!_isLogin) ...[
+                    LegalConsentCheckbox(
+                      value: _agreedToTerms,
+                      onChanged: (v) => setState(() => _agreedToTerms = v),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                  FilledButton(
+                    onPressed: auth.loading || (!_isLogin && !_agreedToTerms)
+                        ? null
+                        : _submit,
+                    style: FilledButton.styleFrom(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                    ),
+                    child: auth.loading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            _isLogin
+                                ? l10n.authSignIn
+                                : l10n.authCreateAccount,
+                          ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextButton(
+                    onPressed: auth.loading ? null : _toggleMode,
+                    child: Text(
+                      _isLogin
+                          ? l10n.authNoAccountPrompt
+                          : l10n.authHaveAccountPrompt,
+                    ),
+                  ),
+                  if (_isLogin)
+                    TextButton(
+                      onPressed: auth.loading ? null : _forgotPassword,
+                      child: Text(l10n.authForgotPassword),
+                    ),
+                  // Sign-in only: sign-up already states the terms in the
+                  // blocking LegalConsentCheckbox above the button, and two
+                  // copies on one screen read as boilerplate.
+                  if (_isLogin) const SsoLegalAgreement(),
+                ],
               ),
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+/// The destination photograph that gives sign-in its atmosphere: a
+/// full-height pane on wide layouts, a pinned top band on narrow ones.
+/// The landing hero's photo stack — gradient fallback, cover photo,
+/// heroScrim — without a logo: the form column already carries the brand,
+/// and the landing hero records why a surface brands only once.
+class _AuthPhotoPanel extends StatelessWidget {
+  /// Pane vs band — decides the tagline's scale and padding.
+  final bool wide;
+
+  const _AuthPhotoPanel({super.key, required this.wide});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          // Branded gradient behind the photo: visible until the image
+          // decodes and whenever it fails to load, so the scrim and the
+          // tagline always sit on a dark branded surface.
+          DecoratedBox(
+            decoration: BoxDecoration(gradient: AppColors.brandGradient),
+          ),
+          Image.asset(
+            'assets/images/hero_santorini.jpg',
+            fit: BoxFit.cover,
+            // Decorative — the form column carries the screen's meaning.
+            excludeFromSemantics: true,
+            // Bound the decode to the panel, not the window: on wide
+            // layouts this pane is roughly half the window. Quantized to
+            // 320px buckets so a continuous resize reuses the cached
+            // decode instead of minting one per pixel of width.
+            cacheWidth: math.min(
+              1600,
+              ((constraints.maxWidth *
+                          MediaQuery.devicePixelRatioOf(context)) /
+                      320)
+                  .ceil() *
+                  320,
+            ),
+            // Hold the previous frame while a new bucket decodes
+            // mid-resize.
+            gaplessPlayback: true,
+            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+              if (wasSynchronouslyLoaded) return child;
+              return AnimatedOpacity(
+                opacity: frame == null ? 0 : 1,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+                child: child,
+              );
+            },
+            // The gradient underneath is the fallback.
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(gradient: AppColors.heroScrim),
+          ),
+          // The scrim is bottomLeft-darkest — the tagline sits exactly
+          // there.
+          Align(
+            alignment: Alignment.bottomLeft,
+            child: Padding(
+              padding: EdgeInsets.all(wide ? AppSpacing.xl : AppSpacing.lg),
+              child: Text(
+                context.l10n.authTagline,
+                style: TextStyle(
+                  // Marcellus ships only w400 — always stated, or web
+                  // synthesizes faux-bold. Display sizes stated locally,
+                  // the landing-hero precedent: 38 suits the half-window
+                  // pane, 24 the band.
+                  fontFamily: AppFonts.display,
+                  fontWeight: FontWeight.w400,
+                  fontSize: wide ? 38 : 24,
+                  height: 1.15,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    });
   }
 }
 

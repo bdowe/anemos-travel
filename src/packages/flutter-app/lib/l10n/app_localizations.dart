@@ -686,6 +686,12 @@ abstract class AppLocalizations {
   /// **'Welcome back'**
   String get authWelcomeBack;
 
+  /// No description provided for @authTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan less. Travel more.'**
+  String get authTagline;
+
   /// No description provided for @authCreateAccountTitle.
   ///
   /// In en, this message translates to:
