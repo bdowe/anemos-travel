@@ -1696,6 +1696,10 @@
   "suggestionPatagonia": "Hiking in Patagonia",
   "suggestionKenya": "Safari in Kenya",
   "homeLocalGuidesTitle": "Local guides",
+  "homeInspirationTitle": "Somewhere new",
+  "@homeInspirationTitle": {
+    "description": "Header of Home's destination-inspiration rail, shown only when there is no trip to continue"
+  },
   "homeGuideByline": "By {name}",
   "@homeGuideByline": {
     "placeholders": {

@@ -51,6 +51,8 @@ void main() {
       expect(result?.tripId, 't1');
       expect(result?.title, 'Renamed in the trip screen');
       expect(result?.dateRange, tripDateRange('2026-09-01', '2026-09-08'));
+      // The live rung carries the raw start date for the hero's countdown.
+      expect(result?.startDate, '2026-09-01');
     });
   });
 
@@ -61,6 +63,9 @@ void main() {
       expect(result?.tripId, 't1');
       expect(result?.title, 'Stale snapshot title');
       expect(result?.dateRange, 'Jan 1 – Jan 2');
+      // The stored snapshot never carried a start date — no countdown here,
+      // rather than a stale one.
+      expect(result?.startDate, isNull);
     });
 
     test('a shared trip is honored, not replaced by an owned one', () {
@@ -99,6 +104,8 @@ void main() {
       ];
 
       expect(continueTripOf(null, trips, null, today)?.tripId, 'ahead');
+      // The fallback rung reads the live list, so it carries the start date.
+      expect(continueTripOf(null, trips, null, today)?.startDate, '2026-09-01');
     });
 
     test('keeps an undated draft, which is not the same as past', () {

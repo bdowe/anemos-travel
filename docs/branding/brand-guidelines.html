@@ -315,7 +315,7 @@
 <header class="cover">
   <div class="cover-top">
     <span>Brand guidelines</span>
-    <span>Version 1.2 · August 2026</span>
+    <span>Version 1.3 · August 2026</span>
   </div>
   <div class="cover-main">
     <svg viewBox="0 0 540 540" role="img" aria-label="Anemos wind-rose mark, light cut">
@@ -626,6 +626,10 @@
       <div class="meta"><b>mapScrim</b>Black at 60%. The one value behind every control drawn over satellite imagery — day chips, segment labels, map buttons.</div>
     </div>
     <div class="sw">
+      <div class="chip" style="background:linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0) 55%), #4E6963"></div>
+      <div class="meta"><b>mapScrimGradient</b>Black 78% → clear, bottom → top of the box it paints. mapScrim's gradient sibling for a <em>text block</em> overlaid on satellite imagery (the Home continue-trip hero) — painted on the text block's own box plus a fade band above, so coverage scales with the user's text size. Over-imagery layers stay black, never teal.</div>
+    </div>
+    <div class="sw">
       <div class="chip" style="background:#0A0F1A"></div>
       <div class="meta"><b>appMapBackground</b>#0A0F1A. The space-dark canvas behind map tiles (<code>app_map.dart</code>).</div>
     </div>
@@ -825,7 +829,7 @@
   </div>
   <figcaption>The destination set (12 cities, <code>assets/images/destinations/</code>). Warm hour, saturated sea and stone, a human scale somewhere in frame. Every photo is credited — <code>CREDITS.md</code> sits beside the set and <code>LICENSES.md</code> beside the heroes; new photography joins those files or doesn't ship.</figcaption>
   <div class="note">
-    <p><strong>Rules of the frame.</strong> Place text over photography only with <code>heroScrim</code> (brand surfaces) or <code>mapScrim</code> (satellite imagery) underneath. Cards crop photos at md radius; heroes at lg. Never tint a photo teal — the scrims are the only brand layers a photo carries, plus the one recorded <code>landingHeroBlend</code> dissolve, which ends the landing hero photo into the canvas and never sets text. Product screenshots ride on the real UI, not mockup chrome.</p>
+    <p><strong>Rules of the frame.</strong> Place text over photography only with <code>heroScrim</code> (brand surfaces) or the <code>mapScrim</code> family (satellite imagery; <code>mapScrimGradient</code> for a text block) underneath. Cards crop photos at md radius; heroes at lg. Never tint a photo teal — the scrims are the only brand layers a photo carries, plus the one recorded <code>landingHeroBlend</code> dissolve, which ends the landing hero photo into the canvas and never sets text. Product screenshots ride on the real UI, not mockup chrome.</p>
   </div>
 </section>
 
@@ -889,7 +893,7 @@
       </svg>
       <span class="w">ANEMOS</span>
     </div>
-    <div class="small" style="text-align:right">Brand guidelines · v1.2 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
+    <div class="small" style="text-align:right">Brand guidelines · v1.3 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
   </div>
 </footer>
 

@@ -4370,6 +4370,12 @@ abstract class AppLocalizations {
   /// **'Local guides'**
   String get homeLocalGuidesTitle;
 
+  /// Header of Home's destination-inspiration rail, shown only when there is no trip to continue
+  ///
+  /// In en, this message translates to:
+  /// **'Somewhere new'**
+  String get homeInspirationTitle;
+
   /// No description provided for @homeGuideByline.
   ///
   /// In en, this message translates to:

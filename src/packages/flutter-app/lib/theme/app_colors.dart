@@ -84,6 +84,23 @@ abstract final class AppColors {
   /// drift apart again.
   static final Color mapScrim = Colors.black.withValues(alpha: 0.6);
 
+  /// Gradient sibling of [mapScrim] for a TEXT BLOCK overlaid on satellite
+  /// imagery (Home's continue-trip hero): black 78% at the bottom edge,
+  /// dissolving to clear at the top of the box it paints. Paint it on the
+  /// text block's OWN box (plus a fade band above), never as a fraction of
+  /// the card — anchored to the text, its coverage scales with the user's
+  /// text size by construction. The over-imagery family is black, never
+  /// teal — a brand-colored scrim would tint the photography
+  /// (brand-guidelines doc v1.3 records this scrim).
+  static LinearGradient get mapScrimGradient => LinearGradient(
+        begin: Alignment.bottomCenter,
+        end: Alignment.topCenter,
+        colors: [
+          Colors.black.withValues(alpha: 0.78),
+          Colors.black.withValues(alpha: 0),
+        ],
+      );
+
   // Semantic status pair for positive/complete states (booked checkmarks,
   // Planned pills, published counts) — the exact green pair screens were
   // re-declaring inline before the polish wave.
