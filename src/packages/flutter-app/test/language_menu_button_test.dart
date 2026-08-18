@@ -52,6 +52,15 @@ class _FakeAuthService extends AuthService {
 
 class _NoopAnalytics implements AnalyticsApiService {
   @override
+  Future<void> recordLandingPromptSubmitted(
+          {required String surface, String? kind}) =>
+      Future.value();
+
+  @override
+  Future<void> recordPendingPromptConsumed({required String surface}) =>
+      Future.value();
+
+  @override
   Future<void> recordLegsParityMismatch(
           {required String tripId, required List<String> details}) =>
       Future.value();

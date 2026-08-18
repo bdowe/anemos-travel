@@ -219,6 +219,7 @@ class _TrendsPane extends ConsumerWidget {
   // timeseriesEventTypes; unknown keys in the payload are simply not shown).
   static const _series = [
     ('landing_viewed', 'Landing views'),
+    ('landing_prompt_submitted', 'Prompts submitted'),
     ('user_registered', 'Signups'),
     ('trip_created', 'Trips created'),
     ('plan_session_started', 'Plan sessions'),

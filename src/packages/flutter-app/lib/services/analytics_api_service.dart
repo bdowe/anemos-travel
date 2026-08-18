@@ -17,6 +17,7 @@ class AnalyticsApiService {
   static const Set<String> _anonymousEventTypes = {
     'landing_viewed',
     'booking_link_clicked',
+    'landing_prompt_submitted',
   };
 
   /// Records a place added to a trip from a browse surface
@@ -59,6 +60,27 @@ class AnalyticsApiService {
   /// Top of the funnel: a signed-out visitor rendered the landing page.
   /// Call sites guard this to once per app session.
   Future<void> recordLandingViewed() => _record('landing_viewed');
+
+  /// A landing prompt was handed to sign-up (specs/landing-prompt-handoff).
+  /// [surface] is 'hero' (the prompt field, typed or chip-prefilled) or
+  /// 'card' (a destination-rail card); [kind] carries the destination slug
+  /// for cards. The prompt TEXT never rides analytics. Sent anonymously —
+  /// the submitter is by definition signed out.
+  Future<void> recordLandingPromptSubmitted({
+    required String surface,
+    String? kind,
+  }) {
+    return _record(
+      'landing_prompt_submitted',
+      metadata: {'surface': surface, if (kind != null) 'kind': kind},
+    );
+  }
+
+  /// The stored landing prompt reached the signed-in composer — the funnel's
+  /// closing bracket (landing_prompt_submitted → user_registered → this).
+  /// Authed-only by nature: consume requires a session.
+  Future<void> recordPendingPromptConsumed({required String surface}) =>
+      _record('pending_prompt_consumed', metadata: {'surface': surface});
 
   /// Transition telemetry (specs/server-leg-dates): the server `legs`
   /// payload and the local derivation disagreed on a trip load. Expected

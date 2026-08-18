@@ -84,6 +84,12 @@ class UrlSyncController {
   BootTarget? _bootTarget;
   bool _bootConsumed = false;
 
+  /// Whether this app run booted with a deep-link target (pending or already
+  /// consumed). The pending-prompt resume (specs/landing-prompt-handoff)
+  /// skips its Plan-tab preselect when true: a destination the user
+  /// explicitly navigated to outranks a remembered prompt's tab choice.
+  bool get bootTargetSeen => _bootTarget != null || _bootConsumed;
+
   // ---- write half -------------------------------------------------------
 
   String get _currentLocation {

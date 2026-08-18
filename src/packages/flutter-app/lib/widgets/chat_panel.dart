@@ -345,6 +345,22 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
         s.streamingText == null &&
         s.queuedMessages.isEmpty));
 
+    // External draft-text writes (the pending-prompt resume,
+    // specs/landing-prompt-handoff) reach a MOUNTED composer too — without
+    // this an external chatDraftProvider write lands only on the next
+    // remount's _restoreDraft, a silent-loss window. Loop-safe: _saveDraft
+    // echoes every keystroke into the provider, so for our own edits `next`
+    // already equals the controller text and the guard no-ops.
+    ref.listen(chatDraftProvider(_draftKey).select((d) => d.text), (_, next) {
+      if (next == _controller.text) return;
+      // Never assign controller.text — that parks the caret at -1 (see
+      // _restoreDraft).
+      _controller.value = TextEditingValue(
+        text: next,
+        selection: TextSelection.collapsed(offset: next.length),
+      );
+    });
+
     ref.listen(widget.state.select((s) => s.streamingText),
         (_, __) => _scrollToBottom());
     ref.listen(widget.state.select((s) => s.messages.length),

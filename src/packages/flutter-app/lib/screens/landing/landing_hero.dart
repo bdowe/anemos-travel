@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../providers/suggestions_provider.dart';
+import '../../services/pending_prompt.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/spacing.dart';
@@ -13,8 +14,8 @@ import 'landing_handoff.dart';
 
 /// The hero prompt field caps input at the handoff store's limit so the two
 /// can never disagree about how long a first prompt may be
-/// (specs/landing-prompt-handoff).
-const int kLandingPromptMaxLength = 2000;
+/// (specs/landing-prompt-handoff — the store constant is the one source).
+const int kLandingPromptMaxLength = PendingPromptStore.maxPromptLength;
 
 /// Full-bleed landing hero: the Santorini photo dissolving into the landing
 /// canvas, a Marcellus headline, and a REAL prompt input — the product's

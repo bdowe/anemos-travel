@@ -19,6 +19,15 @@ import 'support/l10n_test_app.dart';
 
 class _NoopAnalytics implements AnalyticsApiService {
   @override
+  Future<void> recordLandingPromptSubmitted(
+          {required String surface, String? kind}) =>
+      Future.value();
+
+  @override
+  Future<void> recordPendingPromptConsumed({required String surface}) =>
+      Future.value();
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => Future.value();
 }
 
