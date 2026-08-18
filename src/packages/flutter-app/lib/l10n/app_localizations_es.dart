@@ -3428,11 +3428,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get agentScreenStartOver => 'Empezar de nuevo';
 
   @override
-  String get agentScreenEmptyTitle => 'Cuéntame sobre el viaje de tus sueños';
+  String get agentScreenEmptyTitle => 'Cuéntame sobre tu viaje';
 
   @override
   String get agentScreenEmptyMessage =>
-      'Buscaré lugares reales y crearé un itinerario día a día para ti.';
+      'Un lugar, una idea aproximada, unas fechas: buscaré lugares reales y crearé un itinerario día a día.';
 
   @override
   String agentScreenItineraryReady(int count) {
