@@ -79,7 +79,7 @@ void main() {
       overrides: [analyticsApiServiceProvider.overrideWithValue(analytics)],
       child: localizedTestApp(home: const LandingScreen()),
     ));
-    expect(find.text('Plan less. Travel more.'), findsOneWidget);
+    expect(find.text('Where to next?'), findsOneWidget);
   });
 }
 
