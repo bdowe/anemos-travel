@@ -38,6 +38,14 @@ theme value, the same way `docs/zen.md` precedes a data model. The skill's
 ADD mode captures new references when the owner names a design worth keeping;
 theme tokens themselves live in `src/packages/flutter-app/lib/theme/`.
 
+Every UI change is then held to the brand rulebook: load
+`.claude/skills/brand-guidelines/SKILL.md` (the enforceable digest of
+[`docs/branding/brand-guidelines.html`](docs/branding/brand-guidelines.html))
+whenever an interface is created, updated, or reviewed, and run its
+`scripts/check.sh` on touched Dart files before shipping. Taste
+(design-inspiration) → values (`lib/theme/`) → conformance (brand-guidelines);
+a rule that must break gets written into the guideline doc in the same PR.
+
 ## Parallel Development
 
 Feature waves run as parallel **lanes**: one lane = one branch = one git

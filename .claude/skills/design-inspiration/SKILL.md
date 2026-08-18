@@ -1,6 +1,6 @@
 ---
 name: design-inspiration
-description: Consult BEFORE creating, redesigning, restyling, or polishing ANY UI in the Flutter app — a new screen, widget, dialog, sheet, card, empty state, onboarding step, or landing/marketing surface, and any change to theme, color, typography, spacing, layout, elevation, imagery, or motion. Holds the project's visual reference library (screenshots of admired travel-product and luxury-travel editorial designs) plus the aesthetic direction distilled from them; look at the reference images, don't just read about them. ADD mode: when the owner names a site, screen, or design direction to capture into the library. Complements — never replaces — lib/theme tokens (values) and the impeccable skill (process); this skill is taste. Not for backend, API, data-model, test, or other non-visual work.
+description: Consult BEFORE creating, redesigning, restyling, or polishing ANY UI in the Flutter app — a new screen, widget, dialog, sheet, card, empty state, onboarding step, or landing/marketing surface, and any change to theme, color, typography, spacing, layout, elevation, imagery, or motion. Holds the project's visual reference library (screenshots of admired travel-product and luxury-travel editorial designs) plus the aesthetic direction distilled from them; look at the reference images, don't just read about them. ADD mode: when the owner names a site, screen, or design direction to capture into the library. Complements — never replaces — lib/theme tokens (values), the impeccable skill (process), and the brand-guidelines skill (conformance); this skill is taste. Not for backend, API, data-model, test, or other non-visual work.
 ---
 
 # Design inspiration
@@ -168,12 +168,15 @@ Entry format:
 
 ## Notes
 
-- **Three layers, no turf wars.** This skill supplies TASTE (mood,
+- **Four layers, no turf wars.** This skill supplies TASTE (mood,
   references, composition); `src/packages/flutter-app/lib/theme/` supplies
-  VALUES and is law; the `impeccable` skill supplies PROCESS. When
-  impeccable triggers on the same prompt, run its process with these
-  references as input. If a reference argues a token is wrong, propose a
-  change to `lib/theme/` — never fork a value inline.
+  VALUES and is law; the `impeccable` skill supplies PROCESS; the
+  `brand-guidelines` skill supplies CONFORMANCE (the enforceable rulebook
+  + checklist). When impeccable triggers on the same prompt, run its
+  process with these references as input. If a reference argues a token is
+  wrong, propose a change to `lib/theme/` — never fork a value inline.
+  Mechanical fixes inside an existing pattern may skip this skill's
+  reference pass and go straight to brand-guidelines — say so.
 - **Mimic feel, never pixel-copy.** No trade-dress cloning: never reproduce
   another product's identifiable layout, illustration, icon set, or
   copywriting. Learn the move; perform it in Anemos materials.
