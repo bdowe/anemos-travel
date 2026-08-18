@@ -29,6 +29,15 @@ why) and `plan.md` (how); treat the spec's acceptance criteria as the definition
 of done and surface any `[NEEDS CLARIFICATION]` before starting. See
 [`specs/README.md`](specs/README.md) for the workflow.
 
+## Design References
+
+UI is designed against the project's visual reference library:
+read `.claude/skills/design-inspiration/SKILL.md` — and actually look at its
+`references/` images — before creating or restyling any screen, widget, or
+theme value, the same way `docs/zen.md` precedes a data model. The skill's
+ADD mode captures new references when the owner names a design worth keeping;
+theme tokens themselves live in `src/packages/flutter-app/lib/theme/`.
+
 ## Parallel Development
 
 Feature waves run as parallel **lanes**: one lane = one branch = one git
