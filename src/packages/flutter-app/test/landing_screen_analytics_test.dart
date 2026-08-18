@@ -12,6 +12,15 @@ import 'support/l10n_test_app.dart';
 /// Counts landing-view records instead of hitting the network.
 class _CountingAnalytics implements AnalyticsApiService {
   @override
+  Future<void> recordLandingPromptSubmitted(
+          {required String surface, String? kind}) =>
+      Future.value();
+
+  @override
+  Future<void> recordPendingPromptConsumed({required String surface}) =>
+      Future.value();
+
+  @override
   Future<void> recordLegsParityMismatch(
           {required String tripId, required List<String> details}) =>
       Future.value();
@@ -84,6 +93,15 @@ void main() {
 }
 
 class _ThrowingAnalytics implements AnalyticsApiService {
+  @override
+  Future<void> recordLandingPromptSubmitted(
+          {required String surface, String? kind}) =>
+      Future.value();
+
+  @override
+  Future<void> recordPendingPromptConsumed({required String surface}) =>
+      Future.value();
+
   @override
   Future<void> recordLegsParityMismatch(
           {required String tripId, required List<String> details}) =>

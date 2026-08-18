@@ -271,8 +271,9 @@ func TestAdminTimeseries(t *testing.T) {
 	if !ok {
 		t.Fatalf("series missing: %v", body["series"])
 	}
-	for _, key := range []string{"landing_viewed", "user_registered", "trip_created",
-		"plan_session_started", "booking_link_clicked", "itinerary_item_added"} {
+	for _, key := range []string{"landing_viewed", "landing_prompt_submitted",
+		"user_registered", "trip_created", "plan_session_started",
+		"booking_link_clicked", "itinerary_item_added"} {
 		if _, ok := series[key]; !ok {
 			t.Errorf("series[%s] missing (stable slots require every type)", key)
 		}

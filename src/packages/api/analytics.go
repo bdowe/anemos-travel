@@ -28,6 +28,12 @@ var clientEventTypes = map[string]bool{
 	// A place added to a trip from a browse surface (local rec, event, guide
 	// pin) — specs/add-to-itinerary. Distinguished by metadata "source".
 	"itinerary_item_added": true,
+	// A landing prompt handed to sign-up, and the moment the stored prompt
+	// reached the signed-in composer (specs/landing-prompt-handoff).
+	// Distinguished by metadata "surface": hero|card; "kind" carries the
+	// destination slug for cards. The prompt text itself never rides.
+	"landing_prompt_submitted": true,
+	"pending_prompt_consumed":  true,
 	// Transition telemetry (specs/server-leg-dates): the client compared the
 	// server `legs` payload against its local derivation on a trip load and
 	// they DISAGREED. Expected volume: zero — any row is a derivation-parity
@@ -52,6 +58,11 @@ var clientEventTypes = map[string]bool{
 var anonymousClientEventTypes = map[string]bool{
 	"landing_viewed":       true,
 	"booking_link_clicked": true,
+	// The landing hero's prompt submit — by definition produced signed out
+	// (specs/landing-prompt-handoff). Its consume-side sibling
+	// (pending_prompt_consumed) is deliberately NOT here: consuming requires
+	// a session.
+	"landing_prompt_submitted": true,
 }
 
 // maxEventMetadataBytes caps the metadata bag (small, flat detail only).

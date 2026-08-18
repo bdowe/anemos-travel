@@ -8,6 +8,7 @@ import 'navigation/app_routes.dart';
 import 'navigation/url_sync.dart';
 import 'providers/auth_provider.dart';
 import 'providers/locale_provider.dart';
+import 'providers/pending_prompt_provider.dart';
 import 'providers/theme_mode_provider.dart';
 import 'theme/app_theme.dart';
 import 'widgets/konami_listener.dart';
@@ -117,6 +118,10 @@ class TravelRoutePlannerApp extends ConsumerWidget {
     // Watching only the locale the widget layer needs, not the whole state.
     final locale = ref.watch(localeProvider.select((s) => s.materialLocale));
     final themeMode = ref.watch(themeModeProvider.select((s) => s.mode));
+    // Alive from the first frame like rootUrlObserverProvider below: the
+    // landing-prompt resume must hear the auth transition on every route,
+    // including the bare /sso return (specs/landing-prompt-handoff).
+    ref.watch(pendingPromptResumeProvider);
     return MaterialApp(
       title: AppInfo.name,
       debugShowCheckedModeBanner: false,

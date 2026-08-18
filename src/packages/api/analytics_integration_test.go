@@ -384,3 +384,52 @@ func TestClientEventMetadataSanitized(t *testing.T) {
 		}
 	}
 }
+
+// --- landing prompt handoff events (specs/landing-prompt-handoff) ---
+
+func TestAnonymousLandingPromptSubmittedAccepted(t *testing.T) {
+	resetDB(t)
+	// The submitter is by definition signed out; surface/kind ride the
+	// existing metadata whitelist and the prompt TEXT never rides at all.
+	rec := doJSON(t, "POST", "/api/v1/events", "", map[string]any{
+		"event_type": "landing_prompt_submitted",
+		"metadata":   map[string]any{"surface": "card", "kind": "rome"},
+	})
+	if rec.Code != 202 {
+		t.Fatalf("anonymous POST /events = %d, want 202: %s", rec.Code, rec.Body.String())
+	}
+	waitForAnonymousEventCount(t, "landing_prompt_submitted", 1)
+
+	var meta map[string]any
+	if err := dbPool.QueryRow(context.Background(),
+		`SELECT metadata FROM analytics_events
+		 WHERE user_id IS NULL AND event_type = 'landing_prompt_submitted'`).Scan(&meta); err != nil {
+		t.Fatalf("row: %v", err)
+	}
+	if meta["surface"] != "card" || meta["kind"] != "rome" || len(meta) != 2 {
+		t.Fatalf("metadata = %v, want {surface: card, kind: rome}", meta)
+	}
+}
+
+func TestPendingPromptConsumedAuthedOnly(t *testing.T) {
+	resetDB(t)
+	// Consuming requires a session — the anonymous whitelist must reject it.
+	rec := doJSON(t, "POST", "/api/v1/events", "", map[string]any{
+		"event_type": "pending_prompt_consumed",
+		"metadata":   map[string]any{"surface": "hero"},
+	})
+	if rec.Code != 400 {
+		t.Fatalf("anonymous POST /events = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+
+	// The authed path accepts it.
+	user, token := createTestUser(t, "prompt-consumer@example.com")
+	rec = doJSON(t, "POST", "/api/v1/events", token, map[string]any{
+		"event_type": "pending_prompt_consumed",
+		"metadata":   map[string]any{"surface": "hero"},
+	})
+	if rec.Code != 202 {
+		t.Fatalf("authed POST /events = %d, want 202: %s", rec.Code, rec.Body.String())
+	}
+	waitForEventCount(t, user.ID, "pending_prompt_consumed", 1)
+}
