@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/screens/reset_password_screen.dart';
+import 'package:travel_route_planner/screens/sso_callback_screen.dart';
 import 'package:travel_route_planner/screens/verify_email_screen.dart';
 import 'package:travel_route_planner/services/auth_service.dart';
 import 'package:travel_route_planner/widgets/auth_photo_panel.dart';
@@ -12,11 +13,14 @@ import 'package:travel_route_planner/widgets/gradient_app_bar.dart';
 import 'support/l10n_test_app.dart';
 
 /// The family pass (specs/auth-redesign): the deep-link siblings — reset
-/// password and verify email — wear the same photo composition as the
-/// sign-in screen, via the shared AuthPhotoBody. Unlike the sign-in screen
-/// they keep their GradientAppBar (the landing page's bar-over-photo
-/// precedent), so the photo starts below the bar and the band threshold
-/// measures the body box.
+/// password, verify email, and the SSO callback — wear the same photo
+/// composition as the sign-in screen, via the shared AuthPhotoBody. Unlike
+/// the sign-in screen they keep their GradientAppBar (the landing page's
+/// bar-over-photo precedent), so the photo starts below the bar and the
+/// band threshold measures the body box.
+///
+/// SSO cases pump `code: 'error'` — the OAuth-declined path, which reaches
+/// the failure state synchronously without touching the auth service.
 class _FakeAuthService extends AuthService {
   final bool verifySucceeds;
   _FakeAuthService({this.verifySucceeds = true})
@@ -134,5 +138,35 @@ void main() {
 
     expect(panel, findsNothing);
     expect(find.byType(EmptyState), findsOneWidget);
+  });
+
+  testWidgets('sso error: the failure sits beside the pane on wide',
+      (tester) async {
+    await _pump(tester, const SsoCallbackScreen(code: 'error'),
+        const Size(1280, 800));
+
+    expect(find.byIcon(Icons.link_off), findsOneWidget);
+    expect(find.byType(GradientAppBar), findsOneWidget);
+    // WIDE-discriminating, as on the reset/verify tests.
+    expect(tester.getSize(panel).width, 1280 - authFormPaneWidth(1280));
+  });
+
+  testWidgets('sso error: tall phone gets the band', (tester) async {
+    await _pump(tester, const SsoCallbackScreen(code: 'error'),
+        const Size(420, 1200));
+
+    expect(find.byIcon(Icons.link_off), findsOneWidget);
+    // BAND-discriminating: full-width at the clamped max height.
+    expect(tester.getSize(panel).width, 420);
+    expect(tester.getSize(panel).height, 220);
+  });
+
+  testWidgets('sso error: short viewports keep the pre-photo screen',
+      (tester) async {
+    await _pump(tester, const SsoCallbackScreen(code: 'error'),
+        const Size(800, 600));
+
+    expect(panel, findsNothing);
+    expect(find.byIcon(Icons.link_off), findsOneWidget);
   });
 }

@@ -4,6 +4,7 @@ import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
 import '../services/pending_connect.dart';
 import '../theme/spacing.dart';
+import '../widgets/auth_photo_panel.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/page_container.dart';
@@ -109,10 +110,15 @@ class _SsoCallbackScreenState extends ConsumerState<SsoCallbackScreen> {
     }
     return Scaffold(
       appBar: GradientAppBar(title: l10n.ssoTitle),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: body,
+      // The family photo composition around the untouched outcome column
+      // (specs/auth-redesign); the gradient bar stays atop the photo, the
+      // landing page's precedent — same wrap as verify-email.
+      body: AuthPhotoBody(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: body,
+          ),
         ),
       ),
     );
