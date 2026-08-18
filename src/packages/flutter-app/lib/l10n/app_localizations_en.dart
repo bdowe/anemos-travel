@@ -315,6 +315,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authWelcomeBack => 'Welcome back';
 
   @override
+  String get authTagline => 'Plan less. Travel more.';
+
+  @override
   String get authCreateAccountTitle => 'Create your account';
 
   @override
