@@ -1,3 +1,5 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
@@ -8,8 +10,7 @@ import '../theme/spacing.dart';
 import '../widgets/account_menu.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/chat_panel.dart';
-import '../widgets/destination_carousel.dart';
-import '../widgets/empty_state.dart';
+import '../widgets/destination_suggestion_card.dart';
 import '../widgets/near_me_chip.dart';
 import '../widgets/random_suggestions.dart';
 import '../providers/auth_provider.dart';
@@ -103,7 +104,7 @@ class _AgentScreenState extends ConsumerState<AgentScreen> {
           // The width-capped column exposes the full-bleed bar's square
           // corners mid-screen; float the composer as a rounded card here.
           floatingComposer: true,
-          emptyState: _EmptyState(),
+          emptyState: const _PlanIntro(),
           onViewTrip: _openTrip,
           footerBuilder: (context, state) => state.completedLocations == null
               ? const SizedBox.shrink()
@@ -126,47 +127,195 @@ class _AgentScreenState extends ConsumerState<AgentScreen> {
   }
 }
 
-class _EmptyState extends ConsumerWidget {
+/// One card of the destination rail. The landing rail's width, because the two
+/// photo rails in the product are the same component doing the same job and a
+/// second number would only be a second number.
+const double _kRailCardWidth = 260;
+
+/// How wide the intro paragraph is allowed to run. A centered measure, not the
+/// column width: past ~50 characters a line the eye loses the return sweep,
+/// and the whole point of this block is that it reads in one glance.
+const double _kIntroMeasure = 420;
+
+/// Below this the reading block stops floating in a field of its own and joins
+/// the scroll with everything else. Measured against the shortest viewport the
+/// screen has to hold (a 568pt phone, less the app bar and the composer, is
+/// ~430) rather than guessed from a width breakpoint — the thing that runs out
+/// here is height, so height is what is asked.
+const double _kIntroFieldFloor = 440;
+
+/// The Plan tab before a word is typed.
+///
+/// Composed as ONE block that ends at the composer instead of a centered card
+/// marooned in the middle of the panel: the reading half (heading + what the
+/// agent will do) takes an open field over its head, and the acting half
+/// (destination rail, then the two non-typing ways in) sits directly above the
+/// input, so the eye finishes the sentence on the thing it is supposed to use. That adjacency is the redesign — every AI start screen
+/// worth copying (and Mindtrip, the closest competitor) hangs its starters off
+/// the composer, and the old layout hung them off the vertical centre with
+/// ~200px of nothing underneath.
+///
+/// Deliberately NOT the shared [EmptyState] widget: that one is the app's
+/// "nothing here yet" voice — icon, title, message, a Wrap of buttons, all
+/// centered — and this is a designed opening, with a rail that has to run to
+/// the column's edges and a block that has to sit off-centre.
+class _PlanIntro extends ConsumerWidget {
+  const _PlanIntro();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     final l10n = context.l10n;
-    return RandomSuggestions(
-      // The whole pool, shuffled — the carousel cycles it, so a three-pick
-      // sample would loop the same three cards every fifteen seconds.
-      picker: suggestionOrderProvider,
-      builder: (context, prompts) => EmptyState(
-        // No glyph here: the destination photos are this screen's visual
-        // anchor, and a generic chat bubble over them is just weight
-        // (specs/destination-suggestion-cards).
-        icon: null,
-        title: l10n.agentScreenEmptyTitle,
-        message: l10n.agentScreenEmptyMessage,
-        // The drawn destinations as photo cards. Tapping one sends exactly
-        // its visible label: it becomes a message in the traveler's own
-        // transcript, so an English message they never wrote would read as a
-        // bug. The agent answers in their language anyway
-        // (specs/i18n-spanish).
-        content: DestinationSuggestionCarousel(
-          prompts: prompts,
-          onSelect: (prompt) =>
-              ref.read(planProvider.notifier).sendMessage(prompt),
-        ),
-        actions: [
-          NearMeChip(
-            onSend: (text, {displayLabel}) => ref
-                .read(planProvider.notifier)
-                .sendMessage(text, displayLabel: displayLabel),
+
+    // Marcellus w400 comes from the theme's headline tier — never restated
+    // here, so this can't be the call site that ships faux-bold.
+    final reading = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            l10n.agentScreenEmptyTitle,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineMedium,
           ),
-          // Planned elsewhere (ChatGPT/Claude)? Paste it in instead
-          // (specs/import-trip-from-ai-chat). A button, not a chip: the
-          // cards above put words into the chat, this navigates — to the
-          // Trips tab, same as /import's refresh-restore.
-          OutlinedButton.icon(
-            onPressed: () => openImportOnTripsTab(ref),
-            icon: const Icon(Icons.content_paste_go, size: 18),
-            label: Text(l10n.importFromAi),
+          const SizedBox(height: AppSpacing.md),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _kIntroMeasure),
+            child: Text(
+              l10n.agentScreenEmptyMessage,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
           ),
         ],
+      ),
+    );
+
+    final acting = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _DestinationRail(),
+        const SizedBox(height: AppSpacing.lg),
+        // The two ways in that aren't typing and aren't a destination. Both
+        // are chips now: side by side they are the same kind of offer, and a
+        // chip beside an outlined button read as two ranks of one thing.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          child: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            alignment: WrapAlignment.center,
+            children: [
+              NearMeChip(
+                onSend: (text, {displayLabel}) => ref
+                    .read(planProvider.notifier)
+                    .sendMessage(text, displayLabel: displayLabel),
+              ),
+              // Planned elsewhere (ChatGPT/Claude)? Paste it in instead
+              // (specs/import-trip-from-ai-chat). This one navigates — to the
+              // Trips tab, same as /import's refresh-restore — rather than
+              // putting words in the chat.
+              ActionChip(
+                avatar: const Icon(Icons.content_paste_go, size: 16),
+                label: Text(l10n.importFromAi),
+                onPressed: () => openImportOnTripsTab(ref),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxHeight < _kIntroFieldFloor) {
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                const SizedBox(height: AppSpacing.xl),
+                reading,
+                const SizedBox(height: AppSpacing.xl),
+                acting,
+              ],
+            ),
+          );
+        }
+        return Column(
+          children: [
+            Expanded(
+              // Whatever height is left over splits 3:1 in favour of the field
+              // ABOVE the heading. Space over a heading reads as composure —
+              // it is the move the editorial references make — while the same
+              // space under it reads as a missing element, which is exactly
+              // how the centred layout this replaces read.
+              child: Align(
+                alignment: const Alignment(0, 0.5),
+                // Loose constraints from Align, so this shrink-wraps unless
+                // the largest text scales make the block taller than its
+                // share — then it scrolls instead of overflowing.
+                child: SingleChildScrollView(child: reading),
+              ),
+            ),
+            acting,
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The shuffled destination pool as a horizontal rail of photo cards.
+///
+/// Replaces the one-card-at-a-time carousel this screen shipped with. That
+/// carousel answered a real objection — a rail that sits still hides its picks
+/// behind a scroll nobody is invited to try — but it answered it by moving,
+/// which costs a timer, dot pagination, and a five-second wait to see a second
+/// idea. The rail shows two and a bit at once with the next one cut by the
+/// edge, which is the invitation the still rail lacked; it is the same move
+/// the landing page's rail already shipped, so the two surfaces now speak once.
+///
+/// Tapping a card sends exactly its visible label: it becomes a message in the
+/// traveler's own transcript, so an English message they never wrote would read
+/// as a bug. The agent answers in their language anyway (specs/i18n-spanish).
+class _DestinationRail extends ConsumerWidget {
+  const _DestinationRail();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return RandomSuggestions(
+      // The whole pool in a shuffled order, not a three-pick sample: a rail
+      // can scroll, so it can carry the full range of destinations.
+      picker: suggestionOrderProvider,
+      builder: (context, prompts) => SizedBox(
+        height: DestinationSuggestionCard.heightFor(
+            _kRailCardWidth, MediaQuery.textScalerOf(context)),
+        child: ScrollConfiguration(
+          // Without this a mouse cannot drag the rail on web/desktop — the
+          // same reason the landing rail and the chat photo strips set it.
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: PointerDeviceKind.values.toSet(),
+          ),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            itemCount: prompts.length,
+            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+            itemBuilder: (context, i) {
+              final p = prompts[i];
+              return DestinationSuggestionCard(
+                prompt: p.text,
+                asset: p.asset,
+                credit: p.credit,
+                width: _kRailCardWidth,
+                onTap: () =>
+                    ref.read(planProvider.notifier).sendMessage(p.text),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

@@ -12,24 +12,24 @@ import 'package:travel_route_planner/providers/suggestions_provider.dart';
 import 'package:travel_route_planner/screens/agent_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/plan_service.dart';
-import 'package:travel_route_planner/widgets/destination_carousel.dart';
 import 'package:travel_route_planner/widgets/destination_suggestion_card.dart';
-import 'package:travel_route_planner/widgets/empty_state.dart';
 import 'package:travel_route_planner/widgets/near_me_chip.dart';
 
 import 'support/l10n_test_app.dart';
 
-/// The agent screen's empty state shuffles the whole destination pool and
-/// cycles it as a self-advancing carousel: one card on screen at a time in the
-/// content slot, the near-me chip and the import-from-AI-chat button stay in
-/// actions (both are actions rather than destinations, and the import one is
-/// a button because it navigates instead of sending), the order is drawn once
-/// per mount (a locale switch relabels WITHOUT reshuffling; a chat reset
-/// re-rolls), and tapping a card sends exactly the visible label.
+/// The Plan tab's opening state: a heading and one line of what the agent will
+/// do, floating in the space above; then the shuffled destination pool as a
+/// horizontal rail, and the two non-typing ways in as chips, both sitting
+/// directly against the composer.
 ///
-/// Auto-advance is a `Timer`, and it is suppressed on a hidden tab, under
-/// reduced motion / a screen reader, and once the traveler has dragged the
-/// cards themselves — each pinned below.
+/// The composition IS the feature here — the screen this replaced put the same
+/// pieces in the vertical centre with a couple of hundred pixels of nothing
+/// between them and the input — so the order and the gap are asserted, not
+/// just the presence of the parts.
+///
+/// The pool order is drawn once per mount (a locale switch relabels WITHOUT
+/// reshuffling; a chat reset re-rolls), and tapping a card sends exactly the
+/// visible label.
 
 class _RecordingPlanNotifier extends PlanNotifier {
   final List<(String, String?)> sent = [];
@@ -111,123 +111,81 @@ void main() {
     await tester.pump();
   }
 
-  /// One dwell plus the slide. The carousel's own timings are private; a test
-  /// that waited exactly them would pass on a stuck carousel too.
-  Future<void> waitOneDwell(WidgetTester tester) async {
-    await tester.pump(const Duration(seconds: 6));
-    await tester.pumpAndSettle();
-  }
-
   setUp(() {
     plan = _RecordingPlanNotifier();
     pickerCalls = 0;
-    // Beyond the legacy trio (proves pool wiring), and short enough that
-    // cycling all the way round is three advances rather than twelve.
+    // Beyond the legacy trio (proves pool wiring), and few enough that the
+    // whole order fits on one rail at the default 800px test surface.
     nextPicks = const [3, 4, 5];
   });
 
-  testWidgets('one card at a time; near-me and import stay actions',
+  testWidgets('the rail shows more than one destination at once',
       (WidgetTester tester) async {
     await pumpAgent(tester, overrides());
 
-    final emptyState = tester.widget<EmptyState>(find.byType(EmptyState));
-    expect(emptyState.actions.first, isA<NearMeChip>());
-    expect(emptyState.actions.last, isA<OutlinedButton>());
-    expect(emptyState.actions, hasLength(2),
-        reason: 'destinations belong in the content slot, not actions');
-    // The photos are the visual anchor; a generic glyph over them is weight.
-    expect(emptyState.icon, isNull);
-
-    expect(find.byType(DestinationSuggestionCarousel), findsOneWidget);
+    // The carousel this replaced showed exactly one card and hid the rest
+    // behind a five-second dwell; the rail's whole argument is that a second
+    // idea is visible without waiting for it.
     expect(find.text('Island hopping in Greece'), findsOneWidget);
-    // The rest of the order is a slide away, not stacked underneath.
-    expect(find.text('3 days in Lisbon'), findsNothing);
-    expect(find.text('2 days in Paris'), findsNothing);
-  });
-
-  testWidgets('the carousel advances itself, and wraps',
-      (WidgetTester tester) async {
-    await pumpAgent(tester, overrides());
-    expect(find.text('Island hopping in Greece'), findsOneWidget);
-
-    await waitOneDwell(tester);
     expect(find.text('3 days in Lisbon'), findsOneWidget);
-    expect(find.text('Island hopping in Greece'), findsNothing);
-
-    await waitOneDwell(tester);
-    expect(find.text('Tapas in Barcelona'), findsOneWidget);
-
-    // Past the last destination it comes round again — forwards, which is why
-    // the pages run without end instead of animating back to index 0. Waited
-    // for rather than counted: how many dwells fit in a pumped interval is an
-    // implementation detail, that it comes back round is the contract.
-    var dwells = 0;
-    while (find.text('Island hopping in Greece').evaluate().isEmpty) {
-      expect(dwells++, lessThan(nextPicks.length * 2),
-          reason: 'the carousel never came back round');
-      await waitOneDwell(tester);
-    }
+    expect(find.byType(PageView), findsNothing);
   });
 
-  testWidgets('a hidden tab does not keep sliding',
+  testWidgets('heading, rail, chips, composer — in that order, no void',
       (WidgetTester tester) async {
-    // AppShell keeps every tab mounted and freezes hidden ones with
-    // TickerMode — which does NOT stop a Timer on its own.
-    await pumpAgent(tester, overrides(),
-        wrap: (child) => TickerMode(enabled: false, child: child));
+    await pumpAgent(tester, overrides());
 
-    await waitOneDwell(tester);
-    expect(find.text('Island hopping in Greece'), findsOneWidget);
+    final heading = tester.getRect(find.text('Tell me about your trip'));
+    final rail =
+        tester.getRect(find.byType(DestinationSuggestionCard).first);
+    final chips = tester.getRect(find.byType(NearMeChip));
+    final composer = tester.getRect(find.byType(TextField));
+
+    expect(heading.bottom, lessThan(rail.top));
+    expect(rail.bottom, lessThanOrEqualTo(chips.top));
+    expect(chips.bottom, lessThan(composer.top));
+
+    // The point of the redesign: the starters hang off the composer. The old
+    // layout centred everything and left ~200px of nothing here, so a
+    // generous ceiling still fails the thing this replaced.
+    expect(composer.top - chips.bottom, lessThan(64),
+        reason: 'the starters must sit against the composer, not the centre');
+
+    // ...and the reading block is NOT crammed against the app bar either: it
+    // keeps the field above it that makes the block read as composed.
+    expect(heading.top, greaterThan(tester.getRect(find.byType(AppBar)).bottom),
+        reason: 'the heading sits below the app bar, in its own field');
   });
 
-  testWidgets('reduced motion stops the auto-advance',
+  testWidgets('near-me and import are the two starter chips',
       (WidgetTester tester) async {
-    await pumpAgent(
-      tester,
-      overrides(),
-      wrap: (child) => Builder(
-        builder: (context) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(disableAnimations: true),
-          child: child,
-        ),
-      ),
+    await pumpAgent(tester, overrides());
+
+    expect(find.byType(NearMeChip), findsOneWidget);
+    // Import navigates rather than sending, but beside the near-me chip it is
+    // the same kind of offer, so it wears the same clothes.
+    expect(
+      find.widgetWithText(ActionChip, 'Import from AI chat'),
+      findsOneWidget,
     );
-
-    await waitOneDwell(tester);
-    expect(find.text('Island hopping in Greece'), findsOneWidget);
+    expect(find.byType(OutlinedButton), findsNothing);
   });
 
-  testWidgets('a drag hands the cards over for good',
-      (WidgetTester tester) async {
-    await pumpAgent(tester, overrides());
-
-    await tester.drag(find.byType(PageView), const Offset(-400, 0));
-    await tester.pumpAndSettle();
-    expect(find.text('3 days in Lisbon'), findsOneWidget);
-
-    // No yanking a card out from under a thumb.
-    await waitOneDwell(tester);
-    expect(find.text('3 days in Lisbon'), findsOneWidget);
-  });
-
-  testWidgets('the visible card shows its own destination photo and credit',
+  testWidgets('every card carries its own destination photo and credit',
       (WidgetTester tester) async {
     await pumpAgent(tester, overrides());
 
     // Order [3, 4, 5] is Greece, Lisbon, Barcelona — each card must carry ITS
     // photo, which a parallel-list wiring bug would silently scramble.
-    var card = tester.widget<DestinationSuggestionCard>(
-        find.byType(DestinationSuggestionCard));
-    expect(card.asset, kDestinationPhotos['greece']!.asset);
+    final cards = tester
+        .widgetList<DestinationSuggestionCard>(
+            find.byType(DestinationSuggestionCard))
+        .toList();
+    expect(cards.first.asset, kDestinationPhotos['greece']!.asset);
+    expect(cards[1].asset, kDestinationPhotos['lisbon']!.asset);
     // Attribution is a license obligation, so it is rendered, not optional.
-    expect(card.credit, isNotEmpty);
-    expect(find.text(card.credit), findsOneWidget);
-
-    await waitOneDwell(tester);
-    card = tester.widget<DestinationSuggestionCard>(
-        find.byType(DestinationSuggestionCard));
-    expect(card.asset, kDestinationPhotos['lisbon']!.asset);
-    expect(find.text(card.credit), findsOneWidget);
+    expect(cards.first.credit, isNotEmpty);
+    expect(find.text(cards.first.credit), findsOneWidget);
   });
 
   testWidgets('tapping a card sends exactly the visible label',
@@ -265,7 +223,7 @@ void main() {
       PlanMessage(role: MessageRole.user, content: 'plan athens'),
     ]));
     await tester.pump();
-    expect(find.byType(EmptyState), findsNothing);
+    expect(find.byType(DestinationSuggestionCard), findsNothing);
 
     // ...and the app-bar reset brings it back with a fresh draw.
     nextPicks = const [6, 7, 8];
@@ -273,5 +231,21 @@ void main() {
     await tester.pump();
     expect(pickerCalls, 2);
     expect(find.text('Street food in Bangkok'), findsOneWidget);
+  });
+
+  testWidgets('a short viewport scrolls the whole block instead of overflowing',
+      (WidgetTester tester) async {
+    // A 320x568 phone, less an app bar and a composer, leaves the reading
+    // block no field to float in — below that floor everything joins one
+    // scroll rather than being squeezed.
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await pumpAgent(tester, overrides());
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Tell me about your trip'), findsOneWidget);
+    expect(find.byType(DestinationSuggestionCard), findsWidgets);
   });
 }

@@ -5675,13 +5675,13 @@ abstract class AppLocalizations {
   /// No description provided for @agentScreenEmptyTitle.
   ///
   /// In en, this message translates to:
-  /// **'Tell me about your dream trip'**
+  /// **'Tell me about your trip'**
   String get agentScreenEmptyTitle;
 
   /// No description provided for @agentScreenEmptyMessage.
   ///
   /// In en, this message translates to:
-  /// **'I\'ll search real places and build you a day-by-day itinerary.'**
+  /// **'A place, a rough idea, a few dates — I\'ll find real places and build a day-by-day itinerary.'**
   String get agentScreenEmptyMessage;
 
   /// No description provided for @agentScreenItineraryReady.

@@ -22,9 +22,9 @@ void main() {
     }
   });
 
-  test('the carousel order is the WHOLE pool, shuffled', () {
-    // The agent empty state cycles this order, so a short draw would silently
-    // hide destinations behind a carousel that claims to show them all.
+  test('the rail order is the WHOLE pool, shuffled', () {
+    // The destination rails scroll this order, so a short draw would silently
+    // hide destinations from a rail that claims to carry the whole pool.
     final container = ProviderContainer();
     addTearDown(container.dispose);
 

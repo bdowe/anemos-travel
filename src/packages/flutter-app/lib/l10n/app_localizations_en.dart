@@ -3409,11 +3409,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentScreenStartOver => 'Start over';
 
   @override
-  String get agentScreenEmptyTitle => 'Tell me about your dream trip';
+  String get agentScreenEmptyTitle => 'Tell me about your trip';
 
   @override
   String get agentScreenEmptyMessage =>
-      'I\'ll search real places and build you a day-by-day itinerary.';
+      'A place, a rough idea, a few dates — I\'ll find real places and build a day-by-day itinerary.';
 
   @override
   String agentScreenItineraryReady(int count) {

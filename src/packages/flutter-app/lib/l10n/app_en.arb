@@ -2262,8 +2262,8 @@
   "chatRemoveQueued": "Remove queued message",
   "agentScreenTitle": "Plan your trip",
   "agentScreenStartOver": "Start over",
-  "agentScreenEmptyTitle": "Tell me about your dream trip",
-  "agentScreenEmptyMessage": "I'll search real places and build you a day-by-day itinerary.",
+  "agentScreenEmptyTitle": "Tell me about your trip",
+  "agentScreenEmptyMessage": "A place, a rough idea, a few dates — I'll find real places and build a day-by-day itinerary.",
   "agentScreenItineraryReady": "Itinerary ready — {count} locations",
   "@agentScreenItineraryReady": {
     "placeholders": {

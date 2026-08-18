@@ -16,10 +16,10 @@ import 'landing_layout.dart';
 /// hands the card's prompt straight to the landing handoff (unlike the hero
 /// chips, which only prefill the field).
 ///
-/// Deliberately a lazy `ListView`, not `DestinationSuggestionCarousel`: no
-/// timer, no auto-advance — a marketing page section should hold still, and
-/// tests should never need to outwait an animation. The next card peeking
-/// past the viewport edge is the scroll affordance.
+/// Deliberately a still, lazy `ListView`: no timer, no auto-advance — a
+/// marketing page section should hold still, and tests should never need to
+/// outwait an animation. The next card peeking past the viewport edge is the
+/// scroll affordance; the Plan tab's rail makes the same move.
 class LandingDestinationRail extends ConsumerWidget {
   const LandingDestinationRail({super.key});
 
@@ -43,7 +43,7 @@ class LandingDestinationRail extends ConsumerWidget {
               _cardWidth, MediaQuery.textScalerOf(context)),
           child: ScrollConfiguration(
             // Without this a mouse cannot drag the rail on web/desktop — the
-            // same reason the destination carousel and photo strips set it.
+            // same reason the Plan rail and the photo strips set it.
             behavior: ScrollConfiguration.of(context).copyWith(
               dragDevices: PointerDeviceKind.values.toSet(),
             ),
