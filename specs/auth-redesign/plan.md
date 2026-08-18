@@ -75,6 +75,23 @@ scroller's top padding adds `kToolbarHeight` so scroll-to-top clears the bar.
 - The photo pane ends on a hard seam against the form pane — deliberately no
   `landingHeroBlend` dissolve; the committed-dark treatment ends at sign-in.
 
+## Family pass (second wave)
+
+The composition moved to one home: `lib/widgets/auth_photo_panel.dart` now
+holds `AuthPhotoPanel` (the photo stack, verbatim from the sign-in screen),
+the layout numbers (`kAuthWideBreakpoint`, `kAuthBandMinViewportHeight`,
+`authFormPaneWidth`, `authBandHeight` — the clamp bounds stay private), and
+`AuthPhotoBody`, the pane/band/nothing ladder for the gradient-bar screens.
+The sign-in screen imports the pieces but keeps composing them itself: its
+transparent bar's icon colors and extend-behind flag depend on the layout
+decision, so its LayoutBuilder must wrap the whole Scaffold, while the
+siblings' bars are layout-independent and `AuthPhotoBody` measures the body
+box below them (band threshold therefore reads ~56px conservative there,
+deliberately — the question is whether the form under the chrome breathes).
+`reset_password_screen.dart` and `verify_email_screen.dart` wrap their
+existing bodies in `AuthPhotoBody`; columns, bars, and logic untouched.
+Tests: `test/auth_family_photo_test.dart`.
+
 ## Verification
 
 `make flutter-analyze`, full `make flutter-test` (run

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
 import '../theme/spacing.dart';
+import '../widgets/auth_photo_panel.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/page_container.dart';
@@ -92,10 +93,15 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     }
     return Scaffold(
       appBar: GradientAppBar(title: l10n.verifyTitle),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: body,
+      // The family photo composition around the untouched outcome column
+      // (specs/auth-redesign); the gradient bar stays atop the photo, the
+      // landing page's precedent.
+      body: AuthPhotoBody(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: body,
+          ),
         ),
       ),
     );

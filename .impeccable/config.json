@@ -1,7 +1,9 @@
 {
   "detector": {
     "ignoreRules": [],
-    "ignoreFiles": [],
+    "ignoreFiles": [
+      "docs/branding/brand-guidelines.html"
+    ],
     "ignoreValues": [
       {
         "rule": "dark-glow",

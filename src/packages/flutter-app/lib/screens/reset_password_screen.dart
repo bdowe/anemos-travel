@@ -5,6 +5,7 @@ import '../l10n/l10n.dart';
 import '../providers/auth_provider.dart';
 import '../theme/spacing.dart';
 import '../utils/errors.dart';
+import '../widgets/auth_photo_panel.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/page_container.dart';
@@ -71,13 +72,19 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: GradientAppBar(title: context.l10n.resetAppBarTitle),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          // The auth family's shared 420px column (see auth_screen.dart).
-          child: PageContainer(
-            maxWidth: 420,
-            child: _done ? _buildSuccess(theme) : _buildForm(theme),
+      // The family photo composition around the untouched column
+      // (specs/auth-redesign): pane beside the form on wide, band above it
+      // on tall phones, nothing on short viewports. The gradient bar stays —
+      // the landing page is the precedent for it sitting atop the photo.
+      body: AuthPhotoBody(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            // The auth family's shared 420px column (see auth_screen.dart).
+            child: PageContainer(
+              maxWidth: 420,
+              child: _done ? _buildSuccess(theme) : _buildForm(theme),
+            ),
           ),
         ),
       ),
