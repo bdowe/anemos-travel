@@ -139,7 +139,8 @@ class _DestinationSuggestionCarouselState
           children: [
             SizedBox(
               width: width,
-              height: DestinationSuggestionCard.heightFor(width),
+              height: DestinationSuggestionCard.heightFor(
+                  width, MediaQuery.textScalerOf(context)),
               child: NotificationListener<ScrollStartNotification>(
                 onNotification: _onScrollStart,
                 // Without this a mouse cannot drag the pages on web/desktop,

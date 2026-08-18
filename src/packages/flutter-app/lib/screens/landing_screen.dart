@@ -5,19 +5,33 @@ import '../navigation/app_nav.dart';
 import '../providers/analytics_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 import '../theme/spacing.dart';
-import '../widgets/brand_logo.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/language_menu_button.dart';
-import '../widgets/legal_links.dart';
 import '../widgets/page_container.dart';
-import '../widgets/section_header.dart';
 import 'auth_screen.dart';
+import 'landing/landing_cta_band.dart';
+import 'landing/landing_destination_rail.dart';
+import 'landing/landing_feature_grid.dart';
+import 'landing/landing_footer.dart';
+import 'landing/landing_hero.dart';
+import 'landing/landing_how_it_works.dart';
+import 'landing/landing_layout.dart';
+import 'landing/landing_section_title.dart';
 
-/// Marketing entry point shown to logged-out visitors. Brands the product and
-/// showcases the core features, then funnels into the existing auth form:
-/// "Get started" opens sign-up, "Sign in" opens login. On success the AuthGate
-/// swaps this screen for the app automatically.
+/// Marketing entry point shown to logged-out visitors (specs/landing-redesign).
+/// The hero IS the product's first interaction — a real prompt input whose
+/// submit hands the text to the landing handoff (specs/landing-prompt-handoff)
+/// — followed by the feature grid, destination rail, how-it-works, and the
+/// closing CTA. "Sign in" opens login; on success the AuthGate swaps this
+/// screen for the app automatically.
+///
+/// The whole route commits to the dark brand look via a local `Theme` wrap,
+/// regardless of the visitor's theme mode — routes pushed from here rebuild
+/// under the MaterialApp themes as normal. One caveat: overlay-routed
+/// surfaces (the language menu's popup) inherit the navigator's theme, not
+/// this wrap — same as before the redesign; don't "fix" it here.
 ///
 /// Rendering this screen records the anonymous `landing_viewed` analytics
 /// event — the top of the activation funnel — at most once per app session
@@ -71,306 +85,93 @@ class _LandingScreenState extends State<LandingScreen> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
 
-    return Scaffold(
-      appBar: GradientAppBar(
-        // No page title: the landing page's title is the brand. The bar's own
-        // lockup (plated mark + wordmark) comes from GradientAppBar — this
-        // screen sits outside the shell, so it keeps the mark at every width.
-        actions: [
-          const LanguageMenuButton(),
-          TextButton(
-            onPressed: () => _openAuth(context, isLogin: true),
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
-            child: Text(l10n.landingSignIn),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: PageContainer(
+    return Theme(
+      data: AppTheme.dark,
+      child: Scaffold(
+        backgroundColor: AppColors.landingCanvas,
+        appBar: GradientAppBar(
+          // No page title: the landing page's title is the brand. The bar's
+          // own lockup (bare mark + wordmark, plate policy v3) comes from
+          // GradientAppBar — this screen sits outside the shell, so it keeps
+          // the mark at every width.
+          actions: [
+            const LanguageMenuButton(),
+            TextButton(
+              onPressed: () => _openAuth(context, isLogin: true),
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              child: Text(l10n.landingSignIn),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            // Full-bleed sections own their padding; the hero runs
+            // edge-to-edge under the opaque bar's gradient, which ends on the
+            // same brandDark the hero scrim starts from.
+            padding: EdgeInsets.zero,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: AppSpacing.sm),
-                _LandingHero(
-                  onGetStarted: () => _openAuth(context, isLogin: false),
+                LandingHero(
                   onSignIn: () => _openAuth(context, isLogin: true),
                 ),
-                const SizedBox(height: AppSpacing.xl + AppSpacing.xs),
-                SectionHeader(title: l10n.landingFeaturesTitle),
-                const SizedBox(height: AppSpacing.md),
-                _FeatureCard(
-                  icon: Icons.auto_awesome,
-                  title: l10n.landingFeatureAgentTitle,
-                  description: l10n.landingFeatureAgentDescription,
+                const SizedBox(height: kLandingSectionGap),
+                PageContainer(
+                  maxWidth: kLandingContentWidth,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        LandingSectionTitle(title: l10n.landingFeaturesTitle),
+                        const SizedBox(height: AppSpacing.xl),
+                        const LandingFeatureGrid(),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                const _LandingFooter(),
-                const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: kLandingSectionGap),
+                PageContainer(
+                  maxWidth: kLandingContentWidth,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg),
+                    child: LandingSectionTitle(
+                      title: l10n.landingDestinationsTitle,
+                      subtitle: l10n.landingDestinationsSubtitle,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                // Full-bleed: the rail aligns its first card with the content
+                // column but scrolls edge-to-edge.
+                const LandingDestinationRail(),
+                const SizedBox(height: kLandingSectionGap),
+                PageContainer(
+                  maxWidth: kLandingContentWidth,
+                  child: const Padding(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    child: LandingHowItWorks(),
+                  ),
+                ),
+                const SizedBox(height: kLandingSectionGap),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: LandingCtaBand(
+                    onGetStarted: () => _openAuth(context, isLogin: false),
+                    onSignIn: () => _openAuth(context, isLogin: true),
+                  ),
+                ),
+                const SizedBox(height: kLandingSectionGap),
+                const LandingFooter(),
+                const SizedBox(height: AppSpacing.xl),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Footer: legal links + company line, so the policy pages are reachable
-/// before sign-up (affiliate programs require a discoverable privacy policy).
-class _LandingFooter extends StatelessWidget {
-  const _LandingFooter();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = context.l10n;
-    final muted = theme.textTheme.bodySmall
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    return Column(
-      children: [
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: AppSpacing.sm,
-          children: [
-            // Shared legal strings + open helpers from legal_links.dart, so
-            // the footer and the auth screen can never drift apart.
-            TextButton(
-              onPressed: openPrivacyPolicy,
-              child: Text(l10n.legalPrivacyPolicy),
-            ),
-            Text('·', style: muted),
-            TextButton(
-              onPressed: openTermsOfService,
-              child: Text(l10n.legalTermsOfService),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(l10n.landingCopyright, style: muted),
-      ],
-    );
-  }
-}
-
-/// Branded hero: full-bleed photo, teal scrim, tagline, and the primary CTAs.
-/// Mirrors the home screen's `_AgentHeroCard` so the logged-out and logged-in
-/// experiences read as one product.
-class _LandingHero extends StatelessWidget {
-  final VoidCallback onGetStarted;
-  final VoidCallback onSignIn;
-
-  const _LandingHero({required this.onGetStarted, required this.onSignIn});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = context.l10n;
-    return LayoutBuilder(builder: (context, constraints) {
-      // Compact metrics below ~600px so both CTAs stay above the fold even on
-      // a 320x568 phone (the app's primary acquisition surface): smaller
-      // lockup, tighter padding/minHeight, subtitle capped at three lines.
-      final narrow = constraints.maxWidth < 600;
-      return Container(
-        decoration: BoxDecoration(
-          borderRadius: AppRadius.lgAll,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.brandDark.withValues(alpha: 0.4),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: AppRadius.lgAll,
-          child: Stack(
-            children: [
-              // Branded gradient behind the photo: visible until the image
-              // decodes and whenever it fails to load, so the white hero copy
-              // and CTAs always sit on a dark branded surface.
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(gradient: AppColors.brandGradient),
-                ),
-              ),
-              Positioned.fill(
-                child: Image.asset(
-                  'assets/images/hero_santorini.jpg',
-                  fit: BoxFit.cover,
-                  // Decorative: the tagline below carries the message.
-                  excludeFromSemantics: true,
-                  frameBuilder:
-                      (context, child, frame, wasSynchronouslyLoaded) {
-                    if (wasSynchronouslyLoaded) return child;
-                    return AnimatedOpacity(
-                      opacity: frame == null ? 0 : 1,
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOut,
-                      child: child,
-                    );
-                  },
-                  // The gradient underneath is the fallback.
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                ),
-              ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(gradient: AppColors.heroScrim),
-                ),
-              ),
-              Container(
-                constraints: BoxConstraints(minHeight: narrow ? 360 : 440),
-                padding: EdgeInsets.all(
-                    narrow ? AppSpacing.xl : AppSpacing.xl + AppSpacing.xs),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Bare mark + white wordmark floating on the scrimmed
-                    // photo, matching the auth screen's plateless mark. The
-                    // lockup PNG's baked-in charcoal wordmark needed the
-                    // white badge plate; white Cinzel text does not.
-                    BrandLogo.mark(size: narrow ? 52 : 96),
-                    const SizedBox(height: AppSpacing.sm),
-                    ExcludeSemantics(
-                      // The mark's Image already carries the "Anemos"
-                      // semantic label.
-                      child: BrandWordmark(
-                        fontSize: narrow ? 24 : 40,
-                        // Caps run wide, so tracking opens up with the size.
-                        letterSpacing: 1.5,
-                        height: 1.1,
-                        color: Colors.white,
-                        // Guards the scrim's lighter top-right corner
-                        // (alpha 0.35) against bright photo patches.
-                        shadows: const [
-                          Shadow(
-                              color: Colors.black26,
-                              blurRadius: 8,
-                              offset: Offset(0, 2)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      l10n.landingHeroTagline,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      l10n.landingHeroSubtitle,
-                      maxLines: narrow ? 3 : null,
-                      overflow: narrow ? TextOverflow.ellipsis : null,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.85),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: onGetStarted,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: AppColors.brandDark,
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppSpacing.lg),
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: AppRadius.mdAll,
-                          ),
-                        ),
-                        child: Text(
-                          l10n.landingGetStarted,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    SizedBox(
-                      width: double.infinity,
-                      child: TextButton(
-                        onPressed: onSignIn,
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppSpacing.md),
-                        ),
-                        child: Text(l10n.landingHaveAccount),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    });
-  }
-}
-
-/// Informational feature row: colored icon chip + title + description (these
-/// don't navigate).
-class _FeatureCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-
-  const _FeatureCard({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final accent = AppColors.brand;
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.1),
-                borderRadius: AppRadius.smAll,
-              ),
-              child: Icon(icon, color: accent, size: 26),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );
