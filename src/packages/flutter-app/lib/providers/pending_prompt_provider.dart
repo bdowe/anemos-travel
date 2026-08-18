@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../navigation/app_nav.dart';
 import '../navigation/url_sync.dart';
+import '../services/pending_connect.dart';
 import '../services/pending_prompt.dart';
 import 'analytics_provider.dart';
 import 'auth_provider.dart';
@@ -48,6 +49,11 @@ class PendingPromptResume {
     if (auth.user!.needsOnboarding) return;
     _consuming = true;
     try {
+      // Defer behind an active connector-consent flow: it ends in a
+      // full-page redirect to the external client, which would strand a
+      // prompt consumed now. The prompt stays stored; the next sign-in (or
+      // the 30-min expiry) settles it.
+      if (await const PendingConnectStore().hasPending()) return;
       final pending = await _store.take();
       if (pending == null) return;
 

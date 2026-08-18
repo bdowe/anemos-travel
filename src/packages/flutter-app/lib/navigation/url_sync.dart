@@ -84,11 +84,19 @@ class UrlSyncController {
   BootTarget? _bootTarget;
   bool _bootConsumed = false;
 
-  /// Whether this app run booted with a deep-link target (pending or already
-  /// consumed). The pending-prompt resume (specs/landing-prompt-handoff)
-  /// skips its Plan-tab preselect when true: a destination the user
-  /// explicitly navigated to outranks a remembered prompt's tab choice.
-  bool get bootTargetSeen => _bootTarget != null || _bootConsumed;
+  /// True from the boot target being applied until the NEXT sign-out —
+  /// i.e. scoped to the signed-in cycle the target belonged to, unlike
+  /// [_bootConsumed], whose whole-run latch exists for anti-replay.
+  bool _bootAppliedThisCycle = false;
+
+  /// Whether a deep-link boot target chose a destination for the CURRENT
+  /// sign-in cycle (pending, or applied and not yet signed out of). The
+  /// pending-prompt resume (specs/landing-prompt-handoff) skips its Plan-tab
+  /// preselect when true: a destination the user explicitly navigated to
+  /// outranks a remembered prompt's tab choice. Cycle-scoped so a sign-out →
+  /// new landing prompt → sign-in later in the same app run gets its
+  /// preselect back.
+  bool get bootTargetSeen => _bootTarget != null || _bootAppliedThisCycle;
 
   // ---- write half -------------------------------------------------------
 
@@ -183,6 +191,8 @@ class UrlSyncController {
         stack.clear();
       }
       _shellAttached = false;
+      // The cycle the boot target belonged to is over.
+      _bootAppliedThisCycle = false;
       if (_lastReported != kHomeLocation) {
         _lastReported = kHomeLocation;
         _ref.read(urlReporterProvider)(kHomeLocation);
@@ -201,6 +211,7 @@ class UrlSyncController {
     if (!auth.initialized || !auth.isSignedIn) return;
     if (auth.user!.needsOnboarding) return;
     _bootConsumed = true;
+    _bootAppliedThisCycle = true;
     _bootTarget = null;
 
     // Listener context, never mid-build: the provider write is legal, and it

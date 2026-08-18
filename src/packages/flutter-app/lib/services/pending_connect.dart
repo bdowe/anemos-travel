@@ -41,6 +41,23 @@ class PendingConnectStore {
     }
   }
 
+  /// Non-destructive: whether a fresh request is waiting. The landing-prompt
+  /// resume (specs/landing-prompt-handoff) defers behind an active connect
+  /// flow — that flow ends in a full-page redirect to the external client,
+  /// which would strand a prompt consumed into the dying page's memory.
+  Future<bool> hasPending() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(_tokenKey);
+      final savedAt = prefs.getInt(_savedAtKey);
+      if (token == null || token.isEmpty || savedAt == null) return false;
+      final age = DateTime.now().toUtc().millisecondsSinceEpoch - savedAt;
+      return age >= 0 && age <= maxAge.inMilliseconds;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Returns the pending request token and forgets it — single use, so a
   /// completed or abandoned link can never replay on a later sign-in. Null
   /// when nothing is pending or the record aged out.
