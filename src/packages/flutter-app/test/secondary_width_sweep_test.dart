@@ -13,7 +13,6 @@ import 'package:travel_route_planner/screens/preferences_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/preferences_api_service.dart';
 import 'package:travel_route_planner/widgets/airport_field.dart';
-import 'package:travel_route_planner/widgets/choice_chip_row.dart';
 import 'package:travel_route_planner/widgets/local_rec_card.dart';
 
 import 'support/l10n_test_app.dart';
@@ -84,7 +83,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    _expectCapped(tester, find.byType(ChoiceChipRow).first);
+    // The section card is the page's full-width element now; the chip rows
+    // sit in a label-left column inside it and are narrower by design.
+    _expectCapped(tester, find.byType(Card).first);
   });
 
   testWidgets('flight search form caps at 700 on wide layouts', (tester) async {

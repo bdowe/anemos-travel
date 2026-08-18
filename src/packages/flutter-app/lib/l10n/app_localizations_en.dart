@@ -83,6 +83,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsTitle => 'Travel profile';
 
   @override
+  String get prefsIntro =>
+      'Everything here is optional — the more your AI agent knows, the better it plans.';
+
+  @override
+  String get prefsSectionStyle => 'Travel style';
+
+  @override
+  String get prefsSectionStyleHelp =>
+      'The shape of a good trip — spend, pace, and company.';
+
+  @override
+  String get prefsInterestsHelp => 'Tap everything a good trip should include.';
+
+  @override
+  String get prefsSectionRhythm => 'Day to day';
+
+  @override
+  String get prefsSectionRhythmHelp =>
+      'Work, workouts, and how demanding the active days get.';
+
+  @override
+  String get prefsSectionFlights => 'Flights';
+
+  @override
+  String get prefsSectionFlightsHelp => 'Defaults for every flight search.';
+
+  @override
   String get prefsBudget => 'Budget';
 
   @override

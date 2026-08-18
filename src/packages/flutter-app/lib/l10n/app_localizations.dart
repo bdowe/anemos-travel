@@ -236,6 +236,54 @@ abstract class AppLocalizations {
   /// **'Travel profile'**
   String get prefsTitle;
 
+  /// No description provided for @prefsIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything here is optional — the more your AI agent knows, the better it plans.'**
+  String get prefsIntro;
+
+  /// No description provided for @prefsSectionStyle.
+  ///
+  /// In en, this message translates to:
+  /// **'Travel style'**
+  String get prefsSectionStyle;
+
+  /// No description provided for @prefsSectionStyleHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'The shape of a good trip — spend, pace, and company.'**
+  String get prefsSectionStyleHelp;
+
+  /// No description provided for @prefsInterestsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap everything a good trip should include.'**
+  String get prefsInterestsHelp;
+
+  /// No description provided for @prefsSectionRhythm.
+  ///
+  /// In en, this message translates to:
+  /// **'Day to day'**
+  String get prefsSectionRhythm;
+
+  /// No description provided for @prefsSectionRhythmHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Work, workouts, and how demanding the active days get.'**
+  String get prefsSectionRhythmHelp;
+
+  /// No description provided for @prefsSectionFlights.
+  ///
+  /// In en, this message translates to:
+  /// **'Flights'**
+  String get prefsSectionFlights;
+
+  /// No description provided for @prefsSectionFlightsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Defaults for every flight search.'**
+  String get prefsSectionFlightsHelp;
+
   /// No description provided for @prefsBudget.
   ///
   /// In en, this message translates to:
