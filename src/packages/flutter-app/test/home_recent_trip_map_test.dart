@@ -19,15 +19,17 @@ import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/home_screen.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/continue_chats_section.dart';
+import 'package:travel_route_planner/widgets/continue_trip_hero.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
 import 'support/l10n_test_app.dart';
 import 'support/url_sync_fakes.dart';
 
-/// The recent-trip card's map band (home "Continue where you left off"):
-/// renders the CACHED trip's overview map above the title row on a cache hit,
-/// and collapses back to the plain card on a miss or when nothing is
-/// mappable. Cache-only by design — home never fetches.
+/// The continue hero's route imagery (home "Continue where you left off"):
+/// renders the CACHED trip's overview map full-bleed behind the overlaid
+/// title on a cache hit, and falls back to the brand-gradient card (same
+/// text block) on a miss or when nothing is mappable. Cache-only by design —
+/// home never fetches.
 ///
 /// Seeding writes the raw prefs keys (recent_trip_provider storage format +
 /// TripCache's entry format) in ONE setMockInitialValues call — never
@@ -180,19 +182,24 @@ Future<void> _pumpHome(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('cache hit renders the map band on the recent-trip card',
+  testWidgets('cache hit renders the route imagery in the continue hero',
       (WidgetTester tester) async {
     final trip = _mappableTrip('t1', 'Lisbon Trip');
     _seed([_recentTripEntry('t1', 'Lisbon Trip'), _cachedTripEntry(trip)]);
     await _pumpHome(tester);
 
     expect(find.byType(TripMap), findsOneWidget);
-    // The plain row survives underneath the band.
-    expect(find.text('Lisbon Trip'), findsOneWidget);
-    expect(find.byIcon(Icons.luggage), findsOneWidget);
+    // The title overlays the imagery inside the same hero card.
+    expect(
+      find.descendant(
+          of: find.byType(ContinueTripHero),
+          matching: find.text('Lisbon Trip')),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('cache miss keeps the plain card', (WidgetTester tester) async {
+  testWidgets('cache miss keeps the gradient-fallback hero',
+      (WidgetTester tester) async {
     _seed([_recentTripEntry('t1', 'Lisbon Trip')]);
     await _pumpHome(tester);
 
@@ -200,7 +207,7 @@ void main() {
     expect(find.text('Lisbon Trip'), findsOneWidget);
   });
 
-  testWidgets('unmappable cached trip keeps the plain card',
+  testWidgets('unmappable cached trip keeps the gradient-fallback hero',
       (WidgetTester tester) async {
     final trip = _unmappableTrip('t1', 'Lisbon Trip');
     _seed([_recentTripEntry('t1', 'Lisbon Trip'), _cachedTripEntry(trip)]);
@@ -221,10 +228,14 @@ void main() {
       tester.getTopLeft(find.text('Lisbon Trip')).dy,
       lessThan(tester.getTopLeft(find.byType(ContinueChatCard)).dy),
     );
-    // And the band sits above its own card's title.
+    // And the title genuinely OVERLAYS the imagery — the map's rect contains
+    // the title's rect. This is the pin that fails if someone moves the text
+    // back below the band (the old card's anatomy).
     expect(
-      tester.getTopLeft(find.byType(TripMap)).dy,
-      lessThan(tester.getTopLeft(find.text('Lisbon Trip')).dy),
+      tester
+          .getRect(find.byType(TripMap))
+          .contains(tester.getRect(find.text('Lisbon Trip')).center),
+      isTrue,
     );
   });
 

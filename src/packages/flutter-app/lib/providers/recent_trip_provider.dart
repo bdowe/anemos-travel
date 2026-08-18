@@ -125,7 +125,17 @@ final cachedTripDetailProvider =
 /// What Home's "Continue where you left off" card renders: enough to draw the
 /// tile, nothing more. A record, so equal contents compare equal and the
 /// derivation below can recompute freely without rebuilding the card.
-typedef ContinueTrip = ({String tripId, String title, String? dateRange});
+///
+/// [startDate] (ISO date-only) feeds the hero's countdown pill and is filled
+/// only at the live rungs (1 and 3) below — the rung-2 stored snapshot
+/// predates the field and never carried one, so there it stays null and the
+/// card simply shows no countdown rather than a stale one.
+typedef ContinueTrip = ({
+  String tripId,
+  String title,
+  String? dateRange,
+  String? startDate,
+});
 
 /// The trip Home offers as a way back in, or null when there is nothing to
 /// continue.
@@ -165,6 +175,7 @@ ContinueTrip? continueTripOf(
         tripId: t.id,
         title: t.title,
         dateRange: tripDateRange(t.startDate, t.endDate),
+        startDate: t.startDate,
       );
 
   if (recorded != null && recorded.tripId != liveTrip?.id) {
@@ -175,6 +186,7 @@ ContinueTrip? continueTripOf(
       tripId: recorded.tripId,
       title: recorded.title,
       dateRange: recorded.dateRange,
+      startDate: null,
     );
   }
 

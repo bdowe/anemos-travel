@@ -2563,6 +2563,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeLocalGuidesTitle => 'Local guides';
 
   @override
+  String get homeInspirationTitle => 'Somewhere new';
+
+  @override
   String homeGuideByline(String name) {
     return 'By $name';
   }

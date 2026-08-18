@@ -77,9 +77,11 @@ Paths below are relative to `src/packages/flutter-app/` unless rooted.
 - **No raw hex in widgets.** The only sanctioned raw-hex sites outside
   `lib/theme/` are `app_map.dart` (`#0A0F1A` canvas) and
   `rick_roll_overlay.dart` (easter egg). Photos are never teal-tinted —
-  `heroScrim`/`mapScrim` are the brand layers an image carries, plus one
-  recorded dissolve: `landingHeroBlend` may end the landing hero photo
-  into the canvas, but never sets text on a photo (still heroScrim's job).
+  `heroScrim` and the `mapScrim` family (incl. `mapScrimGradient`, the
+  black text-block gradient over satellite imagery — doc v1.3) are the
+  brand layers an image carries, plus one recorded dissolve:
+  `landingHeroBlend` may end the landing hero photo into the canvas, but
+  never sets text on a photo (still heroScrim's job).
 
 ## Type — three faces, three jobs
 
@@ -132,9 +134,9 @@ Paths below are relative to `src/packages/flutter-app/` unless rooted.
 ## Imagery & voice
 
 - Real places in real light; no illustration, no stock-abstract. Text
-  sits on photos only over `heroScrim` (brand surfaces) or `mapScrim`
-  (satellite). New photography joins `CREDITS.md`/`LICENSES.md` or
-  doesn't ship.
+  sits on photos only over `heroScrim` (brand surfaces) or the `mapScrim`
+  family (satellite; `mapScrimGradient` for a text block). New
+  photography joins `CREDITS.md`/`LICENSES.md` or doesn't ship.
 - Voice: sentence case everywhere — capitals belong to the wordmark and
   to ONE sanctioned display device, the letterspaced small-caps place
   eyebrow on destination surfaces (design-inspiration's Amanzoe move);

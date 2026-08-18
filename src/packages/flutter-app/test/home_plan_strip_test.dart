@@ -98,7 +98,9 @@ void main() {
     await _pumpHome(tester);
 
     expect(find.text('Plan less. Travel more.'), findsOneWidget);
-    expect(find.text('2 days in Paris'), findsOneWidget); // suggestion chips
+    // Scoped to the chip: the inspiration rail below the hero draws from the
+    // same pool, so the bare text could also appear on a destination card.
+    expect(find.widgetWithText(ActionChip, '2 days in Paris'), findsOneWidget);
     expect(find.byType(Image), findsWidgets); // photo hero present
   });
 

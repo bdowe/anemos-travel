@@ -26,7 +26,20 @@ class TripMapBand extends ConsumerStatefulWidget {
   /// phone preview (180) so a hosting card doesn't dominate its fold.
   final double height;
 
-  const TripMapBand({super.key, required this.tripId, this.height = 160});
+  /// Corner clip for the tiles (they paint square corners). The default is
+  /// the gradient-card contract — top corners at the card radius, square
+  /// bottom where the band meets the title row. A full-bleed host that clips
+  /// the whole stack itself (ContinueTripHero at the hero radius) passes
+  /// [BorderRadius.zero] so this inner clip can't notch inside its own.
+  final BorderRadius borderRadius;
+
+  const TripMapBand({
+    super.key,
+    required this.tripId,
+    this.height = 160,
+    this.borderRadius =
+        const BorderRadius.vertical(top: Radius.circular(AppRadius.md)),
+  });
 
   @override
   ConsumerState<TripMapBand> createState() => _TripMapBandState();
@@ -74,10 +87,7 @@ class _TripMapBandState extends ConsumerState<TripMapBand> {
     _recompute(trip, context.l10n);
     if (!_mappable) return const SizedBox.shrink();
     return ClipRRect(
-      // Tiles paint square corners; clip to the card's top radius (the
-      // bottom edge sits mid-card above the title row).
-      borderRadius:
-          const BorderRadius.vertical(top: Radius.circular(AppRadius.md)),
+      borderRadius: widget.borderRadius,
       child: SizedBox(
         height: widget.height,
         child: ExcludeSemantics(

@@ -17,14 +17,15 @@ import '../theme/app_shadows.dart';
 import '../theme/spacing.dart';
 import '../widgets/account_menu.dart';
 import '../widgets/continue_chats_section.dart';
+import '../widgets/continue_trip_hero.dart';
 import '../widgets/gradient_app_bar.dart';
+import '../widgets/home_inspiration_rail.dart';
 import '../widgets/language_menu_button.dart';
 import '../widgets/live_trip_card.dart';
 import '../widgets/near_me_chip.dart';
 import '../widgets/page_container.dart';
 import '../widgets/random_suggestions.dart';
 import '../widgets/section_header.dart';
-import '../widgets/trip_map_band.dart';
 import 'guides_screen.dart';
 import 'local_guide_detail_screen.dart';
 
@@ -152,7 +153,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                 _GreetingHeader(displayName: displayName),
 
-                const SizedBox(height: AppSpacing.xl),
+                // Space, not size, marks the greeting as the page's display
+                // moment — the largest gap on the page sits under it.
+                const SizedBox(height: AppSpacing.xxl),
 
                 // AI Travel Agent entry: the full photo hero sells the
                 // product to a brand-new account; returning users get a slim
@@ -197,15 +200,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 // only when the account genuinely has nothing to resume.
                 ContinueChatsSection(
                   leading: continueTrip != null
-                      ? _RecentTripCard(
+                      ? ContinueTripHero(
                           tripId: continueTrip.tripId,
                           title: continueTrip.title,
                           dateRange: continueTrip.dateRange,
+                          startDate: continueTrip.startDate,
                           onTap: () =>
                               openTripOnTripsTab(ref, continueTrip.tripId),
                         )
                       : null,
                 ),
+
+                // Inspiration fills the gap only when there is no trip to
+                // continue and nothing live — it must never push a
+                // traveler's actual trips down. New accounts always match,
+                // so the rail doubles as their "get inspired" section under
+                // the photo hero.
+                if (liveTrip == null && continueTrip == null)
+                  HomeInspirationRail(
+                    onPrompt: (text) => startPlanning(initialMessage: text),
+                  ),
 
                 // Local guides discover row — published narrative guides
                 // across all cities. Renders nothing while loading, on
@@ -223,10 +237,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-/// Compact sibling of [_AgentHeroCard] for returning users: one gradient
-/// row — icon, headline, CTA — in the same card language as
-/// [_RecentTripCard]/[LiveTripCard]. No photo, no suggestion chips; the Plan
-/// tab has free input.
+/// Compact sibling of [_AgentHeroCard] for returning users: one quiet card
+/// row — icon, headline, CTA. De-tealed in the editorial pass: the page's
+/// saturated statements are the continue hero's imagery and this row's one
+/// teal button, so the strip itself sits on the ambient card surface
+/// (cardTheme supplies radius, downward shadow, and the dark-mode tonal
+/// step). No photo, no suggestion chips; the Plan tab has free input.
 class _PlanStrip extends StatelessWidget {
   final void Function({String? initialMessage, String? displayLabel}) onStart;
 
@@ -236,60 +252,37 @@ class _PlanStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: AppRadius.mdAll,
-        gradient: AppColors.brandGradient,
-        boxShadow: AppShadows.brandCard,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => onStart(),
-          borderRadius: AppRadius.mdAll,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.sm + 2),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.flight_takeoff,
-                      color: Colors.white, size: 26),
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => onStart(),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              Icon(Icons.flight_takeoff,
+                  color: theme.colorScheme.primary, size: 26),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                child: Text(
+                  l10n.homeHeroTitle,
+                  // Two lines before ellipsis: at phone widths the CTA
+                  // starves the row and one line truncates the tagline
+                  // ("Plan less. Trav…").
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  // titleMedium already carries the row's weight (w600 via
+                  // the theme); below the headline, hierarchy is weight.
+                  style: theme.textTheme.titleMedium,
                 ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Text(
-                    l10n.homeHeroTitle,
-                    // Two lines before ellipsis: at phone widths the CTA
-                    // starves the row and one line truncates the tagline
-                    // ("Plan less. Trav…").
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                FilledButton(
-                  onPressed: () => onStart(),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.brandDark,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  child: Text(
-                    l10n.homeHeroCta,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              FilledButton(
+                onPressed: () => onStart(),
+                child: Text(l10n.homeHeroCta),
+              ),
+            ],
           ),
         ),
       ),
@@ -315,9 +308,11 @@ class _GreetingHeader extends StatelessWidget {
           (firstName == null || firstName.isEmpty)
               ? greeting
               : l10n.homeGreetingNamed(greeting, firstName),
-          style: theme.textTheme.headlineSmall,
+          // The page's one display moment: headlineMedium is the display
+          // face via the theme, a step above the old headlineSmall.
+          style: theme.textTheme.headlineMedium,
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: AppSpacing.xs),
         Text(
           l10n.homeGreetingSubtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
@@ -376,19 +371,15 @@ class _AgentHeroCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child:
-                const Icon(Icons.flight_takeoff, size: 44, color: Colors.white),
-          ),
+          // Bare on the scrim — the editorial pass deleted the translucent
+          // circle plate (icon plates read as chrome, not craft).
+          const Icon(Icons.flight_takeoff, size: 44, color: Colors.white),
           const SizedBox(height: AppSpacing.lg),
           Text(
             l10n.homeHeroTitle,
-            style: theme.textTheme.headlineSmall?.copyWith(
+            // headlineLarge (display face, 34) — the signed-in echo of the
+            // landing hero's display tier, via the theme role.
+            style: theme.textTheme.headlineLarge?.copyWith(
               color: Colors.white,
             ),
           ),
@@ -472,101 +463,6 @@ class _AgentHeroCard extends StatelessWidget {
   }
 }
 
-/// One-tap way back into the trip [continueTripProvider] picked — the one this
-/// device last viewed, or the most recently updated one when this origin has
-/// no such memory — styled as a lighter sibling of the hero card (same teal
-/// family as the app bar gradient).
-/// Rendered inside the "Continue where you left off" section, which supplies
-/// the header — the card itself carries no eyebrow.
-class _RecentTripCard extends StatelessWidget {
-  final String tripId;
-  final String title;
-  final String? dateRange;
-  final VoidCallback onTap;
-
-  const _RecentTripCard({
-    required this.tripId,
-    required this.title,
-    required this.dateRange,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // Date snapshot, styled white-on-teal to match the card; the line is
-    // dropped entirely for an undated trip.
-    final meta = (dateRange != null && dateRange!.isNotEmpty) ? dateRange! : null;
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: AppRadius.mdAll,
-        gradient: AppColors.brandGradient,
-        boxShadow: AppShadows.brandCard,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadius.mdAll,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TripMapBand(tripId: tripId),
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.sm + 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.luggage,
-                          color: Colors.white, size: 26),
-                    ),
-                    const SizedBox(width: AppSpacing.lg),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          if (meta != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              meta,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.85),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.arrow_forward_ios,
-                        size: 16, color: Colors.white70),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Horizontal discover row of published local guides across all cities.
 /// Collapses to nothing (header included) while loading, on error, or when
 /// no guides are published yet — the home screen just reads as before.
@@ -626,16 +522,13 @@ class _GuideCard extends StatelessWidget {
     final theme = Theme.of(context);
     final accent = AppColors.toolLocal;
 
-    return Container(
+    return SizedBox(
       width: 230,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: AppRadius.mdAll,
-        boxShadow: AppShadows.soft,
-      ),
-      child: Material(
-        color: Colors.transparent,
+      // Card, not a hand-rolled Container: cardTheme carries the radius,
+      // the downward shadow, and the dark-mode tonal step in one place.
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
           // Unnamed on purpose: the screen takes the full guide object, so a
           // URL couldn't reconstruct it — refresh lands on the page beneath.
@@ -676,10 +569,8 @@ class _GuideCard extends StatelessWidget {
                         guide.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface,
-                        ),
+                        // titleSmall already carries w600 via the theme.
+                        style: theme.textTheme.titleSmall,
                       ),
                       if (guide.city.isNotEmpty) ...[
                         const SizedBox(height: AppSpacing.xs),
@@ -703,9 +594,12 @@ class _GuideCard extends StatelessWidget {
                                 context.l10n.homeGuideByline(guide.sourceName),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
+                                // Quiet byline: the verified mark carries the
+                                // "local" accent alone; running text stays
+                                // neutral (color is never decoration).
                                 style: theme.textTheme.labelSmall?.copyWith(
-                                  color: accent,
-                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),

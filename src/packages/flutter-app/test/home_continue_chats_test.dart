@@ -146,6 +146,7 @@ void main() {
       tripId: 't9',
       title: 'Athens & the islands',
       dateRange: 'Sep 1 – Sep 8',
+      startDate: null,
     ));
 
     expect(find.text('Continue where you left off'), findsOneWidget);
