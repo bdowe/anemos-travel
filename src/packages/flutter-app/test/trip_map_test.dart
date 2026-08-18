@@ -556,6 +556,150 @@ void main() {
     });
   });
 
+  group('home overlay toggle', () {
+    const homePoint = LatLng(40.6895, -74.1745); // EWR
+    final home = TripMapHome(
+      point: homePoint,
+      label: 'EWR',
+      outboundTo: LatLng(items.first.latitude, items.first.longitude),
+      returnFrom: LatLng(items.last.latitude, items.last.longitude),
+    );
+    // The toggle reuses the pin's icon, so scope to the control.
+    final toggleIcon = find.descendant(
+      of: find.byType(MapControlButton),
+      matching: find.byIcon(Icons.flight_takeoff),
+    );
+
+    testWidgets('shown state: lit icon, Hide tooltip, tap fires', (
+      WidgetTester tester,
+    ) async {
+      var taps = 0;
+      await tester.pumpWidget(
+        _host(
+          TripMap(
+            items: items,
+            home: [home],
+            homeShown: true,
+            onToggleHome: () => taps++,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(toggleIcon, findsOneWidget);
+      expect(tester.widget<Icon>(toggleIcon).color, Colors.white);
+      final tooltip = tester.widget<Tooltip>(find.ancestor(
+        of: toggleIcon,
+        matching: find.byType(Tooltip),
+      ));
+      expect(tooltip.message, 'Hide home airport');
+
+      await tester.tap(toggleIcon);
+      expect(taps, 1);
+    });
+
+    testWidgets('hidden state: button survives an empty overlay, dimmed', (
+      WidgetTester tester,
+    ) async {
+      // The host hid the overlay, so [home] is empty — the button must key
+      // on onToggleHome, never home.isNotEmpty, or the off state would
+      // delete the way back on.
+      await tester.pumpWidget(
+        _host(
+          TripMap(
+            items: items,
+            home: const [],
+            homeShown: false,
+            onToggleHome: () {},
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(toggleIcon, findsOneWidget);
+      // The dimmed treatment, and no pin: the only flight_takeoff on screen
+      // is the control's.
+      expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+      expect(tester.widget<Icon>(toggleIcon).color, Colors.white38);
+      final tooltip = tester.widget<Tooltip>(find.ancestor(
+        of: toggleIcon,
+        matching: find.byType(Tooltip),
+      ));
+      expect(tooltip.message, 'Show home airport');
+    });
+
+    testWidgets('hiding the overlay refits the camera off the home point', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          TripMap(
+            items: items,
+            home: [home],
+            homeShown: true,
+            onToggleHome: () {},
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(_camera(tester).visibleBounds.contains(homePoint), isTrue);
+
+      // The host reacts to a toggle by passing home: const [] —
+      // didUpdateWidget's fit-set comparison must refit down to the trip
+      // (the hide-direction mirror of the async-arrival refit test).
+      await tester.pumpWidget(
+        _host(
+          TripMap(
+            items: items,
+            home: const [],
+            homeShown: false,
+            onToggleHome: () {},
+          ),
+        ),
+      );
+      await tester.pump(); // frame scheduling the post-frame re-fit
+      await tester.pump(); // camera moved
+
+      expect(_camera(tester).visibleBounds.contains(homePoint), isFalse);
+    });
+
+    testWidgets('interactive: false suppresses the toggle with the controls', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          TripMap(
+            items: items,
+            home: [home],
+            interactive: false,
+            onToggleHome: () {},
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(MapControlButton), findsNothing);
+    });
+
+    testWidgets('toggle joins the control row at the 44px touch target', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(TripMap(items: items, home: [home], onToggleHome: () {})),
+      );
+      await tester.pump();
+
+      final buttons = find.byType(MapControlButton);
+      expect(buttons, findsNWidgets(4)); // toggle / zoom in / zoom out / reset
+      for (var i = 0; i < 4; i++) {
+        final size = tester.getSize(buttons.at(i));
+        expect(size.width, greaterThanOrEqualTo(44));
+        expect(size.height, greaterThanOrEqualTo(44));
+      }
+    });
+  });
+
   testWidgets('interactive: false hides the zoom/reset controls', (
     WidgetTester tester,
   ) async {

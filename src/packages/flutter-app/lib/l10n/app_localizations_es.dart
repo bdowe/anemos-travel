@@ -2848,6 +2848,12 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get mapShowHomeAirport => 'Mostrar aeropuerto de origen';
+
+  @override
+  String get mapHideHomeAirport => 'Ocultar aeropuerto de origen';
+
+  @override
   String get accountMenuTooltip => 'Cuenta';
 
   @override

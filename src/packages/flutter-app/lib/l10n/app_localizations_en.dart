@@ -2830,6 +2830,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get mapShowHomeAirport => 'Show home airport';
+
+  @override
+  String get mapHideHomeAirport => 'Hide home airport';
+
+  @override
   String get accountMenuTooltip => 'Account';
 
   @override

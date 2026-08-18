@@ -787,6 +787,8 @@
   "mapDepartureAirport": "Aeropuerto de salida ({code})",
   "mapReturnAirport": "Aeropuerto de regreso ({code})",
   "mapHomeAirport": "Aeropuerto de origen ({code})",
+  "mapShowHomeAirport": "Mostrar aeropuerto de origen",
+  "mapHideHomeAirport": "Ocultar aeropuerto de origen",
   "accountMenuTooltip": "Cuenta",
   "accountMenuTravelProfile": "Perfil de viaje",
   "accountMenuNotifications": "Notificaciones",

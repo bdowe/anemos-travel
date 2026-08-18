@@ -24,6 +24,7 @@ import '../providers/trips_provider.dart';
 import '../providers/recent_trip_provider.dart';
 import '../utils/errors.dart';
 import '../providers/booking_todos_provider.dart';
+import '../providers/home_overlay_provider.dart';
 import '../providers/preferences_provider.dart';
 import '../providers/api_client_provider.dart';
 import '../providers/plan_provider.dart';
@@ -6231,7 +6232,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         // map subtree — resolution landing must not rebuild the screen.
         Widget map = Consumer(
           builder: (context, ref, _) {
-            final home = homeOverlayFor(
+            final candidates = homeOverlayFor(
               ref,
               homeAirport: _homeAirport,
               travelMode: trip.travelMode,
@@ -6244,6 +6245,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               firstCityPoint: endpoints.first,
               lastCityPoint: endpoints.last,
             );
+            // !expandable == _mapPinned at both _mapCard call sites, so the
+            // wide default rides the same slot-width answer as the layout.
+            final showHome = homeOverlayVisible(
+              choice: ref.watch(homeOverlayChoiceProvider),
+              wideLayout: !expandable,
+            );
             return TripMap(
               items: derivation.legFilteredItems(focusKey),
               accommodations: derivation.legFilteredStays(focusKey),
@@ -6253,7 +6260,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               // Unfiltered by leg: TripMap's position+1 adjacency guard
               // already keeps labels within a city.
               segmentLabels: _mapSegmentLabels(derivation),
-              home: home,
+              home: showHome ? candidates : const [],
+              homeShown: showHome,
+              // Narrow preview (expandable) deliberately gets no toggle:
+              // interactive:false suppresses the controls anyway, and the
+              // full-screen map — one tap away — carries it.
+              onToggleHome: (expandable || candidates.isEmpty)
+                  ? null
+                  : () => ref
+                      .read(homeOverlayChoiceProvider.notifier)
+                      .setShown(!showHome),
               fitSignature: focusKey,
               // Keep fitted markers clear of the chip row overlaid below.
               topOverlayInset: hasChips ? MapLegChips.mapTopInset : 0,

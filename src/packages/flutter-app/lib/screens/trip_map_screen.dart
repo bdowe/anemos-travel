@@ -6,7 +6,9 @@ import 'package:latlong2/latlong.dart';
 import '../l10n/l10n.dart';
 import '../models/accommodation.dart';
 import '../models/itinerary_item.dart';
+import '../navigation/app_nav.dart';
 import '../providers/flights_provider.dart';
+import '../providers/home_overlay_provider.dart';
 import '../utils/snack.dart';
 import '../utils/travel_mode.dart';
 import '../widgets/app_map.dart';
@@ -26,6 +28,15 @@ import '../widgets/trip_map.dart';
 /// All shows both; a stale key resolved to -1 shows neither, which is safe
 /// because a stale focus also empties the item list). Shared by the full-screen
 /// map and the inline trip-detail card so both surfaces gate identically.
+///
+/// This returns the CANDIDATES — what the overlay would draw. The traveler's
+/// session show/hide choice ([homeOverlayChoiceProvider], defaulted per form
+/// factor through [homeOverlayVisible]) is applied by both call sites to this
+/// one result, and the toggle button renders only while the candidates are
+/// non-empty — so availability, drawing, and the choice can never disagree.
+/// The choice is deliberately not folded in here: the hosts need the
+/// candidates either way (a hidden overlay still decides whether the button
+/// exists), and the [homeAirportPointProvider] watch stays warm while hidden.
 List<TripMapHome> homeOverlayFor(
   WidgetRef ref, {
   required String? homeAirport,
@@ -230,6 +241,14 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
     final l10n = context.l10n;
     final items = widget.itemsForLeg(_legKey);
     final onAddPlace = widget.onAddPlace;
+    final homeCandidates = _homeOverlay();
+    // Whether the wide default applies is a window question here (the
+    // gradient_app_bar idiom) — this screen is a root-navigator dialog
+    // covering the whole window.
+    final showHome = homeOverlayVisible(
+      choice: ref.watch(homeOverlayChoiceProvider),
+      wideLayout: MediaQuery.sizeOf(context).width >= kRailBreakpoint,
+    );
     // Escape closes the map. Two layers on purpose: this shortcut rides the
     // key-event focus chain, catching Escape while anything in the Scaffold
     // holds focus (the map autofocuses) — the framework's own
@@ -281,7 +300,13 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
                   destinations: _legKey == null ? widget.destinations : null,
                   selectedPosition: _selectedPosition,
                   segmentLabels: widget.segmentLabels,
-                  home: _homeOverlay(),
+                  home: showHome ? homeCandidates : const [],
+                  homeShown: showHome,
+                  onToggleHome: homeCandidates.isEmpty
+                      ? null
+                      : () => ref
+                          .read(homeOverlayChoiceProvider.notifier)
+                          .setShown(!showHome),
                   fitSignature: _legKey,
                   // Keep fitted markers clear of the chip row overlaid below.
                   topOverlayInset: widget.legChips.length >= 2

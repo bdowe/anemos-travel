@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
@@ -11,12 +12,15 @@ import 'package:travel_route_planner/providers/flights_provider.dart';
 import 'package:travel_route_planner/providers/preferences_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
+import 'package:travel_route_planner/screens/trip_map_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/preferences_api_service.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
+import 'package:travel_route_planner/widgets/app_map.dart';
 import 'package:travel_route_planner/widgets/map_leg_chips.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
+import 'support/chip_finders.dart';
 import 'support/l10n_test_app.dart';
 
 /// Home-airport legs on the INLINE trip-detail map card: the overlay follows
@@ -200,6 +204,19 @@ void main() {
   TripMap map(WidgetTester tester) =>
       tester.widget<TripMap>(find.byType(TripMap));
 
+  // The show/hide toggle reuses the pin's icon, so positive assertions scope
+  // to where each lives: markers inside FlutterMap, the control outside it.
+  // `findsNothing` assertions stay unscoped on purpose — no candidates means
+  // neither pin NOR toggle (a control with nothing to govern is dead weight).
+  final homePin = find.descendant(
+    of: find.byType(FlutterMap),
+    matching: find.byIcon(Icons.flight_takeoff),
+  );
+  final homeToggle = find.descendant(
+    of: find.byType(MapControlButton),
+    matching: find.byIcon(Icons.flight_takeoff),
+  );
+
   testWidgets('All draws both legs, the home pin, and the EWR label',
       (WidgetTester tester) async {
     await pumpScreen(tester);
@@ -213,7 +230,7 @@ void main() {
     expect(home.single.outboundTo, isNotNull);
     expect(home.single.returnFrom, isNotNull);
     expect(home.single.kind, TripMapHomeKind.home);
-    expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+    expect(homePin, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -247,6 +264,7 @@ void main() {
 
     expect(map(tester).home, isEmpty);
     expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+    expect(homeToggle, findsNothing); // nothing to govern, no button
     expect(tester.takeException(), isNull);
   });
 
@@ -260,6 +278,7 @@ void main() {
 
     expect(map(tester).home, isEmpty);
     expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+    expect(homeToggle, findsNothing); // nothing to govern, no button
     expect(tester.takeException(), isNull);
   });
 
@@ -280,7 +299,7 @@ void main() {
     expect(home, hasLength(1));
     expect(home.single.label, 'ALB');
     expect(home.single.point, LatLng(albPoint.lat, albPoint.lng));
-    expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+    expect(homePin, findsOneWidget);
   });
 
   testWidgets('departing and returning through different airports draws two pins',
@@ -304,7 +323,7 @@ void main() {
     expect(home.last.kind, TripMapHomeKind.arrival);
     expect(home.last.outboundTo, isNull);
     expect(home.last.returnFrom, isNotNull);
-    expect(find.byIcon(Icons.flight_takeoff), findsNWidgets(2));
+    expect(homePin, findsNWidgets(2));
   });
 
   testWidgets('one endpoint resolving still draws its own pin',
@@ -323,7 +342,7 @@ void main() {
     expect(home, hasLength(1));
     expect(home.single.label, 'EWR');
     expect(home.single.kind, TripMapHomeKind.arrival);
-    expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+    expect(homePin, findsOneWidget);
   });
 
   testWidgets('a mixed-mode trip keeps its home leg',
@@ -333,7 +352,7 @@ void main() {
     await pumpScreen(tester, tripOverride: makeTrip(travelMode: 'mixed'));
 
     expect(map(tester).home, hasLength(1));
-    expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
+    expect(homePin, findsOneWidget);
   });
 
   testWidgets('no saved home airport never touches the provider',
@@ -344,6 +363,7 @@ void main() {
 
     expect(map(tester).home, isEmpty);
     expect(find.byIcon(Icons.flight_takeoff), findsNothing);
+    expect(homeToggle, findsNothing); // nothing to govern, no button
     expect(tester.takeException(), isNull);
   });
 
@@ -384,6 +404,129 @@ void main() {
     expect(prefsApi.calls, 2);
     expect(map(tester).home, hasLength(1));
     expect(map(tester).home.single.label, 'EWR');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wide card: toggle rides the control row and hides the overlay',
+      (WidgetTester tester) async {
+    await pumpScreen(tester);
+
+    // Default ON at the wide surface: lit toggle, left of the fullscreen
+    // button — beside, not above, the zoom column (PR #291's row shape).
+    expect(homeToggle, findsOneWidget);
+    expect(tester.widget<Icon>(homeToggle).color, Colors.white);
+    final fullscreen = find.byIcon(Icons.fullscreen);
+    expect(
+      tester.getCenter(homeToggle).dx,
+      lessThan(tester.getCenter(fullscreen).dx),
+    );
+    expect(
+      tester.getCenter(homeToggle).dy,
+      closeTo(tester.getCenter(fullscreen).dy, 1),
+    );
+
+    // Hide: the overlay leaves, the way back on stays, the chips stand.
+    await tester.tap(homeToggle);
+    await tester.pumpAndSettle();
+    expect(map(tester).home, isEmpty);
+    expect(homePin, findsNothing);
+    expect(homeToggle, findsOneWidget);
+    expect(tester.widget<Icon>(homeToggle).color, Colors.white38);
+    expect(find.byType(MapLegChips), findsOneWidget);
+
+    // Show again.
+    await tester.tap(homeToggle);
+    await tester.pumpAndSettle();
+    expect(map(tester).home, hasLength(1));
+    expect(homePin, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the choice survives a mid-trip focus round trip',
+      (WidgetTester tester) async {
+    await pumpScreen(tester);
+
+    await tester.tap(homeToggle); // explicit OFF on the overview
+    await tester.pumpAndSettle();
+    expect(map(tester).home, isEmpty);
+
+    // Mid-trip focus empties the candidates, so the button goes with them
+    // (contextual, like the strip's reset globe) — but the choice does not.
+    await tapChip(tester, 'Rome');
+    expect(homeToggle, findsNothing);
+
+    await tapMapReset(tester);
+    expect(homeToggle, findsOneWidget);
+    expect(tester.widget<Icon>(homeToggle).color, Colors.white38);
+    expect(map(tester).home, isEmpty);
+
+    await tester.tap(homeToggle);
+    await tester.pumpAndSettle();
+    expect(map(tester).home, hasLength(1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the choice is live across the inline card and the full map',
+      (WidgetTester tester) async {
+    // Provider, not frozen push params: a toggle made inside the modal must
+    // show on the inline card behind it.
+    await pumpScreen(tester);
+
+    await tester.tap(homeToggle); // hide inline
+    await tester.pumpAndSettle();
+    expect(homePin, findsNothing);
+
+    await tester.tap(find.byIcon(Icons.fullscreen));
+    await tester.pumpAndSettle();
+    expect(find.byType(TripMapScreen), findsOneWidget);
+    // The 800px window keeps the wide default, but the explicit choice wins.
+    expect(homePin, findsNothing);
+    expect(tester.widget<Icon>(homeToggle).color, Colors.white38);
+
+    await tester.tap(homeToggle); // show, from the modal
+    await tester.pumpAndSettle();
+    expect(homePin, findsOneWidget);
+
+    await tester.tap(find.byType(CloseButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(TripMapScreen), findsNothing);
+    expect(map(tester).home, hasLength(1)); // inline sees the modal's choice
+    expect(homePin, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('phone flow: bare preview, toggle lives on the full map, '
+      'an explicit ON rides back to the preview', (WidgetTester tester) async {
+    // The default is a window question on the full map, so shrink the VIEW —
+    // setSurfaceSize only resizes layout, not MediaQuery.sizeOf.
+    tester.view.physicalSize = const Size(375, 667);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpScreen(tester);
+
+    // Phone default: tight city framing, and no toggle on the preview — the
+    // full-screen map (one tap away) carries it.
+    expect(map(tester).home, isEmpty);
+    expect(homePin, findsNothing);
+    expect(homeToggle, findsNothing);
+
+    await tester.tap(find.byIcon(Icons.fullscreen));
+    await tester.pumpAndSettle();
+    expect(find.byType(TripMapScreen), findsOneWidget);
+    expect(homeToggle, findsOneWidget);
+    expect(tester.widget<Icon>(homeToggle).color, Colors.white38);
+
+    await tester.tap(homeToggle);
+    await tester.pumpAndSettle();
+    expect(homePin, findsOneWidget);
+
+    await tester.tap(find.byType(CloseButton));
+    await tester.pumpAndSettle();
+    // The explicit choice overrides the narrow default on the preview too.
+    expect(map(tester).home, hasLength(1));
+    expect(homePin, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
