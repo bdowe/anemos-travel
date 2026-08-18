@@ -60,7 +60,11 @@ Paths below are relative to `src/packages/flutter-app/` unless rooted.
   seed; the gradient app bar stays teal in dark mode by design.
 - **Proportion**: surfaces neutral (warm, plaster-leaning); teal is
   identity + the primary action; tool accents and status colors appear at
-  chip-and-pin scale, **never as fields**.
+  chip-and-pin scale, **never as fields**. ONE recorded exception (doc
+  v1.2): the signed-out landing page commits to the dark
+  `landingCanvas` family (`app_colors.dart` — canvas ≈#00231D, glass
+  ladder 6/8/10/12/14%, ink ladder 35/60/70/85%). The exception ends at
+  sign-in; new landing surfaces pick a ladder rung, never a fresh alpha.
 - **Heritage gold `#E8C452`/`#B98B1E` lives in the mark and nowhere
   else** — never text, never a button, never a UI accent.
 - Semantic colors come in two registers on purpose: translucent
@@ -73,14 +77,17 @@ Paths below are relative to `src/packages/flutter-app/` unless rooted.
 - **No raw hex in widgets.** The only sanctioned raw-hex sites outside
   `lib/theme/` are `app_map.dart` (`#0A0F1A` canvas) and
   `rick_roll_overlay.dart` (easter egg). Photos are never teal-tinted —
-  `heroScrim`/`mapScrim` are the only brand layers an image carries.
+  `heroScrim`/`mapScrim` are the brand layers an image carries, plus one
+  recorded dissolve: `landingHeroBlend` may end the landing hero photo
+  into the canvas, but never sets text on a photo (still heroScrim's job).
 
 ## Type — three faces, three jobs
 
 - **Cinzel 600** = the wordmark, and only the wordmark, and only via
   `BrandWordmark` (live text; small-caps ANEMOS; tracking is measured
-  per surface — app bar 19/1.0, hero 24–40/1.5, web splash 22/3.0 is
-  the tuned outlier). Never retype it, never bake it — except the
+  per surface — app bar 19/1.0, auth 26/1.5, the boot splash (web
+  shell and in-app) 22/3.0 is the tuned outlier). Never retype it,
+  never bake it — except the
   sanctioned rasters (og-card, lockup), which `scripts/brand-render.sh`
   renders; nothing else does.
 - **Marcellus** = headings and app-bar page titles. It ships in ONE
@@ -104,8 +111,9 @@ Paths below are relative to `src/packages/flutter-app/` unless rooted.
   PNGs (`scripts/brand-render.sh` owns every raster); never load
   `lockup.svg` as a plain `<img>`.
 - Sizes shipped today: 36 standard in chrome, 28 default, 72 auth,
-  52/96 hero, legible floor 16 (favicon). Clear space ≥ 25% of mark
-  height on all sides.
+  96 boot splash, legible floor 16 (favicon). The signed-out landing
+  carries no in-page mark — its gradient app bar is the one brand
+  carrier. Clear space ≥ 25% of mark height on all sides.
 - The policy's home is `lib/widgets/brand_logo.dart` — re-litigate it
   there, not at a call site.
 
@@ -155,7 +163,8 @@ Each is an instant finding in review:
 - Off-scale magic values: spacing not on the 4/8/12/16/24/32 ladder,
   radii other than 8/12/20/full, ad-hoc `BoxShadow`s.
 - Teal-tinted photos, purple-blue "AI gradients", or any hue used as a
-  large field that isn't the brand gradient.
+  large field that isn't the brand gradient (one recorded exception:
+  `landingCanvas` on the signed-out landing — doc v1.2).
 - M3 defaults where the theme already decided: surface tint, default
   card shadows, `ColorScheme` roles bypassed by raw `Colors.*`.
 

@@ -100,7 +100,7 @@ class _FeatureCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
+              color: AppColors.landingWell,
               borderRadius: AppRadius.smAll,
             ),
             child: Icon(icon, color: Colors.white, size: 26),
@@ -117,7 +117,7 @@ class _FeatureCard extends StatelessWidget {
           Text(
             description,
             style: theme.textTheme.bodySmall
-                ?.copyWith(color: Colors.white.withValues(alpha: 0.7)),
+                ?.copyWith(color: AppColors.landingInkMuted),
           ),
         ],
       ),

@@ -170,7 +170,7 @@ class _LandingHeroState extends ConsumerState<LandingHero> {
                     maxLines: narrow ? 2 : null,
                     overflow: narrow ? TextOverflow.ellipsis : null,
                     style: theme.textTheme.bodyLarge?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.85),
+                      color: AppColors.landingInkStrong,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -211,9 +211,9 @@ class _LandingHeroState extends ConsumerState<LandingHero> {
       decoration: InputDecoration(
         counterText: '', // maxLength guard only — no visible counter.
         hintText: l10n.landingPromptHint,
-        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+        hintStyle: TextStyle(color: AppColors.landingInkFaint),
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.10),
+        fillColor: AppColors.landingField,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.lg,
@@ -225,7 +225,7 @@ class _LandingHeroState extends ConsumerState<LandingHero> {
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.lgAll,
           borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.7),
+            color: AppColors.landingInkMuted,
             width: 2,
           ),
         ),
@@ -242,8 +242,7 @@ class _LandingHeroState extends ConsumerState<LandingHero> {
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: AppColors.brandDark,
-                  disabledBackgroundColor:
-                      Colors.white.withValues(alpha: 0.35),
+                  disabledBackgroundColor: AppColors.landingInkDisabled,
                   disabledForegroundColor:
                       AppColors.brandDark.withValues(alpha: 0.6),
                 ),
@@ -278,7 +277,7 @@ class _LandingHeroState extends ConsumerState<LandingHero> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              backgroundColor: Colors.white.withValues(alpha: 0.12),
+              backgroundColor: AppColors.landingWell,
               side: BorderSide(color: AppColors.landingHairline),
               onPressed: () => _prefill(s.text),
             ),

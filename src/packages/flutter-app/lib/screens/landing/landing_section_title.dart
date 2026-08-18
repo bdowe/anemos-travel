@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/spacing.dart';
 
@@ -36,7 +37,7 @@ class LandingSectionTitle extends StatelessWidget {
             subtitle!,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.7),
+              color: AppColors.landingInkMuted,
             ),
           ),
         ],

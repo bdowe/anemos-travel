@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import 'place_photo_card.dart'
     show kPlaceCardWidth, kPlaceCardHeight, kPlaceCardImageHeight;
@@ -96,7 +97,8 @@ class DestinationSuggestionCard extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: AppSpacing.xs, vertical: 2),
-                          color: Colors.black.withValues(alpha: 0.45),
+                          decoration:
+                              BoxDecoration(gradient: AppColors.heroScrim),
                           child: Text(
                             credit,
                             maxLines: 1,

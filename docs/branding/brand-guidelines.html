@@ -315,7 +315,7 @@
 <header class="cover">
   <div class="cover-top">
     <span>Brand guidelines</span>
-    <span>Version 1.1 · August 2026</span>
+    <span>Version 1.2 · August 2026</span>
   </div>
   <div class="cover-main">
     <svg viewBox="0 0 540 540" role="img" aria-label="Anemos wind-rose mark, light cut">
@@ -498,7 +498,7 @@
           <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
         </g>
       </svg>
-      <p class="cap"><b>Dark cut — mark.svg</b>Neutral page surfaces and scrimmed imagery: auth screen, nav rail, landing hero, favicon.</p>
+      <p class="cap"><b>Dark cut — mark.svg</b>Neutral page surfaces and scrimmed imagery: auth screen, nav rail, favicon.</p>
     </div>
     <div class="cut on-grad">
       <svg viewBox="0 0 540 540" aria-hidden="true">
@@ -527,7 +527,7 @@
   <p>The wordmark is <strong>live text, never an image</strong>: Cinzel SemiBold (a static w600 instance, subsetted). Cinzel has no true lowercase, so the string stays "Anemos" and paints as small-caps ANEMOS. Tracking opens as size grows — caps run wide, and each surface was measured separately.</p>
   <div class="wm-demo" style="margin-top:18px">
     <div class="wm">ANEMOS</div>
-    <p class="cap">Landing hero · 24–40&nbsp;px · letter-spacing 1.5 · line-height 1.1 · white with a black-26 shadow (blur 8, offset 0,2)</p>
+    <p class="cap">Display specimen at 40&nbsp;px. Shipped surfaces: auth screen 26&nbsp;px / letter-spacing 1.5; the boot splash (web shell and in-app) is the tuned outlier at 22&nbsp;px / 3.0. Held in reserve: if a wordmark ever returns to photography, it goes white with a black-26 shadow (blur 8, offset 0,2).</p>
     <div class="at19">ANEMOS</div>
     <p class="cap">App bar · 19&nbsp;px · letter-spacing 1.0 · inherits the bar's white foreground</p>
   </div>
@@ -551,7 +551,7 @@
     </div>
     <div class="small" style="max-width:380px">
       <p><strong>Clear space:</strong> keep at least 25% of the mark's height free on every side (the dashed frame). Nothing enters it — not the wordmark's descenders, not badge counts, not card edges.</p>
-      <p style="margin-top:10px"><strong>Sizes in product:</strong> 36&nbsp;px standard in chrome (app bar, nav rail) · 28&nbsp;px default (<code>BrandLogo.mark</code>) · 72&nbsp;px auth screen · 52 / 96&nbsp;px landing hero · legible down to 16&nbsp;px (the favicon is the floor).</p>
+      <p style="margin-top:10px"><strong>Sizes in product:</strong> 36&nbsp;px standard in chrome (app bar, nav rail) · 28&nbsp;px default (<code>BrandLogo.mark</code>) · 72&nbsp;px auth screen · 96&nbsp;px boot splash · legible down to 16&nbsp;px (the favicon is the floor). The signed-out landing page deliberately carries no in-page mark — its gradient app bar is the one brand carrier.</p>
     </div>
   </div>
 
@@ -629,6 +629,25 @@
       <div class="chip" style="background:#0A0F1A"></div>
       <div class="meta"><b>appMapBackground</b>#0A0F1A. The space-dark canvas behind map tiles (<code>app_map.dart</code>).</div>
     </div>
+  </div>
+
+  <div class="keep">
+  <h3>The landing dark canvas</h3>
+  <p class="small muted" style="margin-bottom:14px">The signed-out landing page is the <strong>one sanctioned exception</strong> to "surfaces stay neutral": it commits to a dark brand look in both theme modes, on a teal-derived field of its own. The exception ends at sign-in — no in-app surface may adopt this family. Tokens in <code>app_colors.dart</code> (the landing family).</p>
+  <div class="swatchcards">
+    <div class="sw">
+      <div class="chip" style="background:#00231D"></div>
+      <div class="meta"><b>landingCanvas</b>brandDark lerped 55% toward black (≈#00231D). The full-page field behind every landing section — the second permitted large brand field, after brandGradient.</div>
+    </div>
+    <div class="sw">
+      <div class="chip" style="background:linear-gradient(to bottom, rgba(0,35,29,0) , #00231D), url() #4E6963"></div>
+      <div class="meta"><b>landingHeroBlend</b>canvas 0% → 100%, top → bottom. A <em>dissolve</em> layer, third beside the two scrims: it ends the hero photo into the canvas. Never used to set text on a photo — that is still heroScrim's job.</div>
+    </div>
+    <div class="sw">
+      <div class="chip" style="background:#00231D"><div style="margin:14px;height:56px;border-radius:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14)"></div></div>
+      <div class="meta"><b>Glass &amp; ink ladders</b>Fills are white at named strengths — card 6% · wellFaint 8% · field 10% · well 12% · hairline 14%; text and strokes take the ink ladder (disabled 35% · faint 60% · muted 70% · strong 85%). New landing surfaces pick a rung, never a fresh alpha.</div>
+    </div>
+  </div>
   </div>
 
   <h3>Heritage gold</h3>
@@ -736,8 +755,9 @@
   <table>
     <thead><tr><th>Style</th><th>Face</th><th>Size / spacing</th><th>Where</th></tr></thead>
     <tbody>
-      <tr><td>Wordmark — hero</td><td>Cinzel 600</td><td>24–40&nbsp;px · ls 1.5 · lh 1.1</td><td>Landing hero (white, black-26 shadow)</td></tr>
+      <tr><td>Wordmark — auth</td><td>Cinzel 600</td><td>26&nbsp;px · ls 1.5</td><td>Auth screen, under the 72&nbsp;px mark</td></tr>
       <tr><td>Wordmark — app bar</td><td>Cinzel 600</td><td>19&nbsp;px · ls 1.0</td><td>Every gradient app bar</td></tr>
+      <tr><td>Wordmark — splash</td><td>Cinzel 600</td><td>22&nbsp;px · ls 3.0</td><td>Boot splash, web shell and in-app (the tuned outlier)</td></tr>
       <tr><td>headlineLarge</td><td>Marcellus 400</td><td>34&nbsp;px · lh 1.2</td><td>Page-scale headings</td></tr>
       <tr><td>headlineMedium</td><td>Marcellus 400</td><td>30&nbsp;px · lh 1.2</td><td>Section heads</td></tr>
       <tr><td>headlineSmall</td><td>Marcellus 400</td><td>26&nbsp;px · lh 1.2</td><td>Card-scale heads</td></tr>
@@ -805,7 +825,7 @@
   </div>
   <figcaption>The destination set (12 cities, <code>assets/images/destinations/</code>). Warm hour, saturated sea and stone, a human scale somewhere in frame. Every photo is credited — <code>CREDITS.md</code> sits beside the set and <code>LICENSES.md</code> beside the heroes; new photography joins those files or doesn't ship.</figcaption>
   <div class="note">
-    <p><strong>Rules of the frame.</strong> Place text over photography only with <code>heroScrim</code> (brand surfaces) or <code>mapScrim</code> (satellite imagery) underneath. Cards crop photos at md radius; heroes at lg. Never tint a photo teal — the scrim is the only brand layer a photo carries. Product screenshots ride on the real UI, not mockup chrome.</p>
+    <p><strong>Rules of the frame.</strong> Place text over photography only with <code>heroScrim</code> (brand surfaces) or <code>mapScrim</code> (satellite imagery) underneath. Cards crop photos at md radius; heroes at lg. Never tint a photo teal — the scrims are the only brand layers a photo carries, plus the one recorded <code>landingHeroBlend</code> dissolve, which ends the landing hero photo into the canvas and never sets text. Product screenshots ride on the real UI, not mockup chrome.</p>
   </div>
 </section>
 
@@ -869,7 +889,7 @@
       </svg>
       <span class="w">ANEMOS</span>
     </div>
-    <div class="small" style="text-align:right">Brand guidelines · v1.1 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
+    <div class="small" style="text-align:right">Brand guidelines · v1.2 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
   </div>
 </footer>
 
