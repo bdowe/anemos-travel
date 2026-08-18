@@ -1165,5 +1165,6 @@
   "wearPackRainGear": "Un paraguas o chubasquero",
   "wearPackSunProtection": "Protección solar",
   "rickRollCaption": "Never gonna give you up",
-  "rickRollDismissHint": "toca donde sea para salir"
+  "rickRollDismissHint": "toca donde sea para salir",
+  "splashLoading": "Cargando"
 }

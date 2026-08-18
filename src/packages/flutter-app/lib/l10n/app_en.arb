@@ -2712,5 +2712,9 @@
   "rickRollDismissHint": "tap anywhere to escape",
   "@rickRollDismissHint": {
     "description": "Hint under the easter-egg caption telling the user how to close it. Deliberately not 'press esc' — the egg has a touch trigger, and a phone has no Escape key. Escape still works; a tap is the instruction that is true on every device."
+  },
+  "splashLoading": "Loading",
+  "@splashLoading": {
+    "description": "Screen-reader label on the boot splash's breathing-dots loading signal. The dots themselves are decorative; this is the only text the loading state speaks."
   }
 }

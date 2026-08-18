@@ -4102,4 +4102,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rickRollDismissHint => 'tap anywhere to escape';
+
+  @override
+  String get splashLoading => 'Loading';
 }

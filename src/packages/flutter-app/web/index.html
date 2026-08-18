@@ -69,9 +69,15 @@
     Boot splash shown while flutter_bootstrap.js + main.dart.js download and
     the engine starts. Pixel-matched to the in-app SplashScreen (lib/screens/
     splash_screen.dart) — same gradient, mark geometry (96px bare light mark,
-    no plate), wordmark, and spinner position — so the flutter-first-frame
-    handoff reads as one continuous screen. If you change dimensions here,
-    change splash_screen.dart too.
+    no plate, centre 24px above viewport centre), pulse, wordmark (centre
+    60px below viewport centre) and bottom loading dots — so the
+    flutter-first-frame handoff reads as one continuous screen. If you change
+    dimensions here, change splash_screen.dart too.
+
+    The mark + wordmark lockup rides high of centre so the pair reads
+    optically centred as one unit; the loading signal is three breathing
+    dots parked at the bottom edge, outside the brand moment, so a fast boot
+    shows a still composition and a slow one still reads deliberately alive.
 
     The native mobile splash (flutter_native_splash) deliberately stays
     mark-only: it cannot render text, and web is the primary surface.
@@ -116,7 +122,10 @@
     #splash.splash-hidden { opacity: 0; }
     .splash-mark {
       position: absolute;
-      top: 50%;
+      /* 24px above centre: the mark + wordmark lockup below is ~145px tall,
+         so lifting the mark drops the pair's optical centre onto the
+         viewport centre instead of hanging it low. */
+      top: calc(50% - 24px);
       left: 50%;
       /* The pulse animates `transform`, so the keyframes must repeat this
          centering translate or the animation stomps it. */
@@ -138,36 +147,59 @@
     }
     .splash-wordmark {
       position: absolute;
-      /* Centre line 74px below the mark's, which clears the 96px mark's
-         bottom edge (+48) with room to spare. Deliberately NOT inside
-         .splash-mark: that element pulses, and the wordmark should not. */
-      top: calc(50% + 74px);
+      /* Centre line 60px below viewport centre: 84px below the lifted
+         mark's, which keeps ≥24px (25% of mark height — the guideline's
+         clear space) between the mark's bottom edge and the caps.
+         Deliberately NOT inside .splash-mark: that element pulses, and the
+         wordmark should not. */
+      top: calc(50% + 60px);
       left: 50%;
       transform: translate(-50%, -50%);
       font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
       font-weight: 600;
       font-size: 22px;
       letter-spacing: 3px;
-      /* Cinzel has no lowercase, so it paints caps on its own — the fallback
-         serif does not, and this keeps the font swap from also being a case
-         change. */
-      text-transform: uppercase;
+      /* No text-transform: BrandWordmark paints the mixed-case string and
+         Cinzel maps its lowercase to small caps, so the in-app wordmark is
+         cap-A + small-caps NEMOS everywhere. Uppercasing here made this one
+         wordmark all full caps — the twins' end states never matched. The
+         cost is that the pre-swap Georgia fallback shows true lowercase for
+         a beat; the end state winning over the fallback is the right trade. */
       color: #FFFFFF;
       white-space: nowrap;
     }
-    .splash-spinner {
+    .splash-dots {
       position: absolute;
-      top: calc(50% + 124px);
+      /* Parked at the bottom edge, clear of the brand moment; the safe-area
+         term keeps it above the home indicator in installed-PWA fullscreen. */
+      bottom: calc(48px + env(safe-area-inset-bottom, 0px));
       left: 50%;
-      width: 24px;
-      height: 24px;
-      margin: -12px 0 0 -12px;
-      border: 2.5px solid rgba(255, 255, 255, 0.30);
-      border-top-color: rgba(255, 255, 255, 0.95);
-      border-radius: 50%;
-      animation: splash-spin 1s linear infinite;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
     }
-    @keyframes splash-spin { to { transform: rotate(360deg); } }
+    .splash-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      opacity: 0.25;
+      animation: splash-dot 1.8s ease-in-out infinite;
+    }
+    /* Negative delays start the wave mid-cycle — steady state from the very
+       first frame, matching the Flutter twin's modulo phase (300ms
+       left-to-right stagger on the pulse's own 1.8s rhythm). */
+    .splash-dot:nth-child(2) { animation-delay: -1.5s; }
+    .splash-dot:nth-child(3) { animation-delay: -1.2s; }
+    @keyframes splash-dot {
+      0%, 100% { opacity: 0.25; }
+      50%      { opacity: 0.85; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .splash-mark, .splash-dot { animation: none; }
+      /* The wave's midpoint, so the still state matches the Flutter twin. */
+      .splash-dot { opacity: 0.55; }
+    }
   </style>
 
 </head>
@@ -179,7 +211,13 @@
       <img src="splash/anemos_mark_light.png" alt="">
     </div>
     <div class="splash-wordmark">Anemos</div>
-    <div class="splash-spinner"></div>
+    <!-- Decorative: the loading state is announced by the app once it boots;
+         these dots are the visual signal only. -->
+    <div class="splash-dots" aria-hidden="true">
+      <div class="splash-dot"></div>
+      <div class="splash-dot"></div>
+      <div class="splash-dot"></div>
+    </div>
   </div>
 
   <script>
