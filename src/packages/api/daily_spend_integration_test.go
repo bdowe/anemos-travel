@@ -299,15 +299,15 @@ func TestLegKeyedExpenseIsUpsertNotDuplicate(t *testing.T) {
 
 	add := map[string]any{
 		"label": "Food & drink · Lisbon", "category": "food",
-		"planned_amount": 200, "leg_key": "Lisbon",
+		"planned_amount": 200, "leg_key": "Lisbon", "leg_plan": true,
 	}
 	rec := doJSON(t, "POST", path, token, add)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("first add = %d: %s", rec.Code, rec.Body.String())
 	}
 	first := decode(t, rec)
-	if first["leg_key"] != "Lisbon" {
-		t.Fatalf("leg_key must ride the wire so the card can find its own line: %v", first)
+	if first["leg_key"] != "Lisbon" || first["leg_plan"] != true {
+		t.Fatalf("leg_key + leg_plan must ride the wire so the card can find its own line: %v", first)
 	}
 	// A city plan is the TRAVELER's, never a system mirror — no booking-state
 	// change may reach it.
@@ -338,7 +338,7 @@ func TestLegKeyedExpenseIsUpsertNotDuplicate(t *testing.T) {
 	// category would be too.
 	if rec := doJSON(t, "POST", path, token, map[string]any{
 		"label": "Food & drink · Porto", "category": "food",
-		"planned_amount": 135, "leg_key": "Porto",
+		"planned_amount": 135, "leg_key": "Porto", "leg_plan": true,
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("second city = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -388,10 +388,10 @@ func TestLegKeyedExpenseRejectsUnknownAndConflictingKeys(t *testing.T) {
 	}
 }
 
-// PATCH has no mechanism to move a line to another city — the same shape as
-// TestPatchTripCannotSetOrigin. Which leg a plan belongs to is decided once, by
-// the one writer, against the trip's real legs.
-func TestPatchExpenseCannotSetLegKey(t *testing.T) {
+// A city PLAN's city is fixed at creation (00070's rule, narrowed by 00072 to
+// the rows it was written for — the shape of TestPatchTripCannotSetOrigin).
+// The refusal covers the whole request: a 409, never a partial apply.
+func TestPatchCannotMoveACityPlan(t *testing.T) {
 	resetDB(t)
 	owner, token := createTestUser(t, "legkey-patch@example.com")
 	trip := createTestTrip(t, owner.ID, 0)
@@ -400,25 +400,220 @@ func TestPatchExpenseCannotSetLegKey(t *testing.T) {
 
 	created := decode(t, doJSON(t, "POST", path, token, map[string]any{
 		"label": "Food & drink · Lisbon", "category": "food",
-		"planned_amount": 200, "leg_key": "Lisbon",
+		"planned_amount": 200, "leg_key": "Lisbon", "leg_plan": true,
 	}))
 	id := created["id"].(string)
 
-	patched := decode(t, doJSON(t, "PATCH", path+"/"+id, token,
-		map[string]any{"label": "Eating in Lisbon", "leg_key": "Porto"}))
-	if patched["leg_key"] != "Lisbon" {
-		t.Fatalf("PATCH moved the line to another city: %v", patched["leg_key"])
+	if rec := doJSON(t, "PATCH", path+"/"+id, token,
+		map[string]any{"label": "Eating in Lisbon", "leg_key": "Porto"}); rec.Code != http.StatusConflict {
+		t.Fatalf("moving a plan = %d, want 409: %s", rec.Code, rec.Body.String())
 	}
-	if patched["label"] != "Eating in Lisbon" {
-		t.Fatalf("the rest of the PATCH should still apply: %v", patched)
+	var rows []map[string]any
+	if err := json.Unmarshal(doJSON(t, "GET", path, token, nil).Body.Bytes(), &rows); err != nil || len(rows) != 1 {
+		t.Fatalf("decode expenses: %v (%d rows)", err, len(rows))
 	}
+	if rows[0]["leg_key"] != "Lisbon" || rows[0]["label"] != "Food & drink · Lisbon" {
+		t.Fatalf("a refused PATCH must apply nothing: %v", rows[0])
+	}
+	// Clearing is a move too — same refusal.
+	if rec := doJSON(t, "PATCH", path+"/"+id, token,
+		map[string]any{"leg_key": ""}); rec.Code != http.StatusConflict {
+		t.Fatalf("clearing a plan's city = %d, want 409", rec.Code)
+	}
+}
 
-	// A plain expense stays plain — PATCH cannot give one a city either.
+// Since 00072 an ordinary line can be filed under a city, re-filed, and
+// un-filed — with every key still canonicalized against the trip's real legs
+// (the 00064 rule; PATCH "" clears, deliberately asymmetric with POST where
+// "" is a 400).
+func TestPatchTagsAndClearsCity(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "legkey-tag@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	seedTwoCityTrip(t, trip, owner.ID)
+	path := "/api/v1/trips/" + trip.ID.String() + "/budget/expenses"
+
 	plain := decode(t, doJSON(t, "POST", path, token,
 		map[string]any{"label": "Souvenirs", "planned_amount": 20}))
-	got := decode(t, doJSON(t, "PATCH", path+"/"+plain["id"].(string), token,
+	id := plain["id"].(string)
+	if plain["leg_key"] != nil || plain["leg_plan"] != false {
+		t.Fatalf("a plain add carries no city and is no plan: %v", plain)
+	}
+
+	tagged := decode(t, doJSON(t, "PATCH", path+"/"+id, token,
 		map[string]any{"leg_key": "Lisbon"}))
-	if got["leg_key"] != nil {
-		t.Fatalf("PATCH gave a plain line a city: %v", got["leg_key"])
+	if tagged["leg_key"] != "Lisbon" || tagged["leg_plan"] != false {
+		t.Fatalf("tagging files the line without minting a plan: %v", tagged)
+	}
+	moved := decode(t, doJSON(t, "PATCH", path+"/"+id, token,
+		map[string]any{"leg_key": "Porto"}))
+	if moved["leg_key"] != "Porto" {
+		t.Fatalf("re-filing = %v, want Porto", moved["leg_key"])
+	}
+	cleared := decode(t, doJSON(t, "PATCH", path+"/"+id, token,
+		map[string]any{"leg_key": ""}))
+	if cleared["leg_key"] != nil {
+		t.Fatalf("empty string must clear the tag: %v", cleared["leg_key"])
+	}
+	if rec := doJSON(t, "PATCH", path+"/"+id, token,
+		map[string]any{"leg_key": "Atlantis"}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown city = %d, want 400", rec.Code)
+	}
+}
+
+// Filing a booking's line under a city is organization, not authorship: a
+// leg_key-only PATCH must leave `auto` alone (the planned_amount rule), or
+// unbook would strand the payment the system still owes the row.
+func TestTaggingDoesNotFlipAuto(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "legkey-auto@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	seedTwoCityTrip(t, trip, owner.ID)
+	path := "/api/v1/trips/" + trip.ID.String() + "/budget/expenses"
+
+	linked := decode(t, doJSON(t, "POST", path, token, map[string]any{
+		"label": "Hotel Mundial", "category": "lodging", "actual_amount": 400,
+		"source_kind": "booking_todo", "source_id": uuid.NewString(),
+	}))
+	if linked["auto"] != true {
+		t.Fatalf("a linked add must be auto: %v", linked)
+	}
+	id := linked["id"].(string)
+
+	tagged := decode(t, doJSON(t, "PATCH", path+"/"+id, token,
+		map[string]any{"leg_key": "Lisbon"}))
+	if tagged["auto"] != true {
+		t.Fatalf("a leg_key-only PATCH is not a takeover: %v", tagged)
+	}
+	// The control: a content edit IS a takeover, exactly as before.
+	relabelled := decode(t, doJSON(t, "PATCH", path+"/"+id, token,
+		map[string]any{"label": "Hotel Mundial Lisboa"}))
+	if relabelled["auto"] != false {
+		t.Fatalf("a content PATCH must still flip auto: %v", relabelled)
+	}
+}
+
+// The 00072 point: many ordinary lines can share a city (the old wide unique
+// index forbade exactly this), while the plan slot stays one-per-city-per-
+// category underneath them.
+func TestManyLinesCanShareACity(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "legkey-many@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	seedTwoCityTrip(t, trip, owner.ID)
+	path := "/api/v1/trips/" + trip.ID.String() + "/budget/expenses"
+
+	ids := map[string]bool{}
+	for i, label := range []string{"Dinner at Ramiro", "Pastéis run", "Fado night"} {
+		rec := doJSON(t, "POST", path, token, map[string]any{
+			"label": label, "category": "food", "planned_amount": 30 + i,
+			"leg_key": "Lisbon",
+		})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("tagged add %d = %d: %s", i, rec.Code, rec.Body.String())
+		}
+		row := decode(t, rec)
+		if row["leg_plan"] != false {
+			t.Fatalf("an ordinary tagged line is not a plan: %v", row)
+		}
+		ids[row["id"].(string)] = true
+	}
+	if len(ids) != 3 {
+		t.Fatalf("three tagged food lines must be three rows, got %d", len(ids))
+	}
+
+	// The plan slot still upserts to ONE row beneath them.
+	first := decode(t, doJSON(t, "POST", path, token, map[string]any{
+		"label": "Food & drink · Lisbon", "category": "food",
+		"planned_amount": 200, "leg_key": "Lisbon", "leg_plan": true,
+	}))
+	again := doJSON(t, "POST", path, token, map[string]any{
+		"label": "Food & drink · Lisbon", "category": "food",
+		"planned_amount": 999, "leg_key": "Lisbon", "leg_plan": true,
+	})
+	if again.Code != http.StatusOK {
+		t.Fatalf("second plan tap = %d, want 200: %s", again.Code, again.Body.String())
+	}
+	if decode(t, again)["id"] != first["id"] {
+		t.Fatalf("the plan slot must stay one row")
+	}
+}
+
+// A plan slot with no city has no identity to upsert on.
+func TestPlanRowRequiresLegKey(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "legplan-bare@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	seedTwoCityTrip(t, trip, owner.ID)
+	if rec := doJSON(t, "POST", "/api/v1/trips/"+trip.ID.String()+"/budget/expenses", token,
+		map[string]any{"label": "Food", "category": "food", "planned_amount": 100,
+			"leg_plan": true}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("leg_plan without leg_key = %d, want 400", rec.Code)
+	}
+}
+
+// A stay-linked expense gets its city stamped by the SERVER (00072) — and the
+// stamp is a fill-in, never an overwrite: once the traveler re-files the line,
+// a re-book must not move it back.
+func TestStayExpenseIsStampedWithItsCity(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "legkey-stay@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	seedTwoCityTrip(t, trip, owner.ID)
+	path := "/api/v1/trips/" + trip.ID.String() + "/budget/expenses"
+
+	// The seeded "Lisbon Stay" — fetched for its id, the link target.
+	q := store.New(dbPool)
+	stays, err := q.ListAccommodationsByTrip(context.Background(), trip.ID)
+	if err != nil || len(stays) == 0 {
+		t.Fatalf("list stays: %v", err)
+	}
+	var lisbonStay store.Accommodation
+	for _, s := range stays {
+		if s.Name == "Lisbon Stay" {
+			lisbonStay = s
+		}
+	}
+
+	linked := decode(t, doJSON(t, "POST", path, token, map[string]any{
+		"label": "Lisbon Stay", "category": "lodging", "actual_amount": 480,
+		"source_kind": "accommodation", "source_id": lisbonStay.ID.String(),
+	}))
+	if linked["leg_key"] != "Lisbon" {
+		t.Fatalf("a stay-linked line lands under its city with nobody typing: %v", linked)
+	}
+	if linked["leg_plan"] != false || linked["auto"] != true {
+		t.Fatalf("the stamp is a tag on a booking mirror, never a plan: %v", linked)
+	}
+
+	// The traveler re-files it; a refresh (re-book) must not move it back.
+	id := linked["id"].(string)
+	if got := decode(t, doJSON(t, "PATCH", path+"/"+id, token,
+		map[string]any{"leg_key": "Porto"})); got["leg_key"] != "Porto" {
+		t.Fatalf("re-file: %v", got)
+	}
+	refreshed := decode(t, doJSON(t, "POST", path, token, map[string]any{
+		"label": "Lisbon Stay", "category": "lodging", "actual_amount": 510,
+		"source_kind": "accommodation", "source_id": lisbonStay.ID.String(),
+	}))
+	if refreshed["id"] != id {
+		t.Fatalf("refresh must land on the same row")
+	}
+	if refreshed["leg_key"] != "Porto" {
+		t.Fatalf("the stamp is fill-in only — a re-book moved the traveler's filing: %v", refreshed["leg_key"])
+	}
+}
+
+// A flight is between cities: segment- and todo-linked lines stay untagged.
+func TestSegmentExpenseIsNotStamped(t *testing.T) {
+	resetDB(t)
+	owner, token := createTestUser(t, "legkey-segment@example.com")
+	trip := createTestTrip(t, owner.ID, 0)
+	seedTwoCityTrip(t, trip, owner.ID)
+	linked := decode(t, doJSON(t, "POST", "/api/v1/trips/"+trip.ID.String()+"/budget/expenses", token,
+		map[string]any{"label": "LIS → OPO", "category": "transport", "actual_amount": 60,
+			"source_kind": "segment", "source_id": uuid.NewString()}))
+	if linked["leg_key"] != nil {
+		t.Fatalf("a segment line is between cities, not in one: %v", linked["leg_key"])
 	}
 }

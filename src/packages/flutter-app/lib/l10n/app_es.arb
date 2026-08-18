@@ -281,6 +281,20 @@
   "budgetEditExpenseTitle": "Editar gasto",
   "budgetSetTargetTitle": "Fijar objetivo de presupuesto",
   "budgetCategoryLabel": "Categoría",
+  "budgetGroupBy": "Agrupar por",
+  "budgetGroupByCategory": "Categoría",
+  "budgetGroupByCity": "Ciudad",
+  "budgetGroupRestOfTrip": "Resto del viaje",
+  "budgetCityLabel": "Ciudad",
+  "budgetCityNone": "Sin ciudad",
+  "budgetCityPlanLocked": "Este es el plan diario de {city}: no se puede cambiar de ciudad.",
+  "@budgetCityPlanLocked": {
+    "placeholders": {
+      "city": {
+        "type": "String"
+      }
+    }
+  },
   "budgetLabelField": "Etiqueta",
   "budgetAmount": "Importe",
   "budgetCurrencyLabel": "Moneda",

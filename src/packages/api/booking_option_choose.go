@@ -174,6 +174,7 @@ func chooseBookingOptionHandler(w http.ResponseWriter, r *http.Request) {
 	resp := ChooseBookingOptionResponse{}
 	var promotedAcc, promotedSeg pgtype.UUID
 	var expenseSourceID uuid.UUID
+	var stayLegKey *string
 	category := ""
 
 	if todo.Kind == "stay" {
@@ -194,6 +195,15 @@ func chooseBookingOptionHandler(w http.ResponseWriter, r *http.Request) {
 		promotedAcc = pgtype.UUID{Bytes: acc.ID, Valid: true}
 		expenseSourceID = todo.ID
 		category = expenseCategoryForLeg("stay", "")
+		// Same server-side city stamp the booked-flip POST gets (00072):
+		// a hotel chosen from the shortlist must land under its city too, or
+		// the answer to "where is this line filed" depends on which door the
+		// traveler booked through. Best-effort — a failed derivation leaves
+		// the line untagged, never blocks the choice. Segments stay untagged:
+		// a flight is between cities.
+		if legs, _, err := tripRenderLegs(ctx, q, trip); err == nil {
+			stayLegKey = legKeyForStay(legs, acc)
+		}
 		accResp := toAccommodationResponse(acc)
 		resp.Accommodation = &accResp
 	} else {
@@ -265,6 +275,7 @@ func chooseBookingOptionHandler(w http.ResponseWriter, r *http.Request) {
 			ActualAmount: opt.Price,
 			SourceKind:   ptrTo("booking_todo"),
 			SourceID:     pgtype.UUID{Bytes: expenseSourceID, Valid: true},
+			LegKey:       stayLegKey, // nil on transport; fill-in-only on refresh
 		})
 		if err != nil {
 			// The booking itself is the point; a full budget or a racing write

@@ -67,11 +67,17 @@ class ExpenseDraft {
   /// over-budget warning.
   final bool planned;
 
+  /// The city leg the next add will be filed under (00072), or null for "no
+  /// city". A canonical `RenderLeg.Key` (`Rome`, `Rome#2`), never a localized
+  /// label — the same spelling [Expense.legKey] carries.
+  final String? legKey;
+
   const ExpenseDraft({
     this.label = '',
     this.amountText = '',
     this.category = 'general',
     this.planned = true,
+    this.legKey,
   });
 
   ExpenseDraft copyWith({
@@ -79,12 +85,15 @@ class ExpenseDraft {
     String? amountText,
     String? category,
     bool? planned,
+    String? legKey,
+    bool clearLegKey = false,
   }) =>
       ExpenseDraft(
         label: label ?? this.label,
         amountText: amountText ?? this.amountText,
         category: category ?? this.category,
         planned: planned ?? this.planned,
+        legKey: clearLegKey ? null : (legKey ?? this.legKey),
       );
 }
 
@@ -108,16 +117,37 @@ class ExpenseDraftNotifier extends StateNotifier<ExpenseDraft> {
     state = state.copyWith(planned: planned);
   }
 
-  /// After a successful save. Deliberately keeps the category AND the
-  /// planned/paid pick: both are choices, and a traveler entering eight
-  /// estimates before a trip — or logging five purchases during one — should
-  /// state it once, not once per line.
+  /// null = "no city". Empty string is not a value here — the wire's
+  /// ''-clears sentinel belongs to the PATCH path, not the draft.
+  void setLegKey(String? legKey) {
+    if (legKey == state.legKey) return;
+    state = state.copyWith(legKey: legKey, clearLegKey: legKey == null);
+  }
+
+  /// After a successful save. Deliberately keeps the category, the
+  /// planned/paid pick AND the city: all three are choices, and a traveler
+  /// entering eight estimates before a trip — or logging five dinners in
+  /// Rome — should state each once, not once per line.
   void clearText() => setText(label: '', amountText: '');
 }
 
 final expenseDraftProvider =
     StateNotifierProvider.family<ExpenseDraftNotifier, ExpenseDraft, String>(
         (ref, tripId) => ExpenseDraftNotifier());
+
+/// How the Budget tab's receipt is grouped: by expense category (the
+/// original view) or by city leg (spend-per-city, 00072). Neither mode hides
+/// a line — every expense appears in exactly one group either way.
+///
+/// Session-local and keyed by trip, the [DailySpendSettings] lifetime and
+/// rationale: this is a way of *looking* at the receipt, not a property of
+/// the trip, so it survives the constant remounts (tab switches, the chat
+/// panel re-parenting the body) and a page reload starting on Category is
+/// correct.
+enum BudgetGrouping { category, city }
+
+final budgetGroupingProvider = StateProvider.family<BudgetGrouping, String>(
+    (ref, tripId) => BudgetGrouping.category);
 
 // --- daily food & drink suggestion (specs/daily-spend-guide) ----------------
 

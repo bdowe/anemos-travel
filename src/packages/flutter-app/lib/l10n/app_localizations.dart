@@ -1784,6 +1784,48 @@ abstract class AppLocalizations {
   /// **'Category'**
   String get budgetCategoryLabel;
 
+  /// No description provided for @budgetGroupBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Group by'**
+  String get budgetGroupBy;
+
+  /// No description provided for @budgetGroupByCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get budgetGroupByCategory;
+
+  /// No description provided for @budgetGroupByCity.
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get budgetGroupByCity;
+
+  /// No description provided for @budgetGroupRestOfTrip.
+  ///
+  /// In en, this message translates to:
+  /// **'Rest of trip'**
+  String get budgetGroupRestOfTrip;
+
+  /// No description provided for @budgetCityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get budgetCityLabel;
+
+  /// No description provided for @budgetCityNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No city'**
+  String get budgetCityNone;
+
+  /// No description provided for @budgetCityPlanLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'This is {city}\'s daily plan — its city can\'t be changed.'**
+  String budgetCityPlanLocked(String city);
+
   /// No description provided for @budgetLabelField.
   ///
   /// In en, this message translates to:

@@ -20,6 +20,8 @@ String _expenseJson({
   double? planned,
   double? actual,
   bool purchased = false,
+  String? legKey,
+  bool legPlan = false,
 }) =>
     jsonEncode({
       'id': 'e1',
@@ -33,6 +35,8 @@ String _expenseJson({
       'auto': false,
       'source_kind': null,
       'source_id': null,
+      'leg_key': legKey,
+      'leg_plan': legPlan,
     });
 
 void main() {
@@ -207,6 +211,7 @@ void main() {
             'source_kind': null,
             'source_id': null,
             'leg_key': 'Lisbon',
+            'leg_plan': true,
           }),
           201,
           headers: {'content-type': 'application/json'});
@@ -217,18 +222,47 @@ void main() {
         label: 'Food & drink · Lisbon',
         amount: 400,
         planned: true,
-        legKey: 'Lisbon');
+        legKey: 'Lisbon',
+        legPlan: true);
 
     expect(captured.url.path, '/api/v1/trips/t1/budget/expenses');
     final body = jsonDecode(captured.body) as Map<String, dynamic>;
     expect(body['leg_key'], 'Lisbon');
+    // The slot marker (00072): without it the server files an ordinary tagged
+    // line the card could never find, and a second tap duplicates.
+    expect(body['leg_plan'], true);
     expect(body['planned_amount'], 400);
     expect(body['category'], 'food');
     // A city plan is never a booking mirror — sending a source link alongside
     // it is a 400 server-side, so it must not leak into this call.
     expect(body.containsKey('source_kind'), isFalse);
     expect(expense.legKey, 'Lisbon');
+    expect(expense.legPlan, isTrue);
     expect(expense.auto, isFalse);
+  });
+
+  test('a city-tagged add sends leg_key and NO leg_plan', () async {
+    late http.Request captured;
+    final service = _service(MockClient((request) async {
+      captured = request;
+      return http.Response(_expenseJson(planned: 30, legKey: 'Rome'), 201,
+          headers: {'content-type': 'application/json'});
+    }));
+
+    // Exactly the call the add row's city picker arms (00072).
+    final expense = await service.addExpense('t1',
+        category: 'food',
+        label: 'Dinner',
+        amount: 30,
+        planned: true,
+        legKey: 'Rome');
+
+    final body = jsonDecode(captured.body) as Map<String, dynamic>;
+    expect(body['leg_key'], 'Rome');
+    // Absent, not false: the flag is guarded so an ordinary add's body can
+    // never accidentally claim a plan slot.
+    expect(body.containsKey('leg_plan'), isFalse);
+    expect(expense.legPlan, isFalse);
   });
 
   test('a plain add sends no leg_key at all', () async {
@@ -244,6 +278,26 @@ void main() {
 
     final body = jsonDecode(captured.body) as Map<String, dynamic>;
     expect(body.containsKey('leg_key'), isFalse);
+    expect(body.containsKey('leg_plan'), isFalse);
+  });
+
+  test('re-filing PATCHes the key and clearing sends an empty string, never null',
+      () async {
+    final bodies = <Map<String, dynamic>>[];
+    final service = _service(MockClient((request) async {
+      bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+      return http.Response(_expenseJson(planned: 30, legKey: 'Rome'), 200,
+          headers: {'content-type': 'application/json'});
+    }));
+
+    await service.updateExpense('t1', 'e1', {'leg_key': 'Rome'});
+    // The PATCH sentinel (00072): '' clears; a null would decode server-side
+    // as "omitted, keep" like every other field.
+    await service.updateExpense('t1', 'e1', {'leg_key': ''});
+
+    expect(bodies[0]['leg_key'], 'Rome');
+    expect(bodies[1]['leg_key'], '');
+    expect(bodies[1]['leg_key'], isNot(isNull));
   });
 
   test('the daily-spend read hits its own path and passes the tier through',

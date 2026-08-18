@@ -44,12 +44,21 @@ class Expense {
   @JsonKey(name: 'source_id')
   final String? sourceId;
 
-  /// The city leg this line plans for (migration 00070), or null for every
-  /// other expense — the identity the daily food & drink card finds its own
-  /// line by. Deliberately NOT part of the `auto` contract above: a leg-keyed
-  /// row is the traveler's own plan, so no booking-state change touches it.
+  /// The city leg this money belongs to (migration 00070, generalized by
+  /// 00072), or null when the line isn't filed under a city. The Budget tab's
+  /// spend-per-city grouping key. Deliberately NOT part of the `auto`
+  /// contract above: where a line is filed is the traveler's organization, so
+  /// no booking-state change touches it.
   @JsonKey(name: 'leg_key')
   final String? legKey;
+
+  /// True on the one row that IS this city's per-day plan slot for its
+  /// category (00072) — the identity the daily food & drink card finds its
+  /// own line by. NEVER infer plan-ness from `legKey != null`: since 00072
+  /// any line can carry a city. Defaults false so a cached pre-00072 payload
+  /// reads as "not a plan slot", the safe meaning.
+  @JsonKey(name: 'leg_plan')
+  final bool legPlan;
 
   const Expense({
     required this.id,
@@ -64,6 +73,7 @@ class Expense {
     this.sourceKind,
     this.sourceId,
     this.legKey,
+    this.legPlan = false,
   });
 
   /// What this line was planned at, or null if it never carried a plan.
@@ -109,6 +119,7 @@ class Expense {
         sourceKind: sourceKind,
         sourceId: sourceId,
         legKey: legKey,
+        legPlan: legPlan,
       );
 
   factory Expense.fromJson(Map<String, dynamic> json) =>

@@ -61,11 +61,17 @@ class BudgetApiService {
   /// semantics. A linked add must stay a payment: the server 400s a plan-only
   /// one rather than guessing.
   ///
-  /// [legKey] binds the line to one city leg (00070) — the daily food & drink
-  /// "Add to plan". That makes the POST an upsert-by-leg: a second tap returns
-  /// the row that already exists (200) instead of filing a duplicate. It is
-  /// mutually exclusive with [sourceKind]; the server 400s a request naming
-  /// both, and 400s a key that is not one of the trip's current legs.
+  /// [legKey] files the line under one city leg (00070/00072) — the
+  /// spend-per-city grouping. Mutually exclusive with [sourceKind]; the
+  /// server 400s a request naming both, and 400s a key that is not one of
+  /// the trip's current legs.
+  ///
+  /// [legPlan] marks the add as that city's PLAN SLOT (requires [legKey]) —
+  /// the daily food & drink "Add to plan". It is what makes the POST an
+  /// upsert-by-leg: a second tap returns the row that already exists (200)
+  /// instead of filing a duplicate. An ordinary city-tagged add (the picker)
+  /// leaves it false and always creates. Guarded `if (legPlan)` so a plain
+  /// add's body stays byte-identical to before.
   Future<Expense> addExpense(String tripId,
       {required String category,
       required String label,
@@ -73,7 +79,8 @@ class BudgetApiService {
       bool planned = false,
       String? sourceKind,
       String? sourceId,
-      String? legKey}) async {
+      String? legKey,
+      bool legPlan = false}) async {
     final res = await apiClient.httpClient.post(
       Uri.parse('${apiClient.baseUrl}/trips/$tripId/budget/expenses'),
       headers: apiClient.jsonHeaders(json: true),
@@ -84,6 +91,7 @@ class BudgetApiService {
         if (sourceKind != null) 'source_kind': sourceKind,
         if (sourceId != null) 'source_id': sourceId,
         if (legKey != null) 'leg_key': legKey,
+        if (legPlan) 'leg_plan': true,
       }),
     );
     if (res.statusCode == 201 || res.statusCode == 200) {
@@ -134,8 +142,13 @@ class BudgetApiService {
   }
 
   /// Partial update — pass only the fields to change (category / label /
-  /// planned_amount / amount / position). It cannot clear a plan: that is the
-  /// 00067 contract, not an oversight.
+  /// planned_amount / amount / position / leg_key). It cannot clear a plan:
+  /// that is the 00067 contract, not an oversight.
+  ///
+  /// `'leg_key': 'Rome'` re-files the line under that city; `'leg_key': ''`
+  /// clears the tag (empty-means-clear is the PATCH sentinel — a null decodes
+  /// as "omitted, keep" like every other field). The server 409s a leg_key
+  /// change on a plan-slot row ([Expense.legPlan]) — a plan's city is fixed.
   Future<Expense> updateExpense(
       String tripId, String expenseId, Map<String, dynamic> body) async {
     final res = await apiClient.httpClient.patch(

@@ -45,9 +45,14 @@ class DailySpendSection extends ConsumerWidget {
   /// The line this city already has, or null. Found by IDENTITY — the leg key
   /// the server stamped (00070) — never by matching the label this widget
   /// generated, which is how a renamed line would silently duplicate itself.
+  /// `legPlan` is load-bearing since 00072: a manually tagged Rome food line
+  /// carries the same legKey and category, and without the flag this card
+  /// would adopt the traveler's dinner as its plan.
   Expense? _planFor(DailySpendCity city) {
     for (final e in expenses) {
-      if (e.legKey == city.legKey && e.category == kDailySpendCategory) {
+      if (e.legPlan &&
+          e.legKey == city.legKey &&
+          e.category == kDailySpendCategory) {
         return e;
       }
     }

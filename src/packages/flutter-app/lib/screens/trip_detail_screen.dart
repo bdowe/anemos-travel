@@ -6922,6 +6922,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                   tripId: trip.id,
                                   canEdit: !_readOnly,
                                   isOffline: _isOffline,
+                                  legChips: derivation.legChips,
                                 ),
                               ),
                             )

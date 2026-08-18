@@ -437,6 +437,20 @@
   "budgetEditExpenseTitle": "Edit expense",
   "budgetSetTargetTitle": "Set budget target",
   "budgetCategoryLabel": "Category",
+  "budgetGroupBy": "Group by",
+  "budgetGroupByCategory": "Category",
+  "budgetGroupByCity": "City",
+  "budgetGroupRestOfTrip": "Rest of trip",
+  "budgetCityLabel": "City",
+  "budgetCityNone": "No city",
+  "budgetCityPlanLocked": "This is {city}'s daily plan — its city can't be changed.",
+  "@budgetCityPlanLocked": {
+    "placeholders": {
+      "city": {
+        "type": "String"
+      }
+    }
+  },
   "budgetLabelField": "Label",
   "budgetAmount": "Amount",
   "budgetCurrencyLabel": "Currency",
