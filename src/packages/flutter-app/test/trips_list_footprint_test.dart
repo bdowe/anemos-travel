@@ -347,13 +347,20 @@ void main() {
       expect(find.byKey(kTraveledStatsKey), findsOneWidget);
     });
 
-    testWidgets('both header actions fit a 360dp phone',
+    testWidgets('both header actions live in the header, and neither escapes it',
         (WidgetTester tester) async {
-      // 360dp is the commonest Android width and the one that decides this:
-      // SectionHeader's Wrap can drop the action group onto its own line, but
-      // the group must also be able to break INSIDE itself — a Row of these
-      // two buttons overflows by 28px here.
+      // Deliberately NO assertion about which line each action lands on, or
+      // about one overflowing: those are text-width claims, and a widget test
+      // lays out with Flutter's fixed-width test font rather than Inter. An
+      // earlier version of this test pinned a three-line stack that the real
+      // app never produces — verified in the browser, where 360dp English puts
+      // the title and both actions on ONE line and 360dp Spanish drops the
+      // pair together onto a second.
       //
+      // The action group is a Wrap rather than a Row so that it CAN break
+      // inside itself if it ever needs to — large accessibility text scales,
+      // a longer translation. That is a defensive choice, not a fix for an
+      // overflow at any shipped width.
       await tester.binding.setSurfaceSize(const Size(360, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await _pumpList(tester, trips: [
@@ -362,14 +369,16 @@ void main() {
       ]);
       await tester.pumpAndSettle();
 
-      // The "Past trips" collapsible row above overflows by 12px at this
-      // width — its header Row gives the count pill and chevron no room to
-      // give — and it does so on main too, with or without this lane. It is
-      // consumed here so it cannot fail teardown, and asserted to be the ONLY
-      // one: a header that overflowed as well would turn this into "Multiple
-      // exceptions" and fail.
+      // The test font is wider than Inter, so rigid chrome elsewhere on the
+      // page (the "Past trips" collapsible's title + count pill) overflows
+      // HERE and not in the app — checked in the browser at this width in both
+      // languages, where that row ellipsizes its summary and fits. Consumed so
+      // it cannot fail teardown; asserted to be the only one, so a header that
+      // overflowed as well would turn this into "Multiple exceptions" and
+      // fail.
       expect(tester.takeException().toString(),
           isNot(contains('Multiple exceptions')));
+
       // Both live INSIDE the section header, not one orphaned beside it...
       final header = find.ancestor(
           of: find.byKey(kTravelAtlasSeeAllKey),
@@ -381,17 +390,11 @@ void main() {
           findsOneWidget);
       // ...and neither runs past its edge, whichever line it lands on.
       final bounds = tester.getRect(header);
-      final seeAll = tester.getRect(find.byKey(kTravelAtlasSeeAllKey));
-      final logTrip = tester.getRect(find.byKey(kLogTripSectionActionKey));
-      for (final button in [seeAll, logTrip]) {
+      for (final key in [kTravelAtlasSeeAllKey, kLogTripSectionActionKey]) {
+        final button = tester.getRect(find.byKey(key));
         expect(button.right, lessThanOrEqualTo(bounds.right + 0.5));
         expect(button.left, greaterThanOrEqualTo(bounds.left - 0.5));
       }
-      // Measured: at 360 the pair breaks, and the two buttons stack on the
-      // TITLE's left edge rather than on each other's right edge — which is
-      // neither margin and reads as an accident.
-      expect(logTrip.top, greaterThan(seeAll.top));
-      expect(logTrip.left, seeAll.left);
       // PR #401's pin still holds: the title is a page-level header outside
       // the card, and the actions did not drag it inside.
       expect(
@@ -400,26 +403,6 @@ void main() {
               matching: find.text('Your travels')),
           findsNothing);
     });
-  });
-
-  testWidgets('at 390dp both header actions share one line',
-      (WidgetTester tester) async {
-    // The artifact predicted a two-line header on a phone and that is what a
-    // 390dp phone gets: the title, then both actions beside each other. Only
-    // at 360 and below does the pair itself have to break.
-    await tester.binding.setSurfaceSize(const Size(390, 800));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await _pumpList(tester, trips: [
-      _trip('past', 'Porto', start: _rel(-30), end: _rel(-26)),
-      _trip('older', 'Naxos', start: _rel(-90), end: _rel(-85)),
-    ]);
-    await tester.pumpAndSettle();
-    tester.takeException(); // the collapsible's own pre-existing overflow
-
-    final seeAll = tester.getRect(find.byKey(kTravelAtlasSeeAllKey));
-    final logTrip = tester.getRect(find.byKey(kLogTripSectionActionKey));
-    expect(logTrip.top, seeAll.top);
-    expect(logTrip.left, greaterThanOrEqualTo(seeAll.right - 0.5));
   });
 
   testWidgets('the map marks visited cities apart from planned ones',

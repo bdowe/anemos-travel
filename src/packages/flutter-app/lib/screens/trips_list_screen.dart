@@ -374,25 +374,25 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                       child: SectionHeader(
                         title: l10n.tripsListYourTravels,
                         // Two actions, passed as one WRAP — not a Row.
-                        // SectionHeader's own Wrap can drop this whole group
-                        // onto a second line, which is what its dartdoc
-                        // promises, but a Row inside it still cannot be
-                        // narrower than its two buttons: at 360dp (the
-                        // commonest Android width) the English pair measures
-                        // wider than the column and a Row overflows it by
-                        // 28px. Wrapping instead lets the second button take a
-                        // third line on exactly those widths and changes
-                        // nothing anywhere else.
+                        // SectionHeader's own Wrap already drops this whole
+                        // group onto its own line, which is what its dartdoc
+                        // promises and what a phone gets: verified in the
+                        // browser, 360dp English keeps the title and both
+                        // actions on ONE line, and Spanish drops the pair
+                        // together onto a second. A Row would render
+                        // identically at every shipped width — the Wrap is
+                        // here so the pair CAN break inside itself if it ever
+                        // has to (a large accessibility text scale, a longer
+                        // translation) instead of overflowing.
                         //
                         // Both actions stay here. "+ Add past trip" does not
                         // move: specs/log-past-trip placed it in this header
                         // deliberately, and relocating it re-opens that
                         // decision.
-                        // Runs stack flush-LEFT when the pair breaks, so the
-                        // buttons land on the title's own edge. Right-aligning
-                        // them instead lines them up on the wider button's
-                        // right edge, which is neither margin and reads as an
-                        // accident.
+                        // Runs stack flush-LEFT in the rare case the pair
+                        // does break, so the buttons land on the title's own
+                        // edge rather than lining up on the wider button's
+                        // right edge, which is neither margin.
                         action: Wrap(
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [

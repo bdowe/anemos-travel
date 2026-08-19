@@ -10,6 +10,7 @@ import '../l10n/l10n.dart';
 import '../navigation/app_nav.dart';
 import '../navigation/app_routes.dart';
 import '../providers/trips_provider.dart';
+import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 import '../utils/trip_days.dart';
 import '../utils/trip_format.dart';
@@ -31,6 +32,40 @@ import 'trip_detail_screen.dart';
 const kAtlasTraveledStatsKey = ValueKey('travelAtlas.stats.traveled');
 const kAtlasPlannedStatsKey = ValueKey('travelAtlas.stats.planned');
 const kAtlasIndexKey = ValueKey('travelAtlas.index');
+
+/// The plate's height below the wide seam.
+///
+/// Measured, not picked between the wireframe's 280 and `_GuideMap`'s shipped
+/// 240 — and measured **in the running app**, because the thing being measured
+/// is where text lands, and widget tests lay out with Flutter's fixed-width
+/// test font rather than Inter. A number taken from a widget test would not be
+/// a number about this app.
+///
+/// The binding case is the smallest phone this app supports (375×667) carrying
+/// the tallest chrome this screen can have — the year chip row above a
+/// colophon rendering BOTH groups — and, crucially, **under the shell's
+/// [NavigationBar]**, whose 80px means the fold sits ~80px above the viewport
+/// floor. Each index row is 49 tall, so the candidates differ only in what
+/// survives that fold:
+///
+///   * **280** — the heading, with the first row's text under the bar.
+///   * **256** — the heading and one row, nothing after it.
+///   * **240** — the heading and one whole row, the second beginning right at
+///     the bar: the most a phone this small has room to promise.
+///
+/// So 240 — which is also, independently, the height this app already ships
+/// for an interactive map inside a scrolling column (`_GuideMap`), so the
+/// atlas introduces no third map size. It is genuinely tight at 667pt and
+/// comfortable everywhere else: a 390×844 phone shows the heading and FOUR
+/// whole rows with a fifth cut by the bar. Going shorter to buy the smallest
+/// phone a second row would cost every other phone the map room this screen
+/// exists to give.
+///
+/// The screen's test pins this constant and the order of what follows it —
+/// both font-independent. The fold numbers above are browser measurements and
+/// deliberately are not asserted anywhere: a pixel claim about text in a
+/// widget test would be a claim about the test font.
+const double kAtlasPlateHeight = 240;
 
 /// The travel atlas: everywhere this traveler has been, given room.
 ///
@@ -70,35 +105,6 @@ class TravelAtlasScreen extends ConsumerStatefulWidget {
 }
 
 class _TravelAtlasScreenState extends ConsumerState<TravelAtlasScreen> {
-  /// The plate's height below the wide seam.
-  ///
-  /// Measured, not picked between the wireframe's 280 and `_GuideMap`'s
-  /// shipped 240 — and measured against the **binding** case rather than the
-  /// comfortable one: a 375×667 phone (the smallest this app supports)
-  /// carrying the tallest chrome this screen can have, which is the year chip
-  /// row above a colophon rendering BOTH groups. On a roomier phone every
-  /// candidate looks fine, so the roomy case decides nothing.
-  ///
-  /// Under that chrome, the first index row's bottom edge lands at
-  /// `240 + 424`, and each row after it is 49 tall. What separates the
-  /// candidates is therefore only what sits ON the 667px fold:
-  ///
-  ///   * **280** — the heading and one whole row; the second starts below the
-  ///     fold. Reads as a list of one.
-  ///   * **256** — the same, with a 2px sliver of the second row's box and
-  ///     none of its text. Still reads as a list of one.
-  ///   * **240** — the heading, one whole row, and the second cut through its
-  ///     text: the plainest "there is more" a list can give.
-  ///
-  /// So 240 — which is also, independently, the height this app already ships
-  /// for an interactive map inside a scrolling column (`_GuideMap`), so the
-  /// atlas is not introducing a third map size. With no chip row (a history
-  /// inside one year) the same height clears two whole rows and cuts a third.
-  ///
-  /// Pinned by the smallest-phone case in this screen's test: change this and
-  /// re-measure, don't change this and re-guess.
-  static const double _plateHeight = 240;
-
   /// Width at which the index moves beside the plate instead of under it, and
   /// the width it takes there. 900 is this app's established side-by-side seam
   /// (the trip detail docks its chat panel at exactly 900, in a 400px column);
@@ -195,18 +201,20 @@ class _TravelAtlasScreenState extends ConsumerState<TravelAtlasScreen> {
     final pins = footprintPins(filtered, now);
     final stats = travelStats(filtered, now);
 
-    final paper = _AtlasPaper(
-      // A lone "2026" beside "All time" is chrome that filters nothing — the
-      // empty affordance the artifact's thin-history drawing was written to
-      // catch. Under two distinct years the row does not render at all.
-      years: years.length >= 2 ? years : const <int>[],
-      selectedYear: year,
-      onYearSelected: (y) => setState(() => _year = y),
-      traveled: stats.traveled,
-      planned: stats.planned,
-      rows: year == null ? rows : atlasRows(trips, now, year: year),
-      onOpenTrip: _openTrip,
-    );
+    _AtlasPaper paper({required bool wide}) => _AtlasPaper(
+          // A lone "2026" beside "All time" is chrome that filters nothing —
+          // the empty affordance the artifact's thin-history drawing was
+          // written to catch. Under two distinct years the row does not
+          // render at all.
+          years: years.length >= 2 ? years : const <int>[],
+          selectedYear: year,
+          onYearSelected: (y) => setState(() => _year = y),
+          wrapChips: wide,
+          traveled: stats.traveled,
+          planned: stats.planned,
+          rows: year == null ? rows : atlasRows(trips, now, year: year),
+          onOpenTrip: _openTrip,
+        );
 
     return scaffold(LayoutBuilder(
       builder: (context, constraints) {
@@ -225,7 +233,9 @@ class _TravelAtlasScreenState extends ConsumerState<TravelAtlasScreen> {
               SizedBox(
                 width: hasPlate ? _sideColumnWidth : constraints.maxWidth,
                 child: SingleChildScrollView(
-                  child: hasPlate ? paper : PageContainer(child: paper),
+                  child: hasPlate
+                      ? paper(wide: true)
+                      : PageContainer(child: paper(wide: true)),
                 ),
               ),
             ],
@@ -237,8 +247,8 @@ class _TravelAtlasScreenState extends ConsumerState<TravelAtlasScreen> {
           // map-led. The paper below supplies its own margins.
           padding: EdgeInsets.zero,
           children: [
-            if (hasPlate) SizedBox(height: _plateHeight, child: _plate(pins)),
-            PageContainer(child: paper),
+            if (hasPlate) SizedBox(height: kAtlasPlateHeight, child: _plate(pins)),
+            PageContainer(child: paper(wide: false)),
           ],
         );
       },
@@ -275,6 +285,9 @@ class _AtlasPaper extends StatelessWidget {
   final List<int> years;
   final int? selectedYear;
   final ValueChanged<int?> onYearSelected;
+
+  /// Passed through to [_YearChips]: wrap the chips instead of scrolling them.
+  final bool wrapChips;
   final TravelStats traveled;
   final TravelStats planned;
   final List<AtlasRow> rows;
@@ -284,6 +297,7 @@ class _AtlasPaper extends StatelessWidget {
     required this.years,
     required this.selectedYear,
     required this.onYearSelected,
+    required this.wrapChips,
     required this.traveled,
     required this.planned,
     required this.rows,
@@ -317,6 +331,7 @@ class _AtlasPaper extends StatelessWidget {
             years: years,
             selected: selectedYear,
             onSelected: onYearSelected,
+            wrap: wrapChips,
           ),
           const Divider(height: 1),
         ],
@@ -369,31 +384,56 @@ class _AtlasPaper extends StatelessWidget {
 /// pan-and-zoom gesture arena. `DESIGN.md` blesses this shape outright —
 /// *"filter chip rows are the entire secondary navigation on list screens"*.
 ///
-/// **"All time" leads and is pinned outside the scroll view.** It is both the
-/// resting state and the only way back, and [BookingFilterBar] already settled
-/// what happens otherwise: on ten years of history the strip scrolls, and an
-/// exit that can scroll off-screen is not an exit. Re-tapping a selected year
-/// is a dead gesture rather than a second, invisible way to clear — the years
-/// have somewhere to say it, and All time is already saying it.
+/// **"All time" leads.** It is both the resting state and the only way back.
+/// In the scrolling form it is pinned OUTSIDE the scroll view, because
+/// [BookingFilterBar] already settled what happens otherwise: on ten years of
+/// history the strip scrolls, and an exit that can scroll off-screen is not an
+/// exit. There is no leading fade under it — a year half-scrolled beneath
+/// reads as a clipped number, not as a stray count attaching itself to the
+/// wrong chip, which is the specific harm that mask exists to prevent.
 ///
-/// Unlike that strip there is no leading fade under the pinned chip: a year
-/// half-scrolled under it reads as a clipped number, not as a stray count
-/// attaching itself to the wrong chip, which is the specific harm that mask
-/// exists to prevent.
+/// [wrap] picks the form. A clipped trailing chip is the ordinary
+/// horizontal-scroll affordance on a phone and reads as intended; in the
+/// ≥900 layout's fixed 400px side column the same clipping reads as a
+/// rendering fault, and the column has vertical room a phone does not — so
+/// there the chips wrap onto a second line instead.
 class _YearChips extends StatelessWidget {
   final List<int> years;
   final int? selected;
   final ValueChanged<int?> onSelected;
 
+  /// True in the wide layout's side column: lay the chips out as a [Wrap]
+  /// rather than a pinned chip beside a horizontal scroll view.
+  final bool wrap;
+
   const _YearChips({
     required this.years,
     required this.selected,
     required this.onSelected,
+    required this.wrap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final l10n = context.l10n;
+    final allTime = _chip(
+      theme,
+      label: l10n.travelAtlasAllTime,
+      isSelected: selected == null,
+      onTap: () => onSelected(null),
+    );
+    final yearChips = [
+      for (final y in years)
+        _chip(
+          theme,
+          // Formatted, never translated — and never through an ICU int
+          // placeholder, which would group 2026 as "2,026".
+          label: '$y',
+          isSelected: selected == y,
+          onTap: () => onSelected(y),
+        ),
+    ];
     // Bare year numbers say nothing about what tapping one does; the row says
     // it once, for a screen reader, instead of every chip repeating it.
     return Semantics(
@@ -402,56 +442,78 @@ class _YearChips extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-        child: Row(
-          children: [
-            _chip(
-              label: l10n.travelAtlasAllTime,
-              isSelected: selected == null,
-              onTap: () => onSelected(null),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                // A traveler with ten years of history overflows any phone.
-                child: Row(
-                  children: [
-                    for (var i = 0; i < years.length; i++) ...[
-                      if (i > 0) const SizedBox(width: AppSpacing.sm),
-                      _chip(
-                        // Formatted, never translated — and never through an
-                        // ICU int placeholder, which would group 2026 as
-                        // "2,026".
-                        label: '${years[i]}',
-                        isSelected: selected == years[i],
-                        onTap: () => onSelected(years[i]),
+        child: wrap
+            ? Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                children: [allTime, ...yearChips],
+              )
+            : Row(
+                children: [
+                  allTime,
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      // A traveler with ten years of history overflows any
+                      // phone.
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < yearChips.length; i++) ...[
+                            if (i > 0) const SizedBox(width: AppSpacing.sm),
+                            yearChips[i],
+                          ],
+                        ],
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
 
   /// The house filter chip: fully round, no checkmark, and a padded tap target
   /// so the 48px floor holds even though the chip paints compact.
-  Widget _chip({
+  ///
+  /// **The selected chip stays ENABLED.** Re-tapping it is inert either way,
+  /// but `onSelected: null` marks a [ChoiceChip] *disabled*, and M3 then paints
+  /// the SELECTED chip in the disabled palette — `onSurface` at 12% under
+  /// dimmed ink. Measured in the browser at (217,224,221) against the brand
+  /// tint's (224,242,241): it reads as "unavailable", and it leaves the
+  /// unselected chips looking louder than the active one. On the row that IS
+  /// this surface's navigation, that inverts the hierarchy — and `DESIGN.md`
+  /// is explicit that a selected chip takes the brand tint family.
+  ///
+  /// [AppColors.brandTintFill] rather than the raw tint because that constant
+  /// is teal-50: correct on paper, a light block punched into a dark page
+  /// anywhere else.
+  Widget _chip(
+    ThemeData theme, {
     required String label,
     required bool isSelected,
     required VoidCallback onTap,
-  }) =>
-      ChoiceChip(
-        label: Text(label),
-        selected: isSelected,
-        onSelected: isSelected ? null : (_) => onTap(),
-        showCheckmark: false,
-        visualDensity: VisualDensity.standard,
-        materialTapTargetSize: MaterialTapTargetSize.padded,
-      );
+  }) {
+    final scheme = theme.colorScheme;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      // Inert, not disabled: All time is the way back, so a re-tap must not
+      // become a second, invisible way to clear.
+      onSelected: isSelected ? (_) {} : (_) => onTap(),
+      selectedColor: AppColors.brandTintFill(scheme),
+      // Stated outright on both sides: an M3 label style left to default
+      // paints onSurface, which is the wrong ink on a tinted fill.
+      labelStyle: theme.textTheme.labelLarge?.copyWith(
+        color: isSelected
+            ? AppColors.onBrandTint(scheme)
+            : scheme.onSurfaceVariant,
+      ),
+      showCheckmark: false,
+      visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+    );
+  }
 }
 
 /// One finished trip, as an index entry: `2026–02 · Lisbon & Porto · 12 days`.
