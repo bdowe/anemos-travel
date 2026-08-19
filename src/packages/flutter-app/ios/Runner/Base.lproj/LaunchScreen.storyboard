@@ -21,7 +21,10 @@
                         </subviews>
                         <!-- Brand teal #00695C, matching the LaunchBackground pixel — the base
                              view must never be white or a failed image load would strand the
-                             light mark on a white field. -->
+                             light mark on a white field. `flutter_native_splash:create` rewrites
+                             this back to white on every run, so re-apply it after regenerating;
+                             the `LaunchImage` size below is the one thing that SHOULD follow the
+                             generator (it tracks assets/splash/mark_light_4x.png). -->
                         <color key="backgroundColor" red="0.0" green="0.41176470588235292" blue="0.36078431372549019" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="YRO-k0-Ey4" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="3T2-ad-Qdv"/>
@@ -41,7 +44,7 @@
         </scene>
     </scenes>
     <resources>
-        <image name="LaunchImage" width="384" height="384"/>
+        <image name="LaunchImage" width="512" height="512"/>
         <image name="LaunchBackground" width="1" height="1"/>
     </resources>
 </document>

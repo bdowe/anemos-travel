@@ -86,13 +86,13 @@ below is generated — edit the SVGs or harnesses, never the PNGs.**
 | Rendered via | File | Size |
 |---|---|---|
 | render/mark.html | `flutter-app/assets/images/anemos_mark.png` | 540 |
-| render/mark.html | `flutter-app/web/favicon.png` | 64 |
+| render/favicon.html (125% crop → rose ~95%) | `flutter-app/web/favicon.png` | 64 |
 | render/mark-light.html | `flutter-app/assets/images/anemos_mark_light.png` | 540 |
 | render/mark-light.html | `flutter-app/web/splash/anemos_mark_light.png` (copy) | 540 |
-| render/mark-light.html (shrunk) | `flutter-app/assets/splash/mark_light_4x.png` | 384 |
+| render/mark-light.html (shrunk, 4× the 128dp splash mark) | `flutter-app/assets/splash/mark_light_4x.png` | 512 |
 | render/splash-android12.html (768 mark in 1152 safe zone) | `flutter-app/assets/splash/mark_light_android12.png` | 1152 |
-| render/icon84.html (84%, transparent) | `flutter-app/web/icons/Icon-192/512.png` | 384 / 1024 |
-| render/maskable.html (64%, white) | `flutter-app/web/icons/Icon-maskable-192/512.png` | 384 / 1024 |
+| render/icon84.html (110% → rose at 84%, transparent) | `flutter-app/web/icons/Icon-192/512.png` | 384 / 1024 |
+| render/maskable.html (69% → ink inside the 80% safe circle, white) | `flutter-app/web/icons/Icon-maskable-192/512.png` | 384 / 1024 |
 | render/lockup.html | `flutter-app/assets/images/anemos_logo.png` | 1024 |
 | render/ogcard.html (teal gradient + tagline) | `flutter-app/web/og-card.png` | 1200×630 |
 | ↳ flutter_native_splash (from the mark_light seeds) | iOS LaunchImage*, Android `splash.png`/`android12splash.png` (+night) | ladders |
@@ -101,6 +101,21 @@ below is generated — edit the SVGs or harnesses, never the PNGs.**
 Historical gotcha this table exists to prevent: og-card and badge_4x were
 missing from the old README's table, so they silently kept two-brands-ago art
 (a metronome!) through two renames. If you add a brand asset, add its row.
+
+**Reading the crop percentages.** `mark.svg`'s solid bronze rose is 76% of its
+own square artboard; the remaining 24% belongs to the route thread's hairline
+tails, which antialias to nothing below ~48px. So a percentage here is
+ambiguous unless it says what it measures, and the icon harnesses used to
+measure the artboard — which is why they shipped a rose at 64% (PWA) and 48.6%
+(maskable) while their names claimed 84% and 64%. They now state the number
+they actually control. Two rules fall out of this:
+
+- **Unmasked surfaces** (favicon, PWA icon) size to the *rose* and let the
+  thread's tails bleed off the frame. Nothing legible is lost.
+- **Masked surfaces** (maskable, Android 12 splash) size to the ink's furthest
+  *radius* from centre, not its bounding-box width — the tails leave the hub
+  diagonally, so they sit near the corners where a circular mask cuts. Measured
+  on the art, that radius is `0.571 × the mark's drawn width`.
 
 Cache note: `/app/icons/*` is served `no-cache` (nginx), so a changed icon
 propagates on the next load without help. It used to be `immutable` for a year,

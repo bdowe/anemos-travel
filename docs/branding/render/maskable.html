@@ -1,9 +1,34 @@
-<!-- Render harness: PWA maskable icon — mark at 64% on solid white so any
-     platform mask (circle, squircle) keeps the rose inside the safe zone. -->
+<!-- Render harness: PWA maskable icon — the mark on solid white, sized so
+     every platform mask (circle, squircle, rounded square) keeps the whole
+     rose AND the route thread inside the safe zone.
+
+     The spec's guaranteed-visible region is a CIRCLE of 80% of the icon's
+     width, so the binding constraint is the ink's furthest RADIUS from centre,
+     not its bounding-box width. Those are different numbers here and the
+     difference is the whole point: the mark's widest ink is the route thread's
+     tails, which leave the hub diagonally — down to the south-west, up to the
+     north-east — so they sit near the artboard's corners, exactly where a
+     circular mask cuts. Measured on the rendered art, the furthest ink lands at
+     0.571 × the mark's drawn width, which puts the ceiling at
+
+       0.571 × scale ≤ 0.40 × 1024   →   scale ≤ 717px
+
+     710 of 1024 (69%) takes that with 5px in hand: max ink radius 405 against
+     a 410 limit, rose at 53% of the icon.
+
+     Up from 655 (rose 48.6%), which reserved the safe zone against the
+     ARTBOARD and then spent the artwork's own 24% margin on top of it. Do not
+     push this to the ~84% that a bounding-box reading suggests — that was
+     tried, and it put 508 pixels of thread outside the circle. If this icon
+     ever needs to be meaningfully bigger, the answer is a tail-less variant of
+     the mark, not a larger scale here.
+
+     Screenshot at --window-size=1024,1024; also the seed
+     flutter_launcher_icons reads for iOS/Android/macOS/Windows. -->
 <!doctype html>
 <html><head><style>
   html,body{margin:0;padding:0;background:#FFFFFF}
   .frame{width:1024px;height:1024px;display:flex;align-items:center;justify-content:center}
-  img{width:655px;height:655px}
+  img{width:710px;height:710px}
 </style></head>
 <body><div class="frame"><img src="../mark.svg"></div></body></html>

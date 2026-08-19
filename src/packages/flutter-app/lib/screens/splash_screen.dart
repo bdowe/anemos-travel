@@ -6,8 +6,8 @@ import '../widgets/brand_logo.dart';
 /// Branded boot splash shown while the stored session is being restored.
 ///
 /// Pixel-matched to the static HTML splash in web/index.html — same gradient,
-/// mark geometry (96px bare light mark, no plate, centre 24px above viewport
-/// centre), pulse (1.0→1.04 over 1.8s), wordmark (centre 60px below viewport
+/// mark geometry (128px bare light mark, no plate, centre 28px above viewport
+/// centre), pulse (1.0→1.04 over 1.8s), wordmark (centre 80px below viewport
 /// centre) and loading dots (three 6px dots at 12px gaps, 48px + safe inset
 /// off the bottom edge, opacity 0.25→0.85 staggered on the pulse's 1.8s
 /// rhythm) — so the web handoff reads as one continuous screen. If you change
@@ -18,6 +18,17 @@ import '../widgets/brand_logo.dart';
 /// edge, out of the brand moment, so a fast boot shows a still composition
 /// and a slow one still reads deliberately alive. Both sides go still under
 /// prefers-reduced-motion.
+///
+/// **The offsets are derived, not tuned.** The lockup is
+/// `mark + 25% clear space + caps` tall and sits centred on the viewport, so
+/// every number here falls out of [_markSize]:
+///
+///   height = 128 + 32 + 24 = 184  →  top = -92
+///   mark box  -92 .. +36  →  mark centre   = -28
+///   caps      +68 .. +92  →  wordmark centre = +80
+///
+/// Re-run that arithmetic rather than nudging a literal — index.html carries
+/// the same three numbers and they have to agree.
 ///
 /// The native mobile splash stays mark-only: flutter_native_splash cannot
 /// render text, and web is the primary surface. Do not re-run its generator
@@ -31,6 +42,23 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
+  /// The mark's box on this screen — the brand's largest appearance.
+  ///
+  /// 128, not the 96 it launched at: the rose radiates from a small hub and
+  /// its solid bronze star measures only 76% of this box (the rest is the
+  /// thread's hairline tails), so a 96px box put a 73px rose on a full-screen
+  /// field and read timid. 128 paints a 97px rose — the size the 96 was always
+  /// meant to look like. Stops here rather than going further because the
+  /// lockup is [_markSize] + 56 tall and the loading dots sit 48px off the
+  /// bottom edge: 144 would leave 4px between them on a 320pt-tall landscape
+  /// phone.
+  static const double _markSize = 128;
+
+  /// Where the mark's and the wordmark's centres sit relative to the viewport
+  /// centre. Derived in the class doc — do not tune independently.
+  static const double _markOffset = -28;
+  static const double _wordmarkOffset = 80;
+
   late final AnimationController _pulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1800),
@@ -76,16 +104,16 @@ class _SplashScreenState extends State<SplashScreen>
           children: [
             Center(
               child: Transform.translate(
-                offset: const Offset(0, -24),
+                offset: const Offset(0, _markOffset),
                 child: ScaleTransition(
                   scale: Tween(begin: 1.0, end: 1.04).animate(
                     CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
                   ),
                   // BrandLogo only sets height; the SizedBox keeps the mark
-                  // 96px wide even if the PNG isn't perfectly square.
+                  // square even if the PNG isn't.
                   child: const SizedBox.square(
-                    dimension: 96,
-                    child: BrandLogo.markLight(size: 96),
+                    dimension: _markSize,
+                    child: BrandLogo.markLight(size: _markSize),
                   ),
                 ),
               ),
@@ -94,7 +122,7 @@ class _SplashScreenState extends State<SplashScreen>
             // holds still.
             Center(
               child: Transform.translate(
-                offset: const Offset(0, 60),
+                offset: const Offset(0, _wordmarkOffset),
                 child: const ExcludeSemantics(
                   // The gradient is the darkest surface in the app, so this is
                   // the one wordmark that names its color instead of inheriting.
