@@ -125,9 +125,16 @@ class NextStepCard extends StatelessWidget {
   Widget _buildStep(BuildContext context, NextStep s) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
+    // The tinted-panel family, resolved once per build. Fixed light constants
+    // here painted teal-50 under teal-900 text in BOTH themes, so dark mode
+    // opened on a light mint block; the pair now tracks the brightness (and,
+    // in dark, the seed) — see [AppColors.brandTintFill].
+    final scheme = theme.colorScheme;
+    final tintFill = AppColors.brandTintFill(scheme);
+    final tintInk = AppColors.onBrandTint(scheme);
 
     final eyebrowStyle = theme.textTheme.labelSmall?.copyWith(
-      color: AppColors.brandDark,
+      color: tintInk,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.8,
     );
@@ -160,7 +167,7 @@ class NextStepCard extends StatelessWidget {
                 // two lines beside the action button, and the counter is the
                 // one thing here that must never be clipped away.
                 Flexible(child: eyebrowText),
-                Icon(Icons.expand_more, size: 14, color: AppColors.brandDark),
+                Icon(Icons.expand_more, size: 14, color: tintInk),
               ],
             ),
           ),
@@ -173,7 +180,7 @@ class NextStepCard extends StatelessWidget {
       key: const ValueKey('next-step-card'),
       margin: const EdgeInsets.only(top: AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.brandTint,
+        color: tintFill,
         borderRadius: AppRadius.mdAll,
       ),
       // The whole card is the primary action; the trailing button is the
@@ -186,7 +193,7 @@ class NextStepCard extends StatelessWidget {
           child: Row(
             children: [
               Icon(_kindIcons[s.kind] ?? Icons.place_outlined,
-                  color: AppColors.brand, size: 24),
+                  color: AppColors.brandTintAccent(scheme), size: 24),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -199,7 +206,7 @@ class NextStepCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
-                        color: AppColors.brandDark,
+                        color: tintInk,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -210,7 +217,7 @@ class NextStepCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.brandDark.withValues(alpha: 0.85),
+                          color: tintInk.withValues(alpha: 0.85),
                         ),
                       ),
                     ],

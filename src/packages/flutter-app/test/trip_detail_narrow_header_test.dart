@@ -10,6 +10,7 @@ import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
+import 'package:travel_route_planner/widgets/trip_detail/trip_header_card.dart';
 import 'package:travel_route_planner/widgets/trip_refine_panel.dart';
 
 import 'support/l10n_test_app.dart';
@@ -190,9 +191,96 @@ void main() {
     expect(find.descendant(of: bar, matching: find.byIcon(Icons.more_vert)),
         findsOneWidget);
 
-    // And the point of the budget: the trip's name is up there, whole.
-    final title = find.descendant(of: bar, matching: find.text('Sevilla week'));
-    expect(title, findsOneWidget);
+    // The name is up there whole once it is the bar's job to show it — which
+    // at rest it is not. The header block owns the name until its own copy
+    // scrolls away (see the handover test below); the two used to render it
+    // ~60px apart at the same time. The width budget this test enumerates is
+    // what makes the handed-over name readable rather than "Big Su…".
+    expect(find.descendant(of: bar, matching: find.text('Sevilla week')),
+        findsNothing,
+        reason: 'the header block owns the name at rest');
+    expect(
+      find.descendant(
+          of: find.byType(TripHeaderCard), matching: find.text('Sevilla week')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  // The collapse (TripAdvisor's trip-page move): the header block's title is
+  // the one on screen at rest, and the app bar takes the name over only once
+  // that copy has scrolled out from under it. Its own fixture, because the
+  // action-budget trip above is one item long and its page does not scroll —
+  // AlwaysScrollableScrollPhysics lets a drag overscroll and spring straight
+  // back, so a handover assertion there would have been vacuous.
+  testWidgets('the header title hands the name to the app bar on scroll',
+      (tester) async {
+    // Item shape borrowed from trip_detail_sticky_headers_test: zero coords so
+    // the screen skips the map widget, and undated so no events/weather rail
+    // is fetched — this test is about the title, and the rest is just the
+    // scroll extent it needs.
+    final tall = Trip(
+      id: 't1',
+      title: 'Sevilla week',
+      createdAt: '2026-06-01',
+      updatedAt: '2026-06-01',
+      items: [
+        for (var k = 0; k < 6; k++)
+          ItineraryItem(
+            id: 'i$k',
+            position: k,
+            name: 'Sevilla stop $k',
+            address: 'Stop $k street, Sevilla',
+            latitude: 0,
+            longitude: 0,
+            category: 'attraction',
+            day: 1,
+            city: 'Sevilla',
+          ),
+        for (var k = 0; k < 6; k++)
+          ItineraryItem(
+            id: 'j$k',
+            position: 6 + k,
+            name: 'Cordoba stop $k',
+            address: 'Stop $k street, Cordoba',
+            latitude: 0,
+            longitude: 0,
+            category: 'attraction',
+            day: 2,
+            city: 'Cordoba',
+          ),
+      ],
+    );
+    await _pump(tester, tall, surface: phone);
+
+    final bar = find.byType(AppBar);
+    final headerTitle = find.descendant(
+        of: find.byType(TripHeaderCard), matching: find.text('Sevilla week'));
+    final barTitle =
+        find.descendant(of: bar, matching: find.text('Sevilla week'));
+
+    expect(barTitle, findsNothing);
+    expect(headerTitle, findsOneWidget);
+
+    // Dragged from inside the header block, above the map band — a vertical
+    // drag started over the map is the map's, not the page's.
+    await tester.dragFrom(const Offset(195, 200), const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    // Premise first: without this the handover assertion would pass vacuously
+    // on a build where the drag scrolled nothing. Asserted as the header copy
+    // being GONE rather than as a smaller dy — the header sliver unmounts once
+    // it is fully off screen, so there is nothing left to measure.
+    expect(headerTitle, findsNothing,
+        reason: 'the drag did not scroll the header block away');
+    expect(barTitle, findsOneWidget,
+        reason: 'the bar takes the name once the header copy has gone');
+
+    // ...and hands it back on the way up, so the name is never in both places.
+    await tester.dragFrom(const Offset(195, 400), const Offset(0, 600));
+    await tester.pumpAndSettle();
+    expect(barTitle, findsNothing);
+    expect(headerTitle, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -153,6 +153,21 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
   /// everything outside it is not tappable at all — see [ShellScope].
   final VoidCallback? onBrandTap;
 
+  /// Cross-fade the title row when [title] appears or disappears, instead of
+  /// swapping it outright.
+  ///
+  /// For a page that hands its title to this bar only once its own copy has
+  /// scrolled away (trip detail's collapse). The two states are different
+  /// WIDGETS, not one string changing — on a phone the ladder below has the
+  /// wordmark yield as the title arrives — so this cannot be an opacity on
+  /// the Text; both sides have to be measured and cross-faded.
+  ///
+  /// Opt-in, and default false, so a bar whose title never changes is
+  /// byte-identical to before: an AnimatedSwitcher that never switches still
+  /// inserts a Stack into every app bar in the app, and this is not worth
+  /// spending on twenty screens with static titles.
+  final bool animateTitle;
+
   const GradientAppBar({
     super.key,
     this.title,
@@ -160,6 +175,7 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
     this.centerTitle,
     this.bottom,
     this.onBrandTap,
+    this.animateTitle = false,
   });
 
   @override
@@ -241,6 +257,36 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
     final railCarriesMark =
         inShell && MediaQuery.sizeOf(context).width >= kRailBreakpoint;
 
+    // railCarriesMark is passed down rather than recomputed: it is the same
+    // fact the leading slot below turns on, and the ladder needs it to know
+    // whether the wordmark is the bar's ONLY brand (rail widths) or has a
+    // rose standing beside it.
+    Widget titleRow = _BrandTitle(
+        title: title, onTap: onTap, railCarriesMark: railCarriesMark);
+
+    if (animateTitle) {
+      titleRow = AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        // Opacity alone. AnimatedSwitcher's default pairs the fade with a
+        // scale, which on a 22px inscriptional serif reads as a wobble.
+        transitionBuilder: (child, animation) =>
+            FadeTransition(opacity: animation, child: child),
+        // The default layout stacks children CENTRED, which would slide the
+        // row horizontally for the length of the transition — and the whole
+        // point of this bar is that the title row's left edge does not move.
+        layoutBuilder: (current, previous) => Stack(
+          alignment: AlignmentDirectional.centerStart,
+          children: [...previous, if (current != null) current],
+        ),
+        // Keyed on PRESENCE, not on the string: this animates the title
+        // arriving and leaving, and a page that renames itself in place still
+        // just repaints.
+        child: KeyedSubtree(key: ValueKey(title != null), child: titleRow),
+      );
+    }
+
     return AppBar(
       // Non-null exactly when AppBar would have left this empty. That is what
       // holds the wordmark still across a navigation.
@@ -261,12 +307,7 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
       // from whatever precedes it, and on a phone those 16px are worth more as
       // title width. See [_titleEndGap] for what this costs on the other side.
       titleSpacing: 0,
-      // railCarriesMark is passed down rather than recomputed: it is the same
-      // fact the leading slot above turns on, and the ladder needs it to know
-      // whether the wordmark is the bar's ONLY brand (rail widths) or has a
-      // rose standing beside it.
-      title: _BrandTitle(
-          title: title, onTap: onTap, railCarriesMark: railCarriesMark),
+      title: titleRow,
       actions: actions,
       centerTitle: centerTitle ?? false,
       bottom: bottom,
