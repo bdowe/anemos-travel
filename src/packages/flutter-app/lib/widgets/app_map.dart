@@ -306,12 +306,19 @@ class MapControlButton extends StatelessWidget {
   /// on these maps a ring means "focused on this city".
   final Color iconColor;
 
+  /// True inside a [MapControlGroup]: paints no circle or border of its own —
+  /// the group owns the capsule; the button contributes icon + hit target
+  /// + ripple, so stacked members read as one segmented pill instead of
+  /// three floating discs (TripAdvisor/Airbnb map-control treatments).
+  final bool grouped;
+
   const MapControlButton({
     super.key,
     required this.icon,
     this.tooltip,
     required this.onTap,
     this.iconColor = Colors.white,
+    this.grouped = false,
   });
 
   @override
@@ -324,25 +331,65 @@ class MapControlButton extends StatelessWidget {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
-          child: Center(
-            // Ink (not Container) so the tap ripple still paints over the
-            // frosted chip instead of underneath it.
-            child: Ink(
-              width: _visualSize,
-              height: _visualSize,
-              decoration: ShapeDecoration(
-                color: AppColors.mapScrim,
-                shape: const CircleBorder(
-                  side: BorderSide(color: Colors.white24),
+          child: grouped
+              ? Center(child: Icon(icon, size: 20, color: iconColor))
+              : Center(
+                  // Ink (not Container) so the tap ripple still paints over
+                  // the frosted chip instead of underneath it.
+                  child: Ink(
+                    width: _visualSize,
+                    height: _visualSize,
+                    decoration: ShapeDecoration(
+                      color: AppColors.mapScrim,
+                      shape: const CircleBorder(
+                        side: BorderSide(color: Colors.white24),
+                      ),
+                    ),
+                    child: Icon(icon, size: 20, color: iconColor),
+                  ),
                 ),
-              ),
-              child: Icon(icon, size: 20, color: iconColor),
-            ),
-          ),
         ),
       ),
     );
     if (tooltip == null) return button;
     return Tooltip(message: tooltip!, child: button);
+  }
+}
+
+/// The map's zoom triplet (+/−/reset) as ONE segmented capsule: a single
+/// frosted container with internal hairline dividers — the deliberate
+/// component that three floating scrim discs never conveyed (research:
+/// TripAdvisor/Airbnb map controls). Children must be MapControlButtons
+/// with `grouped: true`; each keeps its 44px hit target.
+class MapControlGroup extends StatelessWidget {
+  final List<MapControlButton> buttons;
+
+  const MapControlGroup({super.key, required this.buttons});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.mapScrim,
+        // Pills are fully rounded; the capsule reads as one shape containing
+        // the triplet rather than three circles of stock map chrome.
+        borderRadius: BorderRadius.circular(MapControlButton.hitTarget / 2),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < buttons.length; i++) ...[
+            if (i > 0)
+              Container(
+                width: MapControlButton._visualSize,
+                height: 1,
+                color: Colors.white24,
+              ),
+            buttons[i],
+          ],
+        ],
+      ),
+    );
   }
 }

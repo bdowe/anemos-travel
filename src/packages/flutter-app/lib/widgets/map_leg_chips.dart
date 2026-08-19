@@ -47,6 +47,12 @@ class MapLegChips extends StatefulWidget {
   /// pinned by a test.
   static const double mapTopInset = 64;
 
+  /// Widest painted label a single chip may claim (px). The strip scrolls,
+  /// so an unclamped long city name would shove every later chip out of the
+  /// first viewport and hide that the row scrolls at all — the crowding the
+  /// clip prevents (the qualifier rides below the clamp via the Row).
+  static const double maxChipLabelWidth = 140;
+
   /// One entry per full-itinerary leg, visit order, labels display-ready.
   /// [qualifier] is set only on labels the strip repeats — build these with
   /// `mapLegChipEntries`, which owns that rule.
@@ -138,21 +144,33 @@ class _MapLegChipsState extends State<MapLegChips> {
     final chip = ChoiceChip(
       // The qualifier rides one weight down from the city so the strip still
       // scans as a row of place names — it disambiguates, it doesn't compete.
+      // The label clamps to [maxChipLabelWidth] with ellipsis so a long city
+      // name can't shove the rest of the strip out of the first viewport.
       label: qualifier == null
-          ? Text(label)
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label),
-                Text(
-                  ' · $qualifier',
-                  style: TextStyle(
-                    color: dim ? Colors.white38 : Colors.white70,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
+          ? ConstrainedBox(
+              constraints:
+                  const BoxConstraints(maxWidth: MapLegChips.maxChipLabelWidth),
+              child: Text(label, overflow: TextOverflow.ellipsis),
+            )
+          : ConstrainedBox(
+              constraints:
+                  const BoxConstraints(maxWidth: MapLegChips.maxChipLabelWidth),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(label, overflow: TextOverflow.ellipsis),
                   ),
-                ),
-              ],
+                  Text(
+                    ' · $qualifier',
+                    style: TextStyle(
+                      color: dim ? Colors.white38 : Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
       selected: isSelected,
       onSelected: (_) => widget.onSelected(value),
