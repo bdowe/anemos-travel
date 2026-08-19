@@ -48,13 +48,15 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Anemos">
-  <!-- ?v=3 dates from when nginx served /app/icons/* immutable for a year; it
-       is now no-cache, so this is belt-and-braces for pre-2026-08-15 caches. -->
-  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=3">
+  <!-- The ?v= series dates from when nginx served /app/icons/* immutable for a
+       year; it is now no-cache, so this is belt-and-braces for pre-2026-08-15
+       caches. Bumped to 4 when the icon crops tightened (render/icon84.html).
+       manifest.json carries the same version — move them together. -->
+  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=4">
 
-  <!-- Favicon: ?v=3 because Chrome's favicon cache is keyed by URL and
+  <!-- Favicon: ?v=4 because Chrome's favicon cache is keyed by URL and
        refreshes lazily — new bytes at the same URL can stay stale for weeks. -->
-  <link rel="icon" type="image/png" href="favicon.png?v=3"/>
+  <link rel="icon" type="image/png" href="favicon.png?v=4"/>
 
   <title>Anemos</title>
   <link rel="manifest" href="manifest.json">
@@ -68,9 +70,9 @@
   <!--
     Boot splash shown while flutter_bootstrap.js + main.dart.js download and
     the engine starts. Pixel-matched to the in-app SplashScreen (lib/screens/
-    splash_screen.dart) — same gradient, mark geometry (96px bare light mark,
-    no plate, centre 24px above viewport centre), pulse, wordmark (centre
-    60px below viewport centre) and bottom loading dots — so the
+    splash_screen.dart) — same gradient, mark geometry (128px bare light mark,
+    no plate, centre 28px above viewport centre), pulse, wordmark (centre
+    80px below viewport centre) and bottom loading dots — so the
     flutter-first-frame handoff reads as one continuous screen. If you change
     dimensions here, change splash_screen.dart too.
 
@@ -122,23 +124,25 @@
     #splash.splash-hidden { opacity: 0; }
     .splash-mark {
       position: absolute;
-      /* 24px above centre: the mark + wordmark lockup below is ~145px tall,
-         so lifting the mark drops the pair's optical centre onto the
-         viewport centre instead of hanging it low. */
-      top: calc(50% - 24px);
+      /* 28px above centre: the mark + wordmark lockup below is 184px tall
+         (128 mark + 32 clear space + 24 caps), so lifting the mark drops the
+         pair's optical centre onto the viewport centre instead of hanging it
+         low. The three numbers here — 128, -28, +80 — are derived as a set in
+         splash_screen.dart's class doc; change them together, in both files. */
+      top: calc(50% - 28px);
       left: 50%;
       /* The pulse animates `transform`, so the keyframes must repeat this
          centering translate or the animation stomps it. */
       transform: translate(-50%, -50%);
-      width: 96px;
-      height: 96px;
+      width: 128px;
+      height: 128px;
       display: grid;
       place-items: center;
       animation: splash-pulse 1.8s ease-in-out infinite alternate;
     }
     .splash-mark img {
-      width: 96px;
-      height: 96px;
+      width: 128px;
+      height: 128px;
       object-fit: contain;
     }
     @keyframes splash-pulse {
@@ -147,12 +151,12 @@
     }
     .splash-wordmark {
       position: absolute;
-      /* Centre line 60px below viewport centre: 84px below the lifted
-         mark's, which keeps ≥24px (25% of mark height — the guideline's
-         clear space) between the mark's bottom edge and the caps.
+      /* Centre line 80px below viewport centre: 108px below the lifted
+         mark's, which keeps 32px (25% of the 128px mark height — the
+         guideline's clear space) between the mark's bottom edge and the caps.
          Deliberately NOT inside .splash-mark: that element pulses, and the
          wordmark should not. */
-      top: calc(50% + 60px);
+      top: calc(50% + 80px);
       left: 50%;
       transform: translate(-50%, -50%);
       font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;

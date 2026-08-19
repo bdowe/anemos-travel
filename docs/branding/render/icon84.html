@@ -1,9 +1,22 @@
-<!-- Render harness: PWA icon crop — mark at 84% of a 1024 transparent square
-     (matches the historical Icon-512 convention). -->
+<!-- Render harness: PWA icon — content at 84% of a 1024 transparent square
+     (the historical Icon-512 convention), now measured on the ROSE rather than
+     on the artboard.
+
+     mark.svg's solid bronze star is 76% of its own square canvas; the rest is
+     the route thread's hairline tails. Drawing the artboard at 84% therefore
+     put the rose at 84% × 76% = 64% of the icon — a third of the tile empty,
+     which read as a small logo on a large plate on every home screen and app
+     drawer. Drawing it at 110% puts the rose at the 84% the convention always
+     meant, and the thread's tails at ~104% — trimmed a hair by the frame,
+     which is the same deliberate bleed favicon.html uses.
+
+     Screenshot at --window-size=1024,1024; downscaled to 192 by
+     brand-render.sh. -->
 <!doctype html>
 <html><head><style>
   html,body{margin:0;padding:0;background:transparent}
-  .frame{width:1024px;height:1024px;display:flex;align-items:center;justify-content:center}
-  img{width:860px;height:860px}
+  .frame{width:1024px;height:1024px;overflow:hidden;
+         display:flex;align-items:center;justify-content:center}
+  img{width:1128px;height:1128px;flex:none}
 </style></head>
 <body><div class="frame"><img src="../mark.svg"></div></body></html>

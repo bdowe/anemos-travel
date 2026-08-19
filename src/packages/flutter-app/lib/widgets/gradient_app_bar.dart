@@ -22,13 +22,20 @@ const double _leadingSlot = kToolbarHeight;
 
 /// The rose's own size wherever this bar paints it.
 ///
-/// 36, not the 28 it was while plated, and measured rather than guessed: the
-/// rose radiates from a small hub, so most of its box is empty and its optical
-/// size runs well under its layout size. Below 32 the intercardinals antialias
-/// away and it reads as a thin star; 36 reads as the wind rose it is. It is
-/// also what the nav rail paints, so the brand is one size wherever it
-/// appears.
-const double _markSize = 36;
+/// 44, and measured rather than guessed: the rose radiates from a small hub,
+/// so most of its box is empty and its optical size runs well under its
+/// layout size. The solid bronze star measures exactly 76% of the artwork's
+/// square canvas — the remaining 24% is the route thread's hairline tails,
+/// which antialias to nothing at chrome sizes. So 36 painted a 27px rose and
+/// read as a thin star beside a 19px wordmark; 44 paints a 33px one, which is
+/// what a "36px logo" is supposed to look like.
+///
+/// The ceiling is the nav rail, not this bar: the rail's tap box is pinned at
+/// 40 by its centre-line derivation (`app_shell.dart`), so the rose already
+/// overflows it by 2px a side at 44 and 4px at 48. This bar has room to spare
+/// — its tap box is [kMinTouchTarget] — but the brand is one size wherever it
+/// appears, so the rail's constraint governs both.
+const double _markSize = 44;
 
 /// The rose's tap box, centred inside the [_leadingSlot].
 ///
