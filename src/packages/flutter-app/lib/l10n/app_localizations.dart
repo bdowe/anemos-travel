@@ -1706,6 +1706,24 @@ abstract class AppLocalizations {
   /// **'Other'**
   String get bookingsMenuOther;
 
+  /// Bookings tab progress header: how many bookings are still unbooked across the whole trip.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 booking left} other{{count} bookings left}}'**
+  String bookingsProgressRemaining(int count);
+
+  /// Bookings tab progress header when nothing is left to book.
+  ///
+  /// In en, this message translates to:
+  /// **'Every booking is sorted'**
+  String get bookingsProgressComplete;
+
+  /// Tooltip on the check mark of a destination section whose bookings are all done.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything here is booked'**
+  String get bookingsSectionAllBooked;
+
   /// No description provided for @tripOtherBookings.
   ///
   /// In en, this message translates to:

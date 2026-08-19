@@ -718,64 +718,39 @@ extension on _TripDetailScreenState {
   }
 
 
-  /// Flat "left to book" rows for the 'unbooked' lens: every city slot's
-  /// unbooked rows in trip order, then the residual todos and detail-only
-  /// records that matched no city. Reuses the same row widgets (and the
-  /// _setRowBooked writer) as the inline city view, so checking a box here
-  /// behaves identically and the row leaves the lens on the rebuild.
-  ///
-  /// [destination] narrows to one leg label exactly as [_allBookingRows] does
-  /// — the destination strip renders in BOTH scopes, so a chosen city has to
-  /// mean the same thing in both. Same discipline too: this filters the OUTPUT
-  /// of the one full-label partition, never a re-partition on a label subset.
-  List<Widget> _unbookedRows(
-    GroupedBookings grouped,
-    List<String> labels, {
-    String? destination,
-  }) {
+  /// One residual booking's card — the "Other bookings" register, used by both
+  /// lens scopes so a custom booking looks the same whichever scope surfaced
+  /// it. Kept as [BookingTodoCard] (not the slim [BookingTodoRow] the city
+  /// sections use) because it is the ONLY row widget carrying edit/delete, and
+  /// a custom booking is the one kind a traveler can actually rename or throw
+  /// away.
+  Widget _residualTodoCard(BookingTodo todo) {
     final l10n = context.l10n;
-    bool slotShown(int i) =>
-        destination == null ||
-        (i < labels.length && labels[i] == destination);
-    final showResiduals =
-        destination == null || destination == _kOtherPlaces;
-    return [
-      for (final (i, slot) in grouped.slots.indexed)
-        if (slotShown(i)) ...[
-          ..._bookingRowWidgets(slot, departureOnly: false, unbookedOnly: true),
-          if (i == grouped.slots.length - 1)
-            ..._bookingRowWidgets(slot,
-                departureOnly: true, unbookedOnly: true),
-        ],
-      if (showResiduals) ...[
-        for (final todo in grouped.residual.where((t) => !t.booked))
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: BookingTodoCard(
-              todo: todo,
-              onBookedChanged: (v) => _setRowBooked(v, todo: todo),
-              onOpen: _openCallbackFor(todo),
-              openLabelOverride: _flightLegs.containsKey(todo.todoKey)
-                  ? l10n.tripFindFlights
-                  : null,
-              onEdit: todo.auto ? null : () => _editTodo(todo),
-              onDelete: todo.auto ? null : () => _deleteTodo(todo),
-            ),
-          ),
-        for (final a in grouped.residualStays.where((a) => !a.booked))
-          _detailRowFor(stay: a, segment: null, detailOnly: true),
-        for (final s in grouped.residualSegments.where((s) => !s.booked))
-          _detailRowFor(stay: null, segment: s, detailOnly: true),
-      ],
-    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: BookingTodoCard(
+        todo: todo,
+        onBookedChanged: (v) => _setRowBooked(v, todo: todo),
+        onOpen: _openCallbackFor(todo),
+        openLabelOverride:
+            _flightLegs.containsKey(todo.todoKey) ? l10n.tripFindFlights : null,
+        onEdit: todo.auto ? null : () => _editTodo(todo),
+        onDelete: todo.auto ? null : () => _deleteTodo(todo),
+      ),
+    );
   }
 
 
-  /// The 'bookings' lens rows: every city slot's rows — booked and unbooked —
-  /// in trip order, then the residual todos and detail-only records that
-  /// matched no city. Reuses the same row widgets (and the _setRowBooked
-  /// writer) as the inline city view, so checking a box here behaves
-  /// identically; the row stays put, struck through.
+  /// The Bookings view's rows, grouped under the destination they belong to.
+  ///
+  /// This replaced a flat run of rows that gave the eye nothing to hold on to:
+  /// "Naxos → Fira", "Stay in Fira", "Fira → EWR" read as one undifferentiated
+  /// list, and the residual bookings at its tail arrived with no label at all.
+  /// Sections restore the orientation the city groups give the itinerary view.
+  ///
+  /// Merged by LABEL, not by slot, so a revisited city gets ONE section exactly
+  /// as it gets ONE chip ([_bookingsLensDestinations] dedupes the same way) —
+  /// two "Athens" headers around a Naxos detour would read as two cities.
   ///
   /// [destination] narrows to one leg label (null = all): slot i is included
   /// when labels[i] matches; residuals only under All or the 'Other places'
@@ -784,43 +759,229 @@ extension on _TripDetailScreenState {
   /// the partition on a label subset: its claim-once matching is
   /// order-dependent, so a subset call would assign rows differently than
   /// the inline city view (docs/zen.md).
-  List<Widget> _allBookingRows(
+  ///
+  /// [unbookedOnly] keeps only rows whose visible checkbox is unchecked — the
+  /// "Not booked yet" scope. A section whose rows all filter out disappears
+  /// with them; an empty header would promise rows that aren't there.
+  List<({String label, List<Widget> rows})> _bookingSections(
     GroupedBookings grouped,
     List<String> labels, {
     String? destination,
+    bool unbookedOnly = false,
   }) {
-    final l10n = context.l10n;
     bool slotShown(int i) =>
         destination == null ||
         (i < labels.length && labels[i] == destination);
     final showResiduals =
         destination == null || destination == _kOtherPlaces;
-    return [
-      for (final (i, slot) in grouped.slots.indexed)
-        if (slotShown(i)) ...[
-          ..._bookingRowWidgets(slot, departureOnly: false),
-          if (i == grouped.slots.length - 1)
-            ..._bookingRowWidgets(slot, departureOnly: true),
-        ],
-      if (showResiduals) ...[
+    final order = <String>[];
+    final rows = <String, List<Widget>>{};
+    void add(String label, List<Widget> widgets) {
+      if (widgets.isEmpty) return;
+      if (!rows.containsKey(label)) order.add(label);
+      (rows[label] ??= <Widget>[]).addAll(widgets);
+    }
+
+    for (final (i, slot) in grouped.slots.indexed) {
+      if (!slotShown(i) || i >= labels.length) continue;
+      add(labels[i], [
+        ..._bookingRowWidgets(slot,
+            departureOnly: false, unbookedOnly: unbookedOnly),
+        // The flight home hangs off the LAST slot — it departs from that city,
+        // which is where a traveler looks for it.
+        if (i == grouped.slots.length - 1)
+          ..._bookingRowWidgets(slot,
+              departureOnly: true, unbookedOnly: unbookedOnly),
+      ]);
+    }
+    if (showResiduals) {
+      bool keep(bool booked) => !unbookedOnly || !booked;
+      add(_kOtherPlaces, [
         for (final todo in grouped.residual)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: BookingTodoCard(
-              todo: todo,
-              onBookedChanged: (v) => _setRowBooked(v, todo: todo),
-              onOpen: _openCallbackFor(todo),
-              openLabelOverride: _flightLegs.containsKey(todo.todoKey)
-                  ? l10n.tripFindFlights
-                  : null,
-              onEdit: todo.auto ? null : () => _editTodo(todo),
-              onDelete: todo.auto ? null : () => _deleteTodo(todo),
+          if (keep(todo.booked)) _residualTodoCard(todo),
+        for (final a in grouped.residualStays)
+          if (keep(a.booked)) _detailRowFor(stay: a, segment: null, detailOnly: true),
+        for (final s in grouped.residualSegments)
+          if (keep(s.booked)) _detailRowFor(stay: null, segment: s, detailOnly: true),
+      ]);
+    }
+    return [for (final label in order) (label: label, rows: rows[label]!)];
+  }
+
+
+  /// A section head: tinted icon tile, the destination, and — when every
+  /// booking under it is done — a quiet check.
+  ///
+  /// The tile leads the rows the way the budget receipt's group heads lead
+  /// theirs; the 34px slot is the row's own leading slot, so a head's label
+  /// starts on the same x as the titles beneath it.
+  ///
+  /// The done mark reads [bookingDestinationCounts] — the SAME map the chips
+  /// count from — so a "Athens · 2/2" chip and a ticked Athens head can never
+  /// disagree. It is a mark, not a count: the chip above already spends the
+  /// number, and a second copy here would be two spellings of one fact
+  /// (docs/zen.md). Suppressed in the "Not booked yet" scope, where every
+  /// visible row is unbooked by construction and a "done" head would be
+  /// answering a question nobody asked.
+  Widget _bookingSectionHeader(
+    ThemeData theme,
+    String label, {
+    required bool allBooked,
+  }) {
+    final l10n = context.l10n;
+    final isOther = label == _kOtherPlaces;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          12, AppSpacing.md, 0, AppSpacing.xs),
+      child: Row(
+        children: [
+          SizedBox(
+            width: kBookingRowLeadingSlot,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: AppRadius.smAll,
+                ),
+                child: Icon(
+                  isOther ? Icons.luggage_outlined : Icons.place_outlined,
+                  size: 14,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
             ),
           ),
-        for (final a in grouped.residualStays)
-          _detailRowFor(stay: a, segment: null, detailOnly: true),
-        for (final s in grouped.residualSegments)
-          _detailRowFor(stay: null, segment: s, detailOnly: true),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isOther ? l10n.tripOtherBookings : label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelLarge
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (allBooked)
+            Tooltip(
+              message: l10n.bookingsSectionAllBooked,
+              child: Icon(Icons.check_circle,
+                  size: 16, color: theme.colorScheme.primary),
+            ),
+        ],
+      ),
+    );
+  }
+
+
+  /// Where the trip stands, above the filter strip: what is LEFT to book, and
+  /// a bar for the shape of it.
+  ///
+  /// Framed as the remainder rather than as a ratio on purpose. The tab pill
+  /// already spends the "7/10" spelling — but only on wide widths, where it
+  /// fits beside three tabs; on a phone it is dropped, and its own comment
+  /// promises "the count is one tap away inside the view", which until now
+  /// nothing inside the view actually delivered. So this says the thing the
+  /// pill doesn't (how much work remains, which is what a traveler is here
+  /// for) and says it at every width.
+  ///
+  /// Deliberately NOT a hero metric — a label-scale line over a hairline bar.
+  /// The bar is the hierarchy this tab was missing; a big number would just be
+  /// the counter chip again, louder.
+  Widget? _bookingsProgressHeader(
+      ThemeData theme, GroupedBookings grouped, List<String> labels) {
+    final l10n = context.l10n;
+    final count = bookingOverallCount(grouped, labels);
+    if (count.total == 0) return null;
+    final left = count.total - count.booked;
+    final done = left == 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xs, AppSpacing.xs, AppSpacing.xs, AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            done
+                ? l10n.bookingsProgressComplete
+                : l10n.bookingsProgressRemaining(left),
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: done ? theme.colorScheme.primary : null,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ClipRRect(
+            borderRadius: AppRadius.smAll,
+            child: LinearProgressIndicator(
+              value: count.booked / count.total,
+              minHeight: 4,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  /// The sections as widgets: the city sections share ONE raised card so the
+  /// trip's booking plan reads as a single object instead of rows floating on
+  /// the page, and "Other bookings" follows it as its own labelled run.
+  ///
+  /// Residual bookings stay OUTSIDE the card because they render as
+  /// [BookingTodoCard]s — cards nested in a card would be two raised registers
+  /// arguing. Their heading is also the fix for a real gap: in this view the
+  /// residual rows used to arrive at the tail with no label at all, so a
+  /// custom booking looked like it belonged to the last city.
+  List<Widget> _bookingSectionWidgets(
+    ThemeData theme,
+    List<({String label, List<Widget> rows})> sections,
+    GroupedBookings grouped,
+    List<String> labels, {
+    required bool unbookedOnly,
+  }) {
+    final counts =
+        bookingDestinationCounts(grouped, labels, otherKey: _kOtherPlaces);
+    bool allBooked(String label) {
+      if (unbookedOnly) return false;
+      final c = counts[label];
+      return c != null && c.total > 0 && c.booked == c.total;
+    }
+
+    Widget head(String label) =>
+        _bookingSectionHeader(theme, label, allBooked: allBooked(label));
+
+    final cities = [for (final s in sections) if (s.label != _kOtherPlaces) s];
+    final other = [for (final s in sections) if (s.label == _kOtherPlaces) s];
+    return [
+      if (cities.isNotEmpty)
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+                0, AppSpacing.xs, AppSpacing.sm, AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (i, s) in cities.indexed) ...[
+                  // Between sections only — a rule above the first head would
+                  // just underline the card's own top edge.
+                  if (i > 0)
+                    const Divider(height: AppSpacing.lg, indent: 12),
+                  head(s.label),
+                  ...s.rows,
+                ],
+              ],
+            ),
+          ),
+        ),
+      for (final s in other) ...[
+        head(s.label),
+        ...s.rows,
       ],
     ];
   }
@@ -900,10 +1061,22 @@ extension on _TripDetailScreenState {
     List<String> labels,
   ) {
     final l10n = context.l10n;
+    final theme = Theme.of(context);
     final destinations = _bookingsLensDestinations(grouped, labels);
-    final rows = _unbookedRows(grouped, labels,
-        destination: _bookingsLensDestination);
+    final sections = _bookingSections(grouped, labels,
+        destination: _bookingsLensDestination, unbookedOnly: true);
+    final rows = _bookingSectionWidgets(theme, sections, grouped, labels,
+        unbookedOnly: true);
+    // Trip-wide, so it sits ABOVE the strip that narrows the list: it answers
+    // "where does this trip stand", which no chip selection changes. Withheld
+    // over BOTH empty arms below — each already states the progress in words,
+    // and "Every booking is sorted" stacked on "Everything's booked" is one
+    // fact said twice.
+    final progress = rows.isEmpty
+        ? null
+        : _bookingsProgressHeader(theme, grouped, labels);
     return [
+      if (progress != null) progress,
       _bookingsFilterBar(destinations),
       if (rows.isEmpty && _bookingsLensDestination == null)
         SizedBox(
@@ -929,24 +1102,29 @@ extension on _TripDetailScreenState {
   }
 
 
-  /// The 'bookings' lens body: the filter row above the flat all-bookings
-  /// list. Returns [] when the trip has no bookings at all so build can swap
-  /// in the lens empty state.
+  /// The 'bookings' lens body: the progress header and filter row above the
+  /// destination sections. Returns [] when the trip has no bookings at all so
+  /// build can swap in the lens empty state.
   List<Widget> _bookingsLensBody(
     GroupedBookings grouped,
     List<String> labels,
   ) {
     final l10n = context.l10n;
-    final all = _allBookingRows(grouped, labels);
+    final theme = Theme.of(context);
+    final all = _bookingSections(grouped, labels);
     if (all.isEmpty) return const [];
     // Builds the chips AND clamps a stale selection — so it runs before the
     // rows below are filtered by that selection.
     final destinations = _bookingsLensDestinations(grouped, labels);
-    final rows = _bookingsLensDestination == null
+    final sections = _bookingsLensDestination == null
         ? all
-        : _allBookingRows(grouped, labels,
+        : _bookingSections(grouped, labels,
             destination: _bookingsLensDestination);
+    final rows = _bookingSectionWidgets(theme, sections, grouped, labels,
+        unbookedOnly: false);
+    final progress = _bookingsProgressHeader(theme, grouped, labels);
     return [
+      if (progress != null) progress,
       _bookingsFilterBar(destinations),
       if (rows.isEmpty)
         SizedBox(

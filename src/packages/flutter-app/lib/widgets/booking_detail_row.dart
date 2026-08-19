@@ -206,23 +206,34 @@ class BookingDetailRow extends StatelessWidget {
                   : l10n.bookingsOpenBooking,
               onPressed: () => _open(context),
             ),
-          if (onEdit != null)
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              visualDensity: VisualDensity.compact,
-              tooltip: stay != null
-                  ? l10n.bookingsEditStay
-                  : l10n.bookingsEditTransport,
-              onPressed: onEdit,
-            ),
-          if (onDelete != null)
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18),
-              visualDensity: VisualDensity.compact,
-              tooltip: stay != null
-                  ? l10n.bookingsRemoveStay
-                  : l10n.bookingsRemoveTransport,
-              onPressed: onDelete,
+          // Edit and delete fold into ONE kebab so this row speaks the same
+          // trailing grammar as the [BookingTodoRow] above it — an action, an
+          // overflow, then state. Spelled out as four peer icon buttons, a
+          // saved detail (the CHILD of the row above) carried more trailing
+          // weight than its own parent, and destructive delete sat one pixel
+          // from a routine edit at the end of a 16px-icon run.
+          if (onEdit != null || onDelete != null)
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert, size: 18, color: muted),
+              tooltip: l10n.bookingRowOptions,
+              onSelected: (v) =>
+                  v == 'edit' ? onEdit?.call() : onDelete?.call(),
+              itemBuilder: (_) => [
+                if (onEdit != null)
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text(stay != null
+                        ? l10n.bookingsEditStay
+                        : l10n.bookingsEditTransport),
+                  ),
+                if (onDelete != null)
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text(stay != null
+                        ? l10n.bookingsRemoveStay
+                        : l10n.bookingsRemoveTransport),
+                  ),
+              ],
             ),
           if (showCheckbox)
             Checkbox(
