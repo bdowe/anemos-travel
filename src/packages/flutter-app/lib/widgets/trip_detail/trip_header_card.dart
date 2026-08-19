@@ -28,6 +28,12 @@ class TripHeaderCard extends ConsumerStatefulWidget {
   final bool readOnly;
   final bool panelOpen;
   final String displayTitle;
+
+  /// Attached to the title Text so the screen can measure where it sits and
+  /// hand the name to the app bar once it has scrolled away. Optional: the
+  /// card renders identically without one, and nothing here reads it.
+  final GlobalKey? titleKey;
+
   final String? overview;
   final VoidCallback onEditDetails;
   final VoidCallback onEditDates;
@@ -46,6 +52,7 @@ class TripHeaderCard extends ConsumerStatefulWidget {
     required this.readOnly,
     required this.panelOpen,
     required this.displayTitle,
+    this.titleKey,
     required this.overview,
     required this.onEditDetails,
     required this.onEditDates,
@@ -105,14 +112,21 @@ class _TripHeaderCardState extends ConsumerState<TripHeaderCard> {
             Expanded(
               child: Text(
                 widget.displayTitle,
-                // Same string as the app bar directly above, so same face —
-                // but keeping titleLarge's size, because this block is a
-                // compact anchor and headlineSmall would inflate it into the
-                // hero panel the comment above rules out.
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontFamily: AppFonts.display,
-                  fontWeight: FontWeight.w400,
-                ),
+                // Keyed so the screen can measure when this title has scrolled
+                // out from under the app bar and take the name over up there
+                // (the collapse). The key rides in from the screen because the
+                // screen is what owns the scroll listener; this widget only
+                // has to hand it the render object.
+                key: widget.titleKey,
+                // The heading face at title size — the same register the
+                // itinerary's pinned city headers take, now stated once in
+                // [AppTextStyles.sectionHeading]. This block is a compact
+                // anchor, so it must not inflate into the hero panel the
+                // comment above rules out; that is exactly what the register
+                // means. Reached this style via titleLarge + fontFamily before
+                // the token, which silently kept M3's titleLarge line height
+                // rather than the headline register's 1.2.
+                style: AppTextStyles.sectionHeading(theme.textTheme),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -309,10 +323,14 @@ class _TripHeaderCardState extends ConsumerState<TripHeaderCard> {
   /// first. Flat, not elevated — the post-#494 doctrine, and a shadow here
   /// would put the SECONDARY entry above the primary one in depth.
   ///
-  /// Deliberately NOT merged into the tinted panel itself: [NextStepCard]
-  /// paints a fixed light `brandTint`, so a shared field would have to be that
-  /// same light tint and dark mode would gain a light block twice the size.
-  /// Sequence, not fusion.
+  /// Deliberately NOT merged into the tinted panel itself. The original reason
+  /// was that [NextStepCard] painted a fixed light `brandTint` in both themes,
+  /// so a shared field would have doubled that light block in dark mode; the
+  /// tint is brightness-aware now ([AppColors.brandTintFill]), so that
+  /// particular hazard is gone. The decision stands on the other half of its
+  /// rationale: these are two jobs — "what to do next" and "where you left
+  /// off" — and one tinted field would give the quieter one the emphasis of
+  /// the louder. Sequence, not fusion.
   Widget _continueChatRow(ThemeData theme, AppLocalizations l10n) {
     final trip = widget.trip;
     final chat = trip.refineChat;

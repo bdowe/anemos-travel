@@ -121,6 +121,32 @@ abstract final class AppColors {
   static Color get neutralSolid => Colors.white;
   static Color get onNeutralSolid => brandDark;
 
+  // The brand-tinted panel: a quiet teal field carrying brand ink, for a
+  // block that is guidance rather than an alarm (the Next Step card, the
+  // preferences screen's selected chips).
+  //
+  // Brightness-aware because [brandTint] is teal-50 — a genuinely light
+  // paper, correct on paper and a light block punched into a dark page
+  // anywhere else. Dark takes the scheme's own primary container, which is
+  // seeded from the same teal, so the pair tracks the seed instead of
+  // pinning a second hand-picked dark teal. Light is byte-identical to the
+  // constants these replaced: this fixes dark mode and changes nothing else.
+  //
+  // Three roles, not two, because the light block is deliberately two-tone —
+  // [brand] as the leading-icon accent under [brandDark] text. Dark has no
+  // such pair to preserve (`onPrimaryContainer` is the only legible ink on
+  // `primaryContainer`), so accent and ink converge there.
+  static Color brandTintFill(ColorScheme scheme) =>
+      scheme.brightness == Brightness.dark
+          ? scheme.primaryContainer
+          : brandTint;
+  static Color onBrandTint(ColorScheme scheme) =>
+      scheme.brightness == Brightness.dark
+          ? scheme.onPrimaryContainer
+          : brandDark;
+  static Color brandTintAccent(ColorScheme scheme) =>
+      scheme.brightness == Brightness.dark ? scheme.onPrimaryContainer : brand;
+
   // Status-strip marks (the Health pane's 90-day uptime history,
   // specs/uptime-history). Solid and brightness-aware: the container pairs
   // above are 15-20% alpha — right for a pill on a card, invisible as a 3px

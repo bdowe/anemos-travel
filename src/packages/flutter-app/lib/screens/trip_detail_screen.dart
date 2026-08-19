@@ -337,6 +337,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scroll.addListener(_syncCollapsedTitle);
     _load();
   }
 
@@ -344,10 +345,100 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _statusPoll?.cancel();
+    _scroll.removeListener(_syncCollapsedTitle);
     _scroll.dispose();
     _focusedLegKey.dispose();
     _selectedPosition.dispose();
+    _titleCollapsed.dispose();
     super.dispose();
+  }
+
+  // ── The collapsing title ──────────────────────────────────────────────
+  // The trip's name used to render twice about 60px apart: once in the app
+  // bar and again as the first line of the header block. It now renders in
+  // exactly one of those places at a time — the header block owns it at rest,
+  // and the bar takes it over once the header's copy has scrolled out from
+  // under it (the TripAdvisor trip-page move; Mobbin). Scrolling back up
+  // hands it back.
+  //
+  // The bar keeps carrying the name at NARROW on purpose, because that is
+  // where it matters most: [GradientAppBar]'s ladder drops a page title
+  // outright when the row can't hold it, and its own comment names trip
+  // detail as the screen that covers for that by repeating the title in the
+  // body. That contract is unchanged — the body copy is still there, still
+  // the one the traveler reads at rest.
+
+  /// Attached to the header block's title so its position can be measured.
+  /// A key rather than arithmetic on the sliver: the title's height moves
+  /// with the text scaler and the trip's name, and a hardcoded threshold
+  /// would take the name over early for a large-text traveler.
+  final GlobalKey _headerTitleKey = GlobalKey();
+
+  /// Whether the app bar is currently carrying the trip's name.
+  ///
+  /// A ValueNotifier, NOT setState: this changes on scroll, and this screen
+  /// is 4k lines whose scroll performance is a fixed bug (#352/#353).
+  /// Rebuilding the body on a scroll tick is exactly what that fixed — so
+  /// only the app bar listens, via the [ValueListenableBuilder] in build.
+  final ValueNotifier<bool> _titleCollapsed = ValueNotifier<bool>(false);
+
+  /// Hysteresis band, in logical pixels, around the handover point.
+  ///
+  /// The bar takes the name when the header title is fully gone and gives it
+  /// back only once [_kTitleHandoffSlack] of it is showing again. One
+  /// threshold for both directions would let a scroll resting exactly on it
+  /// (or a bouncing overscroll settling) flip the bar back and forth.
+  static const double _kTitleHandoffSlack = 12;
+
+  /// The scroll offset at which the header title's last pixel leaves the
+  /// viewport — the handover point, in scroll coordinates.
+  ///
+  /// Cached rather than measured on every tick, because the thing being
+  /// measured stops existing: the header is a plain [SliverToBoxAdapter], so
+  /// once it is past the cache extent it UNMOUNTS and its key has no context.
+  /// Measuring live meant a fast fling scrolled the header away and the bar
+  /// never took the name over — the handover worked only for scrolls slow or
+  /// short enough to keep the sliver alive. Held in scroll coordinates, the
+  /// answer survives the widget that produced it.
+  ///
+  /// Re-derived on every tick the header IS mounted, so a text-scale change,
+  /// a rename, or a rewrapped overview moves the handover point without
+  /// anything having to invalidate this.
+  double? _titleHandoff;
+
+  void _syncCollapsedTitle() {
+    if (!mounted || !_scroll.hasClients) return;
+    final box = _headerTitleKey.currentContext?.findRenderObject();
+    if (box is RenderBox && box.attached) {
+      final viewport = RenderAbstractViewport.maybeOf(box);
+      if (viewport != null) {
+        // getOffsetToReveal, NOT localToGlobal against the viewport. A scroll
+        // listener runs from `ScrollPosition.setPixels`, BEFORE the frame that
+        // lays the viewport out at the new offset — so the render tree it can
+        // see is one layout stale, and a position read out of it is wrong by
+        // however far this notification just scrolled. A single-step drag of
+        // 380px measured the title as still sitting at the top and put the
+        // handover 387px late, which is exactly far enough that it never
+        // fired. This asks for the target's place in the SCROLL extent, which
+        // no scroll offset can stale: the offset at which its leading edge
+        // reaches the top, plus its own height, is the offset at which its
+        // last pixel leaves.
+        //
+        // No pinned-chrome subtraction is owed (unlike the Today scroll
+        // above): the header is the FIRST sliver, so nothing pinned precedes
+        // it and getOffsetToReveal's obstruction term is zero here.
+        _titleHandoff =
+            viewport.getOffsetToReveal(box, 0).offset + box.size.height;
+      }
+    }
+    final handoff = _titleHandoff;
+    // Nothing measured yet (the first tick can precede the header's layout).
+    // Leaving the bar as it is beats guessing: the header block is on screen
+    // in exactly that case, so the name is already showing somewhere.
+    if (handoff == null) return;
+    final past = _scroll.offset - handoff;
+    _titleCollapsed.value =
+        _titleCollapsed.value ? past > -_kTitleHandoffSlack : past >= 0;
   }
 
   // ── Freshness polling (specs/shared-trip-freshness) ───────────────────
@@ -3303,42 +3394,65 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   : const Icon(Icons.chat_bubble_outline),
             )
           : null,
-      appBar: GradientAppBar(
-        title: trip != null ? _displayTitle(trip) : l10n.tripTitleFallback,
-        actions: [
-          // This is the app's width-budget boss: five icons beside the brand
-          // fit at rail widths and nowhere near it on a phone. At narrow
-          // everything that is already a menu or a sheet folds into the
-          // overflow (see [_overflowAppBarAction]) and the icon row drops to
-          // TWO — health plus the `⋮` itself.
-          //
-          // Health is the one action that earns an icon on a phone: its
-          // severity count is a glanceable badge, and a badge inside a menu is
-          // a badge nobody sees. Everything else is one tap further away and
-          // the trip's NAME gets the ~48px back — at 375px that is the
-          // difference between "Big Su…" and a name you can read, which is
-          // what the traveler actually needed the header for.
-          //
-          // Refine used to hold an icon here at narrow — it is the header
-          // card's own Refine button relocated, since narrow drops it down
-          // there for one clean chip row. It now rides the `⋮` instead, and
-          // the header card must STAY as it is: putting its button back is
-          // what #457's chip row was tidying away.
-          if (trip != null) _healthAppBarAction(trip, theme),
-          if (trip != null && !_narrow) _wearAppBarAction(trip),
-          // Sharing is an owner-only surface; it mutates, so it's hidden
-          // while offline-serving.
-          if (trip != null && trip.isOwner && !_isOffline && !_narrow)
-            PopupMenuButton<TripAction>(
-              key: _shareMenuKey,
-              icon: const Icon(Icons.share_outlined),
-              tooltip: l10n.tripShareTrip,
-              onSelected: (action) => action.onSelected(),
-              itemBuilder: (context) =>
-                  tripActionPopupEntries(context, _shareActionSections(l10n)),
-            ),
-          if (trip != null) _overflowAppBarAction(trip, l10n),
-        ],
+      appBar: PreferredSize(
+        // GradientAppBar's own preferredSize with no `bottom`, restated
+        // because Scaffold has to know the bar's height before the builder
+        // below ever runs.
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        // Only the bar rebuilds when the title changes hands — see
+        // [_titleCollapsed] for why this is not a setState.
+        child: ValueListenableBuilder<bool>(
+          valueListenable: _titleCollapsed,
+          builder: (context, collapsed, _) => GradientAppBar(
+            // The handover is a cross-fade, not a swap: on a phone the
+            // wordmark yields as the name arrives, so the two states are
+            // different widgets rather than one string changing.
+            animateTitle: true,
+            // Null while the header block is still showing the name itself —
+            // which leaves the bar carrying the wordmark alone, the state
+            // GradientAppBar's ladder already had for Home and Landing. A
+            // trip that hasn't loaded has no header block to defer to, so it
+            // keeps the fallback.
+            title: trip == null
+                ? l10n.tripTitleFallback
+                : (collapsed ? _displayTitle(trip) : null),
+            actions: [
+              // This is the app's width-budget boss: five icons beside the
+              // brand fit at rail widths and nowhere near it on a phone. At
+              // narrow everything that is already a menu or a sheet folds into
+              // the overflow (see [_overflowAppBarAction]) and the icon row
+              // drops to TWO — health plus the `⋮` itself.
+              //
+              // Health is the one action that earns an icon on a phone: its
+              // severity count is a glanceable badge, and a badge inside a
+              // menu is a badge nobody sees. Everything else is one tap
+              // further away and the trip's NAME gets the ~48px back — at
+              // 375px that is the difference between "Big Su…" and a name you
+              // can read, which is what the traveler actually needed the
+              // header for.
+              //
+              // Refine used to hold an icon here at narrow — it is the header
+              // card's own Refine button relocated, since narrow drops it down
+              // there for one clean chip row. It now rides the `⋮` instead,
+              // and the header card must STAY as it is: putting its button
+              // back is what #457's chip row was tidying away.
+              if (trip != null) _healthAppBarAction(trip, theme),
+              if (trip != null && !_narrow) _wearAppBarAction(trip),
+              // Sharing is an owner-only surface; it mutates, so it's hidden
+              // while offline-serving.
+              if (trip != null && trip.isOwner && !_isOffline && !_narrow)
+                PopupMenuButton<TripAction>(
+                  key: _shareMenuKey,
+                  icon: const Icon(Icons.share_outlined),
+                  tooltip: l10n.tripShareTrip,
+                  onSelected: (action) => action.onSelected(),
+                  itemBuilder: (context) => tripActionPopupEntries(
+                      context, _shareActionSections(l10n)),
+                ),
+              if (trip != null) _overflowAppBarAction(trip, l10n),
+            ],
+          ),
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -3497,6 +3611,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                     readOnly: _readOnly,
                                     panelOpen: _panelOpen,
                                     displayTitle: _displayTitle(trip),
+                                    titleKey: _headerTitleKey,
                                     overview: _overviewText(trip),
                                     onEditDetails: _editTripDetails,
                                     onEditDates: _editDates,
