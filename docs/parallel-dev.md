@@ -72,6 +72,32 @@ Harness-created worktrees (Mode A) self-provision with `make wt-init`.
 `set -a; . .wt.env; set +a` first — an unsourced bare command falls back to
 the main stack's ports/project.
 
+**Booting the stack breaks the host analyzer — `flutter pub get` fixes it.**
+The Flutter dev container runs its own `flutter pub get` against the *mounted*
+source tree, and the file it writes,
+`src/packages/flutter-app/.dart_tool/package_config.json`, holds absolute
+paths to the SDK. It comes back pointing at the container's
+(`file:///flutter/packages/flutter`) instead of the host's
+(`file:///opt/homebrew/share/flutter/...`), so every host tool that reads it
+sees no Flutter at all:
+
+```
+error - Target of URI doesn't exist: 'package:flutter/material.dart'
+error - Undefined class 'State'.  (…~32k more)
+```
+
+Nothing is wrong with the branch. Run `flutter pub get` on the **host**, from
+`src/packages/flutter-app`, and it is over — the file is gitignored and
+per-worktree, so this affects no one else and nothing needs committing.
+
+What makes it cost time is that **it does not look like a tooling problem**:
+the gates stay green, because `flutter analyze` and `flutter test` each run an
+implicit `pub get` and silently repair the file before doing anything. Only
+the tools that don't — your editor's analysis server, and bare `dart analyze`
+— report the wall of errors. So the failure shows up as "my IDE says the
+branch is broken while every check passes", which reads like a bad merge.
+Expect it again after any `docker-dev` restart.
+
 ## 3. Lane partitioning rules (the hub table)
 
 Measured over 144 merged PRs (2026-06-15 → 07-31). Wave planning must check
