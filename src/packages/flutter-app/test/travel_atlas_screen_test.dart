@@ -23,6 +23,7 @@ import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trip_cache.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/widgets/section_header.dart';
+import 'package:travel_route_planner/widgets/travel_footprint_parts.dart';
 
 import 'support/l10n_test_app.dart';
 import 'support/url_sync_fakes.dart';
@@ -471,11 +472,58 @@ void main() {
         _trip('half', 'Split & Hvar',
             end: '${_lastYear - 4}-08-19', cities: const ['Split']),
       ]);
-      await tester.tap(find.text('${_lastYear - 4}'));
+
+      // FOUR chips now, and the strip scrolls: this one is off the right edge
+      // at 390dp, so a bare tap() lands on nothing, selects nothing, and the
+      // assertions below pass on the UNFILTERED index. Reveal it first —
+      // which is also the font-independent fix, since where the nth chip
+      // sits depends on how wide the test font drew the ones before it. The
+      // strip's own Scrollable, not the page's: the innermost ancestor.
+      final chip = find.text('${_lastYear - 4}');
+      await tester.scrollUntilVisible(chip, 200,
+          scrollable: find.ancestor(of: chip, matching: find.byType(Scrollable)).first);
+      await tester.tap(chip);
       await tester.pumpAndSettle();
 
       expect(_inIndex(find.text('Split & Hvar')), findsOneWidget);
       expect(_inIndex(find.text('0 days')), findsNothing);
+      // ...and the filter is on, which is the half of this test that used to
+      // be missing: both assertions above hold on the unfiltered index too.
+      expect(_inIndex(find.text('Iberia Loop')), findsNothing);
+    });
+
+    testWidgets('a year with no located trips keeps the plate, dot-less',
+        (tester) async {
+      // The one branch where `hasPlate` and `pins` deliberately disagree.
+      // Whether there is a plate at all is answered by the WHOLE account, so
+      // a year whose trips carry no coordinates — name-only destinations on
+      // a logged trip — renders a dot-less map holding the camera it had,
+      // rather than making the plate appear and disappear as you pick
+      // through the chips. Presence of widgets and the camera's own numbers;
+      // nothing here measures a layout.
+      await _pumpAtlas(tester, trips: [
+        ...spanning(),
+        _trip('unlocated', 'Marrakech Trip',
+            start: '${_lastYear - 4}-03-01',
+            end: '${_lastYear - 4}-03-06',
+            cities: const ['Marrakech']), // no cityPins: never invented
+      ]);
+      expect(find.byType(FootprintDot), findsWidgets);
+      final held = (_camera(tester).center, _camera(tester).zoom);
+
+      final chip = find.text('${_lastYear - 4}');
+      await tester.scrollUntilVisible(chip, 200,
+          scrollable: find.ancestor(of: chip, matching: find.byType(Scrollable)).first);
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+
+      // The filter took...
+      expect(_inIndex(find.text('Marrakech Trip')), findsOneWidget);
+      expect(_inIndex(find.text('Iberia Loop')), findsNothing);
+      // ...and the plate stayed, empty, exactly where it was.
+      expect(find.byType(FlutterMap), findsOneWidget);
+      expect(find.byType(FootprintDot), findsNothing);
+      expect((_camera(tester).center, _camera(tester).zoom), held);
     });
 
     testWidgets('the chips keep the 48px touch floor', (tester) async {

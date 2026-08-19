@@ -427,6 +427,21 @@ void main() {
       expect(rows.map((r) => r.trip.id), ['autumn', 'spring']);
     });
 
+    test('year: n keeps a half-dated trip, filed under its end date', () {
+      // The intersection of the two cases above, and the one the year-filter
+      // ticket names outright: a year whose trips are ALL half-dated still
+      // renders rows. `year:` narrows on atlasFirstDay, which falls back to
+      // the end date — narrowing on startDate instead would silently empty
+      // this year, and the row still carries no length.
+      final rows = atlasRows([
+        _trip('half', end: '2023-08-19'),
+        _trip('other', start: '2024-06-01', end: '2024-06-05'),
+      ], _today, year: 2023);
+      expect(rows.map((r) => r.trip.id), ['half']);
+      expect(rows.single.days, isNull);
+      expect((rows.single.year, rows.single.month), (2023, 8));
+    });
+
     test('an undated trip gets no row', () {
       expect(atlasRows([_trip('draft', cities: const ['Tokyo'])], _today),
           isEmpty);

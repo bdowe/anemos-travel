@@ -388,6 +388,28 @@ void main() {
           find.descendant(
               of: header, matching: find.byKey(kLogTripSectionActionKey)),
           findsOneWidget);
+
+      // ...grouped by a Wrap, which is the one property the comment above
+      // exists for and the one a Row would pass everything else while
+      // failing. It cannot be asserted as "there is a Wrap in the header":
+      // SectionHeader supplies one of its own (title + action slot), so that
+      // holds for a Row too. What distinguishes them is which Wrap is
+      // NEAREST the button — the action group's, holding both actions and
+      // not the title, or SectionHeader's, holding the title as well.
+      final group = find
+          .ancestor(
+              of: find.byKey(kTravelAtlasSeeAllKey),
+              matching: find.byType(Wrap))
+          .first;
+      expect(
+          find.descendant(
+              of: group, matching: find.byKey(kLogTripSectionActionKey)),
+          findsOneWidget,
+          reason: 'the two actions are wrapped together, as one group');
+      expect(find.descendant(of: group, matching: find.text('Your travels')),
+          findsNothing,
+          reason: 'a Row action group would leave SectionHeader\'s own Wrap '
+              'as the nearest one, and that holds the title too');
       // ...and neither runs past its edge, whichever line it lands on.
       final bounds = tester.getRect(header);
       for (final key in [kTravelAtlasSeeAllKey, kLogTripSectionActionKey]) {
