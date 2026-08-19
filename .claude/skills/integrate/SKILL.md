@@ -167,6 +167,14 @@ cancelled ones would have shipped. Tell the two apart by the jobs list, not the
 badge — `gh run view <id> --json jobs --jq '.jobs|length'` returns `0` for a
 superseded run and non-zero for one that actually ran and broke.
 
+**A run that was never created is a THIRD state, and the jobs check cannot see
+it** — there is no run to inspect. Observed 2026-08-19: three merges 5–6 seconds
+apart produced runs for only the first two; main's tip had **zero** check-runs.
+It is not the superseded case — main's concurrency keeps the newest *pending*
+run, so a run for the tip would have cancelled its predecessor; instead the
+predecessor survived and ran. Merging back-to-back is what this loop encourages,
+so this window is one the loop actively creates. Step 6.1 is the check for it.
+
 The consequence: **a wave is only verified when its LAST deploy succeeds.**
 Intermediate `cancelled` runs prove nothing either way, so step 6's accounting
 is load-bearing rather than a formality.
@@ -211,14 +219,71 @@ run, which would redeploy an old SHA.
 
 When the queue is empty: `git checkout main && git pull`, then
 `make wt-rm NAME=<lane>` for each merged lane (from the main checkout — it
-deletes the lane's worktree and branch), and report the wave summary — PRs
-merged, and **the wave's final deploy watched to a green finish**
-(`gh run watch <id> --exit-status`), since that is the run that actually ships
-every merge in the wave. Superseded `cancelled` runs are expected and need no
-action; a `failure` at any point does. Confirm prod serves the new SHA —
-`/health` `release` or `/app/version.json` — before declaring the wave done.
-This accounting is what step 3's per-merge watch was traded for, so it is the
-one deploy check that must not be skipped.
+deletes the lane's worktree and branch). Then the deploy accounting below, which
+is what step 3's per-merge watch was traded for and is the one deploy check that
+must not be skipped.
+
+### 6.1 Assert a run EXISTS for main's tip — before watching anything
+
+**Never assume the newest run corresponds to the tip.** Resolve the tip's SHA
+and ask for *its* runs by SHA, not by recency:
+
+```bash
+git fetch origin -q
+SHA=$(git rev-parse origin/main)
+gh api "repos/golden-tempo/anemos-travel/commits/$SHA/check-runs" --jq .total_count
+```
+
+`0` means no workflow was ever created for that push. Poll for a minute before
+concluding it (run creation is not instant), then treat it as a **stop**, not a
+formality: this is the state step 3 describes, and no amount of inspecting the
+newest run will reveal it — that run is green and belongs to a different commit.
+
+Why the distinction is load-bearing rather than pedantic: `build-push` tags
+images `ghcr.io/...:${{ github.sha }}` and `deploy` uses
+`IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || github.sha }}`.
+**A run ships its OWN commit, not main's tip.** So a missing run for the tip
+means the last merged PR is on main and not in production, with every check
+green and nothing to notice.
+
+**`workflow_dispatch` cannot repair it.** Its `image_tag` input requires the SHA
+of *a previously green main build*, and `build-push` is gated
+`if: github.event_name == 'push'`, so dispatch never builds. No image exists for
+the tip. The remedy is a push event that never happened:
+
+```bash
+git commit --allow-empty -m "chore(ci): trigger the deploy main's tip never got"
+git push origin main
+```
+
+Do it **after** any in-flight deploy completes, so deploy order stays clean, and
+only once that one is green — a failure still stops the queue. Then re-run the
+check above and confirm the count is non-zero before moving on.
+
+### 6.2 Watch that run to a green finish — but do not trust the exit code
+
+`gh run watch <id> --exit-status` is the natural spelling and has misreported
+twice in one day: piped (`| tail`) it returns the **pipe's** exit code, and
+unpiped it returned `1` on a run that concluded `success` (a transient
+`api.github.com` timeout during the watch, not a red deploy). Read the verdict
+from the run itself:
+
+```bash
+until [ "$(gh run view <id> --json status --jq .status)" = completed ]; do sleep 25; done
+gh run view <id> --json conclusion --jq .conclusion      # this is the answer
+gh run view <id> --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'
+```
+
+Superseded `cancelled` runs are expected and need no action; a `failure` does.
+
+### 6.3 Confirm production actually serves the tip
+
+`/health` `release` or `/app/version.json` must equal `git rev-parse HEAD`.
+This is the only step that speaks for what is really running, and it is what
+catches 6.1's failure mode even if every other check was skipped.
+
+Then report the wave summary: PRs merged, the path each took, and the deploy
+that shipped them.
 
 ## Notes
 

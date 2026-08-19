@@ -5,6 +5,39 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-19 — a push that produced no workflow run at all
+
+- **[dev] Breakage:** wave 3's three merges (#504/#505/#506) landed 5-6 seconds
+  apart and GitHub created runs for only the **first two**. Main's tip —
+  `5579282`, the #506 merge — had **zero** check-runs. Prod deployed `5c5496b`
+  and sat one PR behind with every check green and nothing to notice.
+- **[dev] It is not the superseded case, and the recorded test says so.** Main's
+  concurrency keeps the newest *pending* run, so a run for the tip would have
+  cancelled #505's pending run. Instead #505's survived and ran — meaning
+  nothing was superseded, a run was simply never created. The
+  `gh run view --json jobs | length == 0` test for "superseded vs broken"
+  structurally cannot see this: there is no run to inspect.
+- **[dev] Why one missing run silently drops a PR from prod:** `build-push` tags
+  images `ghcr.io/...:${{ github.sha }}` and `deploy` defaults `IMAGE_TAG` to
+  the same. **A run ships its OWN commit, not main's tip.** So "the newest run
+  is green" and "the tip is deployed" are different claims, and only the second
+  one matters.
+- **[dev] `workflow_dispatch` cannot repair it** — its `image_tag` input wants
+  the SHA of a previously green main build, and `build-push` is gated
+  `if: github.event_name == 'push'`, so dispatch never builds. No image exists
+  for the missing SHA. The remedy is an empty commit to recreate the push event,
+  pushed only after any in-flight deploy is green.
+- **[dev] `gh run watch --exit-status` misreported twice in one day.** Piped to
+  `tail` it returns the pipe's exit code (the `flutter test | tail` trap, again);
+  unpiped it returned `1` on a run that concluded `success`, from a transient
+  `api.github.com` timeout mid-watch. Read
+  `gh run view <id> --json conclusion` instead — an `until status == completed`
+  loop plus the conclusion is the only spelling that answered correctly.
+- **[dev] Encoded in `/integrate` step 6**, now three explicit sub-steps: assert
+  a run exists **for main's tip by SHA** (never by recency) → watch it and read
+  the conclusion → confirm prod serves that SHA. The window is one the loop
+  actively creates: merging back-to-back is exactly what it encourages.
+
 ## 2026-08-18 — /integrate charged every PR the conflict price
 
 - **[dev] Friction:** Brian — *"I think perhaps the /integrate skill has more
