@@ -214,10 +214,26 @@ check `gh run view <id> --json jobs`: `0` jobs means superseded, not broken.
 The surviving run builds a main that already contains the cancelled runs'
 commits.
 
-So the wave is verified by its **last** deploy, not by each one: watch that
-run to green and confirm prod serves the new SHA before calling the wave
-done. Not blocking is a bet that deploys usually pass, never a reason to skip
-that final check.
+**A run that was never created is a third state, and the jobs check cannot see
+it.** On 2026-08-19 three merges 5-6 seconds apart produced runs for only the
+first two; main's tip had zero check-runs. It is not the superseded case — the
+concurrency group keeps the newest *pending* run, so a run for the tip would
+have cancelled its predecessor, and instead the predecessor survived and ran.
+This matters because `build-push` tags images with `github.sha` and `deploy`
+defaults `IMAGE_TAG` to the same: **a run ships its own commit, not main's
+tip**, so a missing run leaves the last merged PR on main and out of
+production with every check green. `workflow_dispatch` cannot repair it (its
+`image_tag` needs an already-built image and `build-push` is push-only); the
+remedy is an empty commit to recreate the push event.
+
+So the wave is verified by its **last** deploy, not by each one — and "last"
+means *the run whose head SHA equals main's tip*, asserted by SHA rather than
+by recency (`gh api repos/<owner>/<repo>/commits/$(git rev-parse origin/main)/check-runs`),
+never by picking the newest run off the list. Watch it to green, read the
+verdict from `gh run view --json conclusion` rather than `gh run watch
+--exit-status` (which has misreported in both directions), and confirm prod
+serves the new SHA before calling the wave done. Not blocking is a bet that
+deploys usually pass, never a reason to skip that final check.
 
 Who fixes a red check: **the integrator fixes anything integration created**
 (hub resolution, cross-lane contract parity, codegen drift, fmt);
