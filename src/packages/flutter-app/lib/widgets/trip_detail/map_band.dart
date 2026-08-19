@@ -17,7 +17,7 @@ import '../app_map.dart';
 import '../map_leg_chips.dart';
 import '../trip_map.dart';
 
-/// Wide pinned-header extent: top gap + map + bottom gap (the phone layout's
+/// Height of the map card on the wide pinned layout (the phone layout's
 /// preview is [mapBandHeightNarrow] and scrolls away instead).
 ///
 /// 280, down from 340 (wave 2, header/shell lane): this band does not scroll
@@ -29,7 +29,36 @@ import '../trip_map.dart';
 /// 900px content cap (~3.2:1) and leaves the map lane's own composition
 /// untouched — its chip strip insets 8 from the top and its control cluster 8
 /// from the bottom, so both still clear each other by a wide margin.
-const double mapBandHeaderHeight = 12 + 280 + 12;
+const double _mapCardHeight = 280;
+
+/// The gap the pinned band keeps ABOVE the map card, and the one it keeps
+/// BELOW it — the band↔tab-bar seam.
+///
+/// Deliberately unequal, and that is the whole fix (wave 3). Pinned, this band
+/// sits inside a block bounded by two hairlines: the app bar's above and the
+/// tab row's below (#503 moved the selected tab's underline onto that lower
+/// rule so the tabs read as the head of the list). With 12 above and 12 below
+/// the map card read as *centred between* those two rules rather than as
+/// belonging to either, and the seam the tab row needs was indistinguishable
+/// from the sliver of scaffold under the app bar — most obviously in dark,
+/// where a bright satellite card is letterboxed by two identical strips of
+/// near-black.
+///
+/// Unequal says which way the card leans: the map hangs off the top chrome it
+/// pins with, and the larger gap below is the seam before the tab row and the
+/// list it heads. The pair still totals the same 24, so this costs the
+/// itinerary nothing and leaves #503's 420→304 argument exactly where it was.
+///
+/// The gap above is the PINNED figure only. On phones the band is not chrome —
+/// it is a card in the page flow under the header's own [AppSpacing.lg] — so
+/// that branch keeps [AppSpacing.md] above and takes only the seam below.
+const double _pinnedTopGap = AppSpacing.sm;
+const double _seamGap = AppSpacing.lg;
+
+/// Wide pinned-header extent: top gap + map + seam. Derived from the three
+/// figures the padding below is built from, never restated, so the delegate's
+/// height and its child's insets cannot drift apart.
+const double mapBandHeaderHeight = _pinnedTopGap + _mapCardHeight + _seamGap;
 
 /// Map card height on phones, where the map scrolls away instead of
 /// pinning (a preview — the full-screen map is one tap away).
@@ -57,14 +86,17 @@ Widget tripDetailMapBandSliver({
       delegate: pinnedDelegateBuilder(
         height: mapBandHeaderHeight,
         backgroundColor: backgroundColor,
-        padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 12),
+        padding: EdgeInsets.fromLTRB(gutter, _pinnedTopGap, gutter, _seamGap),
         child: cardBuilder(false),
       ),
     );
   }
   return SliverToBoxAdapter(
     child: Padding(
-      padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 12),
+      // Phone: the header's own AppSpacing.lg already sits above this card, so
+      // the top gap stays md; the seam below is the same one the pinned layout
+      // draws, because the tab row it introduces is the same tab row.
+      padding: EdgeInsets.fromLTRB(gutter, AppSpacing.md, gutter, _seamGap),
       child: SizedBox(height: mapBandHeightNarrow, child: cardBuilder(true)),
     ),
   );
