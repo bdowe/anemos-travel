@@ -4162,4 +4162,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get splashLoading => 'Loading';
+
+  @override
+  String get travelAtlasSeeAll => 'See all';
+
+  @override
+  String get travelAtlasIndexTitle => 'Past trips';
+
+  @override
+  String get travelAtlasAllTime => 'All time';
+
+  @override
+  String get travelAtlasFilterByYear => 'Filter by year';
+
+  @override
+  String get travelAtlasEmptyTitle => 'No finished trips yet';
+
+  @override
+  String get travelAtlasEmptyMessage =>
+      'Trips land here once they are behind you — every city you have been to, on one map.';
 }

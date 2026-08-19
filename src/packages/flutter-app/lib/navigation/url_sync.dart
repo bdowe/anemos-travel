@@ -15,6 +15,7 @@ import '../screens/local_admin_screen.dart';
 import '../screens/log_trip_screen.dart';
 import '../screens/notification_center_screen.dart';
 import '../screens/preferences_screen.dart';
+import '../screens/travel_atlas_screen.dart';
 import '../screens/trip_detail_screen.dart';
 import 'app_nav.dart';
 import 'app_routes.dart';
@@ -257,6 +258,7 @@ class UrlSyncController {
         BootUtility.logTrip => const LogTripScreen(),
         BootUtility.guides => const GuidesScreen(),
         BootUtility.notifications => const NotificationCenterScreen(),
+        BootUtility.travelAtlas => const TravelAtlasScreen(),
       };
 }
 

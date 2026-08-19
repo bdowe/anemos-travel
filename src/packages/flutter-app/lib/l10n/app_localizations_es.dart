@@ -4190,4 +4190,23 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get splashLoading => 'Cargando';
+
+  @override
+  String get travelAtlasSeeAll => 'Ver todo';
+
+  @override
+  String get travelAtlasIndexTitle => 'Viajes pasados';
+
+  @override
+  String get travelAtlasAllTime => 'Todos los años';
+
+  @override
+  String get travelAtlasFilterByYear => 'Filtrar por año';
+
+  @override
+  String get travelAtlasEmptyTitle => 'Aún no tienes viajes terminados';
+
+  @override
+  String get travelAtlasEmptyMessage =>
+      'Los viajes aparecen aquí cuando ya los has hecho: todas las ciudades donde has estado, en un mapa.';
 }

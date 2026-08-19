@@ -294,6 +294,134 @@ void main() {
     expect(find.text('cities'), findsNothing);
   });
 
+  // The atlas door (the "See all" action in this section's header).
+  //
+  // It is gated on FINISHED trips — tripIsPast — and that predicate is the
+  // whole point. The card's own gate counts owned trips; travelStats counts
+  // trips that have STARTED. Either would open the door for an account whose
+  // atlas has no traveled pins, no Traveled colophon group (it doesn't render
+  // at zero) and an index with no rows at all.
+  //
+  // One pump per test: _pumpList installs a fresh tripsApiServiceProvider
+  // override, which resets the tripsProvider that reads it.
+  group('the atlas door', () {
+    testWidgets('absent with one finished trip', (WidgetTester tester) async {
+      await _pumpList(tester, trips: [
+        _trip('past', 'Iberia Loop', start: _rel(-30), end: _rel(-26)),
+        _trip('next', 'Madrid Trip', start: _rel(10), end: _rel(12)),
+      ]);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(kTravelAtlasSeeAllKey), findsNothing);
+      // The band itself is present — the two gates ask different questions.
+      expect(find.byType(TravelFootprintCard), findsOneWidget);
+      // And the header keeps the action that fills the history, which is how
+      // this account earns the door.
+      expect(find.byKey(kLogTripSectionActionKey), findsOneWidget);
+    });
+
+    testWidgets('present at two finished trips', (WidgetTester tester) async {
+      await _pumpList(tester, trips: [
+        _trip('past', 'Iberia Loop', start: _rel(-30), end: _rel(-26)),
+        _trip('older', 'Athens Trip', start: _rel(-90), end: _rel(-85)),
+      ]);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(kTravelAtlasSeeAllKey), findsOneWidget);
+    });
+
+    testWidgets('absent when the second started trip is still under way',
+        (WidgetTester tester) async {
+      // travelStats reports two traveled trips here. One of them is happening
+      // right now, and a retrospective is not where it belongs — the same
+      // category error the list already refuses for "Past trips".
+      await _pumpList(tester, trips: [
+        _trip('past', 'Iberia Loop', start: _rel(-30), end: _rel(-26)),
+        _trip('live', 'Athens Now', start: _rel(-2), end: _rel(5)),
+      ]);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(kTravelAtlasSeeAllKey), findsNothing);
+      // ...and the band still counts it as traveled, unchanged: the gate moved,
+      // the colophon did not.
+      expect(find.byKey(kTraveledStatsKey), findsOneWidget);
+    });
+
+    testWidgets('both header actions fit a 360dp phone',
+        (WidgetTester tester) async {
+      // 360dp is the commonest Android width and the one that decides this:
+      // SectionHeader's Wrap can drop the action group onto its own line, but
+      // the group must also be able to break INSIDE itself — a Row of these
+      // two buttons overflows by 28px here.
+      //
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpList(tester, trips: [
+        _trip('past', 'Porto', start: _rel(-30), end: _rel(-26)),
+        _trip('older', 'Naxos', start: _rel(-90), end: _rel(-85)),
+      ]);
+      await tester.pumpAndSettle();
+
+      // The "Past trips" collapsible row above overflows by 12px at this
+      // width — its header Row gives the count pill and chevron no room to
+      // give — and it does so on main too, with or without this lane. It is
+      // consumed here so it cannot fail teardown, and asserted to be the ONLY
+      // one: a header that overflowed as well would turn this into "Multiple
+      // exceptions" and fail.
+      expect(tester.takeException().toString(),
+          isNot(contains('Multiple exceptions')));
+      // Both live INSIDE the section header, not one orphaned beside it...
+      final header = find.ancestor(
+          of: find.byKey(kTravelAtlasSeeAllKey),
+          matching: find.byType(SectionHeader));
+      expect(header, findsOneWidget);
+      expect(
+          find.descendant(
+              of: header, matching: find.byKey(kLogTripSectionActionKey)),
+          findsOneWidget);
+      // ...and neither runs past its edge, whichever line it lands on.
+      final bounds = tester.getRect(header);
+      final seeAll = tester.getRect(find.byKey(kTravelAtlasSeeAllKey));
+      final logTrip = tester.getRect(find.byKey(kLogTripSectionActionKey));
+      for (final button in [seeAll, logTrip]) {
+        expect(button.right, lessThanOrEqualTo(bounds.right + 0.5));
+        expect(button.left, greaterThanOrEqualTo(bounds.left - 0.5));
+      }
+      // Measured: at 360 the pair breaks, and the two buttons stack on the
+      // TITLE's left edge rather than on each other's right edge — which is
+      // neither margin and reads as an accident.
+      expect(logTrip.top, greaterThan(seeAll.top));
+      expect(logTrip.left, seeAll.left);
+      // PR #401's pin still holds: the title is a page-level header outside
+      // the card, and the actions did not drag it inside.
+      expect(
+          find.descendant(
+              of: find.byType(TravelFootprintCard),
+              matching: find.text('Your travels')),
+          findsNothing);
+    });
+  });
+
+  testWidgets('at 390dp both header actions share one line',
+      (WidgetTester tester) async {
+    // The artifact predicted a two-line header on a phone and that is what a
+    // 390dp phone gets: the title, then both actions beside each other. Only
+    // at 360 and below does the pair itself have to break.
+    await tester.binding.setSurfaceSize(const Size(390, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpList(tester, trips: [
+      _trip('past', 'Porto', start: _rel(-30), end: _rel(-26)),
+      _trip('older', 'Naxos', start: _rel(-90), end: _rel(-85)),
+    ]);
+    await tester.pumpAndSettle();
+    tester.takeException(); // the collapsible's own pre-existing overflow
+
+    final seeAll = tester.getRect(find.byKey(kTravelAtlasSeeAllKey));
+    final logTrip = tester.getRect(find.byKey(kLogTripSectionActionKey));
+    expect(logTrip.top, seeAll.top);
+    expect(logTrip.left, greaterThanOrEqualTo(seeAll.right - 0.5));
+  });
+
   testWidgets('the map marks visited cities apart from planned ones',
       (WidgetTester tester) async {
     await _pumpList(tester, trips: [

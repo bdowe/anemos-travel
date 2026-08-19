@@ -20,6 +20,7 @@ enum BootUtility {
   logTrip,
   guides,
   notifications,
+  travelAtlas,
 }
 
 /// Where a URL lands after boot: a tab, plus at most one of an inner screen
@@ -65,13 +66,18 @@ String utilityLocation(BootUtility utility) => switch (utility) {
       BootUtility.logTrip => '/log-trip',
       BootUtility.guides => '/guides',
       BootUtility.notifications => '/notifications',
+      BootUtility.travelAtlas => '/atlas',
     };
 
-/// The tab a utility screen is restored onto. Import and log-a-past-trip both
-/// live in the trips flow; everything else hangs off Home (the account menu is
-/// reachable from any tab, so restore needs one deterministic choice).
+/// The tab a utility screen is restored onto. Import, log-a-past-trip and the
+/// travel atlas all live in the trips flow; everything else hangs off Home
+/// (the account menu is reachable from any tab, so restore needs one
+/// deterministic choice).
 AppTab utilityTab(BootUtility utility) => switch (utility) {
-      BootUtility.importTrip || BootUtility.logTrip => AppTab.trips,
+      BootUtility.importTrip ||
+      BootUtility.logTrip ||
+      BootUtility.travelAtlas =>
+        AppTab.trips,
       _ => AppTab.home,
     };
 
@@ -117,6 +123,7 @@ BootTarget? parseBootTarget(Uri uri) {
           'log-trip' => BootUtility.logTrip,
           'guides' => BootUtility.guides,
           'notifications' => BootUtility.notifications,
+          'atlas' => BootUtility.travelAtlas,
           _ => null,
         };
         if (utility != null) {
