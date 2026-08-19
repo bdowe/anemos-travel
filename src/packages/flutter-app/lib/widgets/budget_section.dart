@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,16 +16,19 @@ import 'budget_categories.dart';
 import 'budget_target_dialog.dart';
 import 'daily_spend_section.dart';
 import 'empty_state.dart';
+import 'trip_detail/budget_composer.dart';
 
 /// The Budget tab's body: a single per-trip budget (one target in one
 /// currency) with a spend headline + progress toward the target, a flat list
 /// of expense line-items grouped by category with per-category subtotals, a
 /// running total, and a remaining footer.
 /// Self-contained — it owns its data via [budgetProvider] + [expensesProvider]
-/// and reconciles mutations by invalidating both family keys. The add row's
-/// unsaved contents live in [expenseDraftProvider] rather than in this
-/// widget's State, because the widget is unmounted every time the traveler
-/// changes header tab or opens the chat panel. (The
+/// and reconciles mutations by invalidating both family keys. The add-expense
+/// composer (add-options line + add row) lives in
+/// `trip_detail/budget_composer.dart` — lifted out as a pure move; its unsaved
+/// contents live in [expenseDraftProvider] rather than in either widget's
+/// State, because the tab is unmounted every time the traveler changes header
+/// tab or opens the chat panel. (The
 /// `showHeader` knob died with the collapsed cluster row this tab replaced —
 /// precedent: [TripReviewSection]'s knob retiring with the health sheet.)
 class BudgetSection extends ConsumerStatefulWidget {
@@ -79,75 +80,10 @@ class _ExpenseEdit {
 }
 
 class _BudgetSectionState extends ConsumerState<BudgetSection> {
-  final TextEditingController _labelController = TextEditingController();
-  final TextEditingController _amountController = TextEditingController();
   bool _busy = false;
-  // The picked category has no field here on purpose: it lives in the draft,
-  // which is the one place any part of this row's unsaved contents lives.
-
-  @override
-  void initState() {
-    super.initState();
-    _seedFrom(widget.tripId);
-  }
-
-  @override
-  void didUpdateWidget(BudgetSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Nothing to flush — every keystroke already wrote through — so a trip
-    // swap on a reused element only has to re-seed. Unreachable from the one
-    // mount site today, where the id is fixed for the screen's life; here so
-    // that "which trip's draft is in these fields" is answered by the code
-    // rather than by that convention.
-    if (oldWidget.tripId != widget.tripId) _seedFrom(widget.tripId);
-  }
-
-  /// Loads [tripId]'s kept draft into the fields, then arms the write-back.
-  /// Called from `initState`, never from `build`: seeding on rebuild would
-  /// clobber the character just typed, and this way the early
-  /// `SizedBox.shrink()` return cannot race it.
-  ///
-  /// `read`, never `watch` — watching the draft from `build` would re-render
-  /// every expense row on every keystroke.
-  void _seedFrom(String tripId) {
-    final draft = ref.read(expenseDraftProvider(tripId));
-    // Detached across the two assignments: [_saveDraft] writes both fields at
-    // once, so a half-applied seed would post the outgoing trip's amount into
-    // the incoming trip's draft before the next line corrected it. Removing a
-    // listener that was never added is a no-op, so this is safe on first call.
-    _labelController.removeListener(_saveDraft);
-    _amountController.removeListener(_saveDraft);
-    _labelController.value = _endCollapsed(draft.label);
-    _amountController.value = _endCollapsed(draft.amountText);
-    // Recorded on every change rather than on the way out: this row is
-    // unmounted without warning (a header-tab switch, the chat panel
-    // re-parenting the body), and by the time `dispose` runs the element is
-    // already unmounted, so `ref` throws there.
-    _labelController.addListener(_saveDraft);
-    _amountController.addListener(_saveDraft);
-  }
-
-  /// Never assign `controller.text`: that setter parks the selection at
-  /// offset -1, which the engine normalizes to 0, so the next keystroke lands
-  /// in *front* of the restored value (the trap `airport_field.dart`
-  /// documents).
-  static TextEditingValue _endCollapsed(String text) => TextEditingValue(
-        text: text,
-        selection: TextSelection.collapsed(offset: text.length),
-      );
-
-  void _saveDraft() =>
-      ref.read(expenseDraftProvider(widget.tripId).notifier).setText(
-            label: _labelController.text,
-            amountText: _amountController.text,
-          );
-
-  @override
-  void dispose() {
-    _labelController.dispose();
-    _amountController.dispose();
-    super.dispose();
-  }
+  // The composer (BudgetComposer) owns the add row's controllers and its
+  // draft write-back; this State only carries the shared busy flag its [_run]
+  // wraps around every mutation.
 
   bool _guard() {
     if (widget.isOffline) {
@@ -290,42 +226,6 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
       undo: () =>
           api.purchaseExpense(widget.tripId, expense.id, amount: paid),
     );
-  }
-
-  void _add() {
-    final label = _labelController.text.trim();
-    final amount = double.tryParse(_amountController.text.trim());
-    if (label.isEmpty || amount == null || amount < 0) return;
-    final key = expenseDraftProvider(widget.tripId);
-    final draftNow = ref.read(key);
-    final category = draftNow.category;
-    final planned = draftNow.planned;
-    // Same stale-key resolution the picker renders with: a draft city the
-    // trip no longer has posts as "no city", never as a 400.
-    final legKey = _cityOptions.any((c) => c.key == draftNow.legKey)
-        ? draftNow.legKey
-        : null;
-    // Captured before the await: this row can be unmounted mid-save (tab away
-    // while the POST is in flight), and by the time it returns the controllers
-    // are disposed and `ref` throws. The draft outlives both, so clearing it
-    // has to go through the notifier — otherwise the expense just saved sits
-    // in the row waiting to be added a second time.
-    final draft = ref.read(key.notifier);
-    _run(() async {
-      await ref.read(budgetApiServiceProvider).addExpense(
-            widget.tripId,
-            category: category,
-            label: label,
-            amount: amount,
-            planned: planned,
-            legKey: legKey,
-          );
-      if (mounted) {
-        _labelController.clear();
-        _amountController.clear();
-      }
-      draft.clearText();
-    });
   }
 
   /// Edit everything about a line: its category, its label, what it was
@@ -552,22 +452,28 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           ),
         ] else ...[
           _buildHeadline(theme, budget),
-          if (_cityOptions.isNotEmpty) _buildGroupControl(theme),
-          ..._buildGroups(theme, expenses, currency),
-          _buildTotals(theme, budget, expenses),
+          const SizedBox(height: AppSpacing.md),
+          _buildReceipt(theme, budget, expenses, currency),
         ],
         if (widget.canEdit) ...[
-          // Suggestions sit between the receipt and the add row: an input to
-          // planning, next to the other way of adding a line, and never above
-          // the real numbers. Editors only — accepting one is a write.
-          DailySpendSection(
-            tripId: widget.tripId,
-            expenses: expenses,
-            isOffline: widget.isOffline,
-            onAdd: _addDailySpend,
+          // The suggestion is an estimate fed to the receipt, so it takes a
+          // recessed well — a deliberately quieter register than the raised
+          // receipt card. Editors only — accepting one is a write.
+          _buildSuggestionWell(
+            theme,
+            DailySpendSection(
+              tripId: widget.tripId,
+              expenses: expenses,
+              isOffline: widget.isOffline,
+              onAdd: _addDailySpend,
+            ),
           ),
-          _buildAddOptions(theme),
-          _buildAddRow(theme),
+          BudgetComposer(
+            tripId: widget.tripId,
+            isOffline: widget.isOffline,
+            cityOptions: _cityOptions,
+            run: _run,
+          ),
         ],
       ],
     );
@@ -603,8 +509,10 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
   /// The spend headline the collapsed cluster row used to carry, now the tab
   /// body's first line: "$120 / $2,000" when a target is set (with a
   /// progress bar underneath, error-colored once over), or
-  /// "$120 spent · No target set" while tracking spend only. The pencil
-  /// opens the shared target dialog.
+  /// "$120 spent · No target set" while tracking spend only. The pencil opens
+  /// the shared target dialog and HUGS the headline — the row takes
+  /// [MainAxisSize.min] so the edit affordance sits next to the only thing it
+  /// can change, instead of floating at the far edge of the page.
   Widget _buildHeadline(ThemeData theme, Budget budget) {
     final l10n = context.l10n;
     final currency = budget.currency;
@@ -617,51 +525,49 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     final pct = target != null && target > 0
         ? (budget.spent / target * 100).round()
         : null;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  headline,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: over
-                        ? theme.colorScheme.error
-                        : theme.colorScheme.onSurface,
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                headline,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: over
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.onSurface,
                 ),
               ),
-              if (widget.canEdit)
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  color: theme.colorScheme.onSurfaceVariant,
-                  visualDensity: VisualDensity.compact,
-                  tooltip: l10n.budgetSetTargetTitle,
-                  onPressed: () => _editTarget(budget),
-                ),
+            ),
+            if (widget.canEdit)
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                color: theme.colorScheme.onSurfaceVariant,
+                visualDensity: VisualDensity.compact,
+                tooltip: l10n.budgetSetTargetTitle,
+                onPressed: () => _editTarget(budget),
+              ),
+          ],
+        ),
+        if (pct != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              Expanded(child: _buildBar(theme, budget, over, pct)),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                '$pct%',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
             ],
           ),
-          if (pct != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                Expanded(child: _buildBar(theme, budget, over, pct)),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  '$pct%',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ],
-          ..._buildProjectionLine(theme, budget),
         ],
-      ),
+        ..._buildProjectionLine(theme, budget),
+      ],
     );
   }
 
@@ -750,11 +656,14 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           padding: const EdgeInsets.symmetric(
               vertical: AppSpacing.xs, horizontal: AppSpacing.xs),
           child: Row(
+            // Hugs the content like the headline's pencil: the edit icon
+            // belongs to the target line, not to the page's far edge.
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.flag_outlined,
                   size: 16, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(width: AppSpacing.xs),
-              Expanded(
+              Flexible(
                 child: Text(
                   hasTarget
                       ? context.l10n.budgetTargetSet(
@@ -774,6 +683,105 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     );
   }
 
+  /// The receipt as ONE raised surface: the card head carries the section
+  /// title and — when the trip has city legs — the Group-by toggle that acts
+  /// on the contents below it; the body is the category/city groups and the
+  /// totals footer. Until this card the tab's numbers floated on the void.
+  /// The card theme supplies the treatment (12px radius, elevation 3, tint
+  /// off), so nothing here re-declares a surface.
+  Widget _buildReceipt(
+      ThemeData theme, Budget budget, List<Expense> expenses, String currency) {
+    final l10n = context.l10n;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.budgetExpensesTitle,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (_cityOptions.isNotEmpty) _buildGroupControl(theme),
+              ],
+            ),
+            ..._buildGroups(theme, expenses, currency),
+            _buildTotals(theme, budget, expenses),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The Group-by control, stripped of its own label — the receipt's card
+  /// head now says what the segments act on, and dedicating a line to a
+  /// two-segment pill spent vertical space the phone widths actually need.
+  /// The Key and behaviour are unchanged; it is still shown to viewers
+  /// because it is a way of reading the receipt, not a write.
+  Widget _buildGroupControl(ThemeData theme) {
+    return Consumer(builder: (context, ref, _) {
+      final grouping = ref.watch(budgetGroupingProvider(widget.tripId));
+      final l10n = context.l10n;
+      return SegmentedButton<BudgetGrouping>(
+        key: const Key('budget-group-by'),
+        showSelectedIcon: false,
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          textStyle: WidgetStatePropertyAll(theme.textTheme.labelMedium),
+        ),
+        segments: [
+          ButtonSegment(
+            value: BudgetGrouping.category,
+            label: Text(l10n.budgetGroupByCategory),
+          ),
+          ButtonSegment(
+            value: BudgetGrouping.city,
+            label: Text(l10n.budgetGroupByCity),
+          ),
+        ],
+        selected: {grouping},
+        onSelectionChanged: (picked) => ref
+            .read(budgetGroupingProvider(widget.tripId).notifier)
+            .state = picked.first,
+      );
+    });
+  }
+
+  /// The suggestion is a labelled model estimate fed INTO the receipt, so it
+  /// takes a recessed well — the demoted register of the two surfaces on this
+  /// tab (raised receipt, recessed suggestion). The section inside collapses
+  /// to nothing for viewers, offline, or an empty guide, and the well must
+  /// collapse with it: an empty tinted frame would be visual noise over the
+  /// add row. Sizing the frame to the CHILD is what the wrapper's own padding
+  /// can't express, so visibility is resolved from the providers here —
+  /// the same watch the section itself performs, no second fetch.
+  Widget _buildSuggestionWell(ThemeData theme, Widget child) {
+    final settings = ref.watch(dailySpendSettingsProvider(widget.tripId));
+    final guide = ref
+        .watch(dailySpendProvider(
+            DailySpendQuery(tripId: widget.tripId, tier: settings.tier)))
+        .valueOrNull;
+    if (widget.isOffline || guide == null || guide.isEmpty) return child;
+    final fill = theme.colorScheme.surfaceContainerHighest;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Container(
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: AppRadius.mdAll,
+        ),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: child,
+      ),
+    );
+  }
+
   /// The pickable cities: the trip's legs minus the "Other places" run, which
   /// names no city. Filtered on the KEY, never the label — the label is
   /// localized, the key is canonical.
@@ -782,73 +790,21 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
           if (c.key != kOtherPlacesLabel) c
       ];
 
-  /// The Group-by toggle. Labelled, and above the list rather than below it,
-  /// for the reason [_buildAddOptions] documents in reverse: an unlabelled
-  /// pill sitting BELOW the receipt was read as a filter over the list above.
-  /// This one really does act on the list, so it sits at its head and says
-  /// what it does. It never hides a line — every expense appears in exactly
-  /// one group in both modes, and the group subtotals sum to the same total
-  /// either way (the property the widget test pins).
-  ///
-  /// Shown to viewers too, unlike every other control here: it is a way of
-  /// reading the receipt, not a write.
-  Widget _buildGroupControl(ThemeData theme) {
-    return Consumer(builder: (context, ref, _) {
-      final grouping = ref.watch(budgetGroupingProvider(widget.tripId));
-      final l10n = context.l10n;
-      return Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.sm),
-        child: Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.xs,
-          children: [
-            Text(
-              l10n.budgetGroupBy,
-              style: theme.textTheme.labelMedium
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-            SegmentedButton<BudgetGrouping>(
-              key: const Key('budget-group-by'),
-              showSelectedIcon: false,
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStatePropertyAll(theme.textTheme.labelMedium),
-              ),
-              segments: [
-                ButtonSegment(
-                  value: BudgetGrouping.category,
-                  label: Text(l10n.budgetGroupByCategory),
-                ),
-                ButtonSegment(
-                  value: BudgetGrouping.city,
-                  label: Text(l10n.budgetGroupByCity),
-                ),
-              ],
-              selected: {grouping},
-              onSelectionChanged: (picked) => ref
-                  .read(budgetGroupingProvider(widget.tripId).notifier)
-                  .state = picked.first,
-            ),
-          ],
-        ),
-      );
-    });
-  }
-
   List<Widget> _buildGroups(
           ThemeData theme, List<Expense> expenses, String currency) =>
       ref.watch(budgetGroupingProvider(widget.tripId)) == BudgetGrouping.city
           ? _buildCityGroups(theme, expenses, currency)
           : _buildCategoryGroups(theme, expenses, currency);
 
-  /// One group header: icon + label + the hollow "still has planned money"
-  /// mark + ONE subtotal — the projected one, which is the only subtotal that
-  /// stays continuous across a trip (it equals the plan before departure and
-  /// the spend after it). A second column here would turn the section into a
-  /// spreadsheet; the hollow mark says "not all of this has left yet" without
-  /// spending a word or a line. Shared by both groupings so their subtotals
-  /// cannot diverge.
+  /// One group header: tinted icon tile + label + the hollow "still has
+  /// planned money" mark + ONE subtotal — the projected one, which is the only
+  /// subtotal that stays continuous across a trip (it equals the plan before
+  /// departure and the spend after it). A second column here would turn the
+  /// section into a spreadsheet; the hollow mark says "not all of this has
+  /// left yet" without spending a word or a line. Shared by both groupings so
+  /// their subtotals cannot diverge. The icon takes a tile now: the receipt
+  /// card needs its group heads to READ as heads, and a bare 16px glyph at
+  /// the same muted role as the label beside it could not lead its rows.
   Widget _buildGroupHeader(ThemeData theme,
       {required Key key,
       required IconData icon,
@@ -862,13 +818,22 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
       padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: AppSpacing.xs),
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: AppRadius.smAll,
+            ),
+            child: Icon(icon,
+                size: 14, color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               label,
               style: theme.textTheme.labelLarge
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           if (hasPlanned) ...[
@@ -1037,19 +1002,28 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
     );
   }
 
-  /// The receipt: what you planned, what you spent, how the two compare, and
-  /// what's left against the target. Every number is the server's — they are
-  /// derived once, together, so no two lines here can disagree.
+  /// The receipt's footer: what you planned (memo register — the visited
+  /// totals are not the trip's bill) and what you spent (the ONE emphasized
+  /// total, TripAdvisor's receipt discipline), then the plan comparison and
+  /// what's left against the target as quiet lines. Every number is the
+  /// server's — they are derived once, together, so no two lines here can
+  /// disagree.
   Widget _buildTotals(ThemeData theme, Budget budget, List<Expense> expenses) {
     final currency = budget.currency;
     final l10n = context.l10n;
     final planned = budget.planned;
     final variance = budget.planVariance;
+    final memoLabel = theme.textTheme.bodyMedium
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final memoAmount = theme.textTheme.bodyMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
           child: Divider(height: 1),
         ),
         // Absent until something is actually planned, so a trip tracking spend
@@ -1057,16 +1031,8 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
         if (planned != null && planned > 0) ...[
           Row(
             children: [
-              Expanded(
-                child: Text(l10n.budgetPlanTotalPlanned,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-              ),
-              Text(
-                formatMoney(planned, currency),
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
+              Expanded(child: Text(l10n.budgetPlanTotalPlanned, style: memoLabel)),
+              Text(formatMoney(planned, currency), style: memoAmount),
             ],
           ),
           const SizedBox(height: 2),
@@ -1076,12 +1042,12 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
             Expanded(
               child: Text(l10n.budgetTotalSpent,
                   style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold)),
+                      ?.copyWith(fontWeight: FontWeight.w700)),
             ),
             Text(
               formatMoney(budget.spent, currency),
               style: theme.textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -1138,458 +1104,5 @@ class _BudgetSectionState extends ConsumerState<BudgetSection> {
         ],
       ],
     );
-  }
-
-  /// Planned or paid, for whatever the add row is about to save.
-  ///
-  /// On its OWN LINE rather than inside the add row: that row already spends
-  /// 240px of its 358 on fixed-width controls, and the "Add an expense…" hint
-  /// barely fits in what's left — any horizontal addition kills it. Vertical
-  /// space in a scrolling tab body is nearly free; horizontal space is the
-  /// scarce resource.
-  ///
-  /// "Barely fits" turned out to be "doesn't": the hint was truncating to
-  /// "Add a…" on every phone, and [_buildAddRow] now stacks onto two lines
-  /// when it can't seat both fields. That vindicates this control's own line
-  /// rather than reversing it — putting it back in the row would only make the
-  /// row stack at wider and wider windows.
-  ///
-  /// It carries a visible "Add as" label because the pick has **no immediate
-  /// on-screen consequence** — tapping it changes nothing but itself, and the
-  /// result only appears one action later, on the line you then add. An
-  /// unlabelled pill sitting between the daily-spend card and the add row was
-  /// read as belonging to the card, or as a filter over the list above, and so
-  /// as a control that did nothing. The label is what ties it to the row it
-  /// arms; the [AppSpacing.md] above and [AppSpacing.xs] below are the rest of
-  /// that tie.
-  ///
-  /// The pick is read from the draft, so it survives the remount that changing
-  /// header tab or opening the chat panel causes — a choice, like the category
-  /// beside it.
-  ///
-  /// Since 00072 the line also carries the CITY picker — deliberately here
-  /// and not in [_buildAddRow]: that row is measured against
-  /// [_addRowFixedWidth] and a third fixed control would move every one of
-  /// the 8-widths × 2-locales assertions, while this line is a [Wrap] with
-  /// slack, right at every width and locale by construction.
-  Widget _buildAddOptions(ThemeData theme) {
-    return Consumer(builder: (context, ref, _) {
-      final planned = ref
-          .watch(expenseDraftProvider(widget.tripId).select((d) => d.planned));
-      final l10n = context.l10n;
-      return Padding(
-        // The top gap lives here rather than in a sibling SizedBox because
-        // DailySpendSection collapses to nothing when offline or empty — a
-        // sibling would dangle above the add row in the common case.
-        padding:
-            const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.xs),
-        // Wrap, not Row: the label and the pill sit side by side when they
-        // fit and the pill drops to its own line when they don't, which is
-        // what Spanish does at 360px ("Añadir como" wants more than the
-        // leftover beside a two-segment pill). A Row would have to choose
-        // between ellipsizing the label and wrapping it mid-phrase, and both
-        // fail silently — the add row's hints already taught this file that
-        // "nothing threw" proves nothing. Wrap needs no measurement, so it is
-        // right in every language and at every text scale by construction.
-        child: Wrap(
-          alignment: WrapAlignment.end,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.xs,
-          children: [
-            Text(
-              l10n.budgetPlanAddAs,
-              style: theme.textTheme.labelMedium
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-            SegmentedButton<bool>(
-              showSelectedIcon: false,
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStatePropertyAll(theme.textTheme.labelMedium),
-              ),
-              segments: [
-                ButtonSegment(
-                  value: true,
-                  label: Text(l10n.budgetPlanStatePlanned),
-                ),
-                ButtonSegment(
-                  value: false,
-                  label: Text(l10n.budgetPlanStatePaid),
-                ),
-              ],
-              selected: {planned},
-              onSelectionChanged: widget.isOffline
-                  ? null
-                  : (picked) => ref
-                      .read(expenseDraftProvider(widget.tripId).notifier)
-                      .setPlanned(picked.first),
-            ),
-            if (_cityOptions.isNotEmpty) _buildCityPicker(theme),
-          ],
-        ),
-      );
-    });
-  }
-
-  /// The add row's city pick (00072): which leg the next line is filed under.
-  /// A popup menu, not a DropdownButton, for [_buildCategoryTrigger]'s reason
-  /// (a dropdown's menu is constrained to its trigger's width) — but with a
-  /// TEXT trigger, unlike the category's icon: this control has no width
-  /// pressure on its Wrap line, and an icon cannot say "Rome".
-  ///
-  /// The selected key is resolved against [_cityOptions] before rendering, so
-  /// a stale draft key — the trip lost a city since it was picked — displays
-  /// and posts as "No city" instead of a 400.
-  Widget _buildCityPicker(ThemeData theme) {
-    return Consumer(builder: (context, ref, _) {
-      final draftKey = ref
-          .watch(expenseDraftProvider(widget.tripId).select((d) => d.legKey));
-      final l10n = context.l10n;
-      final options = _cityOptions;
-      ({String key, String label, String? qualifier})? selected;
-      for (final c in options) {
-        if (c.key == draftKey) selected = c;
-      }
-      final muted = theme.colorScheme.onSurfaceVariant;
-      return PopupMenuButton<String>(
-        key: const Key('budget-add-city'),
-        tooltip: l10n.budgetCityLabel,
-        enabled: !widget.isOffline,
-        // '' is the menu's "No city" value (a PopupMenuItem value can't be
-        // null); it reaches the draft as null via setLegKey.
-        onSelected: (v) => ref
-            .read(expenseDraftProvider(widget.tripId).notifier)
-            .setLegKey(v.isEmpty ? null : v),
-        itemBuilder: (_) => [
-          CheckedPopupMenuItem<String>(
-            value: '',
-            checked: selected == null,
-            child: Text(l10n.budgetCityNone),
-          ),
-          for (final c in options)
-            CheckedPopupMenuItem<String>(
-              value: c.key,
-              checked: c.key == selected?.key,
-              child: Text(c.qualifier == null
-                  ? c.label
-                  : '${c.label} · ${c.qualifier}'),
-            ),
-        ],
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.place_outlined, size: 18, color: muted),
-            const SizedBox(width: 2),
-            Text(
-              selected == null
-                  ? l10n.budgetCityNone
-                  : (selected.qualifier == null
-                      ? selected.label
-                      : '${selected.label} · ${selected.qualifier}'),
-              style: theme.textTheme.labelMedium?.copyWith(color: muted),
-            ),
-            Icon(Icons.arrow_drop_down, size: 18, color: muted),
-          ],
-        ),
-      );
-    });
-  }
-
-  /// What a dense outline field spends on chrome either side of its text.
-  /// Flutter 3.35's `InputDecorator` gives the M3 + dense + outline branch a
-  /// `contentPadding` of 12 per side (input_decorator.dart:2600-2603) and then
-  /// deducts `OutlineInputBorder.gapPadding` (4 — input_border.dart:332) per
-  /// side as well (:2609-2613, :992-1008), so the hint is laid out at exactly
-  /// `fieldWidth - _fieldChrome`. That is the width the regression tests read
-  /// straight off `RenderParagraph.constraints`. (The old note here said "16px
-  /// per side" — right in total, wrong about where it comes from.)
-  static const double _fieldChrome = 32;
-
-  /// A hint whose intrinsic width lands EXACTLY on the interior is one
-  /// sub-pixel from ellipsizing itself, and a fractional device pixel ratio is
-  /// enough to get there. One spacing step of headroom is plenty, because the
-  /// measurement below already uses the same painter inputs the hint's own
-  /// paragraph does — this covers rounding, not disagreement.
-  static const double _hintFitSlack = AppSpacing.xs;
-
-  /// Width of each of the row's two icon affordances.
-  ///
-  /// **Declared, not predicted** — the row renders both inside a `SizedBox` of
-  /// this width, so the number the arithmetic spends is the number the row
-  /// occupies. That is the whole difference between this constant and the 136
-  /// it replaces, and predicting would have been wrong anyway: `IconButton`
-  /// takes its tap-target size from the platform, so the add button is 48 on
-  /// Android/iOS and silently **40** on macOS/Linux/Windows
-  /// (theme_data.dart:398-408). Pinning it makes the row platform-invariant
-  /// and brings the desktop tap target back up to Material's minimum.
-  ///
-  /// Legitimately a constant even in a file about measuring: 48 encodes a
-  /// touch-target spec, not a string, so it doesn't move with locale — and it
-  /// can't move with text scale either, since `Icon.applyTextScaling` defaults
-  /// to false and nothing here enables it.
-  static const double _controlWidth = kMinTouchTarget;
-
-  /// Everything on the add row that is not a field: the two icon affordances
-  /// and the two gaps. None of it is text, so none of it moves with the text
-  /// scaler; the terms that DO move are the hints, and those are measured.
-  static const double _addRowFixedWidth =
-      2 * _controlWidth + 2 * AppSpacing.sm;
-
-  /// The amount field has two things to seat and its hint is the smaller one,
-  /// so the figure is named here instead of folded into a magic width: a
-  /// five-figure amount with cents — a flight or a hotel total, the widest
-  /// thing that lands on one expense line. Sizing the box from
-  /// "Amount"/"Importe" alone would give ~82px, which reads fine and is
-  /// miserable to type in.
-  ///
-  /// Only characters this field's own [FilteringTextInputFormatter] admits: a
-  /// sample containing a thousands separator would size the box for text it
-  /// can never hold.
-  static const String _amountWidthSample = '88888.88';
-
-  /// The width a field needs for [text] to render in full, chrome included —
-  /// directly comparable to the width a `SizedBox`/`Expanded` hands the field.
-  ///
-  /// Measured, not assumed: the strings are translated ("Añade un gasto…"),
-  /// the text scaler is the traveler's, and the 1em-per-glyph FlutterTest font
-  /// moves both again. A constant can only ever be right for the one string
-  /// somebody measured — which is exactly how the description hint shipped
-  /// truncated to "Add a…" while the amount hint had a regression test.
-  ///
-  /// The style is the one `InputDecorator` actually paints a hint with:
-  /// `textTheme.bodyLarge` merged with the M3 default hint style, which sets
-  /// only a colour (input_decorator.dart:2170-2183, :5897-5902). These fields
-  /// pass neither `style` nor `hintStyle`, so nothing else contributes.
-  /// `Text` merges `MediaQuery.boldTextOf` on top of that, so this does too.
-  ///
-  /// `maxIntrinsicWidth`, not `width`: painted width omits the trailing
-  /// letter-spacing the field's constraint still has to cover, and intrinsic
-  /// width is the quantity the tests compare against `constraints.maxWidth` —
-  /// the widget's arithmetic and the tests' oracle have to be the same number.
-  ///
-  /// Same shape as the overview show-more toggle's `_collapsedClips`
-  /// (trip_detail_screen.dart): synchronous, one layout pass, no post-frame
-  /// re-measure.
-  static double _fieldWidthFor(BuildContext context, String text) {
-    var style = Theme.of(context).textTheme.bodyLarge;
-    if (MediaQuery.boldTextOf(context)) {
-      style = style?.merge(const TextStyle(fontWeight: FontWeight.bold));
-    }
-    final painter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      textDirection: Directionality.of(context),
-      textScaler: MediaQuery.textScalerOf(context),
-      locale: Localizations.maybeLocaleOf(context),
-    )..layout();
-    final width = painter.maxIntrinsicWidth;
-    painter.dispose();
-    return (width + _fieldChrome + _hintFitSlack).ceilToDouble();
-  }
-
-  /// Closed state stays icon-compact (the add row is width-tight on phones);
-  /// the open menu spells out each category. A popup menu (not a
-  /// DropdownButton) because a dropdown's menu is hard-constrained to the
-  /// trigger's width — an icon-only trigger would clip every label.
-  ///
-  /// The pick is read straight from the draft rather than mirrored into a
-  /// field, so there is one answer to "which category is armed". The watch is
-  /// scoped to this button and selects one String, so typing in the fields
-  /// beside it can never re-render the expense list — or re-run the
-  /// measurement beside it.
-  Widget _buildCategoryTrigger(ThemeData theme) {
-    return Consumer(builder: (context, ref, _) {
-      final category = ref
-          .watch(expenseDraftProvider(widget.tripId).select((d) => d.category));
-      return SizedBox(
-        width: _controlWidth,
-        child: PopupMenuButton<String>(
-          // Zero, not the default all(8) that PopupMenuButton forwards to its
-          // IconButton: the two 18px icons plus 8+8 measure 52, which would
-          // overflow the 48 the row's arithmetic spends here. 36 centred in 48
-          // leaves 6 a side and reads the same.
-          padding: EdgeInsets.zero,
-          tooltip: context.l10n.budgetCategoryLabel,
-          enabled: !widget.isOffline,
-          icon: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(kExpenseCategoryIcons[category],
-                  size: 18, color: theme.colorScheme.onSurfaceVariant),
-              Icon(Icons.arrow_drop_down,
-                  size: 18, color: theme.colorScheme.onSurfaceVariant),
-            ],
-          ),
-          onSelected: (v) => ref
-              .read(expenseDraftProvider(widget.tripId).notifier)
-              .setCategory(v),
-          itemBuilder: (_) => [
-            for (final cat in kExpenseCategories)
-              CheckedPopupMenuItem<String>(
-                value: cat,
-                checked: cat == category,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(kExpenseCategoryIcons[cat],
-                        size: 18, color: theme.colorScheme.onSurfaceVariant),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(expenseCategoryLabel(context.l10n, cat)),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      );
-    });
-  }
-
-  /// Neither field passes a `style:`, and the theme passes no `hintStyle:`, on
-  /// purpose: that is what makes the hint's metrics exactly `bodyLarge`, which
-  /// is what [_fieldWidthFor] measures. Adding either without teaching the
-  /// measurement about it silently un-derives the row.
-  Widget _buildLabelField() => TextField(
-        controller: _labelController,
-        textInputAction: TextInputAction.next,
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: context.l10n.budgetAddHint,
-        ),
-      );
-
-  Widget _buildAmountField() => TextField(
-        controller: _amountController,
-        textInputAction: TextInputAction.done,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-        ],
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: context.l10n.budgetAmount,
-        ),
-        onSubmitted: (_) => _add(),
-      );
-
-  /// Pick a category, say what it was, say what it cost, commit.
-  ///
-  /// One line while both fields can have the width their hints need, two lines
-  /// below that. Measured rather than thresholded, because what runs out is a
-  /// translated string at the traveler's text scale and no px breakpoint is
-  /// right for every combination of those: at 390px the description field got
-  /// ~106px and its hint truncated to "Add a…" — illegible, and too narrow to
-  /// type into either, so shortening the copy would only have made an unusable
-  /// field readable.
-  ///
-  /// It truncated rather than wrapped because a field hint inherits
-  /// `hintMaxLines` from `TextField.maxLines`, which is 1, and a hint with a
-  /// max-lines gets `TextOverflow.ellipsis` against a tight layout width. So
-  /// the failure was silent by construction: no overflow stripes, no thrown
-  /// exception, just a shorter string. Only a width assertion catches it,
-  /// which is why the tests measure rather than watch for exceptions.
-  ///
-  /// Stacked, the money and the commit drop to a second line and the
-  /// description takes the width back, while the category trigger stays glued
-  /// to the field it categorizes — where it reads as that field's leading
-  /// icon, which is what it is.
-  ///
-  /// The decision can't oscillate: this row's width comes from the sliver
-  /// above it, never from its own children, so stacking cannot change the
-  /// constraint that caused it.
-  Widget _buildAddRow(ThemeData theme) {
-    // LayoutBuilder, never MediaQuery (house rule, chat_panel.dart): the width
-    // this row gets is the trip BODY's, and a docked chat panel takes 401px of
-    // it without the window changing at all.
-    return LayoutBuilder(builder: (context, constraints) {
-      final labelWidth = _fieldWidthFor(context, context.l10n.budgetAddHint);
-      final amountWidth = math.max(
-        _fieldWidthFor(context, context.l10n.budgetAmount),
-        _fieldWidthFor(context, _amountWidthSample),
-      );
-      final category = _buildCategoryTrigger(theme);
-      final label = _buildLabelField();
-      final amount = _buildAmountField();
-      // Declared to _controlWidth for the same reason as the category trigger
-      // — and it is a fix as well as a declaration: on desktop this button was
-      // 40 wide, under Material's 48 minimum.
-      final add = SizedBox(
-        width: _controlWidth,
-        child: IconButton(
-          icon: const Icon(Icons.add),
-          tooltip: context.l10n.budgetAddExpenseTooltip,
-          onPressed: widget.isOffline ? null : _add,
-        ),
-      );
-
-      // A ladder, cheapest concession first — the description keeps whatever
-      // company it can while still showing its hint whole:
-      //
-      //   1. everything on one line
-      //   2. the money and the commit drop to a second line
-      //   3. the category drops too, and the description takes the whole line
-      //
-      // Unbounded width takes rung 1: it seats anything, and the Expanded
-      // would already have thrown there, so the guard only feeds the
-      // arithmetic.
-      if (!constraints.maxWidth.isFinite ||
-          constraints.maxWidth >=
-              _addRowFixedWidth + labelWidth + amountWidth) {
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            category,
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(child: label),
-            const SizedBox(width: AppSpacing.sm),
-            SizedBox(width: amountWidth, child: amount),
-            add,
-          ],
-        );
-      }
-
-      // Rung 3 is the accessibility rung, not a phone rung: a 320px body at a
-      // large text scale is where the category trigger's 48 + 8 stops being
-      // affordable. Below THIS nothing helps and the hint ellipsizes as it
-      // always did — but by then the description has the widest line the row
-      // can offer, which is the most the layout can honestly do.
-      final categorySharesTheLabelsLine =
-          constraints.maxWidth - _controlWidth - AppSpacing.sm >= labelWidth;
-
-      // Both fields keep their order and their relative position on every
-      // rung, so reading-order traversal carries `next` from the label to the
-      // amount and `done` to _add() — except on rung 3, where the category
-      // trigger now sits between them in reading order and `next` stops there
-      // first. Acceptable at the only width that reaches rung 3, and the
-      // alternative (the category between the amount and the add button)
-      // buys a tidier tab order by making the row look like a mistake.
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (categorySharesTheLabelsLine)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                category,
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(child: label),
-              ],
-            )
-          else
-            label,
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (!categorySharesTheLabelsLine) ...[
-                category,
-                const SizedBox(width: AppSpacing.sm),
-              ],
-              Expanded(child: amount),
-              add,
-            ],
-          ),
-        ],
-      );
-    });
   }
 }

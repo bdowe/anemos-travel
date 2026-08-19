@@ -1004,6 +1004,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get budgetGroupByCity => 'Ciudad';
 
   @override
+  String get budgetExpensesTitle => 'Gastos';
+
+  @override
   String get budgetGroupRestOfTrip => 'Resto del viaje';
 
   @override
