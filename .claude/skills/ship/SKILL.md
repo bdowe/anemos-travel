@@ -11,8 +11,9 @@ Take the working-tree changes through commit → push → PR → merge.
 
 - `ship` (default) — the full pipeline through merge. Solo, single-lane work.
 - `ship pr` — stop after step 5 (`gh pr create`). Report the PR URL and STOP:
-  do not merge, do not switch back to `main` (the integrator will rebase this
-  branch). Required for lane agents in a parallel wave (`docs/parallel-dev.md`).
+  do not merge, do not switch back to `main` (the integrator will integrate
+  this branch). Required for lane agents in a parallel wave
+  (`docs/parallel-dev.md`).
 - **Auto-detection**: if running inside a linked worktree
   (`git rev-parse --git-dir` differs from `git rev-parse --git-common-dir`),
   behave as `ship pr` even if no argument was given — worktree agents are wave
@@ -44,5 +45,5 @@ Take the working-tree changes through commit → push → PR → merge.
 
 ## Notes
 
-- Never force-push or amend commits that are already pushed. (Exception owned elsewhere: the integrator may `--force-with-lease` a lane branch after its agent has stopped — see `.claude/skills/integrate`.)
+- Never force-push or amend commits that are already pushed. No exceptions — the integrator resolves conflicts by merging `main` into the lane branch, which is a plain push (see `.claude/skills/integrate`).
 - If the merge is blocked (required checks, review requirements), report the blocker and stop — don't bypass with admin flags.

@@ -119,7 +119,7 @@ EOF
   # project — warn loudly rather than let `make docker-dev` collide.
   if ! grep -q 'GTT_PROJECT' "$wt/dockerize/development/docker-compose.yml" 2>/dev/null; then
     echo "WARNING: this worktree's dev compose is NOT parameterized (branch predates" >&2
-    echo "         parallel lanes). Do not run docker targets here — rebase onto main first." >&2
+    echo "         parallel lanes). Do not run docker targets here — merge main in first." >&2
   fi
 
   cat <<EOF

@@ -8,8 +8,10 @@ the process half.
 
 One feature wave = N **lanes**. One lane = one branch = one git worktree = one
 coding agent = one PR (or a short PR chain). Lane agents **stop at PR-open** —
-they never merge. One **integrator** session merges serially: rebase → resolve
-hub files → regenerate generated code → green CI → merge → next. The prod
+they never merge. One **integrator** session merges serially, in the order the
+PRs were opened: check for conflicts → merge if there are none → otherwise
+merge `main` in, resolve hub files, regenerate generated code, green CI → merge
+→ next. Nothing is rebased and nothing is force-pushed (§4, §6). The prod
 deploy each merge triggers runs in the background and **never blocks the next
 merge** (§6); it is checked as it lands, and a red one stops the queue. Brian
 approves the lane plan and steers; agents code.
@@ -21,9 +23,10 @@ Roles:
   (stop-at-PR-open mode), reports the PR URL, stops. Never merges, never
   rebases, never touches files outside its conflict manifest.
 - **Integrator** — owns `main`. Runs the `/integrate` loop
-  (`.claude/skills/integrate`). Only the integrator rebases, force-pushes
-  (`--force-with-lease`), and merges. It tracks deploys without serializing
-  the queue behind them, and accounts for every one in the wave summary.
+  (`.claude/skills/integrate`). Only the integrator merges, and only the
+  integrator pushes to a lane branch (to carry a conflict resolution). It
+  tracks deploys without serializing the queue behind them, and accounts for
+  every one in the wave summary.
 - **Brian** — wave-planning approval, lane steering, anything requiring
   product judgment.
 
@@ -119,40 +122,49 @@ to `main` before merging it**, and check `git merge-base --is-ancestor
 ## 4. Regen-not-merge doctrine
 
 `store/` (sqlc), `lib/l10n/app_localizations*.dart` (gen-l10n), and
-`lib/models/*.g.dart` (build_runner) are committed and CI-drift-checked. On a
-rebase that conflicts in generated files you **never hand-merge them**:
+`lib/models/*.g.dart` (build_runner) are committed and CI-drift-checked. When a
+PR conflicts with `main` in generated files you **never hand-merge them**:
 
-1. `git fetch origin && git rebase origin/main`
-2. In each conflicted commit, hand-resolve ONLY hand-written sources:
+1. In the lane's worktree (the branch is checked out there):
+   `git fetch origin && git merge origin/main`
+2. Hand-resolve ONLY hand-written sources — once, not once per commit:
    `query/*.sql`, `migrations/*.sql`, the `.arb`s (take both key sets),
    `lib/models/*.dart`, `main.go`, `.env.sample`, `plan_tool_registry.go`
    (main's order + your tail append).
 3. For conflicted **generated** files take main's side without reading the
-   diff — during a rebase `--ours` is the branch you're rebasing ONTO:
+   diff — in a merge, main is the side coming IN, so it is `--theirs`:
    ```bash
-   git checkout --ours -- src/packages/api/store \
+   git checkout --theirs -- src/packages/api/store \
      src/packages/flutter-app/lib/l10n/app_localizations*.dart \
      'src/packages/flutter-app/lib/models/*.g.dart'
-   git add -A && git rebase --continue
+   git add -A && git commit
    ```
-4. **After** the rebase completes — sources settled — regenerate everything:
+   ⚠️ This inverts if you ever rebase instead: **during a rebase `--ours` is
+   the branch you are rebasing ONTO**, i.e. main. Both spellings mean "take
+   main"; getting one backwards silently ships main's *stale* generated code
+   into the lane, and no conflict marker is left to notice.
+4. **After** the merge is committed — sources settled — regenerate everything:
    `make api-sqlc` · `make flutter-gen-l10n` · `make flutter-build-models`.
    The three are independent of each other, but all run after ALL hand
    resolution is done ("regen LAST").
 5. Commit the regen output, run
    `make api-fmt && make api-vet && make flutter-analyze` + targeted tests,
-   then `git push --force-with-lease`.
+   then `git push` — plain, no force. A merge commit fast-forwards the lane
+   branch, so there is nothing to force.
 
 ## 5. Wave sizing — 2–4 lanes, usually 3
 
 - `trip_detail_screen.dart` is in ~1 of 3 PRs: in a wave of k typical lanes,
   expected god-screen touchers ≈ 0.31k. Past 3–4 lanes you can't fill a wave
   that avoids it. (Splitting that screen is the single biggest future unlock.)
-- Integration is serial: rebase + regen + CI wait + merge is ~10–20 min per
-  PR. The prod deploy each merge triggers is queued and self-verifying, but
-  sits **off** the critical path (§6), so it no longer adds to the per-PR
-  cost — it only stops the queue if it goes red. Four lanes ≈ a 1 h
-  integrator tail; beyond that the parallel coding gain is eaten by the tail.
+- Integration is serial, but only a *conflicting* PR is expensive: a clean one
+  is a conflict check plus `gh pr merge` (seconds, without leaving the main
+  checkout), while merge + regen + CI wait + merge is the ~10–20 min tail a
+  conflicting one pays (§6). The prod deploy each merge triggers is queued and
+  self-verifying, but sits **off** the critical path (§6), so it never adds to
+  the per-PR cost — it only stops the queue if it goes red. The integrator tail
+  now scales with how many lanes actually collided, not with how many lanes
+  there were.
 - The ≤1-migration-per-lane and single-registry-lane rules cap schema- or
   agent-tool-heavy waves regardless.
 - Each Mode-B lane also runs a full 4-container stack (~1–2 GB peak during the
@@ -161,11 +173,32 @@ rebase that conflicts in generated files you **never hand-merge them**:
 ## 6. The integrator merge queue
 
 Summary (the operational skill is `.claude/skills/integrate` — run
-`/integrate`): merge in dependency order; one PR at a time; rebase (inside the
-lane's worktree — the branch is checked out there) → resolve per §3–4 →
-local checks → `--force-with-lease` → wait green (the rebase rerun
-is also what makes the duplicate-migration CI guard bite) → merge → **start
-the next PR immediately; do NOT wait for the deploy**.
+`/integrate`): one PR at a time, **in the order the PRs were opened**
+(`gh pr list --json createdAt`, ascending). Check for conflicts first —
+`git merge-tree --write-tree --name-only origin/main origin/<branch>`, exit 0 =
+clean. **Clean → merge it** (`gh pr merge --merge --delete-branch`): no rebase,
+no force-push, no worktree, no CI re-run. **Conflicts → merge `origin/main`
+into the lane branch** inside its worktree, resolve per §3–4, regen, local
+checks, plain `git push`, wait green, merge. Either way: **start the next PR
+immediately; do NOT wait for the deploy**.
+
+Two exceptions to PR-open order, both cheaper to obey than to repair: a
+**stacked PR waits for its base** and is retargeted to `main` first (§4a — this
+is how 00058 was burned), and **migration-carrying PRs go in ascending
+migration number** among themselves, since a lower number landing after a
+higher one is refused by CI and forces a renumber. The `tasks.md` dependency
+edges are advisory now — a sanity check on those two cases, not the sequencer.
+
+What skipping the rebase costs, and what is kept: both CI migration guards read
+the PR **merge ref** / live `origin/main` **at run time**, so they never needed
+a rebase — only a fresh *run*. A green badge is therefore only as fresh as the
+PR's last run. That matters for exactly one class: a competing migration merged
+since then produces no textual conflict (different filenames) and lands as a
+boot-time crash-loop (§4a), so `/integrate` keeps a local migration-floor check
+on every PR that adds one. Everything else a stale run could hide — cross-lane
+Go↔Dart contract drift, codegen drift — is a red check, and is now caught by
+`main`'s own CI instead of the integrator's local run: the queue stops and the
+fix goes forward on main.
 
 The prod deploy each merge triggers is self-verifying and runs off the
 critical path. Check the ones already in flight between merges, and **the
@@ -190,7 +223,7 @@ Who fixes a red check: **the integrator fixes anything integration created**
 (hub resolution, cross-lane contract parity, codegen drift, fmt);
 **lane agents fix anything already wrong inside their lane** (hand back via
 SendMessage in Mode A, the lane's terminal in Mode B). Tie-breaker: if the
-failure reproduces on the lane branch *before* the rebase, it's the lane's.
+failure reproduces on the lane branch *before* integration, it's the lane's.
 
 ## 7. Wave runbook
 
@@ -213,7 +246,7 @@ failure reproduces on the lane branch *before* the rebase, it's the lane's.
    not touch files outside your manifest."*
 4. **Monitor** — TaskList / TaskOutput / SendMessage (Mode A) or the
    terminals (Mode B). Collect PR URLs.
-5. **Integrate** — `/integrate`, in the tasks.md merge order.
+5. **Integrate** — `/integrate`, in PR-open order (§6).
 6. **Close** — `make wt-rm` per merged lane, confirm prod SHA + health, check
    off the spec's acceptance criteria.
 

@@ -5,6 +5,49 @@ build queue. Priority when picking work: **breakage > friction in features
 actually used > ideas that recur across ≥2 sessions**. Tag entries `[app]`
 (dogfooding the product) or `[dev]` (workflow/tooling). Newest first.
 
+## 2026-08-18 — /integrate charged every PR the conflict price
+
+- **[dev] Friction:** Brian — *"I think perhaps the /integrate skill has more
+  overhead than it needs."* The loop rebased **every** lane branch onto main,
+  resolved per conflicted commit, ran local checks, force-pushed, and waited out
+  a full CI re-run — ~10–20 min a PR — before merging. The hub table's entire
+  purpose is lanes that do not touch the same files, so most of that was being
+  paid for a conflict that did not exist. New shape: check
+  `git merge-tree --write-tree`, and on exit 0 just `gh pr merge`. Order is now
+  the order the PRs were opened, not the tasks.md dependency edges.
+- **[dev] The rebase was never what armed the migration guards.** The doc
+  claimed *"the rebase rerun is also what makes the duplicate-migration CI guard
+  bite"*. Reading `.github/workflows/ci.yml`: the duplicate guard runs on
+  `refs/pull/N/merge` — GitHub's ephemeral merge with the current main tip — and
+  the out-of-order guard fetches live `origin/main` at run time. Neither needs
+  the branch rebased; both need a **fresh run**. What a green badge actually
+  certifies is "true as of my last run", which is a different and much smaller
+  claim.
+- **[dev] So exactly one thing had to survive skipping the rebase.** A competing
+  migration merged since the PR's last run produces **no textual conflict**
+  (different filenames), so the conflict check waves it through, and the failure
+  is `goose` refusing at boot → crash-loop outage, not a red check. `/integrate`
+  now runs a local migration-floor check (`git ls-tree origin/main -- migrations/
+  | tail -1`) on any PR that adds one. Everything else a stale run can hide —
+  cross-lane Go↔Dart drift, codegen drift — is a red check, and is deliberately
+  traded to main's own CI: queue stops, fix goes forward on main.
+- **[dev] `--ours` and `--theirs` invert between rebase and merge**, and nothing
+  warns you. Under `git merge origin/main` on the lane branch, main is
+  `--theirs`; under `git rebase origin/main`, main is `--ours`. Both spellings
+  mean "take main's generated files unread"; the wrong one silently commits
+  main's *stale* codegen into the lane with no conflict marker left behind.
+  Verified both directions in a throwaway repo before writing either down.
+- **[dev] Nothing in the repo ever required the rebase.** `main` has no branch
+  protection at all (`gh api …/branches/main/protection` → 404): no required
+  checks, no up-to-date-branch rule, no linear history, and main already carries
+  merge bubbles from PRs merged without one. The force-push exception in
+  `ship`/`integrate` is gone with it — resolving by merge is a plain push.
+- **[dev] Two orderings still beat PR-open order**, both because the repair
+  costs more than the rule: a stacked PR waits for its base and is retargeted to
+  main first (this is how 00058 got burned), and migration-carrying PRs go in
+  ascending number, since a lower number landing after a higher one is refused
+  by CI and forces a renumber plus a re-run.
+
 ## 2026-08-15 — it planned the whole trip before anyone said yes
 
 - **[app] Friction:** Brian — *"when planning a trip, sometimes it pulls the list
@@ -1641,4 +1684,5 @@ Open gaps found while fixing "chat doesn't clearly indicate it's loading"
 - **[dev] Open follow-ups:** trim `Bash(gh pr *)` from
   `.claude/settings.local.json` (pre-approves `gh pr merge`, defeating the
   lane-agent stall); local dev DB is empty — reseed if anything mattered;
-  first real wave should exercise `/integrate` end to end.
+  first real wave should exercise the slimmed `/integrate` end to end (see
+  2026-08-18) — expect at least one PR to take the clean path.
