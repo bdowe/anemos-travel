@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
 import '../models/booking_todo.dart';
+import '../theme/spacing.dart';
 import '../utils/travel_mode.dart';
 import 'booking_sheets.dart' show transportModeIcon, transportModeLabel;
 
@@ -61,6 +62,130 @@ String _providerOpenLabel(
 /// BookingDetailRow derives its indent from this; change it here only.
 const double kBookingRowLeadingSlot = 34; // 18 icon + 16 caret
 
+/// One entry in a booking row's overflow menu.
+typedef BookingRowMenuItem = ({String value, String label});
+
+/// The one trailing grammar every booking row speaks: **an action, an
+/// overflow, then state** — the phrasing [BookingDetailRow] adopted when its
+/// four peer icon buttons folded into a kebab, now owned in ONE place so the
+/// family can't drift apart again.
+///
+/// The complaint this exists to answer: the three arrived as three peers of
+/// equal weight, so nothing said which was which. The fix is a weight LADDER,
+/// not fewer elements — the checkbox is behaviour (a filter test counts one
+/// per row, and it is the thing a traveler came to flip) and the named action
+/// is what the row is FOR ("Find ferries" vs "Open in Airbnb" is real
+/// information, pinned by ~27 assertions). So:
+///
+///   * the action is a LINK, not a button — full button padding at primary
+///     strength made it louder than the row's own title, and heavier than the
+///     very same action on the [BookingDetailRow] nested underneath it, which
+///     is a bare 18px glyph. It keeps teal: brand reserves that for identity
+///     and the primary action, and this is the row's primary action.
+///   * the overflow sits tight against it, so the two read as one group of
+///     things-you-can-do rather than as two more peers.
+///   * a deliberate gap then separates STATE, so the checkbox reads as its own
+///     column instead of as the third item in an undifferentiated run.
+///
+/// [alignment] is centerRight on the action so that if a short label ever hits
+/// the button's minimum width the slack lands on the LEFT — which is what
+/// keeps every row's `open_in_new` glyph on one column
+/// (trip_detail_booking_alignment_test).
+class _BookingRowTrailing extends StatelessWidget {
+  /// The open-search action's label; null renders no action at all — a
+  /// permanently disabled control is noise, not an affordance.
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  /// Overflow entries; empty renders no kebab.
+  final List<BookingRowMenuItem> menuItems;
+  final ValueChanged<String>? onMenuSelected;
+
+  /// Booked rows recede: the link stays usable (re-check a price, find the
+  /// confirmation email's provider) but stops competing with unbooked rows.
+  final bool booked;
+
+  /// Narrow rows drop the external-link glyph along with the long label: at
+  /// the 360px overflow floor the row's fixed chrome must leave the title a
+  /// nonzero share.
+  final bool compact;
+
+  final bool checkboxValue;
+  final ValueChanged<bool> onCheckboxChanged;
+
+  /// Rendered after the checkbox (the reorder handle on residual cards).
+  final Widget? trailingExtra;
+
+  const _BookingRowTrailing({
+    required this.actionLabel,
+    required this.onAction,
+    required this.menuItems,
+    required this.onMenuSelected,
+    required this.booked,
+    required this.compact,
+    required this.checkboxValue,
+    required this.onCheckboxChanged,
+    this.trailingExtra,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final style = TextButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      minimumSize: Size.zero,
+      alignment: Alignment.centerRight,
+      foregroundColor: booked ? muted : null,
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (actionLabel case final label?)
+          if (compact)
+            TextButton(
+              onPressed: onAction,
+              style: style,
+              child: Text(label),
+            )
+          else
+            TextButton.icon(
+              onPressed: onAction,
+              icon: const Icon(Icons.open_in_new, size: 18),
+              // Trailing glyph: everything after it is fixed-width and packs
+              // right, so with the icon AFTER the label every row's
+              // open_in_new lands on one column no matter how wide the label.
+              iconAlignment: IconAlignment.end,
+              style: style,
+              label: Text(label),
+            ),
+        if (menuItems.isNotEmpty)
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, size: 18, color: muted),
+            tooltip: context.l10n.bookingRowOptions,
+            onSelected: onMenuSelected,
+            itemBuilder: (_) => [
+              for (final item in menuItems)
+                PopupMenuItem(value: item.value, child: Text(item.label)),
+            ],
+          ),
+        // The seam between doing and recording.
+        const SizedBox(width: AppSpacing.xs),
+        // Last so the fixed-width checkboxes stay flush right and aligned
+        // across rows despite varying button-label widths.
+        Checkbox(
+          value: checkboxValue,
+          onChanged: (v) => onCheckboxChanged(v ?? false),
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        if (trailingExtra != null) trailingExtra!,
+      ],
+    );
+  }
+}
+
 /// A styled booking checklist card: an icon by kind, the title + dates, a
 /// "Booked" checkbox, and a button that opens the pre-filled search link.
 class BookingTodoCard extends StatelessWidget {
@@ -96,62 +221,76 @@ class BookingTodoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
+    final muted = theme.colorScheme.onSurfaceVariant;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.fromLTRB(12, AppSpacing.xs, 0, AppSpacing.xs),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Icon(_icon, color: theme.colorScheme.primary),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(todo.title, style: theme.textTheme.titleSmall),
-                      if (todo.subtitle != null && todo.subtitle!.isNotEmpty)
-                        Text(
-                          todo.subtitle!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (onEdit != null)
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    tooltip: l10n.bookingCardEdit,
-                    onPressed: onEdit,
-                  ),
-                if (onDelete != null)
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: l10n.bookingCardRemove,
-                    onPressed: onDelete,
-                  ),
-                if (dragHandle != null) dragHandle!,
-              ],
+            // The slim row's own leading grid, so a residual booking lines up
+            // with the city rows above it instead of reading as another
+            // species.
+            SizedBox(
+              width: kBookingRowLeadingSlot,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Icon(_icon, size: 18, color: theme.colorScheme.primary),
+              ),
             ),
-            Row(
-              children: [
-                Checkbox(
-                  value: todo.booked,
-                  onChanged: (v) => onBookedChanged(v ?? false),
-                ),
-                Text(l10n.bookingCardBooked, style: theme.textTheme.bodyMedium),
-                const Spacer(),
-                FilledButton.tonalIcon(
-                  onPressed: onOpen,
-                  icon: const Icon(Icons.open_in_new, size: 18),
-                  label:
-                      Text(_providerOpenLabel(l10n, todo, openLabelOverride)),
-                ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    todo.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: todo.booked ? muted : null,
+                      decoration:
+                          todo.booked ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                  if (todo.subtitle != null && todo.subtitle!.isNotEmpty)
+                    Text(
+                      todo.subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                ],
+              ),
+            ),
+            // Edit and delete fold into the same kebab the city rows carry.
+            // This is the only booking widget that owns them, and spelled out
+            // as two peer icon buttons beside a filled "Open search" and a
+            // labelled checkbox, a custom booking arrived with FOUR trailing
+            // weights and twice the height of the rows it sits under —
+            // destructive delete one pixel from a routine edit. Housing them
+            // (rather than dropping them) is what keeps the register change
+            // from being a feature removal.
+            _BookingRowTrailing(
+              // A custom todo has no provider to search, so its action is
+              // null and simply doesn't render — it used to sit there as a
+              // permanently greyed-out filled button.
+              actionLabel: onOpen == null
+                  ? null
+                  : _providerOpenLabel(l10n, todo, openLabelOverride),
+              onAction: onOpen,
+              menuItems: [
+                if (onEdit != null) (value: 'edit', label: l10n.bookingCardEdit),
+                if (onDelete != null)
+                  (value: 'delete', label: l10n.bookingCardRemove),
               ],
+              onMenuSelected: (v) =>
+                  v == 'edit' ? onEdit?.call() : onDelete?.call(),
+              booked: todo.booked,
+              compact: false,
+              checkboxValue: todo.booked,
+              onCheckboxChanged: onBookedChanged,
+              trailingExtra: dragHandle,
             ),
           ],
         ),
@@ -266,72 +405,33 @@ class BookingTodoRow extends StatelessWidget {
               ],
             ),
           ),
-          // Compact rows drop the external-link glyph along with the long
-          // label: at the 360px overflow floor the row's fixed chrome
-          // (leading slot + button + kebab + checkbox) must leave the title
-          // a nonzero share.
-          if (compact)
-            TextButton(
-              onPressed: onOpen,
-              style: todo.booked
-                  ? TextButton.styleFrom(foregroundColor: muted)
-                  : null,
-              child: Text(_providerOpenLabel(
-                  context.l10n, todo, openLabelOverride,
-                  compact: true)),
-            )
-          else
-            TextButton.icon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.open_in_new, size: 18),
-              // Trailing glyph: the kebab + checkbox after the button are
-              // fixed-width and the cluster packs right, so with the icon
-              // after the label every row's open_in_new lands on one column
-              // no matter how wide the label is.
-              iconAlignment: IconAlignment.end,
-              // Booked rows recede: the link stays usable (re-check a price,
-              // find the confirmation email's provider) but stops competing
-              // with unbooked rows for attention.
-              style: todo.booked
-                  ? TextButton.styleFrom(foregroundColor: muted)
-                  : null,
-              label: Text(_providerOpenLabel(
-                  context.l10n, todo, openLabelOverride,
-                  compact: false)),
-            ),
-          if (onAddDetails != null || onChangeAirport != null)
-            PopupMenuButton<String>(
-              icon: Icon(Icons.more_vert, size: 18, color: muted),
-              tooltip: context.l10n.bookingRowOptions,
-              onSelected: (v) => switch (v) {
-                'airport' => onChangeAirport?.call(),
-                _ => onAddDetails?.call(),
-              },
-              itemBuilder: (_) => [
-                // First: on a home leg it is the more consequential of the two,
-                // and it is what a traveler reaching for "Add details…" to
-                // retype an airport was actually looking for.
-                if (onChangeAirport != null)
-                  PopupMenuItem(
-                    value: 'airport',
-                    child: Text(todo.role == 'home_return'
-                        ? context.l10n.tripAirportsChangeReturn
-                        : context.l10n.tripAirportsChangeDeparture),
-                  ),
-                if (onAddDetails != null)
-                  PopupMenuItem(
-                    value: 'details',
-                    child: Text(context.l10n.bookingRowAddDetails),
-                  ),
-              ],
-            ),
-          // Last so the fixed-width checkboxes stay flush right and aligned
-          // across rows despite varying button-label widths.
-          Checkbox(
-            value: todo.booked,
-            onChanged: (v) => onBookedChanged(v ?? false),
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          _BookingRowTrailing(
+            actionLabel: _providerOpenLabel(
+                context.l10n, todo, openLabelOverride,
+                compact: compact),
+            onAction: onOpen,
+            menuItems: [
+              // First: on a home leg it is the more consequential of the two,
+              // and it is what a traveler reaching for "Add details…" to
+              // retype an airport was actually looking for.
+              if (onChangeAirport != null)
+                (
+                  value: 'airport',
+                  label: todo.role == 'home_return'
+                      ? context.l10n.tripAirportsChangeReturn
+                      : context.l10n.tripAirportsChangeDeparture
+                ),
+              if (onAddDetails != null)
+                (value: 'details', label: context.l10n.bookingRowAddDetails),
+            ],
+            onMenuSelected: (v) => switch (v) {
+              'airport' => onChangeAirport?.call(),
+              _ => onAddDetails?.call(),
+            },
+            booked: todo.booked,
+            compact: compact,
+            checkboxValue: todo.booked,
+            onCheckboxChanged: onBookedChanged,
           ),
         ],
       ),
