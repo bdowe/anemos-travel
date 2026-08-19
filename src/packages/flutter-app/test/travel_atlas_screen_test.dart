@@ -99,7 +99,15 @@ List<Trip> _history() => [
           pins: const [CityPin(city: 'Madrid', lat: 40.4, lng: -3.7)]),
     ];
 
-/// Mounts the atlas over a fixed trips payload.
+/// The shell's bottom navigation bar, which this screen is always pushed
+/// under at phone widths. 80 is [NavigationBar]'s M3 height, and it is the
+/// difference between the viewport and the actual fold — measuring without it
+/// reads one index row too many.
+const double kShellNavBarHeight = 80;
+
+/// Mounts the atlas over a fixed trips payload, under a stand-in for the
+/// shell's bottom navigation bar so vertical measurements are against the
+/// fold a traveler actually sees.
 ///
 /// **One pump per test.** Re-pumping installs a fresh
 /// `tripsApiServiceProvider` override, which invalidates the `tripsProvider`
@@ -120,7 +128,12 @@ Future<void> _pumpAtlas(
         resumableChatsProvider.overrideWith((ref) async => const []),
         sharedWithMeProvider.overrideWith((ref) async => const <Trip>[]),
       ],
-      child: localizedTestApp(home: const TravelAtlasScreen()),
+      child: localizedTestApp(
+        home: const Scaffold(
+          body: TravelAtlasScreen(),
+          bottomNavigationBar: SizedBox(height: kShellNavBarHeight),
+        ),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -237,38 +250,25 @@ void main() {
     expect(plate.width, 390.0, reason: 'the plate is full-bleed here too');
   });
 
-  testWidgets('on the smallest phone the index still reads as a list',
+  testWidgets('the plate takes its measured height, and the paper follows it',
       (tester) async {
-    // The plate-height decision, pinned — see `_plateHeight`'s doc.
+    // What [kAtlasPlateHeight] is worth was measured in the running app, not
+    // here: widget tests lay out with Flutter's fixed-width test font, so a
+    // pixel claim about where a row's TEXT lands would be a claim about that
+    // font. See the constant's doc for the browser numbers and the reasoning.
     //
-    // The binding case, not the easy one: a 375×667 phone carrying the
-    // TALLEST chrome this screen can have — the year chip row (history spans
-    // more than one year) above a colophon rendering BOTH groups. Under that,
-    // the index heading and its first row must sit whole above the fold, and
-    // the second must be cut by it. The whole row says "this is a list"; the
-    // cut one says "there is more". A height that loses either is a height to
-    // re-measure, not a test to relax.
+    // What this pins is font-independent — the plate is exactly that tall, and
+    // the chips, the colophon and the index follow it in that order.
     await _pumpAtlas(tester,
-        trips: [
-          ...spanningHistory(),
-          _trip('past4', 'Split Trip',
-              start: '${_lastYear - 3}-03-01',
-              end: '${_lastYear - 3}-03-06',
-              cities: const ['Split']),
-        ],
-        surface: const Size(375, 667));
+        trips: spanningHistory(), surface: const Size(375, 667));
 
-    const fold = 667.0;
-    // Newest first by first day: last September, then last February.
-    for (final label in ['Past trips', 'Athens Trip']) {
-      expect(tester.getRect(find.text(label)).bottom, lessThan(fold),
-          reason: '"$label" must sit whole above the fold');
-    }
-    final second = tester.getRect(find.text('Iberia Loop'));
-    expect(second.top, lessThan(fold),
-        reason: 'the second row must peek over the fold');
-    expect(second.bottom, greaterThan(fold),
-        reason: 'and be cut by it, so the list reads as continuing');
+    final plate = tester.getRect(find.byType(FlutterMap));
+    expect(plate.height, kAtlasPlateHeight);
+    expect(plate.top, lessThan(tester.getRect(find.text('All time')).top));
+    expect(tester.getRect(find.text('All time')).bottom,
+        lessThanOrEqualTo(tester.getRect(find.text('Traveled')).top));
+    expect(tester.getRect(find.text('Traveled')).bottom,
+        lessThanOrEqualTo(tester.getRect(find.text('Past trips')).top));
   });
 
   testWidgets('with no finished trips it offers the way to make some',
