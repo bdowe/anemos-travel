@@ -51,11 +51,14 @@ a rule that must break gets written into the guideline doc in the same PR.
 Feature waves run as parallel **lanes**: one lane = one branch = one git
 worktree (`make wt-new NAME=…`, own dev stack on its own ports) = one PR. Lane
 agents STOP at PR-open (`ship pr` — never merge); one integrator session
-(`/integrate`) rebases, resolves hub files, regenerates generated code
-(`store/`, `lib/l10n/app_localizations*.dart`, `*.g.dart` are NEVER
-hand-merged — regen LAST), and merges serially. Deploys run in the background
-and never block the next merge; a red one stops the queue. Wave
-planning reserves goose migration numbers; at most one in-flight lane may touch
+(`/integrate`) merges them serially **in the order the PRs were opened** —
+checking each for conflicts with `main` first and merging straight away when
+there are none, otherwise merging `main` in, resolving hub files and
+regenerating generated code (`store/`, `lib/l10n/app_localizations*.dart`,
+`*.g.dart` are NEVER hand-merged — regen LAST) before it merges. Nothing is
+rebased or force-pushed. Deploys run in the background and never block the next
+merge; a red one stops the queue. Wave planning reserves goose migration
+numbers; at most one in-flight lane may touch
 `trip_detail_screen.dart` or append to `plan_tool_registry.go`. Full rules and
 runbooks: [`docs/parallel-dev.md`](docs/parallel-dev.md). Triggers: `/wave`
 (orchestrate a wave; also `status`/`abort`) and `/lane` (bootstrap one lane).

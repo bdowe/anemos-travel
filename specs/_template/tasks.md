@@ -48,6 +48,7 @@ are free). Constraints to check before fan-out: ≤1 lane touches
 `trip_detail_screen.dart`; ≤1 lane appends to `plan_tool_registry.go`; ARB
 prefixes unique across the wave; ≤1 migration per lane.
 
-**Merge order** — dependency edges only (e.g. A → B); unordered lanes merge in
-any order. Lane agents stop at PR-open (`ship pr`); the integrator merges
-(`/integrate`).
+**Merge order** — the integrator merges in **PR-open order**; edges listed
+here (e.g. A → B) are advisory. Two things do override it: a stacked PR waits
+for its base, and migration-carrying PRs go in ascending migration number.
+Lane agents stop at PR-open (`ship pr`); the integrator merges (`/integrate`).

@@ -21,8 +21,11 @@ No args in orchestrate intent → ask what to run.
    ≤1 lane touches `trip_detail_screen.dart`; ≤1 lane appends to
    `plan_tool_registry.go`; ARB key prefixes unique across the wave;
    ≤1 migration per lane with numbers reserved NOW
-   (`ls src/packages/api/migrations | tail -1` → next free, assigned in merge
-   order). 2–4 lanes total. If a constraint cannot be satisfied, propose a
+   (`ls src/packages/api/migrations | tail -1` → next free). Merge order is
+   PR-open order and is not knowable here, so the integrator merges
+   migration-carrying PRs in **ascending migration number** regardless — note
+   that in the table so a lane that opens its PR early does not imply an early
+   merge. 2–4 lanes total. If a constraint cannot be satisfied, propose a
    re-split or a serialization edge and say so in the table.
 
 3. **Write the Lanes section** into each spec's `tasks.md` (template:
@@ -49,8 +52,9 @@ No args in orchestrate intent → ask what to run.
    `docs/parallel-dev.md` §6). Collect PR URLs from completion reports.
 
 8. **Auto-integrate.** When EVERY lane has reported PR-open, run the
-   `integrate` skill with the lane table's merge order. No second approval —
-   the step-4 gate covered this.
+   `integrate` skill; it merges in PR-open order (the lane table's edges are
+   advisory — see `docs/parallel-dev.md` §6). No second approval — the step-4
+   gate covered this.
 
 9. **Close.** `make wt-rm NAME=<lane>` per merged lane (from the main
    checkout), then report the wave summary: PRs merged, deploys verified,
