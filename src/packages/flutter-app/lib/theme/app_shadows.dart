@@ -38,4 +38,25 @@ abstract final class AppShadows {
           offset: const Offset(0, 6),
         ),
       ];
+
+  /// Crisp drop under map pins (itinerary dots, stay/home squares, cluster
+  /// bubble) — the trip_map pin family's shared value, kept below the soft
+  /// banner blur so pins land sharply over satellite imagery.
+  static List<BoxShadow> get pin => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.35),
+          blurRadius: 4,
+          offset: const Offset(0, 1),
+        ),
+      ];
+
+  /// The selected pin's slightly stronger drop — the pin family above, one
+  /// notch deeper, so selection reads as "lifted" without a color change.
+  static List<BoxShadow> get pinSelected => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.5),
+          blurRadius: 6,
+          offset: const Offset(0, 1),
+        ),
+      ];
 }

@@ -9,6 +9,8 @@ import '../l10n/l10n.dart';
 import '../models/accommodation.dart';
 import '../models/itinerary_item.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
+import '../theme/spacing.dart';
 import '../utils/trip_format.dart';
 import 'app_map.dart';
 import 'empty_state.dart';
@@ -904,25 +906,28 @@ class _TripMapState extends State<TripMap> {
                       ),
                       const SizedBox(width: 8),
                     ],
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
+                    // The zoom triplet as ONE segmented capsule (see
+                    // MapControlGroup) — deliberate component, not three
+                    // floating discs of stock map chrome.
+                    MapControlGroup(
+                      buttons: [
                         MapControlButton(
                           icon: Icons.add,
                           tooltip: l10n.mapZoomIn,
                           onTap: () => _zoomBy(1),
+                          grouped: true,
                         ),
-                        const SizedBox(height: 8),
                         MapControlButton(
                           icon: Icons.remove,
                           tooltip: l10n.mapZoomOut,
                           onTap: () => _zoomBy(-1),
+                          grouped: true,
                         ),
-                        const SizedBox(height: 8),
                         MapControlButton(
                           icon: Icons.zoom_in_map,
                           tooltip: l10n.mapResetMap,
                           onTap: () => _fitToTrip(fitPoints),
+                          grouped: true,
                         ),
                       ],
                     ),
@@ -1011,7 +1016,7 @@ class _SegmentLabel extends StatelessWidget {
           // imagery and the route line beneath it (same treatment as the day
           // chips and control buttons).
           color: AppColors.mapScrim,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           border: Border.all(color: Colors.white24),
         ),
         child: Text(
@@ -1040,13 +1045,7 @@ class _ClusterBubble extends StatelessWidget {
         color: Colors.black.withValues(alpha: 0.65),
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        boxShadow: AppShadows.pin,
       ),
       alignment: Alignment.center,
       child: Text(
@@ -1092,13 +1091,7 @@ class _Pin extends StatelessWidget {
         color: color,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: selected ? 3 : 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: selected ? 0.5 : 0.35),
-            blurRadius: selected ? 6 : 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        boxShadow: selected ? AppShadows.pinSelected : AppShadows.pin,
       ),
       alignment: Alignment.center,
       child: Text(
@@ -1151,7 +1144,11 @@ class _DestinationPin extends StatelessWidget {
           label: label,
           category: null,
           selected: false,
-          color: Theme.of(context).colorScheme.primary,
+          // The constant brand teal, not the color scheme's theme-shifted
+          // primary: over satellite imagery the numbered dot must read deep
+          // Aegean in both themes (dark mode's scheme.primary is the mint
+          // ramp, which reads "mint chip", not "engraved marker").
+          color: AppColors.brand,
         ),
       ),
     );
@@ -1197,15 +1194,9 @@ class _HomePin extends StatelessWidget {
           height: 26,
           decoration: BoxDecoration(
             color: AppColors.toolFlights,
-            borderRadius: BorderRadius.circular(7),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             border: Border.all(color: Colors.white, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.35),
-                blurRadius: 4,
-                offset: const Offset(0, 1),
-              ),
-            ],
+            boxShadow: AppShadows.pin,
           ),
           alignment: Alignment.center,
           child: const Icon(
@@ -1246,15 +1237,9 @@ class _StayPin extends StatelessWidget {
           // of the family, but square where itinerary pins are round.
           decoration: BoxDecoration(
             color: AppColors.toolStays,
-            borderRadius: BorderRadius.circular(7),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             border: Border.all(color: Colors.white, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.35),
-                blurRadius: 4,
-                offset: const Offset(0, 1),
-              ),
-            ],
+            boxShadow: AppShadows.pin,
           ),
           alignment: Alignment.center,
           child: const Icon(Icons.hotel, size: 14, color: Colors.white),
