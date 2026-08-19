@@ -1,35 +1,41 @@
 # Anemos brand mark
 
-An 8-point **wind rose** — άνεμος is Greek for wind, the thing every journey
-rides on. Long cardinal points in the app's deep teal (`#00796B`/`#004D40`),
-short intercardinal points in the heritage gold (`#E8C452`/`#B98B1E`), each
-point split light/dark like a portolan chart. The old horse-in-horseshoe mark
-retired with the Golden Tempo name; the chat agent persona **Ferdinand** keeps
-the equine nod.
+The **Waypoint Thread rose** — an 8-point **wind rose** (άνεμος is Greek for
+wind, the thing every journey rides on) in sun-bronze, each point split
+light/dark (`#D2A24C` light halves / `#8B6D3A` dark), threaded west→northeast
+by an azure route line (`#3B9CC4` over `#20578B`) with a waypoint dot: **chat
+in, trip out**. Meltemi palette. It is an organic vector drawing, not a
+polygon recipe — edit it in a vector tool, not by hand-computing points.
+Installed 2026-08, replacing the geometric teal/gold rose. The old
+horse-in-horseshoe mark retired with the Golden Tempo name; the chat agent
+persona **Ferdinand** keeps the equine nod. `mark-bezel-backup.svg` is the
+approved alternate take on this rose (bezel ring concept) — unshipped, kept
+as-is.
 
 `mark.svg` is the icon and the **single source of truth** — `lockup.svg`
-references it (`<image href="mark.svg">`) and adds the "Anemos" wordmark as
-live Cinzel SemiBold text — a static w600 instance of the variable font,
-subsetted (font declared *inside* the SVG, loaded from
-`src/packages/flutter-app/assets/fonts/`). Cinzel has no true lowercase, so
-the wordmark paints as small-caps "ANEMOS". Because of that external
-reference + live text, always render via the pipeline below, never by loading
-lockup.svg as a plain `<img>`.
+references it (`<image href="mark.svg">`) and adds the "ANEMOS" wordmark as
+live Cormorant Garamond SemiBold text — a static w600 instance of the
+variable font, subsetted (font declared *inside* the SVG, loaded from
+`src/packages/flutter-app/assets/fonts/`). Cormorant Garamond HAS a true
+lowercase; the approved wordmark is full caps, so the caps come from the
+string itself. Because of that external reference + live text, always render
+via the pipeline below, never by loading lockup.svg as a plain `<img>`.
 
 `mark-light.svg` is the **reversed variant for teal fields** (the boot
-splash): cardinal points recolored white/`#B2DFDB` (teal-100), gold
-intercardinals and the hub unchanged. It duplicates mark.svg's point geometry
-— a geometry change in one must be mirrored in the other (both headers say
-so).
+splash): the route thread is recolored white / pale azure (`#D6ECF5`) — the
+dark mark's azure thread would vanish on the teal gradient — while the
+bronze rose is shared with mark.svg unchanged. It duplicates mark.svg's
+geometry — a geometry change in one must be mirrored in the other (both
+headers say so).
 
 **Plate policy (v3): the rose always floats bare.** No plate is drawn anywhere
 in the app. The only question a surface asks is which cut it needs: neutral
 page surfaces and scrimmed imagery take the dark `mark`; the teal
 `brandGradient` fields — the splash **and the gradient app bar** — take
-`mark-light`, where the dark artwork would be teal-on-teal. v2 kept a white
-plate on gradient app bars; it was retired because that gradient does not
-change with theme, so the plate stayed white in dark mode and became the
-brightest object on the screen. The policy is stated in
+`mark-light`, where the dark artwork's azure thread would vanish against the
+teal. v2 kept a white plate on gradient app bars; it was retired because that
+gradient does not change with theme, so the plate stayed white in dark mode
+and became the brightest object on the screen. The policy is stated in
 `lib/widgets/brand_logo.dart` — re-litigate it there.
 
 Two artifacts outside the app keep a baked-in plate on purpose: `web/og-card.png`
@@ -43,17 +49,26 @@ Three faces, declared once in `flutter-app/lib/theme/app_typography.dart`
 (`AppFonts`) and bundled as subsetted TTFs — never `google_fonts`, which prod
 CSP blocks:
 
-- **Cinzel** — the wordmark, and only the wordmark.
-- **Marcellus** — headings and app-bar page titles. Roman inscriptional shapes
-  like Cinzel, but with a true lowercase, so headings read engraved rather than
-  shouted. It ships in its ONE weight (400): any style naming it must say
-  `w400`, because asking for a weight the family lacks gets synthetic faux-bold
-  on web.
+- **Cormorant Garamond** — the wordmark, and only the wordmark: full caps
+  "ANEMOS" at w600 (a static instance of the variable font, Latin-subsetted;
+  Greek falls back to system faces by design). The caps come from the string
+  (`AppInfo.name.toUpperCase()` in `BrandWordmark`), never from
+  `text-transform` alone — the face has a true lowercase.
+- **Marcellus** — headings and app-bar page titles. Roman inscriptional
+  shapes in the same register as the wordmark's caps, but with a true
+  lowercase, so headings read engraved rather than shouted. It ships in its
+  ONE weight (400): any style naming it must say `w400`, because asking for a
+  weight the family lacks gets synthetic faux-bold on web.
 - **Inter** — body, labels, buttons, and every number, including the big values
   in stat tiles (which opt out of the heading face explicitly).
 
-Only Cinzel is baked into rasters (`anemos_logo.png`, `og-card.png`); a heading
-face change needs no re-render and no `?v=` bump.
+Only the wordmark face is baked into rasters (`anemos_logo.png`,
+`og-card.png`); a heading face change needs no re-render and no `?v=` bump.
+
+**Stale, awaiting a follow-up refresh:** `brand-guidelines.html` and
+`anemos-brand-guidelines.pdf` still describe the previous identity (the
+geometric teal/gold rose and the Cinzel wordmark — which is why the Cinzel
+font files remain in `assets/fonts/`). Treat this README as current.
 
 ## Rendering pipeline (committed — do not run rasterizers ad hoc)
 

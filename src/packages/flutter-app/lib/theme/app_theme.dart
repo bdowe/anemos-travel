@@ -18,7 +18,8 @@ abstract final class AppTheme {
       brightness: brightness,
     );
 
-    // Inter as the app-wide UI font (Cinzel stays the wordmark only).
+    // Inter as the app-wide UI font (Cormorant Garamond stays the wordmark
+    // only).
     final base = ThemeData(
       colorScheme: colorScheme,
       useMaterial3: true,

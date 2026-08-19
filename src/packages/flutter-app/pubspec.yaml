@@ -119,9 +119,10 @@ dev_dependencies:
   # Rerun `dart run flutter_native_splash:create` after changing it.
   flutter_native_splash: ^2.4.1
   # Launcher icons for all native targets, seeded from the maskable PWA icon
-  # (wind rose on white — the rose is teal, so a teal background would have
-  # no contrast). Rerun `dart run flutter_launcher_icons` after re-rendering
-  # brand art (scripts/brand-render.sh).
+  # (wind rose on white — the rose is bronze/azure, so a teal background
+  # would have no contrast for the thread). Rerun
+  # `dart run flutter_launcher_icons` after re-rendering brand art
+  # (scripts/brand-render.sh).
   flutter_launcher_icons: ^0.14.1
 
 # Native launch screens (iOS/Android) shown while the engine boots, before the
@@ -163,16 +164,17 @@ flutter:
   # Three faces, three jobs (see lib/theme/app_typography.dart). All bundled
   # and subsetted — never google_fonts, which prod CSP blocks.
   #
-  # Cinzel (OFL) — the brand wordmark only; static w600 instance of the
-  # variable font, subsetted (see docs/branding/README.md).
+  # Cormorant Garamond (OFL) — the brand wordmark only; static w600
+  # instance of the variable font, subsetted (see docs/branding/README.md).
   fonts:
-    - family: Cinzel
+    - family: Cormorant Garamond
       fonts:
-        - asset: assets/fonts/Cinzel-SemiBold.ttf
+        - asset: assets/fonts/CormorantGaramond-SemiBold.ttf
           weight: 600
     # Marcellus (OFL) — the heading/display face: Roman inscriptional shapes
-    # like Cinzel, but with a true lowercase, so headings read engraved rather
-    # than shouted. Ships in its ONE weight (400) — see AppFonts.
+    # like Cormorant Garamond's caps, but with a true lowercase, so headings
+    # read engraved rather than shouted. Ships in its ONE weight (400) — see
+    # AppFonts.
     - family: Marcellus
       fonts:
         - asset: assets/fonts/Marcellus-Regular.ttf

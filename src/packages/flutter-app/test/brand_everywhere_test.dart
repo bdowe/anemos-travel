@@ -43,9 +43,9 @@ import 'support/l10n_test_app.dart';
 /// rewrites the ladder as `width < 800`.
 ///
 /// One caveat that shapes what can be asserted here: widget tests render in a
-/// fallback face with quite different metrics from Marcellus/Cinzel (a page
-/// title measures ~2.2x its browser width), so *which* branch a given width
-/// lands in diverges from production. Assertions below are therefore on the
+/// fallback face with quite different metrics from Marcellus/Cormorant
+/// Garamond (a page title measures ~2.2x its browser width), so *which* branch
+/// a given width lands in diverges from production. Assertions below are therefore on the
 /// invariant, never on "the wordmark is present at width N" for a narrow N —
 /// the browser pass owns that. Same reason [_fallbackFontScalesAt] exists.
 ///
@@ -63,21 +63,28 @@ const _wideActionCounts = <int>[0, 2, 5];
 /// strict matrix above keeps meaning what it says.
 const double _subPhoneWidth = 230;
 
+/// The wordmark paints [AppInfo.name].toUpperCase() — Cormorant Garamond has
+/// a true lowercase, so the full-caps ANEMOS comes from the string, not the
+/// face (BrandWordmark owns that). Find the painted text, not the raw name.
+final String _wordmarkText = AppInfo.name.toUpperCase();
+
 /// The matrix cells the FALLBACK test font cannot hold, listed rather than
 /// hidden — if this set ever grows, that is a width regression, not a font
 /// artifact, and the diff should have to say so.
 ///
-/// The widget-test fallback face runs ~35% wider than Cinzel, and at this one
-/// cell that difference is what tips the word into the [FittedBox]: it paints
-/// at ~0.94. **Checked in a browser rather than argued from arithmetic** — at
-/// 320px, on both Trips and trip detail, the real Cinzel wordmark paints 83px
-/// of ink, exactly what it paints at 390, so nothing scales on a real device.
-/// The page title is dropped at that width, which it was before this change
-/// too.
+/// The widget-test fallback face runs ~40% wider than Cormorant Garamond,
+/// and at this one cell that difference is what tips the word into the
+/// [FittedBox]: it paints at ~0.94. **Checked in a browser rather than argued
+/// from arithmetic** — at 320px, on both Trips and trip detail, the real
+/// Cormorant Garamond wordmark paints an 84px box (19px size, 1.0 tracking;
+/// the fallback paints 120px), exactly what it paints at 390, so nothing
+/// scales on a real device. The page title is dropped at that width, which it
+/// was before this change too.
 ///
 /// It is also why the large-text case lands in this cell and nowhere else: the
 /// backstop scales a 1.6x wordmark down to the slot, and the slot is wider than
-/// the unscaled *Cinzel* wordmark but narrower than the unscaled fallback one.
+/// the unscaled *real-face* wordmark but narrower than the unscaled fallback
+/// one.
 // `final`, not `const`: records have no primitive equality, so a const Set of
 // them will not compile.
 final _fallbackFontScalesAt = <(double, int)>{(320.0, 3)};
@@ -156,13 +163,13 @@ Future<void> _pumpBar(
 Future<double> _naturalWidth(WidgetTester tester,
     {double textScale = 1.0}) async {
   await _pumpBar(tester, width: 1200, inShell: false, textScale: textScale);
-  return tester.getSize(find.text(AppInfo.name)).width;
+  return tester.getSize(find.text(_wordmarkText)).width;
 }
 
 /// Present, and laid out at its full natural width — i.e. never ellipsized or
 /// clipped. Says nothing about scale.
 void _expectWordmarkWhole(WidgetTester tester, double natural, String where) {
-  final wordmark = find.text(AppInfo.name);
+  final wordmark = find.text(_wordmarkText);
   expect(wordmark, findsOneWidget, reason: 'no wordmark at all: $where');
   expect(tester.getSize(wordmark).width, moreOrLessEquals(natural, epsilon: 0.5),
       reason: 'wordmark laid out narrower than natural — truncated: $where');
@@ -174,7 +181,7 @@ void _expectWordmarkWhole(WidgetTester tester, double natural, String where) {
 /// whole-but-illegible is not, so the floor is asserted rather than assumed.
 void _expectScaledNoWorseThan(
     WidgetTester tester, double natural, double floor, String where) {
-  final wordmark = find.text(AppInfo.name);
+  final wordmark = find.text(_wordmarkText);
   final painted =
       tester.getBottomRight(wordmark).dx - tester.getTopLeft(wordmark).dx;
   expect(painted, greaterThan(natural * floor),
@@ -186,7 +193,7 @@ void _expectScaledNoWorseThan(
 /// own name could be read.
 void _expectWordmarkWholeOrAbsent(
     WidgetTester tester, double natural, String where) {
-  if (find.text(AppInfo.name).evaluate().isEmpty) {
+  if (find.text(_wordmarkText).evaluate().isEmpty) {
     expect(tester.takeException(), isNull, reason: 'overflow or throw: $where');
     return;
   }
@@ -198,7 +205,7 @@ void _expectWordmarkWholeOrAbsent(
 /// invariant across a push, which is [_leadingSlot]'s whole job and is a
 /// separate question from which element happens to occupy it.
 double _rowLeft(WidgetTester tester, String title) {
-  final wordmark = find.text(AppInfo.name);
+  final wordmark = find.text(_wordmarkText);
   return wordmark.evaluate().isNotEmpty
       ? tester.getTopLeft(wordmark).dx
       : tester.getTopLeft(find.text(title)).dx;
@@ -213,7 +220,7 @@ void _expectWordmarkFullSize(
   // the two corner offsets is the PAINTED extent, because localToGlobal
   // applies ancestor transforms. Comparing the two is what catches the
   // FittedBox backstop in gradient_app_bar.dart actually engaging.
-  final wordmark = find.text(AppInfo.name);
+  final wordmark = find.text(_wordmarkText);
   final painted =
       tester.getBottomRight(wordmark).dx - tester.getTopLeft(wordmark).dx;
   expect(painted, moreOrLessEquals(natural, epsilon: 0.5),
@@ -375,18 +382,19 @@ void main() {
         // Where the word yielded the row to the title there is nothing left to
         // measure — a scale that grows the word is exactly what makes it yield,
         // and yielding whole is the correct outcome, not a clip.
-        if (find.text(AppInfo.name).evaluate().isEmpty) continue;
+        if (find.text(_wordmarkText).evaluate().isEmpty) continue;
 
         if (_fallbackFontScalesAt.contains((width, actions))) {
           // The backstop scales the 1.6x word down to the slot, and this one
           // cell's slot is narrower than the FALLBACK font's unscaled wordmark
-          // — though wider than Cinzel's, so the promise below holds on a real
-          // device. Keep the legibility floor rather than nothing at all.
+          // — though wider than the real face's, so the promise below holds on
+          // a real device. Keep the legibility floor rather than nothing at
+          // all.
           _expectScaledNoWorseThan(tester, unscaled, 0.9, where);
           continue;
         }
 
-        final wordmark = find.text(AppInfo.name);
+        final wordmark = find.text(_wordmarkText);
         final painted =
             tester.getBottomRight(wordmark).dx - tester.getTopLeft(wordmark).dx;
         expect(painted, greaterThanOrEqualTo(unscaled - 0.5),
@@ -404,8 +412,8 @@ void main() {
     // trade at a width no device has: a release build does not stripe a
     // RenderFlex overflow, it silently cuts the glyphs off.
     _expectWordmarkWhole(tester, natural, 'sub-phone');
-    final painted = tester.getBottomRight(find.text(AppInfo.name)).dx -
-        tester.getTopLeft(find.text(AppInfo.name)).dx;
+    final painted = tester.getBottomRight(find.text(_wordmarkText)).dx -
+        tester.getTopLeft(find.text(_wordmarkText)).dx;
     expect(painted, lessThan(natural));
     expect(painted, greaterThan(natural * 0.5),
         reason: 'scaled past legibility');
@@ -416,7 +424,7 @@ void main() {
     // Wide: both on screen, brand first.
     await _pumpBar(tester, title: 'Greece 2026', width: 1200);
     expect(find.text('Greece 2026'), findsOneWidget);
-    expect(tester.getTopLeft(find.text(AppInfo.name)).dx,
+    expect(tester.getTopLeft(find.text(_wordmarkText)).dx,
         lessThan(tester.getTopLeft(find.text('Greece 2026')).dx));
 
     // Squeezed — trip detail's icon row on the smallest phone. Under #418 the
@@ -427,7 +435,7 @@ void main() {
     await _pumpBar(tester, title: 'Greece 2026', actions: 3, width: 320);
     expect(find.text('Greece 2026'), findsOneWidget,
         reason: 'the page name is what a phone header is for');
-    expect(find.text(AppInfo.name), findsNothing,
+    expect(find.text(_wordmarkText), findsNothing,
         reason: 'the wordmark is what yields on a squeezed phone bar');
     expect(find.byType(BrandLogo), findsOneWidget,
         reason: 'a tab root still shows the rose in its leading slot');
@@ -446,7 +454,7 @@ void main() {
     // has become a threshold.
     for (final width in [744.0, 799.0]) {
       await _pumpBar(tester, title: 'Greece 2026', actions: 1, width: width);
-      expect(find.text(AppInfo.name), findsOneWidget,
+      expect(find.text(_wordmarkText), findsOneWidget,
           reason: 'wordmark dropped at $width, which has room to spare');
       expect(find.text('Greece 2026'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -470,7 +478,7 @@ void main() {
 
     await _pumpBar(tester, title: title, actions: 1, width: 375);
     expect(find.text(title), findsOneWidget);
-    expect(find.text(AppInfo.name), findsNothing);
+    expect(find.text(_wordmarkText), findsNothing);
     expect(tester.takeException(), isNull);
 
     // The row starts at the leading slot's edge, so the title's left is the
@@ -511,7 +519,7 @@ void main() {
       expect(tester.getCenter(rose).dx,
           moreOrLessEquals(kToolbarHeight / 2, epsilon: 0.5),
           reason: 'the rose left the leading slot at w=$width');
-      expect(tester.getTopLeft(find.text(AppInfo.name)).dx,
+      expect(tester.getTopLeft(find.text(_wordmarkText)).dx,
           greaterThanOrEqualTo(kToolbarHeight),
           reason: 'the wordmark reached back into the slot at w=$width');
     }
@@ -575,7 +583,7 @@ void main() {
           reason: 'separation is the hairline, not elevation');
       expect(bar.elevation, 0);
 
-      final wordmark = tester.widget<Text>(find.text(AppInfo.name));
+      final wordmark = tester.widget<Text>(find.text(_wordmarkText));
       expect(wordmark.style?.color, AppColors.wordmarkInk(scheme),
           reason: 'the wordmark carries the brand ink in ${scheme.brightness}');
     }
@@ -586,13 +594,13 @@ void main() {
     await _pumpBar(tester, width: 1200);
     expect(find.byType(BrandLogo), findsNothing,
         reason: 'two roses 80px apart is a duplicate, not a lockup');
-    expect(find.text(AppInfo.name), findsOneWidget);
-    final withRail = tester.getTopLeft(find.text(AppInfo.name)).dx;
+    expect(find.text(_wordmarkText), findsOneWidget);
+    final withRail = tester.getTopLeft(find.text(_wordmarkText)).dx;
 
     // The empty case is the inset, not an omission: drop the box and the
     // wordmark slides left the moment the window crosses kRailBreakpoint.
     await _pumpBar(tester, width: 700);
-    expect(tester.getTopLeft(find.text(AppInfo.name)).dx,
+    expect(tester.getTopLeft(find.text(_wordmarkText)).dx,
         moreOrLessEquals(withRail, epsilon: 0.5),
         reason: 'the inset must hold even where the rose does not');
 
@@ -607,7 +615,7 @@ void main() {
     await _pumpBar(tester, width: 700);
     expect(
       find.ancestor(
-          of: find.text(AppInfo.name), matching: find.byType(InkWell)),
+          of: find.text(_wordmarkText), matching: find.byType(InkWell)),
       findsOneWidget,
       reason: 'logo-links-home, and exactly one target over the whole lockup',
     );
@@ -615,7 +623,7 @@ void main() {
     await _pumpBar(tester, width: 700, inShell: false);
     expect(
       find.ancestor(
-          of: find.text(AppInfo.name), matching: find.byType(InkWell)),
+          of: find.text(_wordmarkText), matching: find.byType(InkWell)),
       findsNothing,
       reason: 'a "Home" tooltip that goes nowhere is a dead affordance',
     );
@@ -669,9 +677,10 @@ void main() {
     // where Trips still showed "My Trips". Now the two agree at every width.
     //
     // Deliberately relative rather than a hardcoded width: the exact
-    // threshold moves with the font (the test's fallback face runs ~35% wider
-    // than Cinzel), but "the same on both" does not, so this keeps meaning the
-    // same thing where a pinned number would only be measuring the fallback.
+    // threshold moves with the font (the test's fallback face runs ~40% wider
+    // than Cormorant Garamond), but "the same on both" does not, so this keeps
+    // meaning the same thing where a pinned number would only be measuring
+    // the fallback.
     for (final width in _widths) {
       final counts = width >= 800 ? _wideActionCounts : _narrowActionCounts;
       for (final actions in counts) {

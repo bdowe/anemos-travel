@@ -1,27 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Anemos full lockup: wind-rose mark over the wordmark.
-       The rose geometry lives ONLY in mark.svg (referenced below) so the
+  <!-- Anemos full lockup: Waypoint Thread rose over the wordmark.
+       The rose artwork lives ONLY in mark.svg (referenced below) so the
        two files cannot drift. NOTE: because of the external reference and
        live text, render this via the HTML harness in render/ (which inlines
-       it and loads Cinzel) — an <img src="lockup.svg"> will not
+       it and loads Cormorant Garamond) — an <img src="lockup.svg"> will not
        resolve the mark. -->
   <style>
     /* The SVG is its own document — fonts must be declared HERE, not in the
        render harness. Path is relative to this file. */
     @font-face{
-      font-family:'Cinzel';
+      font-family:'Cormorant Garamond';
       font-weight:600;
-      src:url('../../src/packages/flutter-app/assets/fonts/Cinzel-SemiBold.ttf') format('truetype');
+      src:url('../../src/packages/flutter-app/assets/fonts/CormorantGaramond-SemiBold.ttf') format('truetype');
     }
   </style>
   <image href="mark.svg" x="242" y="52" width="540" height="540"/>
-  <!-- Cinzel paints lowercase as small caps ("ANEMOS") and has no
-       descenders, so the baseline sits higher than Playfair's did. -->
-  <text x="512" y="820"
+  <!-- The approved wordmark is full caps; Cormorant Garamond has a true
+       lowercase, so the caps come from the string itself. -->
+  <text x="522" y="760"
         text-anchor="middle"
-        font-family="Cinzel"
+        font-family="Cormorant Garamond"
         font-weight="600"
-        font-size="150"
-        letter-spacing="10"
-        fill="#2A2A2C">Anemos</text>
+        font-size="160"
+        letter-spacing="12"
+        fill="#2A2A2C">ANEMOS</text>
 </svg>

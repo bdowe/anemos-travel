@@ -11,8 +11,8 @@ import 'package:flutter/material.dart';
 /// typo here fails silently to the platform default rather than loudly.
 abstract final class AppFonts {
   /// Headings and page titles. Marcellus carries Roman inscriptional
-  /// letterforms — the same register as the Cinzel wordmark — but with a true
-  /// lowercase, so headings can be sentence case.
+  /// letterforms — the same register as the Cormorant Garamond wordmark — but
+  /// with a true lowercase, so headings can be sentence case.
   ///
   /// It ships in ONE weight (400). Every style that names this family must set
   /// `FontWeight.w400` explicitly: asking for a weight the family doesn't have
@@ -24,9 +24,10 @@ abstract final class AppFonts {
   /// heading tier.
   static const ui = 'Inter';
 
-  /// The brand wordmark, and nothing else. Cinzel has no true lowercase, so
-  /// any text set in it paints as small caps.
-  static const wordmark = 'Cinzel';
+  /// The brand wordmark, and nothing else. Cormorant Garamond HAS a true
+  /// lowercase — the wordmark's full-caps ANEMOS is produced by uppercasing
+  /// the string (BrandWordmark), not by the face.
+  static const wordmark = 'Cormorant Garamond';
 }
 
 /// Composed styles that name a REGISTER the `textTheme` slots don't have a
