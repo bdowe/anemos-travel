@@ -120,8 +120,8 @@ const double _minTitleWidth = 56;
 /// 360 and 390. On a **pushed** page it moves a long way the *good* way: the
 /// rose leaving the row hands the title back the 52px it used to spend, which
 /// is why trip detail shows its trip name on a phone at all. Measured in a
-/// browser against real Cinzel, not computed — the numbers here are easy to get
-/// wrong and the comment is load-bearing.
+/// browser against the real wordmark face, not computed — the numbers here
+/// are easy to get wrong and the comment is load-bearing.
 ///
 /// The rose floats bare, as it does everywhere: this bar takes the dark cut
 /// ([BrandLogo.mark]) — the same artwork the nav rail already paints on this

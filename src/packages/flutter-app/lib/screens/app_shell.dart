@@ -154,8 +154,8 @@ const double _kRailMarkBox = kToolbarHeight - _kRailLeadingGap * 2; // 40
 const double _kRailMarkSize = 36;
 
 /// The Anemos brand mark for the top of the rail — the persistent
-/// Site ID (Krug). Bare mark: the teal/gold rose reads on the rail surface in
-/// both themes, so no badge plate; the InkWell supplies the hover/focus
+/// Site ID (Krug). Bare mark: the bronze/azure rose reads on the rail surface
+/// in both themes, so no badge plate; the InkWell supplies the hover/focus
 /// highlight and web pointer cursor. Tapping it goes Home, per the universal
 /// logo-links-home convention.
 ///

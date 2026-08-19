@@ -258,7 +258,7 @@ var printViewTmpl = template.Must(template.New("print-view").Parse(`<!DOCTYPE ht
       opacity: 0.85; margin: 0 0 6px; display: flex; align-items: center; gap: 10px;
     }
     header .brand img {
-      /* White plate behind the teal rose (the icon PNG is transparent).
+      /* White plate behind the bronze rose (the icon PNG is transparent).
          The app retired its plate and floats the reversed rose on teal
          instead (brand_logo.dart, policy v3) — print deliberately does not
          follow, because paper has a second state the app does not: the
@@ -324,7 +324,7 @@ var printViewTmpl = template.Must(template.New("print-view").Parse(`<!DOCTYPE ht
 <body>
   <header>
     <div class="wrap">
-      <p class="brand"><img src="/app/icons/Icon-512.png?v=2" alt="">Anemos</p>
+      <p class="brand"><img src="/app/icons/Icon-512.png?v=3" alt="">Anemos</p>
       <h1>{{.Title}}</h1>
       {{if .Dates}}<p class="meta">{{.Dates}}</p>{{end}}
     </div>

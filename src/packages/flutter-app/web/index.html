@@ -48,13 +48,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Anemos">
-  <!-- ?v=2 dates from when nginx served /app/icons/* immutable for a year; it
+  <!-- ?v=3 dates from when nginx served /app/icons/* immutable for a year; it
        is now no-cache, so this is belt-and-braces for pre-2026-08-15 caches. -->
-  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=2">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=3">
 
-  <!-- Favicon: ?v=2 because Chrome's favicon cache is keyed by URL and
+  <!-- Favicon: ?v=3 because Chrome's favicon cache is keyed by URL and
        refreshes lazily — new bytes at the same URL can stay stale for weeks. -->
-  <link rel="icon" type="image/png" href="favicon.png?v=2"/>
+  <link rel="icon" type="image/png" href="favicon.png?v=3"/>
 
   <title>Anemos</title>
   <link rel="manifest" href="manifest.json">
@@ -93,10 +93,10 @@
          The path is a Flutter build-layout detail. If an engine upgrade
          reshuffles assets/, this silently falls back to the serif stack
          below — check here if the splash wordmark ever stops matching. */
-      font-family: 'Cinzel';
-      src: url('assets/assets/fonts/Cinzel-SemiBold.ttf') format('truetype');
+      font-family: 'Cormorant Garamond';
+      src: url('assets/assets/fonts/CormorantGaramond-SemiBold.ttf') format('truetype');
       font-weight: 600;
-      /* This layer paints before flutter_bootstrap.js, so the 40 KB face is a
+      /* This layer paints before flutter_bootstrap.js, so the ~80 KB face is a
          fresh fetch: show the fallback immediately rather than a blank gap. */
       font-display: swap;
     }
@@ -155,16 +155,17 @@
       top: calc(50% + 60px);
       left: 50%;
       transform: translate(-50%, -50%);
-      font-family: 'Cinzel', Georgia, 'Times New Roman', serif;
+      font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
       font-weight: 600;
       font-size: 22px;
       letter-spacing: 3px;
-      /* No text-transform: BrandWordmark paints the mixed-case string and
-         Cinzel maps its lowercase to small caps, so the in-app wordmark is
-         cap-A + small-caps NEMOS everywhere. Uppercasing here made this one
-         wordmark all full caps — the twins' end states never matched. The
-         cost is that the pre-swap Georgia fallback shows true lowercase for
-         a beat; the end state winning over the fallback is the right trade. */
+      /* text-transform: Cormorant Garamond HAS a true lowercase, so the
+         full-caps wordmark must come from the string — BrandWordmark paints
+         AppInfo.name.toUpperCase() in-app, and this transform is the splash
+         twin of it. (Under the old Cinzel this was deliberately absent:
+         Cinzel had no lowercase and painted small caps, so uppercasing only
+         here made the twins disagree.) */
+      text-transform: uppercase;
       color: #FFFFFF;
       white-space: nowrap;
     }

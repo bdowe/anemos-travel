@@ -117,7 +117,7 @@ void main() {
       'no ellipsis', (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(360, 690));
 
-    expect(find.text(AppInfo.name), findsOneWidget);
+    expect(find.text(AppInfo.name.toUpperCase()), findsOneWidget);
     expect(find.byType(BrandLogo), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -132,7 +132,7 @@ void main() {
     // backstop — whole, just smaller — and brand_everywhere_test owns that.
     await _pumpHome(tester, surface: const Size(230, 690));
 
-    expect(find.text(AppInfo.name), findsOneWidget);
+    expect(find.text(AppInfo.name.toUpperCase()), findsOneWidget);
     expect(find.byType(BrandLogo), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -142,7 +142,7 @@ void main() {
       'mark', (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(1200, 800));
 
-    expect(find.text(AppInfo.name), findsOneWidget);
+    expect(find.text(AppInfo.name.toUpperCase()), findsOneWidget);
     expect(find.byType(BrandLogo), findsNothing);
   });
 
@@ -150,7 +150,7 @@ void main() {
       (WidgetTester tester) async {
     await _pumpHome(tester, surface: const Size(700, 800));
 
-    expect(find.text(AppInfo.name), findsOneWidget);
+    expect(find.text(AppInfo.name.toUpperCase()), findsOneWidget);
     expect(find.byType(BrandLogo), findsOneWidget);
   });
 
@@ -177,7 +177,7 @@ void main() {
 
     expect(
       find.ancestor(
-          of: find.text(AppInfo.name), matching: find.byType(InkWell)),
+          of: find.text(AppInfo.name.toUpperCase()), matching: find.byType(InkWell)),
       findsOneWidget,
     );
 
@@ -185,7 +185,7 @@ void main() {
         ProviderScope.containerOf(tester.element(find.byType(HomeScreen)));
     container.read(navIndexProvider.notifier).state = AppTab.plan.index;
 
-    await tester.tap(find.text(AppInfo.name));
+    await tester.tap(find.text(AppInfo.name.toUpperCase()));
     await tester.pump();
 
     expect(container.read(navIndexProvider), AppTab.home.index);
@@ -201,7 +201,7 @@ void main() {
 
     // The wordmark text, NOT the mark — the half of the lockup that used to
     // be dead space.
-    await tester.tap(find.text(AppInfo.name));
+    await tester.tap(find.text(AppInfo.name.toUpperCase()));
     await tester.pump();
 
     expect(container.read(navIndexProvider), AppTab.home.index);
@@ -223,7 +223,7 @@ void main() {
     );
     expect(
       find.ancestor(
-          of: find.text(AppInfo.name), matching: find.byType(InkWell)),
+          of: find.text(AppInfo.name.toUpperCase()), matching: find.byType(InkWell)),
       findsOneWidget,
     );
 

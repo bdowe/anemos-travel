@@ -191,7 +191,7 @@ void main() {
     final mark = tester.getCenter(find.descendant(
         of: find.byType(NavigationRail), matching: find.byType(BrandLogo)));
     final wordmark = tester.getCenter(find.descendant(
-        of: find.byType(AppBar), matching: find.text(AppInfo.name)));
+        of: find.byType(AppBar), matching: find.text(AppInfo.name.toUpperCase())));
 
     expect(mark.dy, wordmark.dy);
     expect(mark.dy, kToolbarHeight / 2);

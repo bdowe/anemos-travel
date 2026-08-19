@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import '../constants/app_info.dart';
+import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
 
-/// Anemos brand mark: an 8-point wind rose (άνεμος = wind) — teal cardinal
-/// points, gold intercardinals. Source SVGs live in docs/branding/; PNGs are
-/// rendered by scripts/brand-render.sh. (The old horse mark retired with the
-/// Golden Tempo name; the agent persona "Ferdinand" keeps the equine nod.)
+/// Anemos brand mark: the Waypoint Thread rose — an 8-point wind rose
+/// (άνεμος = wind) in sun-bronze (#D2A24C/#8B6D3A halves), threaded
+/// west→northeast by an azure route line (#3B9CC4 over #20578B) with a
+/// waypoint dot: chat in, trip out. Source SVGs live in docs/branding/; PNGs
+/// are rendered by scripts/brand-render.sh. (The old horse mark retired with
+/// the Golden Tempo name; the agent persona "Ferdinand" keeps the equine
+/// nod.)
 /// Three forms:
 /// - [BrandLogo.lockup] — the full rose + "Anemos" wordmark image. Currently
 ///   unused: the wordmark is live text ([BrandWordmark]) everywhere, and this
@@ -13,9 +17,10 @@ import '../theme/spacing.dart';
 ///   ~7pt of dead space below the mark.
 /// - [BrandLogo.mark] — the rose icon only, for neutral chrome and page
 ///   surfaces (the app bar, nav rail, auth screen).
-/// - [BrandLogo.markLight] — the reversed rose (white/teal-100 cardinals),
-///   for teal fields (the boot splash — the last one standing after the
-///   de-gradient pass took the app bar to neutral surface).
+/// - [BrandLogo.markLight] — the reversed rose (white/pale-azure #D6ECF5
+///   thread, bronze rose unchanged), for teal fields (the boot splash — the
+///   last one standing after the de-gradient pass took the app bar to
+///   neutral surface).
 ///
 /// The word itself is [BrandWordmark], not part of this class — see there.
 ///
@@ -23,7 +28,8 @@ import '../theme/spacing.dart';
 /// anywhere in the app; the only question a surface asks is which cut of the
 /// rose it needs. Neutral chrome and page surfaces (app bar, nav rail, auth
 /// screen) take the dark [BrandLogo.mark]; the splash's teal field takes
-/// [BrandLogo.markLight], because the dark artwork is teal-on-teal there.
+/// [BrandLogo.markLight], because the dark artwork's azure thread would
+/// vanish against the teal there.
 ///
 /// v2 kept a white `BrandBadge` plate on gradient app bars. v3 retired it: the
 /// gradient behind it never changes with theme, so the plate was white in dark
@@ -54,8 +60,8 @@ class BrandLogo extends StatelessWidget {
         _isLockup = false,
         _isLight = false;
 
-  /// Reversed wind-rose mark (white/teal-100 cardinals) for teal fields — the
-  /// boot splash — rendered as a [size]×[size] square.
+  /// Reversed wind-rose mark (white/pale-azure thread) for teal fields —
+  /// the boot splash — rendered as a [size]×[size] square.
   const BrandLogo.markLight({super.key, double size = 28})
       : _asset = _markLightAsset,
         _height = size,
@@ -78,9 +84,11 @@ class BrandLogo extends StatelessWidget {
   }
 }
 
-/// The "Anemos" wordmark as live text, in Cinzel — the brand's one piece of
-/// display type. Cinzel has no true lowercase, so the string stays
-/// [AppInfo.name] and paints as small-caps ANEMOS.
+/// The "ANEMOS" wordmark as live text, in Cormorant Garamond SemiBold —
+/// the brand's one piece of display type. The face HAS a true lowercase and
+/// the approved wordmark is full caps, so the string is
+/// [AppInfo.name].toUpperCase() — the caps come from the string, not (as
+/// with the old Cinzel) from the face.
 ///
 /// This is deliberately text and not the baked [BrandLogo.lockup] PNG: it
 /// recolors, scales and localizes-around cleanly, and it is the thing the
@@ -90,14 +98,17 @@ class BrandLogo extends StatelessWidget {
 /// The invariants — family, weight, and the string itself — live here. The
 /// tuned values are parameters because caps run wide and each surface was
 /// measured separately: tracking opens up as the size grows (app bar 19/1.0,
-/// boot splash 22/3).
+/// boot splash 22/3). Cormorant's caps run narrower than Cinzel's, so the
+/// same sizes sit a touch slimmer than they used to.
 ///
 /// [color] defaults to **inherited**. Every gradient app bar already sets
 /// `foregroundColor: Colors.white`, so those are white for free, while the
 /// neutral surfaces (auth screen) and dark mode get a readable color without
 /// a hardcoded one fighting them.
 class BrandWordmark extends StatelessWidget {
-  /// The app-bar size, tuned in PR #391 when the wordmark moved to Cinzel.
+  /// The app-bar size, tuned in PR #391 when the wordmark moved to Cinzel
+  /// and kept through the move to Cormorant Garamond (its caps run
+  /// narrower, so no retune was needed).
   static const double appBarFontSize = 19;
 
   /// The default tracking. Caps run wide, so callers using a larger size open
@@ -129,7 +140,7 @@ class BrandWordmark extends StatelessWidget {
     List<Shadow>? shadows,
   }) =>
       TextStyle(
-        fontFamily: 'Cinzel',
+        fontFamily: AppFonts.wordmark,
         fontWeight: FontWeight.w600,
         fontSize: fontSize,
         letterSpacing: letterSpacing,
@@ -140,9 +151,10 @@ class BrandWordmark extends StatelessWidget {
 
   /// How wide the wordmark will actually paint in [context].
   ///
-  /// Measured, not assumed, because the answer moves: Cinzel may not have
-  /// loaded yet (or at all — in widget tests the fallback runs ~35% wider),
-  /// and the traveler's text-scale setting multiplies it. The app bar's
+  /// Measured, not assumed, because the answer moves: the face may not have
+  /// loaded yet (or at all — in widget tests the fallback runs wider than
+  /// Cormorant's caps), and the traveler's text-scale setting multiplies
+  /// it. The app bar's
   /// layout ladder is arithmetic on this number, so a hardcoded width would
   /// tip a large-text user's bar into overflow — and a release build does not
   /// stripe an overflow, it silently cuts the glyphs off, which is the one
@@ -154,7 +166,7 @@ class BrandWordmark extends StatelessWidget {
   }) {
     final painter = TextPainter(
       text: TextSpan(
-        text: AppInfo.name,
+        text: AppInfo.name.toUpperCase(),
         style: styleOf(fontSize: fontSize, letterSpacing: letterSpacing),
       ),
       textDirection: Directionality.of(context),
@@ -169,7 +181,7 @@ class BrandWordmark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      AppInfo.name,
+      AppInfo.name.toUpperCase(),
       maxLines: 1,
       softWrap: false,
       style: styleOf(
@@ -209,7 +221,7 @@ class _MonogramFallback extends StatelessWidget {
       child: Text(
         'A',
         style: TextStyle(
-          fontFamily: 'Cinzel',
+          fontFamily: AppFonts.wordmark,
           fontWeight: FontWeight.w600,
           fontSize: size * 0.42,
           height: 1,
