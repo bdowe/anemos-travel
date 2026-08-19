@@ -808,6 +808,42 @@ extension on _TripDetailScreenState {
     return [for (final label in order) (label: label, rows: rows[label]!)];
   }
 
+  /// The dates a section head may honestly show, or null.
+  ///
+  /// Only a label the TRIP visits exactly once gets a date. A revisited city
+  /// merges its runs into one section, and those runs are genuinely different
+  /// windows on screen — pinned in trip_detail_derivation_test's section-head
+  /// group, which is also where the index alignment this relies on is proven.
+  /// Showing the first run's dates would re-create the label-keyed range map
+  /// [TripDerivation] deliberately deleted for "collapsing revisited cities
+  /// onto one window"; a head is exactly where it would come back.
+  ///
+  /// Counted over [labels] — every leg the trip has — and deliberately NOT
+  /// over the legs that contributed ROWS. Claim-once matching means a revisit
+  /// usually has no bookings of its own (it cannot re-claim the first run's
+  /// stay), so a rows-based count would see one leg, and the head would date
+  /// the whole destination from run 1 while the traveler is also there on run
+  /// 2. 'Other places' appears in no leg, so it is dateless by the same rule.
+  ///
+  /// The range is [CityGroup.dateRange] — the SAME chip the itinerary's city
+  /// header renders, built from visibleLegRanges. Never re-derived here:
+  /// anything that promises something about the dates on screen reads the one
+  /// derivation that owns them (docs/zen.md). `_derive` is memoized on the
+  /// input signature, so this is a cache hit during build.
+  String? _sectionHeadDate(String label, List<String> labels) {
+    var found = -1;
+    for (var i = 0; i < labels.length; i++) {
+      if (labels[i] != label) continue;
+      if (found >= 0) return null; // visited more than once
+      found = i;
+    }
+    if (found < 0) return null;
+    final trip = _trip;
+    if (trip == null) return null;
+    final groups = _derive(trip).groups;
+    return found < groups.length ? groups[found].dateRange?.range : null;
+  }
+
 
   /// A section head: tinted icon tile, the destination, and — when every
   /// booking under it is done — a quiet check.
@@ -827,6 +863,7 @@ extension on _TripDetailScreenState {
     ThemeData theme,
     String label, {
     required bool allBooked,
+    String? dateRange,
   }) {
     final l10n = context.l10n;
     final isOther = label == _kOtherPlaces;
@@ -864,6 +901,17 @@ extension on _TripDetailScreenState {
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
+          // Context, not a claim the head owns: same quiet weight as a row's
+          // subtitle, so the destination stays the head's one strong word.
+          if (dateRange != null) ...[
+            Text(
+              dateRange,
+              maxLines: 1,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
           if (allBooked)
             Tooltip(
               message: l10n.bookingsSectionAllBooked,
@@ -952,8 +1000,18 @@ extension on _TripDetailScreenState {
       return c != null && c.total > 0 && c.booked == c.total;
     }
 
-    Widget head(String label) =>
-        _bookingSectionHeader(theme, label, allBooked: allBooked(label));
+    // Narrow drops the head's dates, the same call the itinerary's city
+    // header makes ("narrow stacks the dates under the name instead of
+    // rendering the chip") — and for the same reason: at 320px the head is
+    // down to ~268px of usable width, and a rigid date beside a flexible
+    // label is exactly the shape that truncates the DESTINATION, which is the
+    // head's one strong word. Not stacked here either: this is a lightweight
+    // label row, not a city header, and the dates are one tab away on the
+    // itinerary. Pinned by the Spanish-at-1.3x filter-row test, which throws
+    // on a RenderFlex overflow.
+    Widget head(String label) => _bookingSectionHeader(theme, label,
+        allBooked: allBooked(label),
+        dateRange: _narrow ? null : _sectionHeadDate(label, labels));
 
     final cities = [for (final s in sections) if (s.label != _kOtherPlaces) s];
     final other = [for (final s in sections) if (s.label == _kOtherPlaces) s];

@@ -681,6 +681,65 @@ void main() {
     });
   });
 
+  // The pin the bookings section heads stand on (wave 3). #501 shipped those
+  // heads with no dates on the stated reason that [legLabels] comes from
+  // rawLegRanges while visibleLegRanges is "a separate list" — so before any
+  // date goes on a head, prove what a head is actually allowed to say.
+  //
+  // Two facts, and the SECOND is the one that constrains the design:
+  //   1. The lists are index-aligned, so leg i's on-screen dates are
+  //      reachable from leg i's label. A head CAN carry a date.
+  //   2. A section is keyed by LABEL and a revisited city merges its runs into
+  //      one section — so a label can own two indices with two DIFFERENT
+  //      windows, and no single range is true for it. This is the failure
+  //      [TripDerivation]'s own doc records as "the label-keyed copy ...
+  //      collapsed revisited cities onto one window and is gone"; a head that
+  //      showed run 1's dates would put it straight back.
+  group('section-head dates: the legLabels <-> visibleRanges pin', () {
+    test('legLabels, rawRanges, visibleRanges and groups are index-aligned',
+        () {
+      final d = _compute();
+      final n = d.legLabels.length;
+      expect(n, 3);
+      expect(d.rawRanges, hasLength(n));
+      expect(d.visibleRanges, hasLength(n));
+      expect(d.groups, hasLength(n));
+      // visibleLegRanges is a pure forward map over rawLegRanges — it adjusts
+      // start/end and carries the label through untouched — so index i names
+      // the same leg in all four lists. That is what makes groups[i].dateRange
+      // (built from visibleRanges[i]) the right dates for legLabels[i].
+      for (var i = 0; i < n; i++) {
+        expect(d.visibleRanges[i].label, d.legLabels[i], reason: 'leg $i');
+        expect(d.rawRanges[i].label, d.legLabels[i], reason: 'leg $i');
+        expect(d.groups[i].label, d.legLabels[i], reason: 'leg $i');
+      }
+    });
+
+    test('a revisited label owns two legs whose visible windows differ', () {
+      final d = _compute();
+      // Paris -> Rome -> Paris: ONE 'Paris' section, TWO Paris legs.
+      expect(d.legLabels, ['Paris', 'Rome', 'Paris']);
+      final paris = [
+        for (var i = 0; i < d.legLabels.length; i++)
+          if (d.legLabels[i] == 'Paris') i,
+      ];
+      expect(paris, [0, 2]);
+      // The two runs are genuinely different stays on screen, so the merged
+      // section has no single range to show. A head may only date a label that
+      // owns exactly one leg; anything else has to stay silent.
+      expect(d.groups[0].dateRange?.range, 'Sep 1 – Sep 2');
+      expect(d.groups[2].dateRange?.range, 'Sep 4 – Sep 5');
+      expect(d.groups[0].dateRange, isNot(d.groups[2].dateRange));
+      // Rome owns exactly one leg — the case a head CAN date.
+      final rome = [
+        for (var i = 0; i < d.legLabels.length; i++)
+          if (d.legLabels[i] == 'Rome') i,
+      ];
+      expect(rome, [1]);
+      expect(d.groups[1].dateRange?.range, 'Sep 2 – Sep 4');
+    });
+  });
+
   // TWIN of TestIsCityFillerParity in api/city_filler_test.go. Same cases, same
   // expectations, in the same order — docs/zen.md requires the parity contract
   // because "city filler" has two implementations now: this one, which HIDES
