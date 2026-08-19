@@ -3032,7 +3032,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifTitle => 'Notifications';
 
   @override
-  String get notifMoreActions => 'More options';
+  String get notifSectionNew => 'New';
+
+  @override
+  String get notifSectionEarlier => 'Earlier';
 
   @override
   String get notifClearAll => 'Clear all';

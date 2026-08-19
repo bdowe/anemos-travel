@@ -9,6 +9,7 @@ import 'package:travel_route_planner/providers/notifications_provider.dart';
 import 'package:travel_route_planner/screens/notification_center_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/notifications_api_service.dart';
+import 'package:travel_route_planner/widgets/account_menu.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -48,6 +49,10 @@ class _FakeNotificationsApiService extends NotificationsApiService {
   /// failure lands on top of real data.
   Exception? failNextList;
 
+  /// While set, EVERY list() throws — the shape of a feed that cannot load at
+  /// all (the failed-open path, where mark-read must not fire).
+  bool failLists = false;
+
   bool markReadCalled = false;
   bool clearAllCalled = false;
   Exception? clearAllError; // set to make clearAll throw
@@ -59,6 +64,7 @@ class _FakeNotificationsApiService extends NotificationsApiService {
   // contract (the client re-lists to see post-state).
   @override
   Future<List<AppNotification>> list({int limit = 50}) async {
+    if (failLists) throw Exception('list down');
     final err = failNextList;
     if (err != null) {
       failNextList = null;
@@ -329,17 +335,48 @@ void main() {
     // The affordance is what this screen lacked; the destination is asserted
     // in admin_metrics_screen_test.dart, since pushOnActiveTab needs mounted
     // tab navigators this harness deliberately doesn't build. Scoped to the
-    // tile Card because the app bar's clear-all menu is also an InkWell.
-    Finder tappableTile() => find.descendant(
-          of: find.byType(Card),
-          matching: find.byWidgetPredicate((w) => w is InkWell && w.onTap != null),
+    // row's own text so the footer button's internal InkWell can't match.
+    Finder rowInk(String text) => find.ancestor(
+          of: find.text(text),
+          matching:
+              find.byWidgetPredicate((w) => w is InkWell && w.onTap != null),
         );
 
     await _pump(tester, [_ops()]);
-    expect(tappableTile(), findsOneWidget);
+    expect(rowInk('System degraded'), findsOneWidget);
 
     await _pump(tester, [_priceDrop()]);
-    expect(tappableTile(), findsNothing);
+    expect(rowInk('BOS → CDG'), findsNothing);
+  });
+
+  testWidgets('unread and read rows split into New and Earlier sections',
+      (tester) async {
+    await _pump(tester, [
+      _priceDrop(id: 'u1'),
+      _priceDrop(
+          id: 'r1',
+          origin: 'JFK',
+          destination: 'LAX',
+          readAt: '2026-07-15T13:00:00Z'),
+    ]);
+    expect(find.text('New'), findsOneWidget);
+    expect(find.text('Earlier'), findsOneWidget);
+    // The unread row sits under New, above the read row under Earlier.
+    final newY = tester.getTopLeft(find.text('New')).dy;
+    final unreadY = tester.getTopLeft(find.text('BOS → CDG')).dy;
+    final earlierY = tester.getTopLeft(find.text('Earlier')).dy;
+    final readY = tester.getTopLeft(find.text('JFK → LAX')).dy;
+    expect(newY, lessThan(unreadY));
+    expect(unreadY, lessThan(earlierY));
+    expect(earlierY, lessThan(readY));
+  });
+
+  testWidgets('an all-read feed renders flat, with no section headers',
+      (tester) async {
+    await _pump(tester, [_priceDrop(readAt: '2026-07-15T13:00:00Z')]);
+    expect(find.text('New'), findsNothing);
+    expect(find.text('Earlier'), findsNothing);
+    expect(find.text('BOS → CDG'), findsOneWidget);
   });
 
   testWidgets('tapping an ops row does not throw without a nav host',
@@ -361,6 +398,29 @@ void main() {
     expect(service.markReadCalled, isTrue);
   });
 
+  testWidgets('a failed load does not mark notifications read',
+      (tester) async {
+    // Marking read on a failed open would clear the badge for rows the user
+    // never saw — the open sequence marks read only after rows actually load.
+    final service = _FakeNotificationsApiService([_priceDrop()]);
+    service.failLists = true;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
+          notificationsApiServiceProvider.overrideWithValue(service),
+        ],
+        child: MaterialApp(
+            localizationsDelegates: testLocalizationsDelegates,
+            home: const NotificationCenterScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not load notifications'), findsOneWidget);
+    expect(service.markReadCalled, isFalse);
+  });
+
   testWidgets('a malformed createdAt renders the row without a timestamp',
       (tester) async {
     await _pump(tester, const [
@@ -378,21 +438,18 @@ void main() {
   });
 
   group('clear all', () {
-    testWidgets('overflow menu hidden on an empty feed, shown with rows',
+    testWidgets('clear-all footer hidden on an empty feed, shown with rows',
         (tester) async {
       // Nothing to clear → no destructive affordance.
       await _pump(tester, const []);
-      expect(find.byIcon(Icons.more_vert), findsNothing);
+      expect(find.text('Clear all'), findsNothing);
 
       await _pump(tester, [_priceDrop()]);
-      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+      expect(find.text('Clear all'), findsOneWidget);
     });
 
     testWidgets('cancel keeps the feed and calls nothing', (tester) async {
       final service = await _pump(tester, [_ops()]);
-      await tester.tap(find.byTooltip('More options'));
-      await tester.pumpAndSettle();
-      expect(find.text('Clear all'), findsOneWidget);
       await tester.tap(find.text('Clear all'));
       await tester.pumpAndSettle();
       expect(find.text('Clear all notifications?'), findsOneWidget);
@@ -404,11 +461,9 @@ void main() {
       expect(find.text('System degraded'), findsOneWidget);
     });
 
-    testWidgets('confirm clears, shows the empty state, and drops the menu',
+    testWidgets('confirm clears, shows the empty state, and drops the footer',
         (tester) async {
       final service = await _pump(tester, [_ops(), _priceDrop()]);
-      await tester.tap(find.byTooltip('More options'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Clear all'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete'));
@@ -416,21 +471,22 @@ void main() {
 
       expect(service.clearAllCalled, isTrue);
       expect(find.text('No notifications yet'), findsOneWidget);
-      // The visibility rule holds post-clear: nothing left to clear, no menu.
-      expect(find.byIcon(Icons.more_vert), findsNothing);
+      // The visibility rule holds post-clear: nothing left to clear, no
+      // footer.
+      expect(find.text('Clear all'), findsNothing);
     });
 
-    testWidgets('a failed refresh hides the menu along with the feed',
+    testWidgets('a failed refresh hides the footer along with the feed',
         (tester) async {
       // An error that FOLLOWS a successful load still carries the previous
       // rows (AsyncError.copyWithPrevious), so a valueOrNull-based gate would
-      // leave the destructive menu sitting over the error panel. The menu must
-      // track the rendered body.
+      // leave the destructive footer sitting over the error panel. The footer
+      // must track the rendered body.
       final service = await _pump(tester, [_ops()]);
       // Assert the precondition rather than assume it: the feed really is
       // AsyncData-with-rows before the refresh fails, so this can never pass
       // vacuously through an error that carried no previous value.
-      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+      expect(find.text('Clear all'), findsOneWidget);
 
       service.failNextList = Exception('refresh failed');
       ProviderScope.containerOf(
@@ -439,7 +495,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Could not load notifications'), findsOneWidget);
-      expect(find.byIcon(Icons.more_vert), findsNothing);
+      expect(find.text('Clear all'), findsNothing);
     });
 
     testWidgets('clearing refreshes the unread badge', (tester) async {
@@ -470,8 +526,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('badge:1'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('More options'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Clear all'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete'));
@@ -485,8 +539,6 @@ void main() {
         (tester) async {
       final service = await _pump(tester, [_ops()]);
       service.clearAllError = Exception('boom');
-      await tester.tap(find.byTooltip('More options'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Clear all'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete'));
@@ -497,6 +549,86 @@ void main() {
           findsOneWidget);
       expect(find.text('System degraded'), findsOneWidget);
       expect(find.text('No notifications yet'), findsNothing);
+    });
+  });
+
+  group('popover', () {
+    Future<_FakeNotificationsApiService> pumpPanel(
+      WidgetTester tester,
+      List<AppNotification> notifications,
+    ) async {
+      final service = _FakeNotificationsApiService(notifications);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
+            notificationsApiServiceProvider.overrideWithValue(service),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: testLocalizationsDelegates,
+            home: Scaffold(
+              body: Center(child: NotificationsPanel(onClose: () {})),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return service;
+    }
+
+    testWidgets('panel renders header, rows and the clear-all footer',
+        (tester) async {
+      await pumpPanel(tester, [_priceDrop()]);
+      expect(find.text('Notifications'), findsOneWidget);
+      expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+      expect(find.text('BOS → CDG'), findsOneWidget);
+      expect(find.text('Clear all'), findsOneWidget);
+    });
+
+    testWidgets('empty panel shows the caught-up state without a footer',
+        (tester) async {
+      await pumpPanel(tester, const []);
+      expect(find.text('No notifications yet'), findsOneWidget);
+      expect(find.text('Clear all'), findsNothing);
+    });
+
+    testWidgets('rail bell opens the panel and marks notifications seen',
+        (tester) async {
+      final service = _FakeNotificationsApiService([_priceDrop()]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
+            notificationsApiServiceProvider.overrideWithValue(service),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: testLocalizationsDelegates,
+            home: const Scaffold(
+              body: Align(
+                  alignment: Alignment.bottomLeft, child: RailAccountButton()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The unread badge rides the bell, and only the bell.
+      expect(
+        find.descendant(
+            of: find.byTooltip('Notifications'),
+            matching: find.byType(Badge)),
+        findsOneWidget,
+      );
+      expect(find.byType(Badge), findsOneWidget);
+      expect(service.markReadCalled, isFalse);
+
+      await tester.tap(find.byTooltip('Notifications'));
+      await tester.pumpAndSettle();
+
+      // The panel is open with the feed, and opening was the read action.
+      expect(find.text('BOS → CDG'), findsOneWidget);
+      expect(find.text('Clear all'), findsOneWidget);
+      expect(service.markReadCalled, isTrue);
     });
   });
 }
