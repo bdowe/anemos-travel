@@ -19,7 +19,17 @@ import '../trip_map.dart';
 
 /// Wide pinned-header extent: top gap + map + bottom gap (the phone layout's
 /// preview is [mapBandHeightNarrow] and scrolls away instead).
-const double mapBandHeaderHeight = 12 + 340 + 12;
+///
+/// 280, down from 340 (wave 2, header/shell lane): this band does not scroll
+/// away — it and the tab row below it are PERMANENT chrome, so every pixel
+/// here is a pixel the itinerary never gets back. At 340 the pinned stack came
+/// to 420px and a 1000px window opened on the header, the map, the tab row and
+/// exactly one city heading, with the first day below the fold on the page
+/// whose job is the days. 280 keeps the card comfortably cinematic at the
+/// 900px content cap (~3.2:1) and leaves the map lane's own composition
+/// untouched — its chip strip insets 8 from the top and its control cluster 8
+/// from the bottom, so both still clear each other by a wide margin.
+const double mapBandHeaderHeight = 12 + 280 + 12;
 
 /// Map card height on phones, where the map scrolls away instead of
 /// pinning (a preview — the full-screen map is one tap away).

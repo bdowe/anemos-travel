@@ -418,8 +418,11 @@ void main() {
 }
 
 /// The Continue-chat row's own ⋮ — the screen has several
-/// `PopupMenuButton<String>`s, so this is scoped to the row.
+/// `PopupMenuButton<String>`s, so this is scoped to the row. Scoped by the
+/// row's ValueKey rather than by the widget it happens to be built from: it
+/// was a ListTile until the wave-2 header redesign made it a flat row in the
+/// Next Step card's family, and this finder was the only thing that noticed.
 final Finder _rowMenu = find.descendant(
-  of: find.widgetWithText(ListTile, 'Continue chat'),
+  of: find.byKey(const ValueKey('continue-chat-row')),
   matching: find.byType(PopupMenuButton<String>),
 );
