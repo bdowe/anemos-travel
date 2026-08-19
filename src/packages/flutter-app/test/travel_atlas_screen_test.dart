@@ -38,8 +38,13 @@ import 'support/url_sync_fakes.dart';
 ///
 /// Tile HTTP in widget tests 400s and is silently tolerated, so map assertions
 /// are structural (FlutterMap / camera / pin tooltips), never imagery.
+/// The account, as the screen sees it. [trips] is mutable so a test can change
+/// what the next fetch answers WITHOUT re-pumping — see [_pumpAtlas]'s note on
+/// why a second pump resets the provider. The screen refetches for real on
+/// popping back from a trip it opened, so "the payload changed under a mounted
+/// screen" is a state this surface genuinely reaches.
 class _FixedTripsApiService extends TripsApiService {
-  final List<Trip> trips;
+  List<Trip> trips;
 
   _FixedTripsApiService(this.trips) : super(ApiClient(baseUrl: 'http://test'));
 
@@ -113,17 +118,20 @@ const double kShellNavBarHeight = 80;
 /// `tripsApiServiceProvider` override, which invalidates the `tripsProvider`
 /// that depends on it and resets the list to empty — a second pump would
 /// assert against an account with no trips rather than against a new fixture.
-Future<void> _pumpAtlas(
+/// Returns the service it installed, so a test that needs the account to
+/// CHANGE mutates `service.trips` and refetches instead ([_refetch]).
+Future<_FixedTripsApiService> _pumpAtlas(
   WidgetTester tester, {
   required List<Trip> trips,
   Size surface = const Size(390, 844),
 }) async {
+  final service = _FixedTripsApiService(trips);
   await tester.binding.setSurfaceSize(surface);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        tripsApiServiceProvider.overrideWithValue(_FixedTripsApiService(trips)),
+        tripsApiServiceProvider.overrideWithValue(service),
         tripCacheProvider.overrideWithValue(TripCache('u1')),
         resumableChatsProvider.overrideWith((ref) async => const []),
         sharedWithMeProvider.overrideWith((ref) async => const <Trip>[]),
@@ -136,6 +144,17 @@ Future<void> _pumpAtlas(
       ),
     ),
   );
+  await tester.pumpAndSettle();
+  return service;
+}
+
+/// Re-reads the account into the mounted screen — what `_openTrip` does on
+/// popping back from a trip whose dates may have moved (`travel_atlas_screen`
+/// fires `loadTrips()` there, fire-and-forget).
+Future<void> _refetch(WidgetTester tester) async {
+  final container =
+      ProviderScope.containerOf(tester.element(find.byType(TravelAtlasScreen)));
+  await container.read(tripsProvider.notifier).loadTrips();
   await tester.pumpAndSettle();
 }
 
@@ -406,6 +425,43 @@ void main() {
       expect(_inIndex(find.text('Iberia Loop')), findsOneWidget);
       expect(_inIndex(find.text('Athens Trip')), findsOneWidget);
       expect(find.byTooltip('Madrid · Planned'), findsOneWidget);
+    });
+
+    testWidgets('a refetch that collapses history onto the selected year '
+        'clears the filter with the row', (tester) async {
+      // "The chip row renders" and "the selection still applies" are ONE
+      // fact, and while they were written twice they could disagree. The
+      // state that splits them is reachable: pick a year, open a trip from
+      // the index, move its dates into that same year, pop — `_openTrip`
+      // refetches. History collapses to a single year, so the row stops
+      // rendering; a filter that outlived it would go on hiding the planned
+      // pin and the Planned colophon group with nothing left to press.
+      final service = await _pumpAtlas(tester, trips: spanningHistory());
+      await tester.tap(find.text('$_lastYear'));
+      await tester.pumpAndSettle();
+      // The filter is genuinely on: a trip planned for a LATER year is out of
+      // scope, on the map and in the colophon both.
+      expect(find.byTooltip('Madrid · Planned'), findsNothing);
+      expect(find.byKey(kAtlasPlannedStatsKey), findsNothing);
+
+      // The older year's only trip moves into the selected year.
+      service.trips = [
+        ..._history(),
+        _trip('older', 'Rome Trip',
+            start: '$_lastYear-09-20',
+            end: '$_lastYear-09-25',
+            cities: const ['Rome'],
+            pins: const [CityPin(city: 'Rome', lat: 41.9, lng: 12.5)]),
+      ];
+      await _refetch(tester);
+
+      expect(find.text('All time'), findsNothing,
+          reason: 'one distinct year left, so the chip row does not render');
+      expect(find.byTooltip('Madrid · Planned'), findsOneWidget,
+          reason: 'the filter goes with the row that was the way to clear it');
+      expect(find.byKey(kAtlasPlannedStatsKey), findsOneWidget);
+      expect(_inIndex(find.text('Rome Trip')), findsOneWidget);
+      expect(_inIndex(find.text('Iberia Loop')), findsOneWidget);
     });
 
     testWidgets('a year whose trips are all half-dated still lists them',
