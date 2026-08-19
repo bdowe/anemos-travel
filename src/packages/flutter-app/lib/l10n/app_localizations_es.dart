@@ -83,6 +83,35 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsTitle => 'Perfil de viaje';
 
   @override
+  String get prefsIntro =>
+      'Todo aquí es opcional: cuanto más sepa tu agente de IA, mejor planifica.';
+
+  @override
+  String get prefsSectionStyle => 'Estilo de viaje';
+
+  @override
+  String get prefsSectionStyleHelp =>
+      'La forma de un buen viaje: gasto, ritmo y compañía.';
+
+  @override
+  String get prefsInterestsHelp =>
+      'Toca todo lo que un buen viaje debería incluir.';
+
+  @override
+  String get prefsSectionRhythm => 'El día a día';
+
+  @override
+  String get prefsSectionRhythmHelp =>
+      'Trabajo, ejercicio y cuánto exigen los días activos.';
+
+  @override
+  String get prefsSectionFlights => 'Vuelos';
+
+  @override
+  String get prefsSectionFlightsHelp =>
+      'Valores predeterminados para cada búsqueda de vuelos.';
+
+  @override
   String get prefsBudget => 'Presupuesto';
 
   @override
