@@ -868,6 +868,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookingsMenuOther => 'Other';
 
   @override
+  String bookingsProgressRemaining(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count bookings left',
+      one: '1 booking left',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get bookingsProgressComplete => 'Every booking is sorted';
+
+  @override
+  String get bookingsSectionAllBooked => 'Everything here is booked';
+
+  @override
   String get tripOtherBookings => 'Other bookings';
 
   @override
