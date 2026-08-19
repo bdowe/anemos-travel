@@ -152,16 +152,81 @@ class _BudgetComposerState extends ConsumerState<BudgetComposer> {
     });
   }
 
+  /// The panel's inset, and it is asymmetric for the reason this whole file is
+  /// asymmetric: **vertical space in a scrolling tab body is nearly free;
+  /// horizontal space is the scarce resource.** [_buildAddRow]'s ladder is
+  /// measured against the width it is handed, and after wave 3 that is this
+  /// panel's interior rather than the tab's full width — so every horizontal
+  /// pixel spent here is a pixel the ladder concedes, at a lower width, to a
+  /// worse rung.
+  ///
+  /// Not free-hand numbers: at [AppSpacing.md] a side, a 360px phone lost the
+  /// category trigger off the description's line — rung 3, which the row is
+  /// only supposed to reach at accessibility widths, and which puts the
+  /// trigger between the two fields in reading order so `next` stops there
+  /// instead of reaching the amount. [AppSpacing.sm] a side keeps 360 on rung
+  /// 2, and the ladder tests at that width are the standing guard: they name
+  /// no width this padding is allowed to be, only that whatever it is, a
+  /// 360px row still seats the category beside the label.
+  static const EdgeInsets _panelPadding = EdgeInsets.symmetric(
+    horizontal: AppSpacing.sm,
+    vertical: AppSpacing.md,
+  );
+
+  /// The composer as a surface of its own — the blank line at the foot of the
+  /// receipt.
+  ///
+  /// Until wave 3 this was the last thing on the tab with no surface at all:
+  /// #498 gave the record a raised card and the model's estimate a recessed
+  /// well, and then the traveler's own write — the one thing on the tab that
+  /// creates an expense — scattered across the bare page below both, wider
+  /// than either, its options line right-aligned over left-aligned fields. It
+  /// read as debris under the cards rather than as the tab's write affordance
+  /// (see the Rocket Money / Airwallex entry forms in the wave's Mobbin pass:
+  /// the fields are always INSIDE something).
+  ///
+  /// Surface + a hairline, and NEITHER a fill nor an elevation, because the
+  /// tab already spends both: the receipt is raised (the record), the
+  /// suggestion is a recessed `surfaceContainerHighest` well (an estimate that
+  /// is not yours yet). A filled panel here was tried first and read as a
+  /// second well — `surfaceContainerHigh` lands 6/255 off `Highest`, so the
+  /// two stacked as one grey block split by a gap. An outlined sheet is the
+  /// third register the tab was missing and the one an entry surface wants
+  /// anyway: a blank line, edge drawn, nothing written on it yet.
+  ///
+  /// The fill is `surface` and in LIGHT that is the page exactly (both
+  /// `(244,251,248)`), so there the hairline alone draws the panel — which is
+  /// the intent, not an accident: an outlined region on the page is what an
+  /// empty line looks like. Dark parts company usefully — `surface` there is
+  /// darker than the well above, the opposite direction from light and the
+  /// same "not that other block" either way. In both, the fields (grey[50]
+  /// light, `surfaceContainerHighest` dark) sit clearly ON the panel.
+  ///
+  /// The top gap is this widget's own margin rather than a sibling gap, for
+  /// the reason the options line used to carry it: `DailySpendSection`
+  /// collapses to nothing when offline or empty, and a sibling `SizedBox`
+  /// would dangle above the panel in the common case.
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildAddOptions(theme),
-        _buildAddRow(theme),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+          borderRadius: AppRadius.mdAll,
+        ),
+        padding: _panelPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildAddOptions(theme),
+            _buildAddRow(theme),
+          ],
+        ),
+      ),
     );
   }
 
@@ -185,8 +250,9 @@ class _BudgetComposerState extends ConsumerState<BudgetComposer> {
   /// unlabelled pill sitting between the daily-spend card and the add row was
   /// read as belonging to the card, or as a filter over the list above, and so
   /// as a control that did nothing. The label is what ties it to the row it
-  /// arms; the [AppSpacing.md] above and [AppSpacing.xs] below are the rest of
-  /// that tie.
+  /// arms; since wave 3 the panel around both is the rest of that tie, and the
+  /// misreading it was written against — "this belongs to the card above" — is
+  /// the one thing a shared surface can no longer be read as saying.
   ///
   /// The pick is read from the draft, so it survives the remount that changing
   /// header tab or opening the chat panel causes — a choice, like the category
@@ -203,11 +269,10 @@ class _BudgetComposerState extends ConsumerState<BudgetComposer> {
           .watch(expenseDraftProvider(widget.tripId).select((d) => d.planned));
       final l10n = context.l10n;
       return Padding(
-        // The top gap lives here rather than in a sibling SizedBox because
-        // DailySpendSection collapses to nothing when offline or empty — a
-        // sibling would dangle above the add row in the common case.
-        padding:
-            const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.xs),
+        // Only the gap down to the entry row now: the gap ABOVE the composer
+        // became the panel's margin in [build] when the panel arrived, since a
+        // surface's own outer spacing cannot live inside one of its children.
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
         // Wrap, not Row: the label and the pill sit side by side when they
         // fit and the pill drops to its own line when they don't, which is
         // what Spanish does at 360px ("Añadir como" wants more than the
@@ -217,7 +282,12 @@ class _BudgetComposerState extends ConsumerState<BudgetComposer> {
         // "nothing threw" proves nothing. Wrap needs no measurement, so it is
         // right in every language and at every text scale by construction.
         child: Wrap(
-          alignment: WrapAlignment.end,
+          // Left, not right (wave 3): on the bare page this line right-aligned
+          // so it would sit over the commit button it arms, which put the
+          // composer's two halves on opposite edges with nothing tying them
+          // together. Inside the panel the left edge IS the tie — the label
+          // now opens the surface the way the receipt's title opens that card.
+          alignment: WrapAlignment.start,
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.xs,
@@ -537,9 +607,18 @@ class _BudgetComposerState extends ConsumerState<BudgetComposer> {
       // Declared to _controlWidth for the same reason as the category trigger
       // — and it is a fix as well as a declaration: on desktop this button was
       // 40 wide, under Material's 48 minimum.
+      //
+      // Tonal-filled since wave 3, and still an IconButton at exactly
+      // _controlWidth so the row's arithmetic is untouched: this is the tab's
+      // primary write, and as a bare glyph it sat quieter than the "Add to
+      // plan" links in the suggestion well directly above it — the one action
+      // that files an expense reading weaker than the one that offers an
+      // estimate. Tonal rather than filled because the surface it commits into
+      // is a panel, not a hero, and the teal spine belongs to one action per
+      // screen (#503's header rule).
       final add = SizedBox(
         width: _controlWidth,
-        child: IconButton(
+        child: IconButton.filledTonal(
           icon: const Icon(Icons.add),
           tooltip: context.l10n.budgetAddExpenseTooltip,
           onPressed: widget.isOffline ? null : _add,
