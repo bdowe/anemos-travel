@@ -6907,6 +6907,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Loading'**
   String get splashLoading;
+
+  /// Action on the "Your travels" section header that opens the travel atlas. Rendered only once the account has 2+ FINISHED trips, so it never opens onto an empty retrospective.
+  ///
+  /// In en, this message translates to:
+  /// **'See all'**
+  String get travelAtlasSeeAll;
+
+  /// Heading over the atlas's index of finished trips. Deliberately its own key rather than tripsListPastTrips: that one labels a collapsible group with a count pill on the trips list, and the two sites are free to drift.
+  ///
+  /// In en, this message translates to:
+  /// **'Past trips'**
+  String get travelAtlasIndexTitle;
+
+  /// The atlas year filter's unfiltered option, leading the row of year chips.
+  ///
+  /// In en, this message translates to:
+  /// **'All time'**
+  String get travelAtlasAllTime;
+
+  /// Screen-reader label for the atlas's row of year filter chips. The chips themselves are bare year numbers, which say nothing about what they do.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by year'**
+  String get travelAtlasFilterByYear;
+
+  /// No description provided for @travelAtlasEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No finished trips yet'**
+  String get travelAtlasEmptyTitle;
+
+  /// Body of the atlas empty state. Only reachable by URL: the See all door is gated on 2+ finished trips, so nobody arrives here from the app.
+  ///
+  /// In en, this message translates to:
+  /// **'Trips land here once they are behind you — every city you have been to, on one map.'**
+  String get travelAtlasEmptyMessage;
 }
 
 class _AppLocalizationsDelegate

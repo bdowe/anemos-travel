@@ -142,3 +142,109 @@ DateTime? bookingNudgeDate(Trip trip, DateTime today) {
   if (days == null || days > kBookingNudgeWindowDays) return null;
   return DateTime.parse(raw!); // non-null and parseable: days != null
 }
+
+// ---- the atlas (specs-less; artifact "My Trips — the Atlas") --------------
+//
+// The travel-history surface behind "Your travels — See all" reads the same
+// payload as the band above, but through a STRICTER membership rule:
+// [tripIsPast], not [tripHasStarted].
+//
+// [travelStats] partitions on [tripHasStarted], which counts a trip currently
+// under way as traveled — right for an aggregate (an in-progress trip's
+// counter ticks up daily instead of banking all 35 days on day one) and wrong
+// for a row that names ONE trip and claims its length: a 14-day trip on day 2
+// would read "2 days" and change every morning. The trips list already refuses
+// this exact category error (trips_list_screen.dart: the live trip is exempt
+// from the past group). Filtering on [tripIsPast] also makes
+// `traveledDayCount == dayCount` (trip_days.dart), so an index row needs no
+// special day-count rule at all.
+//
+// The colophon is deliberately NOT moved: it keeps [travelStats] and its
+// traveled/planned split exactly as the band renders them.
+
+/// The trips wholly behind [today] — the atlas's membership rule, and the
+/// quantity its door is gated on (2+).
+///
+/// A filter, not a sort: the caller's order is preserved, so passing the
+/// result to [footprintPins] keeps its first-coordinate-wins dedupe answering
+/// exactly as it does for the unfiltered list.
+List<Trip> pastTrips(List<Trip> trips, DateTime today) => [
+      for (final t in trips)
+        if (tripIsPast(t.startDate, t.endDate, today)) t
+    ];
+
+/// The day a trip is FILED under: its first day — [Trip.startDate], falling
+/// back to [Trip.endDate] for start-less trips. Null for an undated trip.
+///
+/// The same first-day rule as [tripHasStarted] and trip_list_order.dart's
+/// `_firstDay`, so the year chips, the row references and the list's own
+/// ordering can't disagree about which year a trip belongs to. A trip spanning
+/// Dec→Jan is therefore ONE trip in ONE year — its first day's.
+DateTime? atlasFirstDay(Trip trip) =>
+    DateTime.tryParse(trip.startDate ?? '') ??
+    DateTime.tryParse(trip.endDate ?? '');
+
+/// The distinct years [pastTrips] fall in, newest first — the year chips.
+///
+/// Every past trip has a parseable first day ([tripIsPast] needs one), so no
+/// past trip can be missing from this list.
+List<int> atlasYears(List<Trip> trips, DateTime today) {
+  final years = <int>{
+    for (final t in pastTrips(trips, today))
+      if (atlasFirstDay(t) case final d?) d.year,
+  }.toList();
+  years.sort((a, b) => b.compareTo(a));
+  return years;
+}
+
+/// Every trip filed under [year] — past AND planned, unlike [pastTrips].
+///
+/// The year chips narrow the whole surface at once, and the map's job there is
+/// unchanged: it shows *everywhere*, with planned cities still hollow. Only
+/// the index is where-you've-been.
+List<Trip> tripsInAtlasYear(List<Trip> trips, int year) => [
+      for (final t in trips)
+        if (atlasFirstDay(t)?.year == year) t
+    ];
+
+/// One row of the atlas index. Carries the facts a row is BUILT from, never
+/// its rendered strings: the name goes through `tripHeadline`/`citiesLabel`,
+/// whose connectors are localized at the call site.
+///
+/// [days] is null — not 0 — for a half-dated trip. Both [dayCount] and
+/// [traveledDayCount] answer 0 when either date is missing, and an
+/// end-date-only trip CAN be past, so a row that trusted the number would
+/// print "0 days" for a trip that plainly took some. Null is the same drop
+/// `_StatGroup` performs on a zero-valued stat, made explicit in the type.
+typedef AtlasRow = ({Trip trip, int year, int month, int? days});
+
+/// The atlas index: [pastTrips], newest first, optionally narrowed to one
+/// [year]. Complete — no cap; the index scrolls with the page, and the screen
+/// that IS the see-all destination has nowhere further to send anyone.
+///
+/// Ordered by the FIRST day, descending, rather than by the last day the way
+/// trip_list_order.dart's past group is. The two keys disagree only for
+/// overlapping trips, and here the first day is PRINTED in the reference
+/// column — an index whose leading column doesn't descend contradicts itself
+/// on screen. Ties break on `createdAt` (newest first), since `List.sort` is
+/// unstable.
+List<AtlasRow> atlasRows(List<Trip> trips, DateTime today, {int? year}) {
+  final rows = <AtlasRow>[];
+  for (final t in pastTrips(trips, today)) {
+    final first = atlasFirstDay(t);
+    if (first == null) continue; // unreachable: past implies a parseable date
+    if (year != null && first.year != year) continue;
+    final days = dayCount(t.startDate, t.endDate, const <int?>[]);
+    rows.add((
+      trip: t,
+      year: first.year,
+      month: first.month,
+      days: days > 0 ? days : null,
+    ));
+  }
+  rows.sort((a, b) {
+    final c = atlasFirstDay(b.trip)!.compareTo(atlasFirstDay(a.trip)!);
+    return c != 0 ? c : b.trip.createdAt.compareTo(a.trip.createdAt);
+  });
+  return rows;
+}

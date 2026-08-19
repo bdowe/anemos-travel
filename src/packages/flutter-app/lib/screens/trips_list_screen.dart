@@ -40,6 +40,11 @@ const kLogTripSectionActionKey = ValueKey('logTrip.entry.section');
 const kLogTripAppBarKey = ValueKey('logTrip.entry.appBar');
 const kLogTripEmptyStateKey = ValueKey('logTrip.entry.emptyState');
 
+/// Handle for the "Your travels" section's atlas door. Locale-free, the same
+/// convention: the invariant is whether the door EXISTS for this account, and
+/// a text finder would answer it differently in Spanish.
+const kTravelAtlasSeeAllKey = ValueKey('travelAtlas.entry.section');
+
 /// The trips list, read as a journal index rather than a dashboard.
 ///
 /// The page runs in narrative order — **what's next, what you're co-planning,
@@ -194,6 +199,15 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       final stats = travelStats(state.trips, now);
       final pins = footprintPins(state.trips, now);
       final showFootprint = state.trips.length >= 2;
+      // The atlas door opens on FINISHED trips (tripIsPast), not on the card's
+      // own owned-trip count and not on travelStats' traveled count — that one
+      // partitions on tripHasStarted, so it would open for someone on their
+      // second-ever trip, mid-flight. Below two there is nothing behind the
+      // door: no traveled pins, no Traveled colophon group (it doesn't render
+      // at zero) and an index with no rows at all. So the door doesn't exist,
+      // and the header keeps "+ Add past trip", which is how the history that
+      // unlocks the atlas gets here in the first place.
+      final showAtlas = pastTrips(state.trips, now).length >= 2;
       body = RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(sharedWithMeProvider);
@@ -359,17 +373,55 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                           AppSpacing.xs, AppSpacing.xl, 0, AppSpacing.sm),
                       child: SectionHeader(
                         title: l10n.tripsListYourTravels,
-                        // The band's own gap-filler (specs/log-past-trip): the
-                        // section reads as "everywhere you've been" while
-                        // knowing only what this app planned, so the way to
-                        // correct it belongs in its header. It can't be the
-                        // ONLY way in — the header is gated at 2+ owned trips
-                        // — hence the app-bar and empty-state twins.
-                        action: TextButton.icon(
-                          key: kLogTripSectionActionKey,
-                          onPressed: () => openLogTripOnTripsTab(ref),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: Text(l10n.logTripAction),
+                        // Two actions, passed as one WRAP — not a Row.
+                        // SectionHeader's own Wrap can drop this whole group
+                        // onto a second line, which is what its dartdoc
+                        // promises, but a Row inside it still cannot be
+                        // narrower than its two buttons: at 360dp (the
+                        // commonest Android width) the English pair measures
+                        // wider than the column and a Row overflows it by
+                        // 28px. Wrapping instead lets the second button take a
+                        // third line on exactly those widths and changes
+                        // nothing anywhere else.
+                        //
+                        // Both actions stay here. "+ Add past trip" does not
+                        // move: specs/log-past-trip placed it in this header
+                        // deliberately, and relocating it re-opens that
+                        // decision.
+                        // Runs stack flush-LEFT when the pair breaks, so the
+                        // buttons land on the title's own edge. Right-aligning
+                        // them instead lines them up on the wider button's
+                        // right edge, which is neither margin and reads as an
+                        // accident.
+                        action: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            // The way into the atlas. A marked action rather
+                            // than a tappable card: the card carries no
+                            // affordance, and every pin on it is a 44px hit
+                            // box already spending taps on a tooltip — the
+                            // most inviting targets would be the ones that
+                            // didn't open it.
+                            if (showAtlas)
+                              TextButton(
+                                key: kTravelAtlasSeeAllKey,
+                                onPressed: () => openAtlasOnTripsTab(ref),
+                                child: Text(l10n.travelAtlasSeeAll),
+                              ),
+                            // The band's own gap-filler
+                            // (specs/log-past-trip): the section reads as
+                            // "everywhere you've been" while knowing only what
+                            // this app planned, so the way to correct it
+                            // belongs in its header. It can't be the ONLY way
+                            // in — the header is gated at 2+ owned trips —
+                            // hence the app-bar and empty-state twins.
+                            TextButton.icon(
+                              key: kLogTripSectionActionKey,
+                              onPressed: () => openLogTripOnTripsTab(ref),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: Text(l10n.logTripAction),
+                            ),
+                          ],
                         ),
                       ),
                     ),

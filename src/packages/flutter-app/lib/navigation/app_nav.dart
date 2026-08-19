@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../screens/import_trip_screen.dart';
 import '../screens/log_trip_screen.dart';
+import '../screens/travel_atlas_screen.dart';
 import '../screens/trip_detail_screen.dart';
 import 'app_routes.dart';
 
@@ -251,6 +252,24 @@ void openLogTripOnTripsTab(WidgetRef ref) {
     navKeys[AppTab.trips.index].currentState?.popUntil((r) => r.isFirst);
     return locatedRoute(
         const LogTripScreen(), utilityLocation(BootUtility.logTrip));
+  });
+}
+
+/// Open the travel atlas on the Trips tab — the "See all" destination of the
+/// trips list's "Your travels" section. The [openLogTripOnTripsTab] shape:
+/// same tab, same pop-to-root, and a [locatedRoute] rather than an
+/// [instantRoute] because its one entry point sits ON the Trips tab, so the
+/// push IS the transition the user asked for.
+///
+/// Funnelled through a helper anyway, for the reason its twin was: a screen
+/// pushed from the wrong tab strands its back button on the wrong list.
+void openAtlasOnTripsTab(WidgetRef ref) {
+  ref.read(navIndexProvider.notifier).state = AppTab.trips.index;
+  final navKeys = ref.read(tabNavKeysProvider);
+  pushOnTabWhenReady(navKeys, AppTab.trips, () {
+    navKeys[AppTab.trips.index].currentState?.popUntil((r) => r.isFirst);
+    return locatedRoute(
+        const TravelAtlasScreen(), utilityLocation(BootUtility.travelAtlas));
   });
 }
 

@@ -2745,5 +2745,26 @@
   "splashLoading": "Loading",
   "@splashLoading": {
     "description": "Screen-reader label on the boot splash's breathing-dots loading signal. The dots themselves are decorative; this is the only text the loading state speaks."
+  },
+  "travelAtlasSeeAll": "See all",
+  "@travelAtlasSeeAll": {
+    "description": "Action on the \"Your travels\" section header that opens the travel atlas. Rendered only once the account has 2+ FINISHED trips, so it never opens onto an empty retrospective."
+  },
+  "travelAtlasIndexTitle": "Past trips",
+  "@travelAtlasIndexTitle": {
+    "description": "Heading over the atlas's index of finished trips. Deliberately its own key rather than tripsListPastTrips: that one labels a collapsible group with a count pill on the trips list, and the two sites are free to drift."
+  },
+  "travelAtlasAllTime": "All time",
+  "@travelAtlasAllTime": {
+    "description": "The atlas year filter's unfiltered option, leading the row of year chips."
+  },
+  "travelAtlasFilterByYear": "Filter by year",
+  "@travelAtlasFilterByYear": {
+    "description": "Screen-reader label for the atlas's row of year filter chips. The chips themselves are bare year numbers, which say nothing about what they do."
+  },
+  "travelAtlasEmptyTitle": "No finished trips yet",
+  "travelAtlasEmptyMessage": "Trips land here once they are behind you \u2014 every city you have been to, on one map.",
+  "@travelAtlasEmptyMessage": {
+    "description": "Body of the atlas empty state. Only reachable by URL: the See all door is gated on 2+ finished trips, so nobody arrives here from the app."
   }
 }

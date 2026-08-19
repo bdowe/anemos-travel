@@ -1181,5 +1181,11 @@
   "wearPackSunProtection": "Protección solar",
   "rickRollCaption": "Never gonna give you up",
   "rickRollDismissHint": "toca donde sea para salir",
-  "splashLoading": "Cargando"
+  "splashLoading": "Cargando",
+  "travelAtlasSeeAll": "Ver todo",
+  "travelAtlasIndexTitle": "Viajes pasados",
+  "travelAtlasAllTime": "Todos los a\u00f1os",
+  "travelAtlasFilterByYear": "Filtrar por a\u00f1o",
+  "travelAtlasEmptyTitle": "A\u00fan no tienes viajes terminados",
+  "travelAtlasEmptyMessage": "Los viajes aparecen aqu\u00ed cuando ya los has hecho: todas las ciudades donde has estado, en un mapa."
 }

@@ -294,6 +294,164 @@ void main() {
     });
   });
 
+  // The atlas reads the same payload as the band, through a STRICTER
+  // membership rule: tripIsPast, not tripHasStarted. travelStats' partition is
+  // right for an aggregate and wrong for a row that names one trip and claims
+  // its length — an in-progress trip would get a row whose "days" changes every
+  // morning. These cases pin that, plus the two shapes the contract calls out
+  // by name: a half-dated past trip (no length, never "0 days") and a Dec→Jan
+  // trip (one trip, one year — its first day's).
+  group('pastTrips', () {
+    test('a trip in progress is not past', () {
+      final trips = [
+        _trip('live', start: '2026-08-04', end: '2026-08-13'),
+        _trip('done', start: '2026-07-01', end: '2026-07-05'),
+      ];
+      expect(pastTrips(trips, _today).map((t) => t.id), ['done']);
+    });
+
+    test('a trip ending today is not past; one ending yesterday is', () {
+      expect(
+        pastTrips([_trip('t', start: '2026-08-01', end: '2026-08-06')], _today),
+        isEmpty,
+      );
+      expect(
+        pastTrips([_trip('t', start: '2026-08-01', end: '2026-08-05')], _today),
+        hasLength(1),
+      );
+    });
+
+    test('an undated trip is never past', () {
+      expect(pastTrips([_trip('draft', cities: const ['Tokyo'])], _today),
+          isEmpty);
+    });
+
+    test('an end-date-only trip in the past IS past', () {
+      expect(pastTrips([_trip('half', end: '2026-05-20')], _today), hasLength(1));
+    });
+
+    test('preserves the caller order, so footprintPins dedupes unchanged', () {
+      final trips = [
+        _trip('b', start: '2026-01-01', end: '2026-01-05'),
+        _trip('a', start: '2026-03-01', end: '2026-03-05'),
+      ];
+      expect(pastTrips(trips, _today).map((t) => t.id), ['b', 'a']);
+    });
+  });
+
+  group('atlasYears', () {
+    test('distinct years of past trips, newest first', () {
+      final years = atlasYears([
+        _trip('a', start: '2024-05-01', end: '2024-05-10'),
+        _trip('b', start: '2026-02-01', end: '2026-02-10'),
+        _trip('c', start: '2024-10-01', end: '2024-10-10'),
+      ], _today);
+      expect(years, [2026, 2024]);
+    });
+
+    test('excludes a trip in progress and an undated draft', () {
+      final years = atlasYears([
+        _trip('live', start: '2026-08-04', end: '2026-08-13'),
+        _trip('draft', cities: const ['Tokyo']),
+        _trip('done', start: '2025-04-01', end: '2025-04-05'),
+      ], _today);
+      expect(years, [2025]);
+    });
+
+    test('a Dec→Jan trip lands in exactly one year — its first day\'s', () {
+      final years = atlasYears(
+          [_trip('nye', start: '2025-12-28', end: '2026-01-04')], _today);
+      expect(years, [2025]);
+    });
+
+    test('an end-date-only past trip files under its end date', () {
+      expect(atlasYears([_trip('half', end: '2023-09-14')], _today), [2023]);
+    });
+  });
+
+  group('tripsInAtlasYear', () {
+    test('keeps planned trips — the map is everywhere, the index is not', () {
+      final trips = [
+        _trip('past', start: '2026-02-01', end: '2026-02-05'),
+        _trip('planned', start: '2026-11-01', end: '2026-11-05'),
+        _trip('other', start: '2025-02-01', end: '2025-02-05'),
+      ];
+      expect(tripsInAtlasYear(trips, 2026).map((t) => t.id),
+          ['past', 'planned']);
+    });
+
+    test('an undated trip belongs to no year', () {
+      expect(tripsInAtlasYear([_trip('draft')], 2026), isEmpty);
+    });
+  });
+
+  group('atlasRows', () {
+    test('past trips only, newest first, with year/month and length', () {
+      final rows = atlasRows([
+        _trip('older', start: '2024-10-02', end: '2024-10-07'), // 6 days
+        _trip('newer', start: '2026-02-01', end: '2026-02-12'), // 12 days
+        _trip('live', start: '2026-08-04', end: '2026-08-13'),
+        _trip('ahead', start: '2026-09-01', end: '2026-09-03'),
+      ], _today);
+      expect(rows.map((r) => r.trip.id), ['newer', 'older']);
+      expect(rows.first.year, 2026);
+      expect(rows.first.month, 2);
+      expect(rows.first.days, 12);
+      expect(rows.last.days, 6);
+    });
+
+    test('a half-dated past trip has NO length, not 0', () {
+      // dayCount answers 0 whenever either date is missing, and an
+      // end-date-only trip can still be past — a row that trusted the number
+      // would print "0 days" for a trip that plainly took some.
+      final rows = atlasRows([_trip('half', end: '2023-08-19')], _today);
+      expect(rows.single.days, isNull);
+      expect(rows.single.year, 2023);
+      expect(rows.single.month, 8);
+    });
+
+    test('a Dec→Jan trip files under its first day, and is one row', () {
+      final rows = atlasRows(
+          [_trip('nye', start: '2025-12-28', end: '2026-01-04')], _today);
+      expect(rows, hasLength(1));
+      expect((rows.single.year, rows.single.month), (2025, 12));
+      expect(rows.single.days, 8);
+    });
+
+    test('year: n returns only that year, still newest first', () {
+      final rows = atlasRows([
+        _trip('spring', start: '2025-04-01', end: '2025-04-05'),
+        _trip('autumn', start: '2025-09-01', end: '2025-09-05'),
+        _trip('other', start: '2024-06-01', end: '2024-06-05'),
+      ], _today, year: 2025);
+      expect(rows.map((r) => r.trip.id), ['autumn', 'spring']);
+    });
+
+    test('an undated trip gets no row', () {
+      expect(atlasRows([_trip('draft', cities: const ['Tokyo'])], _today),
+          isEmpty);
+    });
+
+    test('overlapping trips order by their FIRST day, the printed one', () {
+      // 'long' ends later but STARTED earlier; the reference column prints the
+      // first day, so ordering by the last day would leave the leading column
+      // reading 2026-01 above 2026-02.
+      final rows = atlasRows([
+        _trip('long', start: '2026-01-15', end: '2026-03-01'),
+        _trip('short', start: '2026-02-01', end: '2026-02-28'),
+      ], _today);
+      expect(rows.map((r) => r.trip.id), ['short', 'long']);
+    });
+
+    test('equal first days break the tie on createdAt, newest first', () {
+      final rows = atlasRows([
+        _trip('old', start: '2026-02-01', end: '2026-02-03', created: '2026-01-01T00:00:00Z'),
+        _trip('new', start: '2026-02-01', end: '2026-02-05', created: '2026-03-01T00:00:00Z'),
+      ], _today);
+      expect(rows.map((r) => r.trip.id), ['new', 'old']);
+    });
+  });
+
   group('Trip insight fields JSON', () {
     test('a payload with every insight key populates and round-trips', () {
       final trip = Trip.fromJson({
