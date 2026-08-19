@@ -69,8 +69,19 @@ make wt-rm NAME=feature-x         # after merge: stack down -v, worktree+branch 
 
 Harness-created worktrees (Mode A) self-provision with `make wt-init`.
 `make` reads `.wt.env` automatically; for bare `docker`/`go` commands run
-`set -a; . .wt.env; set +a` first — an unsourced bare command falls back to
+`set -a; . ./.wt.env; set +a` first — an unsourced bare command falls back to
 the main stack's ports/project.
+
+**Write `./.wt.env`, with the `./`.** In zsh — this repo's shell — `.` on a
+bare relative name searches `$PATH`, not the working directory, so
+`. .wt.env` fails with *"no such file or directory: .wt.env"* while the file
+is sitting right there. It is one line of stderr in the middle of a compound
+command, and the command then **runs anyway, against the DEFAULT project**.
+That is how a lane's `docker compose … down -v` deleted the main checkout's
+`development_postgres_data` instead of its own. Prefer `make`, which sources
+the file itself; when you must go bare, pass `-p "$GTT_PROJECT"` explicitly
+so the target is named in the command rather than inherited from an
+environment that may not have loaded.
 
 **Booting the stack breaks the host analyzer — `flutter pub get` fixes it.**
 The Flutter dev container runs its own `flutter pub get` against the *mounted*
