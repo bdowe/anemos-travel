@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
+import '../theme/app_shadows.dart';
 import '../theme/spacing.dart';
 import '../utils/trip_list_insights.dart';
 import 'stat_tile_row.dart';
@@ -51,13 +52,9 @@ class FootprintDot extends StatelessWidget {
           color: visited ? primary : Colors.black.withValues(alpha: 0.35),
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.35),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
-            ),
-          ],
+          // The trip_map pin family's shared drop, and this dot is one of that
+          // family — the token's own dartdoc names this use.
+          boxShadow: AppShadows.pin,
         ),
       ),
     );
