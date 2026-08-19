@@ -66,6 +66,17 @@ T _labeledButton<T extends ButtonStyleButton>(
       matching: find.bySubtype<T>(),
     ));
 
+/// Same idea for the header's Refine entry, which is a chip rather than a
+/// button since the wave-2 header redesign (it is a peer of the dates chip
+/// now, so the header carries exactly one filled action — the Next Step
+/// card's). ActionChip is not a ButtonStyleButton, so it needs its own finder;
+/// the assertion it feeds — onPressed nulled while offline — is unchanged.
+ActionChip _labeledChip(WidgetTester tester, String label) =>
+    tester.widget<ActionChip>(find.ancestor(
+      of: find.text(label),
+      matching: find.byType(ActionChip),
+    ));
+
 /// Crosses the RefreshIndicator's arm threshold to fire a quiet _load.
 Future<void> _triggerRefresh(WidgetTester tester) async {
   await tester.fling(
@@ -139,7 +150,7 @@ void main() {
     expect(find.text('Could not load this trip'), findsNothing);
 
     // Mutation affordances are disabled or hidden.
-    final refine = _labeledButton<FilledButton>(tester, 'Refine with AI');
+    final refine = _labeledChip(tester, 'Refine with AI');
     expect(refine.onPressed, isNull, reason: 'chat/refine needs the network');
     final addPlace = _labeledButton<TextButton>(tester, 'Add place');
     expect(addPlace.onPressed, isNull);
@@ -198,7 +209,7 @@ void main() {
     expect(find.textContaining('Offline — showing saved copy from'),
         findsNothing);
     expect(find.text('Athens Trip (live)'), findsWidgets);
-    final refine = _labeledButton<FilledButton>(tester, 'Refine with AI');
+    final refine = _labeledChip(tester, 'Refine with AI');
     expect(refine.onPressed, isNotNull, reason: 'back online — re-enabled');
   });
 
@@ -269,7 +280,7 @@ void main() {
     expect(find.text('Could not load this trip'), findsNothing);
 
     // Mutation affordances are guarded, same as a loud offline entry.
-    final refine = _labeledButton<FilledButton>(tester, 'Refine with AI');
+    final refine = _labeledChip(tester, 'Refine with AI');
     expect(refine.onPressed, isNull);
     final addPlace = _labeledButton<TextButton>(tester, 'Add place');
     expect(addPlace.onPressed, isNull);
@@ -294,7 +305,7 @@ void main() {
         findsNothing);
     expect(find.text('Could not load this trip'), findsNothing);
     expect(find.text('Athens Trip'), findsWidgets);
-    final refine = _labeledButton<FilledButton>(tester, 'Refine with AI');
+    final refine = _labeledChip(tester, 'Refine with AI');
     expect(refine.onPressed, isNotNull);
   });
 
@@ -324,7 +335,7 @@ void main() {
     expect(find.textContaining('Offline — showing saved copy from'),
         findsNothing);
     expect(find.text('Athens Trip (back online)'), findsWidgets);
-    final refine = _labeledButton<FilledButton>(tester, 'Refine with AI');
+    final refine = _labeledChip(tester, 'Refine with AI');
     expect(refine.onPressed, isNotNull, reason: 'back online — re-enabled');
   });
 

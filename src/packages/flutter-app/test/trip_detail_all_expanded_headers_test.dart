@@ -9,6 +9,7 @@ import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
+import 'package:travel_route_planner/widgets/trip_detail/map_band.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
 import 'support/city_groups.dart';
@@ -22,8 +23,8 @@ import 'support/l10n_test_app.dart';
 //   * while scrolling, exactly ONE city header obstructs at a time: each
 //     group's containing MultiSliver pushes its own header off at the
 //     group's end, so consecutive headers hand off edge-to-edge and the
-//     pinned slot (viewport top + 420: the 364px map band + 56px tab row)
-//     never accumulates obstruction as more groups pin and unpin;
+//     pinned slot ([_pinnedSlot]: the map band plus the tab row) never
+//     accumulates obstruction as more groups pin and unpin;
 //   * header taps are pure list toggles — the map-side assertions live in
 //     trip_detail_leg_focus_test.dart; here they only pin down that N
 //     groups collapse and re-expand independently;
@@ -150,10 +151,22 @@ ScrollPosition _position(WidgetTester tester) => tester
 double _viewportTop(WidgetTester tester) =>
     tester.getBottomLeft(find.byType(AppBar)).dy;
 
+/// The screen's own pinned tab-row extent (`_listHeaderHeight`, private to
+/// the screen). Restated, not derived — but paired with [mapBandHeaderHeight]
+/// below so the half of this sum that DOES move with a redesign is read from
+/// its source. It was a bare `420` until the wave-2 header lane retuned the
+/// band, which failed these two tests by exactly the 60px it removed.
+const double _tabRowHeight = 56;
+
+/// Where a pinned city header comes to rest: below the map band and the tab
+/// row, in viewport coordinates.
+double _pinnedSlot(WidgetTester tester) =>
+    _viewportTop(tester) + mapBandHeaderHeight + _tabRowHeight;
+
 void main() {
   testWidgets('exactly one city header pins; the next city pushes it off',
       (tester) async {
-    // Tall surface: the 364px pinned map band pushes deep-group geometry
+    // Tall surface: the pinned map band pushes deep-group geometry
     // below an 800px fold. Berlin's six days keep enough trailing extent
     // (item tiles are ~58px) that a mid-group-3 offset stays reachable on
     // the ~1724px content viewport.
@@ -161,7 +174,7 @@ void main() {
     await _pump(tester, _trip(perDay: 6, berlinDays: 6));
 
     final position = _position(tester);
-    final slot = _viewportTop(tester) + 420; // 364 map band + 56 tab row
+    final slot = _pinnedSlot(tester);
     final headerH = tester.getRect(_headerMaterialOf('Paris')).height;
 
     // Deep inside Rome's body: Rome's header has pinned.
@@ -324,7 +337,7 @@ void main() {
             '(overshoot-then-snap-back reversal); from $start: $samples');
 
     // And it lands exactly: city 1's header rests in the pinned slot.
-    final slot = _viewportTop(tester) + 420;
+    final slot = _pinnedSlot(tester);
     expect((_headerTop(tester, 'Paris') - slot).abs(), lessThanOrEqualTo(2),
         reason: 'Paris header should rest below map band + tab row');
     // The navigation was list-only: no focus write, camera untouched, the

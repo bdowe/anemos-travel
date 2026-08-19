@@ -9,6 +9,7 @@ import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/map_leg_chips.dart';
+import 'package:travel_route_planner/widgets/trip_detail/map_band.dart';
 import 'package:travel_route_planner/widgets/trip_map.dart';
 
 import 'support/chip_finders.dart';
@@ -128,11 +129,25 @@ void _useSurface(WidgetTester tester, Size size) {
   addTearDown(tester.view.reset);
 }
 
+/// The screen's own pinned tab-row extent (`_listHeaderHeight`, private to
+/// the screen); [mapBandHeaderHeight] is read from its source so a band
+/// retune can't silently invalidate this math again. These three assertions
+/// carried a bare `420` until the wave-2 header lane shortened the band.
+const double _tabRowHeight = 56;
+
+/// Where a city header comes to rest: below the pinned map band and tab row,
+/// measured from the viewport top (the app bar's bottom — the scroll math
+/// lives in viewport coordinates).
+double _pinnedSlot(WidgetTester tester) =>
+    tester.getBottomLeft(find.byType(AppBar)).dy +
+    mapBandHeaderHeight +
+    _tabRowHeight;
+
 void main() {
   testWidgets(
       'header taps are pure list toggles: the map never moves, focused '
       'or not', (tester) async {
-    // Tall surface: with the 364px map band pinned, expanded sections push
+    // Tall surface: with the map band pinned, expanded sections push
     // later headers below an 800px fold and header taps would miss.
     _useSurface(tester, const Size(1200, 2200));
     await _pump(tester, _threeCityTrip());
@@ -176,18 +191,16 @@ void main() {
     // The group's items are reachable (expanded — the landing default; the
     // chip tap re-opens a manually collapsed group)…
     expect(find.text('Roman Forum 0'), findsOneWidget);
-    // …and its header rests right below the pinned chrome: the 364px map
-    // band (12 + 340 + 12) + the 56px itinerary tab row = 420, measured
-    // from the viewport top (the app bar's bottom — the scroll math lives
-    // in viewport coordinates). The one correction pass tolerates ±2.
-    final viewportTop = tester.getBottomLeft(find.byType(AppBar)).dy;
+    // …and its header rests right below the pinned chrome (see [_pinnedSlot]).
+    // The one correction pass tolerates ±2.
+    final slot = _pinnedSlot(tester);
     final headerTop = tester
         .getTopLeft(find
             .ancestor(
                 of: cityHeaderLabel('Rome'), matching: find.byType(Material))
             .first)
         .dy;
-    expect((headerTop - (viewportTop + 420)).abs(), lessThanOrEqualTo(2),
+    expect((headerTop - slot).abs(), lessThanOrEqualTo(2),
         reason: 'Rome header should rest below map band + tab row');
   });
 
@@ -214,7 +227,8 @@ void main() {
     final start = position.pixels;
 
     // Tap Paris WITHOUT settling, then sample the scroll frame by frame:
-    // double-subtracting the pinned chrome animated ~420px past the target
+    // double-subtracting the pinned chrome animated a full chrome height
+    // past the target
     // and let the correction pass snap back down — a direction reversal
     // mid-gesture.
     await tester.tap(find.descendant(
@@ -240,14 +254,14 @@ void main() {
             '(up-then-down jank); from $start: $samples');
 
     // And it still lands exactly: Paris rests below the pinned chrome.
-    final viewportTop = tester.getBottomLeft(find.byType(AppBar)).dy;
+    final slot = _pinnedSlot(tester);
     final headerTop = tester
         .getTopLeft(find
             .ancestor(
                 of: cityHeaderLabel('Paris'), matching: find.byType(Material))
             .first)
         .dy;
-    expect((headerTop - (viewportTop + 420)).abs(), lessThanOrEqualTo(2),
+    expect((headerTop - slot).abs(), lessThanOrEqualTo(2),
         reason: 'Paris header should rest below map band + tab row');
   });
 
@@ -357,16 +371,16 @@ void main() {
 
     expect(find.text('Roman Forum 0'), findsOneWidget,
         reason: 'the region tap re-opens its collapsed group');
-    // Same rest math as a chip tap: map band + tab row = 420, ±2 for the
+    // Same rest math as a chip tap: map band + tab row, ±2 for the
     // one correction pass.
-    final viewportTop = tester.getBottomLeft(find.byType(AppBar)).dy;
+    final slot = _pinnedSlot(tester);
     final headerTop = tester
         .getTopLeft(find
             .ancestor(
                 of: cityHeaderLabel('Rome'), matching: find.byType(Material))
             .first)
         .dy;
-    expect((headerTop - (viewportTop + 420)).abs(), lessThanOrEqualTo(2),
+    expect((headerTop - slot).abs(), lessThanOrEqualTo(2),
         reason: 'Rome header should rest below map band + tab row');
     final position = tester
         .state<ScrollableState>(find

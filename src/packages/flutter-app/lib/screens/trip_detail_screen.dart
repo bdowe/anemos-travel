@@ -641,11 +641,16 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // ([_dateChipWidth]), so calendar icons, range starts, and nights suffixes
   // form columns across rows.
 
-  // Itinerary/Bookings/Budget tab row (44 — real touch targets for the view
-  // tabs)
-  // + bottom padding (8) + breathing room (4); the header is one
-  // fixed-height row whether or not the trip has items.
+  // Itinerary/Bookings/Budget tab row + the hairline baseline it rests on.
+  // The header is one fixed-height row whether or not the trip has items, and
+  // its total is what the Today-scroll chrome math reads — so the two parts
+  // are split here rather than padded apart: the row fills everything above
+  // the rule, which is what puts the selected tab's underline ON the rule
+  // instead of a dozen pixels above it.
   static const double _listHeaderHeight = 56;
+  static const double _headerTabBaseline = 1;
+  static const double _headerTabRowHeight =
+      _listHeaderHeight - _headerTabBaseline;
 
   /// Combined height of the chrome pinned above the itinerary slivers: the
   /// map header (when it renders AND is pinned — on phones the map scrolls
@@ -2223,6 +2228,14 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   /// hugs the label's width while filling the header row's height for a real
   /// touch target. [trailing] renders inside the underlined region so the
   /// underline spans label + pill as one tab.
+  ///
+  /// The underline sits on the tab's BOTTOM edge, and the tab fills the pinned
+  /// row's full height — so it lands on the row's own hairline baseline (see
+  /// the tab-row sliver below) the way the TripAdvisor and Vrbo references
+  /// draw it. It used to hug the label inside a vertically-centred box, which
+  /// left a 2px teal dash floating a dozen pixels above nothing and made the
+  /// whole row read as underlined text on the void rather than as the top edge
+  /// of the content below.
   Widget _headerTab(ThemeData theme,
       {required String label,
       required bool selected,
@@ -2234,21 +2247,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       child: InkWell(
         borderRadius: AppRadius.smAll,
         onTap: selected ? null : onTap,
-        child: Center(
-          widthFactor: 1,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xs, 0, AppSpacing.xs, 4),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  width: 2,
-                  color: selected
-                      ? theme.colorScheme.primary
-                      : Colors.transparent,
-                ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                width: 2,
+                color:
+                    selected ? theme.colorScheme.primary : Colors.transparent,
               ),
             ),
+          ),
+          child: Center(
+            widthFactor: 1,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -2304,14 +2315,24 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     // in English. Scale-down only engages when the whole cluster genuinely
     // can't fit (tiny windows, giant accessibility text) and shrinks the
     // trio uniformly instead of eating one label. The inner SizedBox keeps
-    // the 44px tap-target height the pinned header row provides.
+    // the tap-target height the pinned header row provides.
+    //
+    // bottomLeft, not centerLeft: a scaled-down cluster is SHORTER than the
+    // row, and the selected tab's underline has to keep landing on the row's
+    // hairline baseline. Centring it would float the underline back off the
+    // rule at exactly the widths that trigger scaling — a 390px phone in
+    // Spanish — which is the register this redesign is fixing. Identical to
+    // centerLeft whenever nothing scales, since the child then fills the box.
     return FittedBox(
       fit: BoxFit.scaleDown,
-      alignment: Alignment.centerLeft,
+      alignment: Alignment.bottomLeft,
       child: SizedBox(
-        height: 44,
+        height: _headerTabRowHeight,
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          // Stretch, so each tab's underline lands on the row's own baseline
+          // instead of hugging its label. See _headerTab.
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _headerTab(
               theme,
@@ -3548,20 +3569,44 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                           // button stay reachable while scrolling. One
                           // fixed-height row keeps the pinned chrome (and
                           // the Today scroll math) constant.
+                          //
+                          // It closes on a content-width hairline, and that
+                          // rule is the whole point: it is the bottom edge of
+                          // the pinned chrome and the top edge of the list
+                          // below, so the tabs read as the head of a surface
+                          // rather than as three words floating between a map
+                          // card and a city header. The selected tab's own
+                          // underline lands ON it (see _headerTab), which is
+                          // how the TripAdvisor and Vrbo trip pages draw this
+                          // exact seam. Content-width, not edge-to-edge: the
+                          // page owns its margins, like every other band here.
                           SliverPersistentHeader(
                             pinned: true,
                             delegate: _PinnedHeaderDelegate(
                               height: _listHeaderHeight,
                               backgroundColor: theme.scaffoldBackgroundColor,
-                              padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 8),
-                              // Align fills the header's full extent so the child's
-                              // measured height matches maxExtent (a min-sized
-                              // Column would be shorter, yielding an invalid sliver
-                              // geometry: layoutExtent > paintExtent).
+                              padding:
+                                  EdgeInsets.symmetric(horizontal: gutter),
+                              // Align fills the header's full extent so the
+                              // child's measured height matches maxExtent (a
+                              // min-sized box would be shorter, yielding an
+                              // invalid sliver geometry: layoutExtent >
+                              // paintExtent); the box inside states that
+                              // height outright and spends its last pixel on
+                              // the rule.
                               child: Align(
                                 alignment: Alignment.topLeft,
-                                child: SizedBox(
-                                  height: 44,
+                                child: Container(
+                                  height: _listHeaderHeight,
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        width: _headerTabBaseline,
+                                        color:
+                                            theme.colorScheme.outlineVariant,
+                                      ),
+                                    ),
+                                  ),
                                   child: Row(
                                     children: [
                                       Expanded(
@@ -3605,11 +3650,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                       // most. Do not copy the add CTAs'
                                       // gates below.
                                       //
-                                      // Compact density is load-bearing: the
-                                      // row is a hard 44px SizedBox feeding
-                                      // _listHeaderHeight (56) and the
-                                      // Today-scroll chrome math, and a
-                                      // default-density IconButton is 48.
+                                      // Compact density: the row is a fixed
+                                      // _headerTabRowHeight box inside
+                                      // _listHeaderHeight (56), which the
+                                      // Today-scroll chrome math reads — so
+                                      // nothing in here may size the row.
+                                      // Compact keeps this and its siblings
+                                      // optically level with the tab labels.
                                       if (foldShown)
                                         IconButton(
                                           onPressed: () =>

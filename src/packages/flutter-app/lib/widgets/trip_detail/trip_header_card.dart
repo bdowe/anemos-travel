@@ -93,7 +93,14 @@ class _TripHeaderCardState extends ConsumerState<TripHeaderCard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          // Centered, not top-aligned: the pencil's tap target is taller than
+          // the title line, and a start-aligned row parks the title at the top
+          // of that box — so the "8px" gap below rendered as ~30px and the
+          // name floated away from the dates it belongs to (the TripAdvisor
+          // reference stacks title and meta as one block). Centering spends
+          // the button's slack symmetrically and lets the gap below be the
+          // real one.
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Text(
@@ -114,11 +121,14 @@ class _TripHeaderCardState extends ConsumerState<TripHeaderCard> {
               IconButton(
                 icon: const Icon(Icons.edit, size: 20),
                 tooltip: l10n.tripEditDetails,
+                // Compact (40px, the pinned tab row's density) so the chrome
+                // affordance stops setting the identity block's line height.
+                visualDensity: VisualDensity.compact,
                 onPressed: widget.isOffline ? null : widget.onEditDetails,
               ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -157,16 +167,24 @@ class _TripHeaderCardState extends ConsumerState<TripHeaderCard> {
             // collaborators keep their spec-mandated entry point
             // (specs/collaborator-refine); the per-city/day sparkles and the
             // chat FAB are unchanged. On narrow this moves to the app bar.
+            //
+            // An ActionChip, not a tonal FilledButton — this is the entry that
+            // finally makes the demotion true. As a filled button it was the
+            // loudest thing in the top 200px and it rhymed exactly with the
+            // Next Step card's own tonal CTA ~130px below ("Refine with AI"
+            // over "Find lodging"), so the header opened with two equal-weight
+            // teal buttons asking for the same kind of attention. The header
+            // now carries exactly ONE filled action — the next step's — and
+            // refine reads as what the comment above always claimed: a peer of
+            // the dates chip. The brand stays, at chip-and-pin scale, in the
+            // sparkle.
             if (trip.canEdit && !widget.narrow)
-              FilledButton.tonalIcon(
-                // Chat/refine needs the network — disabled while offline.
-                onPressed: widget.isOffline
-                    ? null
-                    : widget.onRefine,
-                style: FilledButton.styleFrom(
-                    visualDensity: VisualDensity.compact),
-                icon: const Icon(Icons.auto_awesome, size: 16),
+              ActionChip(
+                avatar: Icon(Icons.auto_awesome,
+                    size: 16, color: theme.colorScheme.primary),
                 label: Text(l10n.tripRefineWithAI),
+                // Chat/refine needs the network — disabled while offline.
+                onPressed: widget.isOffline ? null : widget.onRefine,
               ),
           ],
         ),
@@ -278,6 +296,23 @@ class _TripHeaderCardState extends ConsumerState<TripHeaderCard> {
     );
   }
 
+  /// The saved-conversation row, rendered as the Next Step card's quiet
+  /// sequel rather than as a second, unrelated card.
+  ///
+  /// It used to be an elevated Material [Card] sitting `AppSpacing.md` below a
+  /// flat tinted panel: two boxes in two different depth registers, doing one
+  /// job each — "what to do next" and "where you left off" — and reading as
+  /// two unrelated surfaces stacked on the page. They are now one sequence:
+  /// same corner radius, the same 24px leading-icon column and `AppSpacing.md`
+  /// icon gutter as [NextStepCard], and only `AppSpacing.sm` between them, so
+  /// the pair scans as one plan block whose second line is quieter than its
+  /// first. Flat, not elevated — the post-#494 doctrine, and a shadow here
+  /// would put the SECONDARY entry above the primary one in depth.
+  ///
+  /// Deliberately NOT merged into the tinted panel itself: [NextStepCard]
+  /// paints a fixed light `brandTint`, so a shared field would have to be that
+  /// same light tint and dark mode would gain a light block twice the size.
+  /// Sequence, not fusion.
   Widget _continueChatRow(ThemeData theme, AppLocalizations l10n) {
     final trip = widget.trip;
     final chat = trip.refineChat;
@@ -285,54 +320,85 @@ class _TripHeaderCardState extends ConsumerState<TripHeaderCard> {
       return const SizedBox.shrink();
     }
     final updated = DateTime.tryParse(chat.updatedAt);
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.md),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: ListTile(
-          leading: const Icon(Icons.forum_outlined),
-          title: Text(l10n.tripContinueChat,
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    // relativeTime already exists (offline_banner.dart) — reuse it rather than
+    // growing a second "how long ago" rule.
+    final meta = updated == null
+        ? l10n.tripContinueChatMeta(chat.messageCount, '')
+        : l10n.tripContinueChatMeta(
+            chat.messageCount, relativeTime(l10n, updated));
+    final mutedStyle = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    return Container(
+      // Addressable the way NextStepCard's own ValueKey is: the screen carries
+      // several PopupMenuButton<String>s, and scoping to this row's structure
+      // is what broke when the row stopped being a ListTile.
+      key: const ValueKey('continue-chat-row'),
+      margin: const EdgeInsets.only(top: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: AppRadius.mdAll,
+      ),
+      child: InkWell(
+        borderRadius: AppRadius.mdAll,
+        onTap: () => widget.onOpenChat(),
+        child: Padding(
+          // Left/top/bottom match NextStepCard's uniform lg inset; the trailing
+          // side is tightened to sm because the menu button carries its own.
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg, AppSpacing.md, AppSpacing.sm, AppSpacing.md),
+          child: Row(
             children: [
-              if (chat.preview.isNotEmpty)
-                Text(chat.preview, maxLines: 2, overflow: TextOverflow.ellipsis),
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.xs),
-                child: Text(
-                  // relativeTime already exists (offline_banner.dart) — reuse
-                  // it rather than growing a second "how long ago" rule.
-                  updated == null
-                      ? l10n.tripContinueChatMeta(chat.messageCount, '')
-                      : l10n.tripContinueChatMeta(
-                          chat.messageCount, relativeTime(l10n, updated)),
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.forum_outlined,
+                  size: 24, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title and meta share a line via a Wrap: on a phone (or in
+                    // Spanish, where both strings are longer) the counter drops
+                    // to its own line instead of ellipsizing the label the
+                    // tests — and the traveler — tap.
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(l10n.tripContinueChat,
+                            style: theme.textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600)),
+                        Text(meta, style: mutedStyle),
+                      ],
+                    ),
+                    if (chat.preview.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(chat.preview,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: mutedStyle),
+                    ],
+                  ],
                 ),
+              ),
+              // A menu, not a bare icon: this sits a thumb's width from the
+              // row's own onTap, which OPENS the conversation, and discarding
+              // one must never be the near miss of resuming it. It is also the
+              // only way to be rid of a saved chat without first opening it and
+              // waiting out a full restore just to throw the transcript away.
+              PopupMenuButton<String>(
+                onSelected: (_) => widget.onNewChat(),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'clear',
+                    child: ListTile(
+                      leading: const Icon(Icons.delete_outline),
+                      title: Text(l10n.refineClearChat),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          // A menu, not a bare icon: this sits a thumb's width from the row's
-          // own onTap, which OPENS the conversation, and discarding one must
-          // never be the near miss of resuming it. It is also the only way to
-          // be rid of a saved chat without first opening it and waiting out a
-          // full restore just to throw the transcript away.
-          trailing: PopupMenuButton<String>(
-            onSelected: (_) => widget.onNewChat(),
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'clear',
-                child: ListTile(
-                  leading: const Icon(Icons.delete_outline),
-                  title: Text(l10n.refineClearChat),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
-          ),
-          onTap: () => widget.onOpenChat(),
         ),
       ),
     );
