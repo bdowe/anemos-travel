@@ -25,6 +25,33 @@ const double _chipInnerGap = 8;
   /// phone row's width.
 const double _chipMaxWidth = 200;
 
+  /// The itinerary spine — a hairline rail down a day's stops with each stop's
+  /// marker sitting ON it, rather than a column of disconnected avatars.
+  ///
+  /// Every itinerary product speaks this vocabulary (TripAdvisor, Viator,
+  /// Wanderlog, Polarsteps all draw the same rail), and it is what makes a
+  /// list of places read as a ROUTE THROUGH A DAY: the rail says "these are
+  /// consecutive", and the travel connector between two stops becomes a label
+  /// ON the rail instead of an indented row floating between two tiles.
+  ///
+  /// The four constants are one geometry, shared by the three widgets that
+  /// draw it — the marker, the tile's rail segments, and the connector's —
+  /// because the rail only reads as continuous if every row derives its x
+  /// from the same number. A marker offset that drifts from a rail offset is
+  /// a visible kink, so neither is ever spelled twice.
+const double _spineMarker = 28;
+
+  /// The tile's top padding, and therefore the marker's top edge: the rail's
+  /// upper segment runs from the row's top edge down to exactly this.
+const double _spineGap = AppSpacing.md;
+
+  /// The tile's leading inset — [ListTile.contentPadding]'s left, so the
+  /// marker's box starts here.
+const double _spineLead = AppSpacing.lg;
+
+  /// The rail's centre within a row, measured from the row's own indent.
+const double _spineCenter = _spineLead + _spineMarker / 2;
+
   /// Greek islands/ports we offer ferry connectors between (mirrors the API's
   /// isGreekLocation set; kept small and local since it only gates the UI hint).
 const _greekIslands = {
@@ -46,16 +73,74 @@ const _greekIslands = {
 /// the screen's one-line [_rebuild] pass-through instead.
 extension on _TripDetailScreenState {
 
-  Widget _itemLeading(String? category, int position) {
-    switch (category) {
-      case 'restaurant':
-        return const CircleAvatar(child: Icon(Icons.restaurant, size: 18));
-      case 'attraction':
-        return const CircleAvatar(child: Icon(Icons.attractions, size: 18));
-      default:
-        return CircleAvatar(child: Text('${position + 1}'));
-    }
+  /// A stop's marker on the [_spineMarker] rail: the category glyph when the
+  /// place has one, else its number in the day.
+  ///
+  /// A RING, not a filled disc. The filled teal circle it replaces spent the
+  /// brand's one accent on every row at once — so the accent said nothing,
+  /// and a screen of them read as a generic Material list rather than as
+  /// stops. Filled is now reserved for the SELECTED stop, which is the one
+  /// thing on this screen the teal should be saying: the map is pinned beside
+  /// the list and recentres on it, so the marker and the map pin light up
+  /// together and the pairing is finally visible (the Wanderlog move).
+  Widget _itemLeading(String? category, int position, ThemeData theme,
+      {required bool selected}) {
+    final scheme = theme.colorScheme;
+    final glyph = switch (category) {
+      'restaurant' => Icons.restaurant,
+      'attraction' => Icons.attractions,
+      _ => null,
+    };
+    final ink = selected ? scheme.onPrimary : scheme.onSurfaceVariant;
+    return SizedBox(
+      width: _spineMarker,
+      height: _spineMarker,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected ? scheme.primary : null,
+          border: Border.all(
+            color: selected ? scheme.primary : scheme.outlineVariant,
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: glyph != null
+              ? Icon(glyph, size: 15, color: ink)
+              // labelMedium, so the number stays in the UI face the theme's
+              // app-wide fontFamily already sets — the brand's "numbers are
+              // Inter" rule holds here by inheritance, not by an override.
+              : Text(
+                  '${position + 1}',
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(color: ink, fontWeight: FontWeight.w600),
+                ),
+        ),
+      ),
+    );
   }
+
+
+  /// One segment of the spine — the hairline between two markers. [x] is the
+  /// rail's centre; the caller supplies either (top, height) for the stub
+  /// above a marker or (top, bottom) for everything below one.
+  ///
+  /// The segments STOP at the marker rather than running under it: a rail
+  /// drawn straight through and masked by an opaque marker fill would need
+  /// the marker's fill to match whatever is behind the row, which the
+  /// selected wash and the today tint both break.
+  Widget _railSegment(ThemeData theme, double x,
+          {double? top, double? bottom, double? height}) =>
+      Positioned(
+        // -0.5 centres the hairline itself on [x], so the rail runs through
+        // the marker's centre rather than half a pixel right of it.
+        left: x - 0.5,
+        top: top,
+        bottom: bottom,
+        height: height,
+        width: 1,
+        child: ColoredBox(color: theme.colorScheme.outlineVariant),
+      );
 
 
   /// The group an item belongs to: its day-trip hub city when set, else its own
@@ -249,8 +334,13 @@ extension on _TripDetailScreenState {
   /// width would misalign them against fresh ones.
   /// The one chip text style, shared by the chip Texts and the measurement
   /// so the two cannot drift.
-  TextStyle? _chipTextStyle(ThemeData theme) =>
-      theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.primary);
+  ///
+  /// Muted, not teal: a leg's dates are a fact about the row, not an action,
+  /// and the teal spine is spent on identity and on what can be pressed. With
+  /// the city name in the display face above it, the range reading quietly is
+  /// what lets the name be the thing the eye lands on.
+  TextStyle? _chipTextStyle(ThemeData theme) => theme.textTheme.labelMedium
+      ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
 
 
   double _dateChipWidth(List<CityGroup> groups, ThemeData theme) {
@@ -286,6 +376,23 @@ extension on _TripDetailScreenState {
   }
 
 
+  /// A city section's heading style: the display face, at a size a PINNED row
+  /// can afford.
+  ///
+  /// Composed from two existing slots rather than written as literals —
+  /// `headlineSmall` contributes the face and its explicit `w400` (Marcellus
+  /// ships in one weight; anything else is faux-bold on web), `titleLarge`
+  /// contributes the size. So a face swap or a scale change in
+  /// `app_theme.dart` still reaches this heading, and no number lives here.
+  ///
+  /// A headline slot outright (26/30/34) is a PAGE title: it owns the top of
+  /// a screen and sets its own rhythm. A city header pins while its days
+  /// scroll under it, so it can't spend that height — this is the step that
+  /// reads editorial while staying chrome.
+  TextStyle? _citySectionStyle(ThemeData theme) => theme.textTheme.headlineSmall
+      ?.copyWith(fontSize: theme.textTheme.titleLarge?.fontSize, height: 1.2);
+
+
   /// City group header: name, date range, refine + collapse controls. Pinned
   /// at the top of the scroll area while its group scrolls past; the opaque
   /// Material keeps items from showing through while pinned. [cityCollapsed]
@@ -318,12 +425,16 @@ extension on _TripDetailScreenState {
             });
           },
           child: Padding(
-            // Narrow buys back some of the second line's height at the top,
-            // where the gap between a city and the day header under it was
-            // the loosest thing on the phone.
+            // The air goes ABOVE the heading, not below it: whitespace is
+            // zero-sum, and a gap under a title pushes the title away from
+            // the content it names. `xl` on a desktop row is the "24 between
+            // sections" the design system asks for; narrow buys some of it
+            // back for the stacked second line, since the gap between a city
+            // and the day header under it was already the loosest thing on
+            // the phone.
             padding: _narrow
-                ? const EdgeInsets.fromLTRB(16, 12, 16, 4)
-                : const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                ? const EdgeInsets.fromLTRB(16, AppSpacing.lg, 16, 4)
+                : const EdgeInsets.fromLTRB(16, AppSpacing.xl, 16, 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -368,7 +479,7 @@ extension on _TripDetailScreenState {
                             children: [
                               Icon(Icons.event,
                                   size: _chipIconSize,
-                                  color: theme.colorScheme.primary),
+                                  color: theme.colorScheme.onSurfaceVariant),
                               const SizedBox(width: _chipIconGap),
                               Expanded(
                                 child: Text(
@@ -447,10 +558,13 @@ extension on _TripDetailScreenState {
                                   ),
                                 ),
                     const SizedBox(width: 4),
+                    // Chrome, not action: the chevron states the section's
+                    // open/closed state, so it takes the muted ink the rest
+                    // of the row's metadata does.
                     Icon(
                       cityCollapsed ? Icons.chevron_right : Icons.expand_more,
                       size: 20,
-                      color: theme.colorScheme.primary,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ],
                 ),
@@ -466,8 +580,11 @@ extension on _TripDetailScreenState {
                 // "2 days unplanned" earns its place.
                 if (_planDaysAction(group.key, group.label, group.emptyDays)
                     case final plan?) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: AppSpacing.xs),
                   Padding(
+                    // Lines up under the city name (pin 18 + its 6 gap), so
+                    // the gap count reads as a note ON the heading rather
+                    // than as the section's first row.
                     padding: const EdgeInsets.only(left: 24),
                     child: Row(
                       children: [
@@ -834,7 +951,7 @@ extension on _TripDetailScreenState {
       // dragged proxy in a Material — without one the lifted ListTile throws.
       proxyDecorator: (child, index, animation) => Material(
         elevation: 4,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadius.smAll,
         child: child,
       ),
       onReorder: (oldIndex, newIndex) =>
@@ -853,6 +970,12 @@ extension on _TripDetailScreenState {
               item,
               indent,
               theme,
+              // The batch IS the spine's run: consecutive stops within one
+              // day (or one day-trip). Rail above every stop but the first,
+              // below every stop but the last — so a day's rail begins and
+              // ends on a marker instead of trailing into the next section.
+              railAbove: i > 0,
+              railBelow: i < batch.length - 1,
               dragHandle: canDrag
                   ? ReorderableDragStartListener(
                       index: i,
@@ -933,11 +1056,16 @@ extension on _TripDetailScreenState {
   Widget _cityHeaderLabel(
       AppLocalizations l10n, CityGroup group, ThemeData theme,
       {Widget? metaLine}) {
+    // The one editorial move on this screen: a city is a SECTION HEADING, so
+    // it takes the display face ([_citySectionStyle]). Bold Inter at
+    // titleSmall made a city name the same object as a booking row's title —
+    // the tab's loudest text was a teal date, and nothing said "a new place
+    // starts here". Sentence case is already the data's own.
     final label = Text(
       groupLabelText(l10n, group.label),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+      style: _citySectionStyle(theme),
     );
     final qualifier = group.qualifier;
     if (qualifier == null && metaLine == null) return label;
@@ -1017,18 +1145,35 @@ extension on _TripDetailScreenState {
     final icon = km > 0 && km <= 1.2
         ? Icons.directions_walk
         : Icons.directions_car_outlined;
-    return Padding(
-      padding: EdgeInsets.only(left: indentLeft + 28, top: 2, bottom: 2),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: muted),
-          const SizedBox(width: 6),
-          Text(
-            '${_fmtTravel(timing.travelToNextMin)}$dist',
-            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+    // The hop reads as a label ON the spine: the rail runs the full height of
+    // this row (both neighbours are stops by construction — the caller only
+    // builds a connector BETWEEN two tiles), and the text sits to its right.
+    // Before, this row floated at its own indent between two tiles and read
+    // as another list entry rather than as the distance between two.
+    return Stack(
+      children: [
+        _railSegment(theme, indentLeft + _spineCenter, top: 0, bottom: 0),
+        Padding(
+          padding: EdgeInsets.only(
+              left: indentLeft + _spineCenter + AppSpacing.lg,
+              top: AppSpacing.xs,
+              bottom: AppSpacing.xs),
+          child: Row(
+            children: [
+              Icon(icon, size: 14, color: muted),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  '${_fmtTravel(timing.travelToNextMin)}$dist',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1138,7 +1283,7 @@ extension on _TripDetailScreenState {
             child: Row(
               children: [
                 if (!_narrow) ...[
-                  Icon(Icons.today, size: 16, color: theme.colorScheme.primary),
+                  Icon(Icons.today, size: 16, color: muted),
                   const SizedBox(width: 6),
                 ],
                 Expanded(
@@ -1149,8 +1294,13 @@ extension on _TripDetailScreenState {
                           label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          // A day is subordinate to the city above it, so it
+                          // steps down from the display face to weighted ink
+                          // — hierarchy by weight, not size (and not by
+                          // being the only teal text on the screen, which is
+                          // what it was).
                           style: theme.textTheme.labelLarge?.copyWith(
-                            color: theme.colorScheme.primary,
+                            color: theme.colorScheme.onSurface,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -1195,7 +1345,7 @@ extension on _TripDetailScreenState {
                 Icon(
                   collapsed ? Icons.chevron_right : Icons.expand_more,
                   size: 18,
-                  color: theme.colorScheme.primary,
+                  color: muted,
                 ),
               ],
             ),
@@ -1241,55 +1391,112 @@ extension on _TripDetailScreenState {
         child: InkWell(
           onTap: onPlan,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
-            child: Row(
-              children: [
-                Icon(Icons.today, size: 16, color: muted),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    _dayHeaderLabel(day, tripStart),
-                    style: theme.textTheme.labelLarge?.copyWith(color: muted),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    l10n.tripDayNothingPlanned,
-                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const Spacer(),
-                // A label, not a nested button: the row's own InkWell is the
-                // tap target, so there is one semantics node here rather than
-                // two offering the same action.
-                if (onPlan != null) ...[
-                  Icon(Icons.auto_awesome,
-                      size: 16, color: theme.colorScheme.primary),
-                  const SizedBox(width: 4),
-                  // Ellipsizing like the two labels beside it: Spanish at 1.3x
-                  // on a 360px viewport overflowed this row by 86px while this
-                  // was the one unflexible child (specs/booking-shortlist's
-                  // narrow-Spanish test is what caught it).
-                  Flexible(
-                    child: Text(
-                      l10n.tripPlanThisDay,
-                      style: theme.textTheme.labelMedium
-                          ?.copyWith(color: theme.colorScheme.primary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+            // The SAME padding a planned day header takes, narrow branch
+            // included — an open day is a day, so it starts in the day
+            // column rather than a phone-width indent of its own. The two
+            // rows sit next to each other in one list and already share
+            // [_dayHeaderLabel]; sharing the indent is the visual half of
+            // that agreement.
+            padding: _narrow
+                ? const EdgeInsets.fromLTRB(24, 8, 16, 2)
+                : const EdgeInsets.fromLTRB(16, 12, 16, 2),
+            child: _emptyDayBody(l10n, theme, day, tripStart, muted, onPlan),
           ),
         ),
       ),
+    );
+  }
+
+
+  /// The open-day row's content: date · "nothing planned" · "Plan this day".
+  ///
+  /// Three labels is one too many for a phone row. All three were Flexible, so
+  /// nothing OVERFLOWED — they just all ellipsized at once, and a row reading
+  /// "Tue, Au… / Nothing p… / Plan this …" tells the traveler nothing at all.
+  /// Narrow therefore gives the date and the action a row of their own and
+  /// drops the caption to a second line, which is the same move the city
+  /// header makes with its dates. Wide keeps the single row: it has the width,
+  /// and the caption sitting between the date and the action is what makes the
+  /// row scan as one sentence.
+  ///
+  /// Every string survives on both branches — an open day says the same thing
+  /// at every width, it just wraps differently.
+  Widget _emptyDayBody(AppLocalizations l10n, ThemeData theme, int day,
+      DateTime? tripStart, Color muted, VoidCallback? onPlan) {
+    final date = Text(
+      _dayHeaderLabel(day, tripStart),
+      style: theme.textTheme.labelLarge?.copyWith(color: muted),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    final caption = Text(
+      l10n.tripDayNothingPlanned,
+      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    // A label, not a nested button: the row's own InkWell is the tap target,
+    // so there is one semantics node here rather than two offering the same
+    // action.
+    //
+    // Ellipsizing like the labels beside it: Spanish at 1.3x on a 360px
+    // viewport overflowed this row by 86px while this was the one unflexible
+    // child (specs/booking-shortlist's narrow-Spanish test is what caught it).
+    final action = onPlan == null
+        ? null
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.auto_awesome,
+                  size: 16, color: theme.colorScheme.primary),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  l10n.tripPlanThisDay,
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(color: theme.colorScheme.primary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          );
+    if (_narrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            // spaceBetween, so the action sits at the row's end the way the
+            // wide branch's Spacer puts it there. Both children stay
+            // Flexible: whichever string is long gives way, and neither can
+            // push the other off the row.
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(child: date),
+              if (action != null)
+                Flexible(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: AppSpacing.sm),
+                    child: action,
+                  ),
+                ),
+            ],
+          ),
+          caption,
+        ],
+      );
+    }
+    return Row(
+      children: [
+        Icon(Icons.today, size: 16, color: muted),
+        const SizedBox(width: 6),
+        Flexible(child: date),
+        const SizedBox(width: 8),
+        Flexible(child: caption),
+        const Spacer(),
+        if (action != null) Flexible(child: action),
+      ],
     );
   }
 
@@ -1393,17 +1600,21 @@ extension on _TripDetailScreenState {
 
   Widget _dayTripSubHeader(String town, ThemeData theme, String? travelLabel) =>
       Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 16, 0),
+        padding: const EdgeInsets.fromLTRB(20, AppSpacing.md, 16, 0),
         child: Row(
           children: [
+            // The bus glyph is what says "excursion"; the label doesn't need
+            // a colour to repeat it. `secondary` on a teal-seeded scheme is
+            // another teal, so this row used to read as a third rank of the
+            // same accent stacked between the day header and the stops.
             Icon(Icons.directions_bus,
-                size: 16, color: theme.colorScheme.secondary),
+                size: 16, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 context.l10n.tripDayTripTo(town),
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.secondary,
+                  color: theme.colorScheme.onSurface,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1439,8 +1650,11 @@ extension on _TripDetailScreenState {
   }
 
 
+  /// One stop. [railAbove]/[railBelow] say whether this row has a neighbour in
+  /// its batch — the batch (one day, one day-trip) is the run the spine spans,
+  /// so the first stop of a day has no rail above it and the last none below.
   Widget _itemTile(ItineraryItem item, double indentLeft, ThemeData theme,
-          {Widget? dragHandle}) =>
+          {Widget? dragHandle, bool railAbove = false, bool railBelow = false}) =>
       // Selection is notifier-driven (see _selectedPosition): each tile
       // listens itself, so selecting a place rebuilds only the visible
       // tiles rather than the whole screen.
@@ -1455,17 +1669,42 @@ extension on _TripDetailScreenState {
             HoverReveal(
         builder: (context, revealed) => Padding(
           padding: EdgeInsets.only(left: indentLeft),
-          child: ListTile(
-          leading: _itemLeading(item.category, item.position),
+          child: Stack(
+            children: [
+          // The spine, behind the tile. Positioned against the Stack, which
+          // sizes to the ListTile — so the lower segment reaches the row's
+          // real bottom whatever the title wrapped to.
+          if (railAbove)
+            _railSegment(theme, _spineCenter, top: 0, height: _spineGap),
+          if (railBelow)
+            _railSegment(theme, _spineCenter,
+                top: _spineGap + _spineMarker, bottom: 0),
+          ListTile(
+          // Explicit, because the spine's geometry is derived from it: the
+          // marker's top edge is contentPadding.top + minVerticalPadding, and
+          // [_railSegment]'s stub length is that same number.
+          contentPadding:
+              const EdgeInsets.only(left: _spineLead, right: AppSpacing.sm),
+          minVerticalPadding: _spineGap,
+          // Top, not centre: a two-line title would otherwise drift the
+          // marker down off the rail's stub.
+          titleAlignment: ListTileTitleAlignment.top,
+          leading: _itemLeading(item.category, item.position, theme,
+              selected: selectedPos == item.position),
           title: Text(item.name,
-              maxLines: 2, overflow: TextOverflow.ellipsis),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall),
           subtitle: (item.address != null || item.localSourceName != null)
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (item.address != null)
                       Text(item.address!,
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
                     // The local-source credit line: who vouched for this place
                     // (snapshot; shown for agent- and browse-added items alike).
                     if (item.localSourceName != null)
@@ -1522,13 +1761,18 @@ extension on _TripDetailScreenState {
             ],
           ),
           selected: selectedPos == item.position,
+          // Lighter than it was (0.08): the filled marker now carries the
+          // selection, so the wash only has to tint the row it belongs to
+          // rather than be the whole signal on its own.
           selectedTileColor:
-              theme.colorScheme.primary.withValues(alpha: 0.08),
+              theme.colorScheme.primary.withValues(alpha: 0.05),
           // The map is pinned and always on screen, so tapping an item only
           // needs to update the selection; the notifier rebuilds the map
           // card (TripMap recenters) and the visible tiles — no setState.
           onTap: () => _selectedPosition.value = item.position,
         ),
+            ],
+          ),
         ),
         ),
       );
@@ -1865,37 +2109,38 @@ class _TimeOfDayChip extends StatelessWidget {
       _ => Icons.schedule,
     };
     final label = _timeOfDayLabel(context.l10n, timeOfDay);
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // A quiet neutral, not `secondaryContainer`. Time of day is the one piece
+    // of METADATA on every row, so a tinted container repeated down the list
+    // painted a second colored column beside the markers and competed with
+    // the place names it was captioning. Shape and metrics match StatusPill
+    // so the itinerary's two pill shapes read as one vocabulary.
+    final fill = scheme.surfaceContainerHighest;
+    final ink = scheme.onSurfaceVariant;
     if (compact) {
       return Tooltip(
         message: label,
         child: Container(
           padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: scheme.secondaryContainer,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, size: 14, color: scheme.onSecondaryContainer),
+          decoration: ShapeDecoration(color: fill, shape: const StadiumBorder()),
+          child: Icon(icon, size: 14, color: ink),
         ),
       );
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: scheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm, vertical: 3),
+      decoration: ShapeDecoration(color: fill, shape: const StadiumBorder()),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: scheme.onSecondaryContainer),
-          const SizedBox(width: 4),
+          Icon(icon, size: 14, color: ink),
+          const SizedBox(width: AppSpacing.xs),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: scheme.onSecondaryContainer,
-                  fontWeight: FontWeight.w600,
-                ),
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: ink, fontWeight: FontWeight.w600),
           ),
         ],
       ),
