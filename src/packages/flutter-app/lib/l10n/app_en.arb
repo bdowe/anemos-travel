@@ -475,6 +475,7 @@
   "budgetGroupBy": "Group by",
   "budgetGroupByCategory": "Category",
   "budgetGroupByCity": "City",
+  "budgetExpensesTitle": "Expenses",
   "budgetGroupRestOfTrip": "Rest of trip",
   "budgetCityLabel": "City",
   "budgetCityNone": "No city",

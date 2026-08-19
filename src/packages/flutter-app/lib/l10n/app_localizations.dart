@@ -2012,6 +2012,12 @@ abstract class AppLocalizations {
   /// **'City'**
   String get budgetGroupByCity;
 
+  /// No description provided for @budgetExpensesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses'**
+  String get budgetExpensesTitle;
+
   /// No description provided for @budgetGroupRestOfTrip.
   ///
   /// In en, this message translates to:
