@@ -208,20 +208,30 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
   /// measurement doesn't care about color, so [titleWidthIn] uses this const
   /// as-is.
   ///
-  /// Size holds at 22 despite the face change: Marcellus sets ~9% narrower than
-  /// Inter Bold, so the longest trip titles gain room here, not lose it.
+  /// 28, up from 22 when the display face followed the wordmark to Cormorant
+  /// Garamond — the same [kDisplayOpticalScale] the headline ladder carries
+  /// (`app_theme.dart`), because a page title that stayed at 22 would read a
+  /// size down beside a wordmark that did not move.
+  ///
+  /// It costs title width, and the ladder below absorbs that on its own: the
+  /// wordmark yields a little sooner on the narrowest phones, which is the
+  /// ordering PR #418 already chose, so it needs no new rung. Measured in a
+  /// browser rather than reasoned about — `ANEMOS · Plan your trip` still fits
+  /// whole at 390px with an action beside it, so a tab root does not reach
+  /// rung 2 and the class doc's promise above holds at the new size.
   static const TextStyle titleStyle = TextStyle(
     fontFamily: AppFonts.display,
-    fontWeight: FontWeight.w400,
-    fontSize: 22,
+    fontWeight: FontWeight.w500,
+    fontSize: 28,
     letterSpacing: 0.2,
   );
 
   /// How wide [text] will actually paint as a page title in [context].
   ///
-  /// Measured for the same reasons [BrandWordmark.widthIn] is: Marcellus may
-  /// not have loaded (widget tests fall back to a font of quite different
-  /// metrics), and the traveler's text-scale setting multiplies the answer. The
+  /// Measured for the same reasons [BrandWordmark.widthIn] is: the display
+  /// face may not have loaded (widget tests fall back to a font of quite
+  /// different metrics), and the traveler's text-scale setting multiplies the
+  /// answer. The
   /// ladder is arithmetic on this number, so a hardcoded width would decide
   /// "it fits" for a large-text user it does not fit for.
   static double titleWidthIn(BuildContext context, String text) {

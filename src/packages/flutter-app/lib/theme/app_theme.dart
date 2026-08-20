@@ -18,8 +18,8 @@ abstract final class AppTheme {
       brightness: brightness,
     );
 
-    // Inter as the app-wide UI font (Cormorant Garamond stays the wordmark
-    // only).
+    // Inter as the app-wide UI font (Cormorant Garamond carries the wordmark
+    // and the headline tier).
     final base = ThemeData(
       colorScheme: colorScheme,
       useMaterial3: true,
@@ -27,32 +27,45 @@ abstract final class AppTheme {
     );
 
     // Two registers, split at the headline/title line. Headlines carry the
-    // display face (Marcellus) at one weight — the size step and the serif do
-    // the work a heavy sans used to. Below that line, hierarchy is still
-    // weight, not size: titles/labels carry weight, body stays regular. (M3
-    // ships titles at w400, which reads too light.)
+    // display face (Cormorant Garamond w500, the whole tier at that one
+    // weight) — the size step and the serif do the work a heavy sans used to.
+    // Below that line, hierarchy is still weight, not size: titles/labels
+    // carry weight, body stays regular. (M3 ships titles at w400, which reads
+    // too light.)
     //
-    // Marcellus has a smaller x-height than Inter (0.500 em vs 0.546), so each
-    // headline steps up 2px to land on the same optical size — headlineSmall
-    // at 26 measures within a hair of the Inter-bold 24 it replaces, in both
-    // x-height and set width.
+    // These are the pre-Cormorant sizes (34/30/26) × [kDisplayOpticalScale],
+    // so the ladder is the SAME typography in a new face rather than a resize
+    // of the app: the correction lands each tier's lowercase where the design
+    // already had it. The face's x-height is 0.386 em where Marcellus's was
+    // 0.500, and in sentence case the lowercase is what the eye measures.
+    //
+    // The previous face's own correction is what this replaces: Marcellus at
+    // 0.500 em against Inter's 0.546 stepped up 2px over the M3 defaults —
+    // headlineSmall at 26 landing on the Inter-bold 24 it replaced.
+    //
+    // Checked on screen, not derived and trusted. The first pass shipped only
+    // +15%, which matched the CAPS (Cormorant's are 0.625 em to Marcellus's
+    // 0.700) while the lowercase came out ~9% smaller — measured at 9.5px
+    // against 11.5px on a trip's own name, which duly read recessive at the
+    // top of its own page. Caps now run ahead of level instead, and that is
+    // the accepted trade in a sentence-case ladder.
     final textTheme = base.textTheme.copyWith(
       headlineLarge: base.textTheme.headlineLarge?.copyWith(
         fontFamily: AppFonts.display,
-        fontWeight: FontWeight.w400,
-        fontSize: 34,
+        fontWeight: FontWeight.w500,
+        fontSize: 44,
         height: 1.2,
       ),
       headlineMedium: base.textTheme.headlineMedium?.copyWith(
         fontFamily: AppFonts.display,
-        fontWeight: FontWeight.w400,
-        fontSize: 30,
+        fontWeight: FontWeight.w500,
+        fontSize: 39,
         height: 1.2,
       ),
       headlineSmall: base.textTheme.headlineSmall?.copyWith(
         fontFamily: AppFonts.display,
-        fontWeight: FontWeight.w400,
-        fontSize: 26,
+        fontWeight: FontWeight.w500,
+        fontSize: 34,
         height: 1.2,
       ),
       titleLarge: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),

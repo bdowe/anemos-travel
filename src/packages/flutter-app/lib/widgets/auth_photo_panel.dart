@@ -108,13 +108,15 @@ class AuthPhotoPanel extends StatelessWidget {
               child: Text(
                 context.l10n.authTagline,
                 style: TextStyle(
-                  // Marcellus ships only w400 — always stated, or web
-                  // synthesizes faux-bold. Display sizes stated locally,
-                  // the landing-hero precedent: 38 suits the half-window
-                  // pane, 24 the band.
+                  // The display face's weight is always stated (w500), or web
+                  // synthesizes faux-bold. Display sizes stated locally, the
+                  // landing-hero precedent: 49 suits the half-window pane, 31
+                  // the band — both carrying the same optical correction the
+                  // headline ladder took when the face followed the wordmark
+                  // (kDisplayOpticalScale).
                   fontFamily: AppFonts.display,
-                  fontWeight: FontWeight.w400,
-                  fontSize: wide ? 38 : 24,
+                  fontWeight: FontWeight.w500,
+                  fontSize: wide ? 49 : 31,
                   height: 1.15,
                   color: Colors.white,
                 ),

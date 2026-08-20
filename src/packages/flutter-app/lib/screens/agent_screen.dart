@@ -167,8 +167,9 @@ class _PlanIntro extends ConsumerWidget {
     final theme = Theme.of(context);
     final l10n = context.l10n;
 
-    // Marcellus w400 comes from the theme's headline tier — never restated
-    // here, so this can't be the call site that ships faux-bold.
+    // The display face and its w500 come from the theme's headline tier —
+    // never restated here, so this can't be the call site that ships
+    // faux-bold.
     final reading = Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Column(

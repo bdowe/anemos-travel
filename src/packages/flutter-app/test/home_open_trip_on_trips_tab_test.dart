@@ -97,6 +97,18 @@ void main() {
     seedRecentTrip('t2', 'Lisbon Trip');
     final container = await pumpApp(tester);
 
+    // Scroll it in first. Widget tests load no fonts, so the greeting above
+    // this card is set in a fallback face whose glyphs are a full em each —
+    // roughly 2.2x the real display face's width (brand_everywhere_test says
+    // the same thing about page titles). That pushes the card past the
+    // 800x600 test surface whenever the headline tier grows, and tap() on an
+    // off-screen target silently misses instead of failing loudly: the
+    // assertion below then reads as "navigation is broken" when nothing but
+    // the test font's metrics moved. What this test is about is the tap, not
+    // the scroll position.
+    await tester.ensureVisible(find.text('Lisbon Trip'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Lisbon Trip'));
     await tester.pumpAndSettle();
 

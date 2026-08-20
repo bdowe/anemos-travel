@@ -380,12 +380,12 @@ extension on _TripDetailScreenState {
   /// can afford.
   ///
   /// Composed from two existing slots rather than written as literals —
-  /// `headlineSmall` contributes the face and its explicit `w400` (Marcellus
-  /// ships in one weight; anything else is faux-bold on web), `titleLarge`
-  /// contributes the size. So a face swap or a scale change in
+  /// `headlineSmall` contributes the face and its explicit `w500` (the
+  /// display weight; anything the family doesn't ship is faux-bold on web),
+  /// `titleLarge` contributes the size. So a face swap or a scale change in
   /// `app_theme.dart` still reaches this heading, and no number lives here.
   ///
-  /// A headline slot outright (26/30/34) is a PAGE title: it owns the top of
+  /// A headline slot outright (30/35/39) is a PAGE title: it owns the top of
   /// a screen and sets its own rhythm. A city header pins while its days
   /// scroll under it, so it can't spend that height — this is the step that
   /// reads editorial while staying chrome.

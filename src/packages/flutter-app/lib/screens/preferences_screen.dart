@@ -454,7 +454,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   }
 }
 
-/// A titled section: Marcellus heading and muted one-line description sitting
+/// A titled section: display-face heading and muted one-line description sitting
 /// OUTSIDE a quiet card that holds the fields — the grouped-settings anatomy
 /// (heading / description / card) both reference settings pages share.
 class _Section extends StatelessWidget {
@@ -487,9 +487,9 @@ class _Section extends StatelessWidget {
               Icon(icon, size: 20, color: scheme.primary),
               const SizedBox(width: AppSpacing.sm),
             ],
-            // Marcellus w400 comes from the theme's headline tier — never
-            // restated here, so this can't be the call site that ships
-            // faux-bold.
+            // The display face and its w500 come from the theme's headline
+            // tier — never restated here, so this can't be the call site that
+            // ships faux-bold.
             Expanded(
               child: Text(title, style: theme.textTheme.headlineSmall),
             ),

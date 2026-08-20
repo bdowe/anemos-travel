@@ -4,7 +4,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/spacing.dart';
 
-/// Centered Marcellus section heading for the landing page's marketing
+/// Centered display-face section heading for the landing page's marketing
 /// register. Deliberately not the app's `SectionHeader` (left-aligned
 /// utilitarian titleMedium): landing sections read as chapters, not lists.
 class LandingSectionTitle extends StatelessWidget {
@@ -22,11 +22,11 @@ class LandingSectionTitle extends StatelessWidget {
           title,
           textAlign: TextAlign.center,
           style: const TextStyle(
-            // Marcellus ships one weight; the explicit w400 keeps a theme
-            // bold from asking for a face that doesn't exist.
+            // The display face ships 500 and 600; the explicit w500 keeps a
+            // theme bold from asking for a weight that doesn't exist.
             fontFamily: AppFonts.display,
-            fontWeight: FontWeight.w400,
-            fontSize: 26,
+            fontWeight: FontWeight.w500,
+            fontSize: 34,
             height: 1.2,
             color: Colors.white,
           ),

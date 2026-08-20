@@ -18,7 +18,7 @@ import 'landing_handoff.dart';
 const int kLandingPromptMaxLength = PendingPromptStore.maxPromptLength;
 
 /// Full-bleed landing hero: the Santorini photo dissolving into the landing
-/// canvas, a Marcellus headline, and a REAL prompt input — the product's
+/// canvas, a display-face headline, and a REAL prompt input — the product's
 /// first interaction, not a description of it.
 ///
 /// No logo or wordmark in here: the `GradientAppBar` above already carries
@@ -153,12 +153,16 @@ class _LandingHeroState extends ConsumerState<LandingHero> {
                     l10n.landingHeroHeadline,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      // Marcellus ships only w400; 48 on desktop is a
-                      // deliberate display step above headlineLarge (34) —
-                      // stated locally because nothing else needs the tier.
+                      // The display face's weight is always stated (w500);
+                      // 62 on desktop is a deliberate display step above
+                      // headlineLarge (44) — stated locally because nothing
+                      // else needs the tier. Both numbers ride the same
+                      // optical correction the headline ladder took when the
+                      // face followed the wordmark (kDisplayOpticalScale), so
+                      // the step between them is unchanged.
                       fontFamily: AppFonts.display,
-                      fontWeight: FontWeight.w400,
-                      fontSize: narrow ? 34 : 48,
+                      fontWeight: FontWeight.w500,
+                      fontSize: narrow ? 44 : 62,
                       height: 1.15,
                       color: Colors.white,
                     ),
