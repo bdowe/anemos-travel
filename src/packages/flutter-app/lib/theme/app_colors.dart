@@ -101,6 +101,51 @@ abstract final class AppColors {
         ],
       );
 
+  // City-leg color ladder (the trip calendar sheet's leg bands and legend
+  // dots): one muted tone per city leg, assigned by leg index and wrapping
+  // when the trip has more legs than tones. Muted mid-tones, so the band can
+  // run under the day numbers without fighting the scheme's ink, and none of
+  // them collides with a tool accent's meaning (the Earned Color Rule: these
+  // mean "city leg N", nothing else). The first rung is Material teal-300 —
+  // the brand ramp's tokens (shade50/600/700/900) stop well short of it, so
+  // the ladder names its own.
+  static const Color legToneTeal = Color(0xFF4DB6AC);
+  static const Color legToneSlate = Color(0xFF6B8CAE);
+  static const Color legToneClay = Color(0xFFB08A6E);
+  static const Color legToneSage = Color(0xFF8FAE8F);
+  static const Color legToneLavender = Color(0xFF9A8FB0);
+  static const Color legToneOlive = Color(0xFFA3A86E);
+  static const Color legToneSteel = Color(0xFF7D9AA8);
+  static const Color legToneMauve = Color(0xFFB07E8A);
+
+  /// The ladder itself, in assignment order: leg [index] takes
+  /// `legTones[index % legTones.length]`.
+  static const List<Color> legTones = [
+    legToneTeal,
+    legToneSlate,
+    legToneClay,
+    legToneSage,
+    legToneLavender,
+    legToneOlive,
+    legToneSteel,
+    legToneMauve,
+  ];
+
+  /// The solid tone for leg [index] — legend dots and the detail-row
+  /// swatch.
+  static Color legTone(int index) => legTones[index % legTones.length];
+
+  /// The calendar band for leg [index]: its tone let down to a wash so the
+  /// sheet surface shows through and the day numbers keep the scheme's ink
+  /// in both themes (a solid mid-tone would force a per-theme ink choice).
+  static Color legBand(int index) =>
+      legTones[index % legTones.length].withValues(alpha: 0.45);
+
+  /// The trip calendar's weekend-column wash: a barely-there ink film, the
+  /// recessive read that marks Saturday/Sunday without earning a color.
+  static Color weekendWash(ColorScheme scheme) =>
+      scheme.onSurface.withValues(alpha: 0.05);
+
   // Semantic status pair for positive/complete states (booked checkmarks,
   // Planned pills, published counts) — the exact green pair screens were
   // re-declaring inline before the polish wave.

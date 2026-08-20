@@ -1249,6 +1249,23 @@
       }
     }
   },
+  "tripCalendarTitle": "Trip calendar",
+  "@tripCalendarTitle": {
+    "description": "Title of the whole-trip calendar sheet (and the tooltip of the icon that opens it): one month grid per month the trip spans, with each city leg as a color band."
+  },
+  "tripCalendarAskToChange": "Ask to change",
+  "@tripCalendarAskToChange": {
+    "description": "Button in the trip calendar's leg detail row: closes the sheet and opens the trip's refine chat with a seeded request to change that city leg."
+  },
+  "tripCalendarWeekendDays": "{count, plural, one{{count} WEEKEND DAY} other{{count} WEEKEND DAYS}}",
+  "@tripCalendarWeekendDays": {
+    "description": "Pill in the trip calendar's leg detail row: how many of the leg's days fall on a Saturday or Sunday. Caps come from the string (the wordmark rule).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "tripTravelMinutes": "{minutes} min",
   "@tripTravelMinutes": {
     "placeholders": {

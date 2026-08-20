@@ -79,6 +79,7 @@ import '../widgets/place_photo_card.dart';
 import '../widgets/source_links_card.dart';
 import '../widgets/status_pill.dart';
 import '../widgets/trip_actions_sheet.dart';
+import '../widgets/trip_calendar_sheet.dart';
 import '../widgets/trip_airports_sheet.dart';
 import '../widgets/trip_details_dialog.dart';
 import '../widgets/trip_refine_panel.dart';
@@ -942,6 +943,60 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       _scroll.jumpTo((_scroll.offset + delta)
           .clamp(0.0, _scroll.position.maxScrollExtent));
     }
+  }
+
+  /// Calendar icon in the pinned tab row: opens the trip calendar sheet, the
+  /// whole-trip month grid with one color band per city leg. Pure view work —
+  /// like the Today chip and the fold control beside it, NOT gated on offline
+  /// or the refine panel.
+  ///
+  /// The legs come straight off the derivation's [TripDerivation.visibleRanges]
+  /// (index-aligned with its legs) — the sheet renders the dates the page
+  /// already promises instead of deriving its own (docs/zen.md: one
+  /// derivation, N call sites).
+  ///
+  /// The two exits: a day tap jump-scrolls the itinerary through
+  /// [_scrollToDay] — the Today chip's exact mechanism, collapsed groups and
+  /// Bookings/Budget exit included — and "Ask to change" hands the leg to the
+  /// refine chat through [_openSeededChat], the Next Step card's path. The
+  /// swap itself stays with the server's AI tools; this only seeds the ask.
+  void _openTripCalendar(Trip trip) {
+    final start = DateTime.tryParse(trip.startDate ?? '');
+    final end = DateTime.tryParse(trip.endDate ?? '');
+    if (start == null || end == null || end.isBefore(start)) return;
+    final d = _derive(trip);
+    final legs = <TripCalendarLeg>[
+      for (var i = 0; i < d.visibleRanges.length; i++)
+        if (d.visibleRanges[i].start != null && d.visibleRanges[i].end != null)
+          (
+            key: d.legs[i].key,
+            label: d.legs[i].label,
+            start: d.visibleRanges[i].start!,
+            end: d.visibleRanges[i].end!,
+          ),
+    ];
+    if (legs.isEmpty) return;
+    showTripCalendarSheet(
+      context,
+      tripStart: start,
+      tripEnd: end,
+      legs: legs,
+      onJumpToDay: _scrollToDay,
+      // The handoff needs the network and an editor (the seed is a change
+      // request); viewers and offline copies get the calendar without the
+      // button rather than a dead one.
+      onAskToChange: (_isOffline || _readOnly)
+          ? null
+          : (leg) => _openSeededChat(
+                trip,
+                // Canonical English like every other seed here: agent input,
+                // not display copy (specs/i18n-spanish).
+                seed: "I'd like to change the ${leg.label} leg "
+                    '(${formatWeekdayRange(leg.start, leg.end)}) — maybe swap '
+                    'it with another city or shift its dates.',
+                displayLabel: context.l10n.tripRefineCity(leg.label),
+              ),
+    );
   }
 
   /// THE writer for map focus, and ONLY map focus — group expansion is
@@ -3635,6 +3690,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                       final hasTodayTarget = todayDay != null &&
                           (trip.items ?? const <ItineraryItem>[])
                               .any((i) => i.day != null);
+                      // Calendar sheet entry: a dated trip with at least one
+                      // dated leg to band (the same inputs _openTripCalendar
+                      // guards on, so the icon never opens an empty sheet).
+                      final tripEndDate =
+                          DateTime.tryParse(trip.endDate ?? '');
+                      final hasCalendarTarget = tripStart != null &&
+                          tripEndDate != null &&
+                          !tripEndDate.isBefore(tripStart) &&
+                          derivation.legs.isNotEmpty;
                       // Fold-all control: WIDE only. On narrow it moves into
                       // the app-bar overflow (the wear & pack / share
                       // precedent) — the phone row's three tabs, Today chip
@@ -3826,6 +3890,24 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                                           // duplicate focus write here.
                                           onPressed: () =>
                                               _scrollToDay(todayDay),
+                                        ),
+                                        const SizedBox(width: 4),
+                                      ],
+                                      // Trip calendar (the month grid with
+                                      // per-leg bands). Same register as the
+                                      // Today chip it sits beside: pure view
+                                      // work, compact so the fixed-height
+                                      // pinned row's chrome math holds.
+                                      if (hasCalendarTarget) ...[
+                                        IconButton(
+                                          onPressed: () =>
+                                              _openTripCalendar(trip),
+                                          tooltip: l10n.tripCalendarTitle,
+                                          visualDensity:
+                                              VisualDensity.compact,
+                                          icon: const Icon(
+                                              Icons.calendar_month_outlined,
+                                              size: 20),
                                         ),
                                         const SizedBox(width: 4),
                                       ],
