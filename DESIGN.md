@@ -13,13 +13,13 @@ colors:
   paper-fill: "#FAFAFA"
 typography:
   wordmark:
-    fontFamily: "Cinzel, Georgia, serif"
+    fontFamily: "Cormorant Garamond, Georgia, serif"
     fontWeight: 600
     letterSpacing: "0.05em"
   headline:
-    fontFamily: "Marcellus, Georgia, serif"
-    fontSize: "26px"
-    fontWeight: 400
+    fontFamily: "Cormorant Garamond, Georgia, serif"
+    fontSize: "34px"
+    fontWeight: 500
     lineHeight: 1.2
   title:
     fontFamily: "Inter, system-ui, sans-serif"
@@ -77,7 +77,7 @@ components:
 > **Authority map (binding).** This file records the system; the repo's
 > four-layer stack enforces it. `src/packages/flutter-app/lib/theme/` is law
 > for values; `.claude/skills/brand-guidelines/` + `docs/branding/brand-guidelines.html`
-> (v1.2) is law for rules and carries the pre-ship checklist and lint;
+> (v1.5) is law for rules and carries the pre-ship checklist and lint;
 > `.claude/skills/design-inspiration/` holds the reference images. If this
 > file and those ever disagree, fix this file.
 
@@ -170,21 +170,37 @@ same build with brightness flipped.
 
 ## Typography
 
-**Display Font:** Marcellus (with Georgia, serif)
+**Display Font:** Cormorant Garamond 500 (with Georgia, serif)
 **Body Font:** Inter (with system-ui, sans-serif)
-**Wordmark Font:** Cinzel 600 (wordmark only, via `BrandWordmark`)
+**Wordmark Font:** Cormorant Garamond 600 (wordmark only, via `BrandWordmark`)
 
-**Character:** Roman inscriptional letterforms carrying the register of the
-Cinzel wordmark, but with a true lowercase — headings read engraved rather
-than shouted, over a working sans that does everything else.
+**Two faces, three jobs.** The display face and the wordmark are the same
+family at two weights, so headings and the brand sit in one register rather
+than in two that have to be reconciled. Headings read editorial rather than
+shouted, over a working sans that does everything else. It was Marcellus
+until the wordmark moved to Cormorant Garamond — Marcellus was picked as
+inscriptional shapes in the *previous* wordmark's register, so it outlived
+its reason and left a sturdy low-contrast heading beside a delicate
+high-contrast wordmark, most visibly in the app bar.
 
 ### Hierarchy
-- **Wordmark** (Cinzel 600, small-caps ANEMOS): only via `BrandWordmark`, with
-  per-surface measured tracking (app bar 19px/1.0, auth 26px/1.5, boot splash
-  22px/3.0). Never retyped, never rasterized outside `brand-render.sh`.
-- **Headline** (Marcellus w400, 34/30/26px, line-height 1.2): page and section
-  headings, app-bar titles. Sentence case, always. Sizes step up 2px over the
-  M3 defaults to match Inter's x-height optically.
+- **Wordmark** (Cormorant Garamond 600, full-caps ANEMOS): only via
+  `BrandWordmark`, with per-surface measured tracking (app bar 19px/1.0, auth
+  26px/1.5, boot splash 22px/3.0). The face has a true lowercase, so the caps
+  come from the string. Never retyped, never rasterized outside
+  `brand-render.sh`.
+- **Headline** (Cormorant Garamond w500, 44/39/34px, line-height 1.2): page
+  and section headings; app-bar page titles at 28px, the pinned section
+  register at 28px (`AppTextStyles.sectionHeading`). Sentence case, always.
+  The sizes are an **optical correction, not a scale**: they are the sizes the
+  previous display face used × **1.295** (`kDisplayOpticalScale`), which is
+  Marcellus's 0.500 em x-height over Cormorant Garamond's 0.386. That lands
+  every tier's lowercase where the design already had it, so the face change
+  is not a resize of the app. Caps run ~15% ahead of that match — the accepted
+  trade in a sentence-case ladder. **A slot that BORROWS an Inter number
+  (`sectionHeading` takes `titleLarge`'s) must apply the factor itself**;
+  omitting it is what made a trip's name recede at the top of its own page on
+  the first render.
 - **Title** (Inter w700 large / w600 medium-small, M3 sizes): card titles and
   row headers.
 - **Body** (Inter w400, 14–16px): prose and transcripts.
@@ -192,9 +208,12 @@ than shouted, over a working sans that does everything else.
 - **Numbers** (Inter, always): stat values opt out of the serif on purpose.
 
 ### Named Rules
-**The One Weight Rule.** Marcellus ships in exactly one weight; every style
-naming it states `w400` explicitly, or the web synthesizes faux-bold and
-smears the serif.
+**The One Weight Rule.** Cormorant Garamond ships exactly two real files —
+**500** (display) and **600** (wordmark) — so each `AppFonts` constant has one
+legal weight and every style naming the family states it explicitly, or the
+web synthesizes faux-bold and smears the serif. It read "Marcellus ships in
+exactly one weight" until the display face moved; the hazard is unchanged,
+only the specifics. `check.sh` rule 7 enforces it per constant.
 
 **The Weight-Not-Size Rule.** Below the headline line, hierarchy is built
 with Inter's weight ladder (400/500/600/700), not with size steps.
@@ -297,19 +316,30 @@ mark on the boot splash's teal field.
 - **App bar:** flat `surface` in both themes under a hairline
   `outlineVariant` bottom border — the brand rides in the wordmark's ink
   (`wordmarkInk`: Harbor Dark light / scheme primary dark) and the dark-cut
-  rose, never in a colored field. Title in Marcellus, `BrandWordmark` as the
-  persistent brand anchor (left-aligned, measured tracking), `onSurface`
-  foreground.
+  rose, never in a colored field. Page title in the display face at 25px,
+  `BrandWordmark` as the persistent brand anchor (left-aligned, measured
+  tracking), `onSurface` foreground.
 - **Menus:** open below the bar (`position: under`), styled to match cards
   (12px radius, elevation 3, tint off) so every raised thing reads the same.
 - **Mobile:** bottom sheets are the phone's overflow vocabulary; the wordmark
   yields to the page title when width demands it.
 
 ### The Wind Rose & Wordmark (signature)
-`BrandLogo` (mark) and `BrandWordmark` (Cinzel small-caps ANEMOS) are
-components, not assets to recreate. Sizes shipped: 36 in chrome, 28 default,
-72 auth, 96 boot splash, 16 legible floor. Clear space ≥25% of mark height.
-Rasters come only from `scripts/brand-render.sh`.
+`BrandLogo` (mark) and `BrandWordmark` (Cormorant Garamond 600 full-caps
+ANEMOS) are components, not assets to recreate. Sizes shipped: **58 in chrome**
+(nav rail and app bar), 28 default, 72 auth, 96 boot splash, 16 legible floor.
+Clear space ≥25% of mark height. Rasters come only from
+`scripts/brand-render.sh`.
+
+**Every number in that ladder is a BOX, not the rose.** `anemos_mark.png` is a
+540×540 canvas holding art that measures 515×410, so `BrandLogo.mark(size: n)`
+paints a rose `0.759 n` tall — the chrome 58 paints 44, and the 16px "legible
+floor" paints 12. Chrome moved 44→58 for exactly that reason: at 44 the rose
+painted 33 and its rays read thin. 64 is the ceiling and it fails — a 64 box
+paints a 48.6 rose, 61 wide, leaving 9.5px of clear space in the 80px rail
+against the ≥25% minimum (11px). The real fix is to trim the padding out of
+the asset so `size` means what it says at all four call sites; that re-tunes
+auth and the splash too and rewrites this ladder, so it is a pass of its own.
 
 ### The Hero Scrim (signature)
 Text sits on photography only over `heroScrim` — Harbor Dark densest in the
@@ -328,7 +358,9 @@ gradient never carries text.
   `CREDITS.md`/`LICENSES.md` — and put a scrim under any text on it.
 - **Do** check both themes; the bar is `surface` in both — dark mode is the
   same build with brightness flipped, chrome included.
-- **Do** state `w400` on every Marcellus style and set numbers in Inter.
+- **Do** state the weight on every style naming Cormorant Garamond — `w500`
+  for `AppFonts.display`, `w600` for `AppFonts.wordmark` — and set numbers in
+  Inter.
 - **Do** run `.claude/skills/brand-guidelines/scripts/check.sh` on touched
   Dart files before shipping.
 
@@ -337,8 +369,9 @@ gradient never carries text.
   the mark "close enough".
 - **Don't** use gradient text, colored glows, zero-offset halos, teal-tinted
   photos, purple-blue AI gradients, or glassmorphism as decoration.
-- **Don't** add a fourth typeface, load `google_fonts` (prod CSP blocks it),
-  or let emoji stand in for icons.
+- **Don't** add a third typeface (the app is down to two — Cormorant Garamond
+  and Inter), load `google_fonts` (prod CSP blocks it), or let emoji stand in
+  for icons.
 - **Don't** use off-ladder spacing, radii outside 8/12/20/full, ad-hoc
   `BoxShadow`s, or raw hex in widgets (sanctioned exceptions: `app_map.dart`
   canvas, the easter egg).

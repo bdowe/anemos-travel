@@ -22,20 +22,28 @@ const double _leadingSlot = kToolbarHeight;
 
 /// The rose's own size wherever this bar paints it.
 ///
-/// 44, and measured rather than guessed: the rose radiates from a small hub,
-/// so most of its box is empty and its optical size runs well under its
-/// layout size. The solid bronze star measures exactly 76% of the artwork's
-/// square canvas — the remaining 24% is the route thread's hairline tails,
-/// which antialias to nothing at chrome sizes. So 36 painted a 27px rose and
-/// read as a thin star beside a 19px wordmark; 44 paints a 33px one, which is
-/// what a "36px logo" is supposed to look like.
+/// 58, and measured rather than guessed. `anemos_mark.png` is a 540×540 canvas
+/// holding art that measures 515×410 — 95.4% of its width but only **75.9% of
+/// its height**, with 65px of transparent padding baked in top and bottom. The
+/// mark renders `Image.asset(height: size, fit: BoxFit.contain)` against that
+/// square source, so a `size` of *n* paints a rose **0.759 n** tall and every
+/// size number in the codebase has overstated the visible mark by a third.
+/// 36 painted 27; 44 painted 33, which is why the 8-point rose's rays kept
+/// reading thin next to a 19px wordmark. **58 paints 44.**
 ///
-/// The ceiling is the nav rail, not this bar: the rail's tap box is pinned at
-/// 40 by its centre-line derivation (`app_shell.dart`), so the rose already
-/// overflows it by 2px a side at 44 and 4px at 48. This bar has room to spare
-/// — its tap box is [kMinTouchTarget] — but the brand is one size wherever it
-/// appears, so the rail's constraint governs both.
-const double _markSize = 44;
+/// The ceiling is `DESIGN.md`'s clear-space minimum (≥25% of the mark's
+/// height), not the rail's tap box: at 58 the rose is 55.3 wide in the 80px
+/// rail, leaving 12.3px of clear space against an 11px minimum. **64 would
+/// paint 48.6 and leave 9.5 — it fails that rule, and that rule is what bounds
+/// this.** The rail's 40px tap box does not bound it: [OverflowBox] centres an
+/// oversized child on the unchanged box, so the alignment contract at
+/// `app_shell.dart:150` survives untouched.
+///
+/// The real structural fix is to trim the padding out of the asset so `size`
+/// means what it says at all four call sites; that re-tunes auth (72) and the
+/// boot splash too and rewrites `DESIGN.md`'s size ladder, so it is recorded
+/// as its own pass rather than smuggled in here.
+const double _markSize = 58;
 
 /// The rose's tap box, centred inside the [_leadingSlot].
 ///
@@ -208,20 +216,30 @@ class GradientAppBar extends ConsumerWidget implements PreferredSizeWidget {
   /// measurement doesn't care about color, so [titleWidthIn] uses this const
   /// as-is.
   ///
-  /// Size holds at 22 despite the face change: Marcellus sets ~9% narrower than
-  /// Inter Bold, so the longest trip titles gain room here, not lose it.
+  /// 28, up from 22 when the display face followed the wordmark to Cormorant
+  /// Garamond — the same [kDisplayOpticalScale] the headline ladder carries
+  /// (`app_theme.dart`), because a page title that stayed at 22 would read a
+  /// size down beside a wordmark that did not move.
+  ///
+  /// It costs title width, and the ladder below absorbs that on its own: the
+  /// wordmark yields a little sooner on the narrowest phones, which is the
+  /// ordering PR #418 already chose, so it needs no new rung. Measured in a
+  /// browser rather than reasoned about — `ANEMOS · Plan your trip` still fits
+  /// whole at 390px with an action beside it, so a tab root does not reach
+  /// rung 2 and the class doc's promise above holds at the new size.
   static const TextStyle titleStyle = TextStyle(
     fontFamily: AppFonts.display,
-    fontWeight: FontWeight.w400,
-    fontSize: 22,
+    fontWeight: FontWeight.w500,
+    fontSize: 28,
     letterSpacing: 0.2,
   );
 
   /// How wide [text] will actually paint as a page title in [context].
   ///
-  /// Measured for the same reasons [BrandWordmark.widthIn] is: Marcellus may
-  /// not have loaded (widget tests fall back to a font of quite different
-  /// metrics), and the traveler's text-scale setting multiplies the answer. The
+  /// Measured for the same reasons [BrandWordmark.widthIn] is: the display
+  /// face may not have loaded (widget tests fall back to a font of quite
+  /// different metrics), and the traveler's text-scale setting multiplies the
+  /// answer. The
   /// ladder is arithmetic on this number, so a hardcoded width would decide
   /// "it fits" for a large-text user it does not fit for.
   static double titleWidthIn(BuildContext context, String text) {

@@ -15,7 +15,8 @@ import 'package:travel_route_planner/theme/app_typography.dart';
 import 'support/l10n_test_app.dart';
 
 /// The editorial recast's style guards (home redesign): the greeting is the
-/// page's one display moment (Marcellus w400/30 via the theme role), and the
+/// page's one display moment (the display face at w500/39 via the theme role,
+/// i.e. headlineMedium), and the
 /// de-tealed plan strip can never silently regress to a gradient band or
 /// grow its icon plate back. Scoped finders on purpose — the live hero and
 /// the photo hero legitimately keep their gradients.
@@ -111,8 +112,12 @@ void main() {
     final greeting =
         tester.widget<Text>(find.textContaining(', Brian').first);
     expect(greeting.style?.fontFamily, AppFonts.display);
-    expect(greeting.style?.fontWeight, FontWeight.w400);
-    expect(greeting.style?.fontSize, 30);
+    // The literal values of headlineMedium, pinned rather than read back off
+    // the theme — reading the theme here would assert nothing. w500 is the
+    // One Weight Rule's display weight; 35 is the optical correction the
+    // ladder took when the face followed the wordmark to Cormorant Garamond.
+    expect(greeting.style?.fontWeight, FontWeight.w500);
+    expect(greeting.style?.fontSize, 39);
   });
 
   testWidgets('plan strip carries no gradient band and no icon plate',
@@ -150,8 +155,10 @@ void main() {
     final headline =
         tester.widget<Text>(find.text('Plan less. Travel more.'));
     expect(headline.style?.fontFamily, AppFonts.display);
-    expect(headline.style?.fontWeight, FontWeight.w400);
-    expect(headline.style?.fontSize, 34);
+    // headlineLarge's literals — see the greeting test above for why these are
+    // spelled out rather than read from the theme.
+    expect(headline.style?.fontWeight, FontWeight.w500);
+    expect(headline.style?.fontSize, 44);
 
     // The hero's flight icon floats bare on the scrim — the circle plate
     // died in the editorial pass.

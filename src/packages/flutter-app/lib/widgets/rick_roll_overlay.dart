@@ -160,10 +160,11 @@ class _RickRollOverlayState extends ConsumerState<RickRollOverlay>
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               fontFamily: AppFonts.display,
-                              // Marcellus ships in 400 only; naming the weight
-                              // keeps the web build off synthetic faux-bold.
-                              fontWeight: FontWeight.w400,
-                              fontSize: 34,
+                              // The display face ships 500 and 600; naming the
+                              // weight keeps the web build off synthetic
+                              // faux-bold.
+                              fontWeight: FontWeight.w500,
+                              fontSize: 44,
                               height: 1.1,
                               color: Colors.white,
                               shadows: _captionShadows,

@@ -21,16 +21,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Anemos Brand Guidelines</title>
 <style>
-  /* ── Faces: the app's own subsetted files, three faces, three jobs ────── */
+  /* ── Faces: the app's own subsetted files, two faces, three jobs ─────── */
   @font-face {
-    font-family: 'Cinzel';
-    src: url('../../src/packages/flutter-app/assets/fonts/Cinzel-SemiBold.ttf') format('truetype');
+    font-family: 'Cormorant Garamond';
+    src: url('../../src/packages/flutter-app/assets/fonts/CormorantGaramond-SemiBold.ttf') format('truetype');
     font-weight: 600; font-style: normal; font-display: block;
   }
   @font-face {
-    font-family: 'Marcellus';
-    src: url('../../src/packages/flutter-app/assets/fonts/Marcellus-Regular.ttf') format('truetype');
-    font-weight: 400; font-style: normal; font-display: block;
+    font-family: 'Cormorant Garamond';
+    src: url('../../src/packages/flutter-app/assets/fonts/CormorantGaramond-Medium.ttf') format('truetype');
+    font-weight: 500; font-style: normal; font-display: block;
   }
   @font-face { font-family: 'Inter'; src: url('../../src/packages/flutter-app/assets/fonts/Inter-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
   @font-face { font-family: 'Inter'; src: url('../../src/packages/flutter-app/assets/fonts/Inter-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
@@ -53,9 +53,9 @@
     --ink-2:     #5A625F;
     --line:      #E2DCCE;
     --map-night: #0A0F1A;
-    --serif: 'Marcellus', 'Iowan Old Style', Georgia, serif;
+    --serif: 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
     --sans: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
-    --caps: 'Cinzel', 'Iowan Old Style', Georgia, serif;
+    --caps: 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -72,7 +72,10 @@
   a:hover { color: var(--teal-900); }
   :focus-visible { outline: 2px solid var(--teal-700); outline-offset: 3px; border-radius: 2px; }
 
-  h1, h2, h3 { font-family: var(--serif); font-weight: 400; color: var(--ink); text-wrap: balance; }
+  /* Every rule naming the serif states its weight — this document obeys the
+     One Weight Rule it publishes. --serif and --caps are the SAME family now
+     (Cormorant Garamond); the weight is what tells them apart. */
+  h1, h2, h3 { font-family: var(--serif); font-weight: 500; color: var(--ink); text-wrap: balance; }
   h2 { font-size: 34px; line-height: 1.2; margin: 0 0 10px; }
   h3 { font-size: 23px; line-height: 1.25; margin: 44px 0 8px; }
   p  { max-width: 68ch; }
@@ -119,7 +122,7 @@
   .cover-main { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 0; animation: rise 0.9s cubic-bezier(0.16,1,0.3,1) both; }
   .cover-main svg { width: 168px; height: 168px; margin-bottom: 40px; }
   .cover-word { font-family: var(--caps); font-weight: 600; font-size: 64px; letter-spacing: 10px; line-height: 1.1; text-indent: 10px; text-shadow: 0 2px 8px rgba(0,0,0,0.26); }
-  .cover-sub { font-family: var(--serif); font-size: 26px; color: #fff; margin-top: 14px; }
+  .cover-sub { font-family: var(--serif); font-weight: 500; font-size: 26px; color: #fff; margin-top: 14px; }
   .cover-tag { font-size: 15px; color: var(--teal-100); margin-top: 22px; letter-spacing: 0.4px; }
   .cover-bottom { display: flex; justify-content: space-between; font-size: 13px; color: var(--teal-100); }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
@@ -221,7 +224,7 @@
   .face .who h3 { margin: 0 0 6px; font-size: 21px; }
   .face .who p { font-size: 13.5px; color: var(--ink-2); }
   .spec-caps { font-family: var(--caps); font-weight: 600; font-size: 44px; letter-spacing: 5px; line-height: 1.2; color: var(--teal-900); }
-  .spec-serif { font-family: var(--serif); font-size: 38px; line-height: 1.25; }
+  .spec-serif { font-family: var(--serif); font-weight: 500; font-size: 38px; line-height: 1.25; }
   .spec-serif .alpha { font-size: 20px; color: var(--ink-2); display: block; margin-top: 10px; letter-spacing: 0.5px; }
   .spec-sans div { line-height: 1.5; font-size: 19px; }
 
@@ -243,13 +246,13 @@
   .heroimg img { width: 100%; height: 340px; object-fit: cover; display: block; }
   .heroimg .scrim { position: absolute; inset: 0; background: linear-gradient(to top right, rgba(0,77,64,0.88), rgba(0,77,64,0.35)); }
   .heroimg .txt { position: absolute; left: 30px; bottom: 26px; color: #fff; }
-  .heroimg .txt .h { font-family: var(--serif); font-size: 30px; line-height: 1.2; }
+  .heroimg .txt .h { font-family: var(--serif); font-weight: 500; font-size: 30px; line-height: 1.2; }
   .heroimg .txt .s { font-size: 14px; color: var(--teal-100); margin-top: 4px; }
   .photostrip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; }
   .photostrip img { width: 100%; height: 130px; object-fit: cover; border-radius: 12px; display: block; }
 
   /* ── Voice ────────────────────────────────────────────────────────────── */
-  .tagline { font-family: var(--serif); font-size: 46px; line-height: 1.15; color: var(--teal-900); margin: 8px 0 30px; }
+  .tagline { font-family: var(--serif); font-weight: 500; font-size: 46px; line-height: 1.15; color: var(--teal-900); margin: 8px 0 30px; }
 
   /* ── Footer ───────────────────────────────────────────────────────────── */
   .endcap { background: var(--teal-900); color: var(--teal-100); margin-top: 72px; }
@@ -363,7 +366,7 @@
       <p>The mark is an eight-point wind rose off a portolan chart: long cardinal points in the brand's deep teal, short intercardinal points in heritage gold, each point split into a light left half and a dark right half. It replaced the horse-in-horseshoe mark that retired with the Golden Tempo name; the chat persona <strong>Ferdinand</strong> keeps the equine nod.</p>
       <p>The brand voice of the product is Aegean and editorial — engraved serif headings, deep sea-teal, real photography — while the interface underneath stays calm, modern, and utilitarian.</p>
       <dl class="fact-list">
-        <dt>Product name</dt><dd>Anemos (wordmark renders as small-caps ANEMOS — Cinzel has no lowercase)</dd>
+        <dt>Product name</dt><dd>Anemos (wordmark renders as full-caps ANEMOS — the caps come from the string, not the face)</dd>
         <dt>Tagline</dt><dd>Plan less. Travel more.</dd>
         <dt>Domain</dt><dd>anemos.travel</dd>
         <dt>Personality</dt><dd>Calm · knowledgeable · Mediterranean · editorial · precise</dd>
@@ -524,7 +527,7 @@
   </div>
 
   <h3>Wordmark</h3>
-  <p>The wordmark is <strong>live text, never an image</strong>: Cinzel SemiBold (a static w600 instance, subsetted). Cinzel has no true lowercase, so the string stays "Anemos" and paints as small-caps ANEMOS. Tracking opens as size grows — caps run wide, and each surface was measured separately.</p>
+  <p>The wordmark is <strong>live text, never an image</strong>: Cormorant Garamond SemiBold (a static w600 instance, subsetted). The face <em>has</em> a true lowercase, so the caps come from the string — <code>AppInfo.name.toUpperCase()</code> in <code>BrandWordmark</code>, never from <code>text-transform</code> alone. Tracking opens as size grows — caps run wide, and each surface was measured separately.</p>
   <div class="wm-demo" style="margin-top:18px">
     <div class="wm">ANEMOS</div>
     <p class="cap">Display specimen at 40&nbsp;px. Shipped surfaces: auth screen 26&nbsp;px / letter-spacing 1.5; the boot splash (web shell and in-app) is the tuned outlier at 22&nbsp;px / 3.0. Held in reserve: if a wordmark ever returns to photography, it goes white with a black-26 shadow (blur 8, offset 0,2).</p>
@@ -551,8 +554,8 @@
     </div>
     <div class="small" style="max-width:380px">
       <p><strong>Clear space:</strong> keep at least 25% of the mark's height free on every side (the dashed frame). Nothing enters it — not the wordmark's descenders, not badge counts, not card edges.</p>
-      <p style="margin-top:10px"><strong>Sizes in product:</strong> 44&nbsp;px standard in chrome (app bar, nav rail) · 28&nbsp;px default (<code>BrandLogo.mark</code>) · 72&nbsp;px auth screen · 128&nbsp;px boot splash · legible down to 16&nbsp;px (the favicon is the floor). The signed-out landing page deliberately carries no in-page mark — its app bar is the one brand carrier.</p>
-      <p style="margin-top:10px"><strong>Box size vs. optical size:</strong> every number above is the mark's <em>box</em>. The solid bronze rose is 76% of that square — the rest belongs to the route thread's hairline tails — so 44&nbsp;px in chrome paints a 33&nbsp;px star and 128&nbsp;px on the splash paints a 97&nbsp;px one. Size a new surface against the star you want to see, then divide by 0.76.</p>
+      <p style="margin-top:10px"><strong>Sizes in product:</strong> 58&nbsp;px standard in chrome (app bar, nav rail) · 28&nbsp;px default (<code>BrandLogo.mark</code>) · 72&nbsp;px auth screen · 128&nbsp;px boot splash · legible down to 16&nbsp;px (the favicon is the floor). The signed-out landing page deliberately carries no in-page mark — its app bar is the one brand carrier.</p>
+      <p style="margin-top:10px"><strong>Box size vs. optical size:</strong> every number above is the mark&rsquo;s <em>box</em>, and the box is bigger than the rose. <code>anemos_mark.png</code> is a 540&times;540 canvas holding art that measures <b>515&times;410</b> &mdash; 95.4% of its width but only <b>75.9% of its height</b>, with 65&nbsp;px of transparent padding baked in top and bottom. <code>BrandLogo.mark</code> renders <code>Image.asset(height: size, fit: BoxFit.contain)</code> against that square source, so a box of <em>n</em> paints a rose <b>0.759&nbsp;n</b> tall: 128&nbsp;px on the splash paints 97, and 16&nbsp;px paints a 12&nbsp;px &ldquo;legible floor&rdquo;. Chrome moved 44&rarr;58 in v1.5 for exactly this &mdash; at 44 the rose painted 33 and the 8-point star&rsquo;s rays read thin. Size a new surface against the rose you want to see, then divide by 0.759. <b>64 is over the line:</b> it paints a 48.6 rose, 61&nbsp;px wide, leaving 9.5&nbsp;px of clear space in the 80&nbsp;px nav rail against the &ge;25%-of-mark-height minimum (11&nbsp;px). The real fix is to trim the padding out of the asset so <code>size</code> means what it says at every call site; that re-tunes auth and the splash together and rewrites this ladder, so it is a pass of its own.</p>
     </div>
   </div>
 
@@ -586,9 +589,9 @@
     </div>
     <div class="dd">
       <div class="art" style="background:#fff">
-        <span style="font-family:var(--serif);font-weight:400;font-size:clamp(15px,5.5vw,26px);letter-spacing:2px;-webkit-text-stroke:0.6px #23282A;color:#23282A">ANEMOS</span>
+        <span style="font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:clamp(15px,5.5vw,26px);letter-spacing:2px;-webkit-text-stroke:0.6px #23282A;color:#23282A">ANEMOS</span>
       </div>
-      <div class="lab"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#B3261E" stroke-width="2"/><path d="M8 8l8 8M16 8l-8 8" stroke="#B3261E" stroke-width="2" stroke-linecap="round"/></svg><span>Never fake the wordmark — no substitute faces, no synthesized bold. Cinzel SemiBold or nothing.</span></div>
+      <div class="lab"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#B3261E" stroke-width="2"/><path d="M8 8l8 8M16 8l-8 8" stroke="#B3261E" stroke-width="2" stroke-linecap="round"/></svg><span>Never fake the wordmark — no substitute faces, no synthesized bold. Cormorant Garamond SemiBold or nothing. (This demo names Georgia outright: the display face is now the wordmark's own family, so <code>--serif</code> would no longer show a substitute at all.)</span></div>
     </div>
     <div class="dd">
       <div class="art" style="background:#fff">
@@ -721,20 +724,20 @@
 <!-- ═══ 5 · Typography ═══ -->
 <section class="sheet" id="type">
   <div class="rule-title"><h2>Typography</h2></div>
-  <p class="lede">Three faces, three jobs — declared once in <code>app_typography.dart</code> and bundled as subsetted TTFs. Never Google Fonts at runtime; production CSP blocks it.</p>
+  <p class="lede">Two faces, three jobs — declared once in <code>app_typography.dart</code> and bundled as subsetted TTFs. Never Google Fonts at runtime; production CSP blocks it.</p>
 
   <div class="face">
     <div class="who">
-      <h3>Cinzel — the wordmark</h3>
-      <p>SemiBold 600, a static instance of the variable font. The wordmark, and only the wordmark. No true lowercase: "Anemos" paints as small-caps ANEMOS. The one face baked into rasters (og-card, lockup).</p>
+      <h3>Cormorant Garamond 600 — the wordmark</h3>
+      <p>SemiBold 600, a static instance of the variable font. The wordmark, and only the wordmark. The face has a true lowercase, so "Anemos" is uppercased by the string to paint ANEMOS. The one weight baked into rasters (og-card, lockup).</p>
     </div>
     <div><div class="spec-caps">ANEMOS</div></div>
   </div>
 
   <div class="face">
     <div class="who">
-      <h3>Marcellus — headings</h3>
-      <p>Roman inscriptional shapes like Cinzel, but with a true lowercase — headings read engraved rather than shouted. Ships in its one weight, 400: every style naming it must say w400, or the web synthesizes faux-bold. Sentence case, always.</p>
+      <h3>Cormorant Garamond 500 — headings</h3>
+      <p>The wordmark’s own family, one weight down, so headings and the brand sit in one register instead of two that have to be reconciled. It was Marcellus until August 2026 — picked for the <em>previous</em> (Cinzel) wordmark’s register, and left mismatched when the wordmark moved. Every style naming the family must state its weight (w500 here, w600 for the wordmark), or the web synthesizes faux-bold. Sentence case, always.</p>
     </div>
     <div>
       <div class="spec-serif">Ten days across the Cyclades
@@ -760,18 +763,19 @@
   <table>
     <thead><tr><th>Style</th><th>Face</th><th>Size / spacing</th><th>Where</th></tr></thead>
     <tbody>
-      <tr><td>Wordmark — auth</td><td>Cinzel 600</td><td>26&nbsp;px · ls 1.5</td><td>Auth screen, under the 72&nbsp;px mark</td></tr>
-      <tr><td>Wordmark — app bar</td><td>Cinzel 600</td><td>19&nbsp;px · ls 1.0</td><td>Every app bar, in the wordmark ink (brandDark light / primary dark)</td></tr>
-      <tr><td>Wordmark — splash</td><td>Cinzel 600</td><td>22&nbsp;px · ls 3.0</td><td>Boot splash, web shell and in-app (the tuned outlier)</td></tr>
-      <tr><td>headlineLarge</td><td>Marcellus 400</td><td>34&nbsp;px · lh 1.2</td><td>Page-scale headings</td></tr>
-      <tr><td>headlineMedium</td><td>Marcellus 400</td><td>30&nbsp;px · lh 1.2</td><td>Section heads</td></tr>
-      <tr><td>headlineSmall</td><td>Marcellus 400</td><td>26&nbsp;px · lh 1.2</td><td>Card-scale heads</td></tr>
-      <tr><td>App-bar page title</td><td>Marcellus 400</td><td>22&nbsp;px · ls 0.2</td><td>App bar, onSurface ink</td></tr>
+      <tr><td>Wordmark — auth</td><td>Cormorant Garamond 600</td><td>26&nbsp;px · ls 1.5</td><td>Auth screen, under the 72&nbsp;px mark</td></tr>
+      <tr><td>Wordmark — app bar</td><td>Cormorant Garamond 600</td><td>19&nbsp;px · ls 1.0</td><td>Every app bar, in the wordmark ink (brandDark light / primary dark)</td></tr>
+      <tr><td>Wordmark — splash</td><td>Cormorant Garamond 600</td><td>22&nbsp;px · ls 3.0</td><td>Boot splash, web shell and in-app (the tuned outlier)</td></tr>
+      <tr><td>headlineLarge</td><td>Cormorant Garamond 500</td><td>44&nbsp;px · lh 1.2</td><td>Page-scale headings</td></tr>
+      <tr><td>headlineMedium</td><td>Cormorant Garamond 500</td><td>39&nbsp;px · lh 1.2</td><td>Section heads</td></tr>
+      <tr><td>headlineSmall</td><td>Cormorant Garamond 500</td><td>34&nbsp;px · lh 1.2</td><td>Card-scale heads</td></tr>
+      <tr><td>App-bar page title</td><td>Cormorant Garamond 500</td><td>28&nbsp;px · ls 0.2</td><td>App bar, onSurface ink</td></tr>
+      <tr><td>Section heading (pinned)</td><td>Cormorant Garamond 500</td><td>28&nbsp;px · lh 1.2</td><td><code>AppTextStyles.sectionHeading</code> — city headers, trip header card</td></tr>
       <tr><td>titleLarge / Medium / Small</td><td>Inter 700 / 600 / 600</td><td>M3 default sizes (22 / 16 / 14)</td><td>List titles, tiles, dialogs</td></tr>
       <tr><td>body / label</td><td>Inter 400 · labels 600</td><td>M3 defaults (16 / 14 / 12)</td><td>Everything else</td></tr>
     </tbody>
   </table>
-  <figcaption>Marcellus headline sizes run 2&nbsp;px larger than the Inter sizes they replaced — Marcellus has a smaller x-height (0.500&nbsp;em vs 0.546), so equal point sizes would read smaller. The subsets carry Latin only: Greek strings (<span class="el">άνεμος</span>) fall back to system faces by design.</figcaption>
+  <figcaption>The headline sizes are an <b>optical correction, not a scale</b>: Cormorant Garamond’s x-height is 0.386&nbsp;em against Inter’s 0.546, so equal point sizes read a size down. They are the sizes the previous display face used &times; <b>1.295</b> (<code>kDisplayOpticalScale</code>) &mdash; Marcellus&rsquo;s 0.500&nbsp;em x-height over Cormorant&rsquo;s 0.386 &mdash; so every tier&rsquo;s lowercase lands where the design already had it and the face change is not a resize of the app. Caps run ~15% ahead of that match; sentence case is what these headings are, so the lowercase wins. Full parity with Inter would be 1.414, which the app has never been at.) Both weights are subsetted to Latin only: Greek strings (<span class="el">άνεμος</span>) fall back to system faces by design.</figcaption>
 </section>
 
 <!-- ═══ 6 · Space, shape & elevation ═══ -->
@@ -866,7 +870,7 @@
       <tr><td>Mark, wordmark &amp; plate policy</td><td><code>lib/widgets/brand_logo.dart</code></td></tr>
       <tr><td>Source artwork</td><td><code>docs/branding/mark.svg</code> · <code>mark-light.svg</code> · <code>lockup.svg</code> (+ <code>README.md</code> for the full story)</td></tr>
       <tr><td>Raster pipeline</td><td><code>scripts/brand-render.sh</code> → every PNG (marks, favicons, splash, icons, og-card). Add a brand asset? Add its row to the README table.</td></tr>
-      <tr><td>Font files &amp; licenses</td><td><code>src/packages/flutter-app/assets/fonts/</code> — Cinzel, Marcellus, Inter, all SIL OFL, subsetted (Latin only)</td></tr>
+      <tr><td>Font files &amp; licenses</td><td><code>src/packages/flutter-app/assets/fonts/</code> — Cormorant Garamond (500 + 600), Inter, all SIL OFL, subsetted (Latin only)</td></tr>
       <tr><td>Photo credits</td><td><code>assets/images/LICENSES.md</code> · <code>assets/images/destinations/CREDITS.md</code></td></tr>
       <tr><td>Taste &amp; references</td><td><code>.claude/skills/design-inspiration/</code> — the aesthetic direction ("Aegean, not tropical. Engraved, not shouted.") and the annotated reference library; taste lives there, values live in <code>lib/theme/</code></td></tr>
       <tr><td>This document</td><td><code>docs/branding/brand-guidelines.html</code> — regen PDF with the headless-Chrome one-liner in the file header</td></tr>
@@ -893,7 +897,7 @@
       </svg>
       <span class="w">ANEMOS</span>
     </div>
-    <div class="small" style="text-align:right">Brand guidelines · v1.4 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
+    <div class="small" style="text-align:right">Brand guidelines · v1.5 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
   </div>
 </footer>
 

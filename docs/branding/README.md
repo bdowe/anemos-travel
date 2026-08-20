@@ -45,30 +45,43 @@ one too — see `print_view_handler.go`.
 
 ## Type
 
-Three faces, declared once in `flutter-app/lib/theme/app_typography.dart`
-(`AppFonts`) and bundled as subsetted TTFs — never `google_fonts`, which prod
-CSP blocks:
+Two faces doing three jobs, declared once in
+`flutter-app/lib/theme/app_typography.dart` (`AppFonts`) and bundled as
+subsetted TTFs — never `google_fonts`, which prod CSP blocks:
 
-- **Cormorant Garamond** — the wordmark, and only the wordmark: full caps
-  "ANEMOS" at w600 (a static instance of the variable font, Latin-subsetted;
-  Greek falls back to system faces by design). The caps come from the string
-  (`AppInfo.name.toUpperCase()` in `BrandWordmark`), never from
-  `text-transform` alone — the face has a true lowercase.
-- **Marcellus** — headings and app-bar page titles. Roman inscriptional
-  shapes in the same register as the wordmark's caps, but with a true
-  lowercase, so headings read engraved rather than shouted. It ships in its
-  ONE weight (400): any style naming it must say `w400`, because asking for a
-  weight the family lacks gets synthetic faux-bold on web.
+- **Cormorant Garamond w600** (`AppFonts.wordmark`) — the wordmark: full caps
+  "ANEMOS". The caps come from the string (`AppInfo.name.toUpperCase()` in
+  `BrandWordmark`), never from `text-transform` alone — the face has a true
+  lowercase.
+- **Cormorant Garamond w500** (`AppFonts.display`) — headings and app-bar page
+  titles. The same family one weight down, so the heading tier and the brand
+  sit in one register instead of two that have to be reconciled. It was
+  Marcellus until 2026-08, chosen for the *Cinzel* wordmark's register and
+  left mismatched when the wordmark moved; matching the wordmark exactly
+  removed the pairing question and took the app from three faces to two.
+  Sizes carry an optical correction — every display size × **1.295**
+  (`kDisplayOpticalScale`, Marcellus's 0.500 em x-height over Cormorant's
+  0.386), giving 44/39/34 headline, 28 app-bar title, 28 pinned section
+  heading. Same typography, new face.
 - **Inter** — body, labels, buttons, and every number, including the big values
   in stat tiles (which opt out of the heading face explicitly).
+
+Both Cormorant weights are static instances of the variable font,
+Latin-subsetted to the same coverage (ASCII + Latin-1 + Latin Extended-A +
+punctuation); Greek falls back to system faces by design. One `pubspec.yaml`
+family entry carries both — a second entry would let the two drift.
+
+**The One Weight Rule** follows from there: the family ships exactly two real
+files, so each `AppFonts` constant has one legal weight and every style naming
+the family states it explicitly, or the web synthesizes faux-bold and smears
+the serif. `check.sh` rule 7 enforces it per constant.
 
 Only the wordmark face is baked into rasters (`anemos_logo.png`,
 `og-card.png`); a heading face change needs no re-render and no `?v=` bump.
 
-**Stale, awaiting a follow-up refresh:** `brand-guidelines.html` and
-`anemos-brand-guidelines.pdf` still describe the previous identity (the
-geometric teal/gold rose and the Cinzel wordmark — which is why the Cinzel
-font files remain in `assets/fonts/`). Treat this README as current.
+**Stale, awaiting a follow-up refresh:** `anemos-brand-guidelines.pdf` still
+describes the previous identity (the geometric teal/gold rose). Treat this
+README and `brand-guidelines.html` v1.5 as current.
 
 ## Rendering pipeline (committed — do not run rasterizers ad hoc)
 

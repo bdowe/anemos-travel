@@ -162,24 +162,20 @@ flutter:
     # them so the credits ship next to the images they describe.
     - assets/images/destinations/
 
-  # Three faces, three jobs (see lib/theme/app_typography.dart). All bundled
+  # Two faces, three jobs (see lib/theme/app_typography.dart). All bundled
   # and subsetted — never google_fonts, which prod CSP blocks.
   #
-  # Cormorant Garamond (OFL) — the brand wordmark only; static w600
-  # instance of the variable font, subsetted (see docs/branding/README.md).
+  # Cormorant Garamond (OFL) — the wordmark AND the heading/display face:
+  # w600 for the wordmark, w500 for headings. Both are static instances of the
+  # variable font, Latin-subsetted (see docs/branding/README.md). ONE family
+  # entry, two real weights — a second family entry would let the two drift.
   fonts:
     - family: Cormorant Garamond
       fonts:
+        - asset: assets/fonts/CormorantGaramond-Medium.ttf
+          weight: 500
         - asset: assets/fonts/CormorantGaramond-SemiBold.ttf
           weight: 600
-    # Marcellus (OFL) — the heading/display face: Roman inscriptional shapes
-    # like Cormorant Garamond's caps, but with a true lowercase, so headings
-    # read engraved rather than shouted. Ships in its ONE weight (400) — see
-    # AppFonts.
-    - family: Marcellus
-      fonts:
-        - asset: assets/fonts/Marcellus-Regular.ttf
-          weight: 400
     # Inter (OFL) — the UI font: body, labels, buttons, numbers.
     - family: Inter
       fonts:

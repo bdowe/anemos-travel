@@ -43,8 +43,8 @@ import 'support/l10n_test_app.dart';
 /// rewrites the ladder as `width < 800`.
 ///
 /// One caveat that shapes what can be asserted here: widget tests render in a
-/// fallback face with quite different metrics from Marcellus/Cormorant
-/// Garamond (a page title measures ~2.2x its browser width), so *which* branch
+/// fallback face with quite different metrics from Cormorant Garamond
+/// (a page title measures ~2.2x its browser width), so *which* branch
 /// a given width lands in diverges from production. Assertions below are therefore on the
 /// invariant, never on "the wordmark is present at width N" for a narrow N —
 /// the browser pass owns that. Same reason [_fallbackFontScalesAt] exists.
@@ -471,7 +471,8 @@ void main() {
     //
     // GEOMETRY rather than "the string renders whole", because a widget test
     // renders in a fallback face where every glyph is a full em: 'Plan your
-    // trip' measures ~311px here against ~143px of Marcellus in a browser. A
+    // trip' measures ~311px here against ~138px of the real display face in a
+    // browser (measured at the shipped 25px, 390px viewport). A
     // whole-string assertion at a real phone width would be testing the test
     // font. The real string at the real width is the browser pass's job.
     const title = 'Plan your trip';

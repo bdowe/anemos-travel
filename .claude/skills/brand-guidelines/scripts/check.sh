@@ -86,19 +86,20 @@ for f in "${SCAN[@]}"; do
 
   # 1. google_fonts is banned outright (prod CSP blocks it; faces are bundled).
   while IFS=: read -r ln _; do
-    finding "$f:$ln" "google-fonts" "google_fonts is banned — the three faces are bundled subsets (app_typography.dart)"
+    finding "$f:$ln" "google-fonts" "google_fonts is banned — the two faces are bundled subsets (app_typography.dart)"
   done < <(grep -n "package:google_fonts" "$f" 2>/dev/null)
 
   # Everything below is about token discipline, so theme files are exempt.
   if ! in_theme "$f"; then
 
     # 2. fontFamily string literals — faces come from AppFonts / textTheme.
-    #    brand_logo.dart owns the wordmark's Cinzel declaration.
-    if [ "$rel" != "lib/widgets/brand_logo.dart" ]; then
-      while IFS=: read -r ln _; do
-        finding "$f:$ln" "font-literal" "fontFamily string literal — use AppFonts.* or a textTheme style"
-      done < <(grep -nE "fontFamily:[[:space:]]*[\"']" "$f" 2>/dev/null)
-    fi
+    #    No exemptions: brand_logo.dart used to carry the wordmark's own
+    #    `fontFamily: 'Cinzel'` literal and was excused from this rule, but the
+    #    wordmark has gone through AppFonts.wordmark since, so the exemption
+    #    was excusing nothing. Rule 7 is what holds the wordmark's weight.
+    while IFS=: read -r ln _; do
+      finding "$f:$ln" "font-literal" "fontFamily string literal — use AppFonts.* or a textTheme style"
+    done < <(grep -nE "fontFamily:[[:space:]]*[\"']" "$f" 2>/dev/null)
 
     # 3. Raw hex colors — new colors become AppColors tokens first.
     #    Sanctioned exceptions: the map canvas and the easter egg.
@@ -131,15 +132,32 @@ for f in "${SCAN[@]}"; do
     done < <(grep -nE "Radius\.circular\(([6-9]|[0-9][0-9])" "$f" 2>/dev/null)
   fi
 
-  # 7. Marcellus without an explicit w400 nearby — the family has ONE weight;
-  #    web synthesizes faux-bold for anything else. (Window: 2 lines back,
-  #    6 forward — named args order-free, and weight comments push it down.)
-  while IFS=: read -r ln _; do
-    start=$((ln > 2 ? ln - 2 : 1))
-    if ! sed -n "${start},$((ln + 6))p" "$f" | grep -q "FontWeight.w400"; then
-      finding "$f:$ln" "marcellus-weight" "AppFonts.display without FontWeight.w400 nearby — faux-bold risk"
-    fi
-  done < <(grep -n "AppFonts.display" "$f" 2>/dev/null)
+  # 7. The One Weight Rule. Cormorant Garamond ships exactly TWO real files —
+  #    500 (display) and 600 (wordmark) — so a style naming the family without
+  #    saying which one it wants may ask for a weight that does not exist, and
+  #    web answers with synthetic faux-bold, which smears a Garamond's stroke
+  #    contrast. Each AppFonts constant therefore has ONE legal weight, and it
+  #    must be stated at the call site. (Window: 2 lines back, 6 forward —
+  #    named args order-free, and weight comments push it down.)
+  #
+  #    This used to read "Marcellus without an explicit w400", and it keys on
+  #    the CONSTANT rather than the face's name — so when the display face
+  #    followed the wordmark to Cormorant Garamond it did not quietly stop
+  #    matching, it inverted: every one of the nine call sites became a
+  #    finding, correctly weighted and reported as faux-bold risk. An advisory
+  #    lint that is wrong about every site it names is read once and then
+  #    ignored, which is the same end state as one that matches nothing.
+  #    Keep the expected weight in this table, never in prose.
+  for spec in "display:w500" "wordmark:w600"; do
+    const="AppFonts.${spec%%:*}"
+    weight="FontWeight.${spec##*:}"
+    while IFS=: read -r ln _; do
+      start=$((ln > 2 ? ln - 2 : 1))
+      if ! sed -n "${start},$((ln + 6))p" "$f" | grep -q "$weight"; then
+        finding "$f:$ln" "display-weight" "$const without $weight nearby — faux-bold risk"
+      fi
+    done < <(grep -n "$const" "$f" 2>/dev/null)
+  done
 done
 
 echo "---"

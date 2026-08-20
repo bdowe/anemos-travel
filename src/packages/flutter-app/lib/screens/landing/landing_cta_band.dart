@@ -7,7 +7,7 @@ import '../../theme/spacing.dart';
 
 /// Closing CTA: the page's last word, set directly on the landing canvas.
 /// Every other section sits bare on Midnight Harbor, so the close does too —
-/// the emptiness around one Marcellus line and one action is the emphasis
+/// the emptiness around one display-face line and one action is the emphasis
 /// (the Aman move), not a raised field. Plain sign-up entry — the
 /// prompt-carrying paths live in the hero and the destination rail.
 class LandingCtaBand extends StatelessWidget {
@@ -37,13 +37,14 @@ class LandingCtaBand extends StatelessWidget {
                 l10n.landingCtaTitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  // Marcellus ships one weight; the explicit w400 keeps a
-                  // theme bold from asking for a face that doesn't exist.
-                  // One tier above the section titles (26) — the closing
-                  // line outranks a chapter heading, stays under the hero.
+                  // The display face ships 500 and 600; the explicit w500
+                  // keeps a theme bold from asking for a weight that doesn't
+                  // exist. One tier above the section titles (34) — the
+                  // closing line outranks a chapter heading, stays under the
+                  // hero.
                   fontFamily: AppFonts.display,
-                  fontWeight: FontWeight.w400,
-                  fontSize: narrow ? 30 : 34,
+                  fontWeight: FontWeight.w500,
+                  fontSize: narrow ? 39 : 44,
                   height: 1.2,
                   color: Colors.white,
                 ),

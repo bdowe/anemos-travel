@@ -87,18 +87,25 @@ Paths below are relative to `src/packages/flutter-app/` unless rooted.
   `landingHeroBlend` may end the landing hero photo into the canvas, but
   never sets text on a photo (still heroScrim's job).
 
-## Type — three faces, three jobs
+## Type — two faces, three jobs
 
-- **Cinzel 600** = the wordmark, and only the wordmark, and only via
-  `BrandWordmark` (live text; small-caps ANEMOS; tracking is measured
-  per surface — app bar 19/1.0, auth 26/1.5, the boot splash (web
-  shell and in-app) 22/3.0 is the tuned outlier). Never retype it,
-  never bake it — except the
+- **Cormorant Garamond 600** (`AppFonts.wordmark`) = the wordmark, and
+  only the wordmark, and only via `BrandWordmark` (live text; full-caps
+  ANEMOS, uppercased from the string because the face HAS a lowercase;
+  tracking is measured per surface — app bar 19/1.0, auth 26/1.5, the
+  boot splash (web shell and in-app) 22/3.0 is the tuned outlier).
+  Never retype it, never bake it — except the
   sanctioned rasters (og-card, lockup), which `scripts/brand-render.sh`
   renders; nothing else does.
-- **Marcellus** = headings and app-bar page titles. It ships in ONE
-  weight — every style naming it must say `w400` or web synthesizes
-  faux-bold. Sentence case, always.
+- **Cormorant Garamond 500** (`AppFonts.display`) = headings and app-bar
+  page titles — the wordmark's own family one weight down, since doc
+  v1.5 (it was Marcellus, picked for the *previous* wordmark's register
+  and left mismatched when that wordmark moved). Sizes 44/39/34, app-bar
+  title 28, pinned section heading 28 — the previous face's sizes ×1.295
+  (`kDisplayOpticalScale`), an optical correction for a 0.386 em x-height,
+  not a resize. A slot that borrows an INTER number must apply the factor
+  itself; `AppTextStyles.sectionHeading` is the one that does.
+  Sentence case, always.
 - **Inter** = body, labels, buttons, and **every number** (stat values
   opt out of the heading face on purpose). Below the headline line,
   hierarchy is **weight, not size**.
@@ -158,8 +165,10 @@ Each is an instant finding in review:
 - A plate/tile behind the wind rose, or the mark redrawn "close enough".
 - Gradient text; colored glow or zero-offset halo shadows; glassmorphism
   as decoration.
-- Faux-bold Marcellus (any Marcellus style without explicit `w400`).
-- A fourth typeface, `google_fonts`, or numbers set in a serif.
+- Faux-bold Cormorant Garamond — any style naming the family without
+  its explicit weight (`w500` for `AppFonts.display`, `w600` for
+  `AppFonts.wordmark`). The family ships those two files and no others.
+- A third typeface, `google_fonts`, or numbers set in a serif.
 - Emoji or unicode glyphs standing in for icons.
 - Kickers/eyebrows above headings — with ONE exception: the sanctioned
   letterspaced place eyebrow on destination surfaces (the Amanzoe move
@@ -185,8 +194,9 @@ Each is an instant finding in review:
       explained in the PR body.
 - [ ] Mark/wordmark (if present): right cut for the field, no plate,
       `BrandWordmark`/`BrandLogo` used — not re-created.
-- [ ] Marcellus styles all state `w400`; numbers are Inter; labels are
-      sentence case.
+- [ ] Every Cormorant Garamond style states its weight — `w500` for
+      `AppFonts.display`, `w600` for `AppFonts.wordmark` (`check.sh`
+      rule 7); numbers are Inter; labels are sentence case.
 - [ ] Text over any photo has a scrim under it.
 - [ ] Both themes checked — the change reads correctly in light AND dark
       (the bar is `surface` in both; the splash staying teal is correct,
