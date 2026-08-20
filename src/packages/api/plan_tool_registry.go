@@ -193,6 +193,19 @@ var planToolRegistry = []planTool{
 	// resolveDateShiftTrip; the write is applyTripSummary, the same one the trip
 	// page's PATCH calls. Tail-appended per the prompt-cache rule above.
 	{def: setTripDescriptionTool, enabled: authedOnly, run: runSetTripDescriptionTool},
+
+	// Swap ONE city of a saved trip for another (replace_leg_splice.go has the
+	// full account). Until now a swap had no primitive, so the
+	// tooling routed it to update_itinerary_section scope 'trip' — a whole-trip
+	// rewrite in which the model hand-authors every position and every day
+	// number, which is exactly what fragments cities and moves other legs'
+	// dates. Here the SERVER owns both, and the replaced leg keeps its day span,
+	// so a swap can no longer disturb a neighbour. Gated on a bound trip like
+	// update_itinerary_section — there is no saved leg to replace otherwise, and
+	// the gate leaves the anonymous and unbound tools arrays byte-identical.
+	// Tail-appended per the prompt-cache rule above.
+	{def: replaceLegTool, enabled: func(s *planSession) bool { return s.boundTripID != nil },
+		run: runReplaceLegTool},
 }
 
 // planToolByName dispatches tool_use blocks; derived from the registry so the
