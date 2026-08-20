@@ -12,66 +12,21 @@ package main
 // because the duplicate copy carried the pre-edit `day` numbers.
 //
 // Run it with `make api-repair-sections` (report only) or
-// `make api-repair-sections APPLY=1`. Reuses the same hub predicate as the guard
-// (sameHub/keyOfItem), so detection and enforcement cannot drift apart.
+// `make api-repair-sections APPLY=1`. The hub predicate, the run split and the
+// "is this fragmented or a real revisit?" call all live in itinerary_runs.go and
+// are SHARED with the scope-'trip' write guard, so detection and enforcement
+// cannot drift apart.
 
 import (
 	"context"
 	"flag"
 	"fmt"
 	"log"
-	"sort"
-	"strings"
 
 	"github.com/google/uuid"
 
 	"travel-route-planner/store"
 )
-
-// hubRun is one contiguous same-hub stretch in position order — the same
-// grouping computeTripLegs renders a leg from.
-type hubRun struct {
-	Hub   string
-	Items []store.ItineraryItem
-}
-
-func hubRuns(items []store.ItineraryItem) []hubRun {
-	var runs []hubRun
-	for _, it := range items {
-		hub := hubOfItem(it)
-		if len(runs) == 0 || !sameHub(runs[len(runs)-1].Hub, hub) {
-			runs = append(runs, hubRun{Hub: hub})
-		}
-		runs[len(runs)-1].Items = append(runs[len(runs)-1].Items, it)
-	}
-	return runs
-}
-
-// itemIdentity is what a verbatim splice copy preserves byte-for-byte. `day` is
-// deliberately EXCLUDED: the duplicate's stale day is the whole reason the two
-// copies differ, so keying on it would hide exactly the pairs we're looking for.
-// Position is excluded for the same reason.
-type itemIdentity struct {
-	Name, PlaceID, City, DayTripFrom string
-	LatE5, LngE5                     int64
-}
-
-func identityOf(it store.ItineraryItem) itemIdentity {
-	deref := func(p *string) string {
-		if p == nil {
-			return ""
-		}
-		return strings.ToLower(foldHub(*p))
-	}
-	return itemIdentity{
-		Name:        strings.ToLower(foldHub(it.Name)),
-		PlaceID:     deref(it.PlaceID),
-		City:        deref(it.City),
-		DayTripFrom: deref(it.DayTripFrom),
-		LatE5:       int64(it.Latitude * 1e5),
-		LngE5:       int64(it.Longitude * 1e5),
-	}
-}
 
 // repairPlan is what a dry run prints and an apply run executes.
 type repairPlan struct {
@@ -85,60 +40,6 @@ type repairPlan struct {
 
 func (p repairPlan) empty() bool { return len(p.DeleteIDs) == 0 }
 
-// dayOrderViolations counts adjacent pairs (in position order) whose day numbers
-// run backwards. The splice bug leaves the stale copy's days out of order with
-// everything around it, so removing the stale run drops this count while
-// removing the fresh one does not.
-func dayOrderViolations(items []store.ItineraryItem) int {
-	n := 0
-	var prev *int32
-	for _, it := range items {
-		if it.Day == nil {
-			continue
-		}
-		if prev != nil && *it.Day < *prev {
-			n++
-		}
-		d := *it.Day
-		prev = &d
-	}
-	return n
-}
-
-func identityCounts(items []store.ItineraryItem) map[itemIdentity]int {
-	m := make(map[itemIdentity]int, len(items))
-	for _, it := range items {
-		m[identityOf(it)]++
-	}
-	return m
-}
-
-// subsetOf reports whether every identity in a appears in b at least as often.
-func subsetOf(a, b map[itemIdentity]int) bool {
-	for k, n := range a {
-		if b[k] < n {
-			return false
-		}
-	}
-	return true
-}
-
-func dayRange(items []store.ItineraryItem) (lo, hi int32, ok bool) {
-	for _, it := range items {
-		if it.Day == nil {
-			continue
-		}
-		if !ok || *it.Day < lo {
-			lo = *it.Day
-		}
-		if !ok || *it.Day > hi {
-			hi = *it.Day
-		}
-		ok = true
-	}
-	return lo, hi, ok
-}
-
 func describeItem(it store.ItineraryItem) string {
 	day := "no day"
 	if it.Day != nil {
@@ -151,83 +52,51 @@ func describeItem(it store.ItineraryItem) string {
 	return fmt.Sprintf("  pos %3d  %-32s (%s, %s)", it.Position, it.Name, hub, day)
 }
 
-// planTripRepair classifies a trip's hub runs and returns what collapsing the
-// duplicates would delete. Pure: no DB, no I/O, so it is unit-testable without
-// Postgres.
+// planTripRepair decides which duplicate run to collapse, given the shared
+// classifier's verdict about which hubs are fragmented at all. Pure: no DB, no
+// I/O, so it is unit-testable without Postgres.
 //
-// It is deliberately conservative. A hub occupying two runs is NOT by itself
-// corruption — computeTripLegs supports genuine revisits (Paris → Rome → Paris),
-// and those must be left alone. A run is only dropped when it is also a content
-// duplicate of its twin AND the two disagree about dates.
+// The conservatism that keeps a genuine revisit (Paris → Rome → Paris) out of
+// this plan lives in classifyHubRuns — see itinerary_runs.go. What is left here
+// is repair-only: which of the twin runs is the stale copy, and the refusal
+// backstop.
+//
+// The four-item floor is a repair heuristic, not part of the predicate: a trip
+// this small predates the splice bug's reach and is not worth a destructive
+// guess. The write-path guard deliberately has no such floor — it rejects rather
+// than deletes, so it has nothing to be careful with.
 func planTripRepair(items []store.ItineraryItem) repairPlan {
 	plan := repairPlan{}
 	if len(items) < 4 {
 		return plan
 	}
-	runs := hubRuns(items)
-
-	byHub := map[string][]int{}
-	var order []string
-	for i, r := range runs {
-		if strings.TrimSpace(r.Hub) == "" {
-			continue // hubless runs group together by a different rule; skip
-		}
-		k := strings.ToLower(foldHub(r.Hub))
-		if _, seen := byHub[k]; !seen {
-			order = append(order, k)
-		}
-		byHub[k] = append(byHub[k], i)
-	}
-	sort.Strings(order)
+	rits := runItemsOfStored(items)
+	c := classifyHubRuns(rits)
+	plan.Skipped = c.Skipped
 
 	drop := map[int]bool{}
-	for _, k := range order {
-		idx := byHub[k]
-		if len(idx) < 2 {
-			continue
-		}
-		hub := runs[idx[0]].Hub
-		if len(idx) > 2 {
-			plan.Skipped = append(plan.Skipped,
-				fmt.Sprintf("%s: %d runs — too many to classify automatically", hub, len(idx)))
-			continue
-		}
-		a, b := runs[idx[0]], runs[idx[1]]
-		ca, cb := identityCounts(a.Items), identityCounts(b.Items)
-		if !subsetOf(ca, cb) && !subsetOf(cb, ca) {
-			plan.Skipped = append(plan.Skipped,
-				fmt.Sprintf("%s: two runs hold different places — looks like a real revisit", hub))
-			continue
-		}
-		aLo, aHi, aOK := dayRange(a.Items)
-		bLo, bHi, bOK := dayRange(b.Items)
-		if aOK && bOK && aLo == bLo && aHi == bHi {
-			plan.Skipped = append(plan.Skipped,
-				fmt.Sprintf("%s: duplicate runs share the same days — not the splice bug", hub))
-			continue
-		}
-
+	for _, f := range c.Fragmented {
 		// Which copy is stale? Whichever removal leaves the trip's day numbers
 		// running forwards. Neither "first" nor "last" is right on its own: the
 		// stale copy lands last when the model targeted the other city first,
 		// and first when it targeted this one.
-		without := func(skip int) []store.ItineraryItem {
-			var out []store.ItineraryItem
-			for i, r := range runs {
+		without := func(skip int) []runItem {
+			var out []runItem
+			for i, r := range c.Runs {
 				if i == skip {
 					continue
 				}
-				out = append(out, r.Items...)
+				out = append(out, r.slice(rits)...)
 			}
 			return out
 		}
-		va, vb := dayOrderViolations(without(idx[0])), dayOrderViolations(without(idx[1]))
-		victim := idx[1]
+		va, vb := dayOrderViolations(without(f.A)), dayOrderViolations(without(f.B))
+		victim := f.B
 		switch {
 		case va < vb:
-			victim = idx[0]
+			victim = f.A
 		case vb < va:
-			victim = idx[1]
+			victim = f.B
 		default:
 			plan.Tied = true
 		}
@@ -239,14 +108,14 @@ func planTripRepair(items []store.ItineraryItem) repairPlan {
 	}
 
 	var kept []store.ItineraryItem
-	for i, r := range runs {
+	for i, r := range c.Runs {
 		if drop[i] {
-			for _, it := range r.Items {
+			for _, it := range items[r.Start:r.End] {
 				plan.DeleteIDs = append(plan.DeleteIDs, it.ID)
 			}
 			continue
 		}
-		kept = append(kept, r.Items...)
+		kept = append(kept, items[r.Start:r.End]...)
 	}
 	// Backstop, not a live path: two duplicate runs can never exceed half a
 	// trip's items, so this cannot fire under today's rules. It exists so that
@@ -426,5 +295,122 @@ func runRepairSections(ctx context.Context, args []string) error {
 	}
 	log.Printf("checked %d candidate trip(s): %d with duplicates, %d left alone; %s",
 		len(ids), flagged, skipped, mode)
+
+	return auditTripScopeGuard(ctx, q, *only, *verbose)
+}
+
+// auditGuardTripsSQL is the guard audit's own candidate set, and it is
+// deliberately NOT candidateTripsSQL. That query prefilters to trips where some
+// hub occupies two or more runs, which can only ever answer the fragmentation
+// half — a trip whose day numbers run backwards without any repeated hub would
+// never be looked at, and the audit's day-monotonicity number would be a
+// statement about the prefilter rather than about the data. The guard runs on
+// every payload, so the audit scans every trip that has items.
+//
+// Ordered, unlike candidateTripsSQL, so two runs over an unchanged database
+// produce the same report in the same order.
+const auditGuardTripsSQL = `
+SELECT DISTINCT trip_id FROM itinerary_items ORDER BY trip_id
+`
+
+// auditTripScopeGuard answers, for every trip: would these items, resubmitted as
+// a scope-'trip' payload, be REJECTED by the guard? It writes nothing and
+// changes no verdict above it — its only job is to turn "the guard is probably
+// safe on real data" into a number somebody can read.
+//
+// Reading a stored trip as a payload is exact rather than approximate: an
+// itinerary IS what a scope-'trip' payload becomes, and inspectTripScope is
+// literally the function the write path calls, reached through the SAME
+// classifier via the stored-row reducer (pinned by
+// TestStoredAndSubmittedReduceIdentically).
+//
+// What a reader has to judge, and what the output is shaped to let them judge:
+// a flagged trip is either corruption that already happened — these are the
+// trips the repair pass above exists for — or a legitimate itinerary the guard
+// would wrongly block. Only the second kind invalidates the guard, so every
+// finding names its places.
+//
+// It runs AFTER the repair pass, deliberately: under -apply that means it
+// reports the state the database is actually left in, not the state it was
+// found in. Under the default dry run the two are the same thing.
+func auditTripScopeGuard(ctx context.Context, q *store.Queries, only string, verbose bool) error {
+	var ids []uuid.UUID
+	if only != "" {
+		id, err := uuid.Parse(only)
+		if err != nil {
+			return fmt.Errorf("bad -trip id: %w", err)
+		}
+		ids = append(ids, id)
+	} else {
+		rows, err := dbPool.Query(ctx, auditGuardTripsSQL)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id uuid.UUID
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			ids = append(ids, id)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+
+	var rejected, fragmented, dayBroken, fragOnly int
+	for _, id := range ids {
+		items, err := q.GetItineraryItemsByTrip(ctx, id)
+		if err != nil {
+			return err
+		}
+		v := inspectTripScope(runItemsOfStored(items))
+		if v.ok() {
+			// Fragmentation with no day break does NOT reject — it is the
+			// measured false-positive class (a revisit that repeats a place).
+			// Reported anyway, marked as a non-rejection, because how often it
+			// occurs in real data is the number that would justify ever
+			// tightening the rule.
+			if len(v.Fragmented) > 0 {
+				fragOnly++
+				log.Printf("trip %s: allowed, but fragmented with no day break: %s", id, describeFragments(v))
+			}
+			continue
+		}
+		rejected++
+		log.Printf("trip %s: WOULD BE REJECTED by the scope 'trip' guard", id)
+		if v.fragmentationRejects() {
+			fragmented++
+			log.Printf("    fragmented: %s", describeFragments(v))
+		}
+		if len(v.Breaks) > 0 {
+			dayBroken++
+			for i, b := range v.Breaks {
+				if i == straySampleCap {
+					log.Printf("    day order: and %d more", len(v.Breaks)-i)
+					break
+				}
+				log.Printf("    day order: %s is day %d, after day %d", b.Name, b.Day, b.Prev)
+			}
+		}
+		if verbose {
+			for _, it := range items {
+				log.Print(describeItem(it))
+			}
+			for _, s := range v.Skipped {
+				log.Printf("    also: %s", s)
+			}
+		}
+	}
+
+	log.Printf("guard audit (report only, nothing written): scanned %d trip(s) with itinerary items — "+
+		"%d would be rejected (%d fragmented, %d day-order), %d would pass "+
+		"(%d of those fragmented but allowed: no day break)",
+		len(ids), rejected, fragmented, dayBroken, len(ids)-rejected, fragOnly)
+	if len(ids) == 0 {
+		log.Printf("guard audit: NO TRIPS TO CHECK — this database is empty, so this is not evidence " +
+			"that the guard is safe. Point DATABASE_URL at a database with real trips.")
+	}
 	return nil
 }

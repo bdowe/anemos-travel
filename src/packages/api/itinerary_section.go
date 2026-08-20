@@ -232,6 +232,18 @@ func locationFromItem(it store.ItineraryItem) map[string]any {
 func spliceSection(existing []store.ItineraryItem, sel sectionSelector, newLocs []map[string]any) ([]map[string]any, error) {
 	switch sel.Scope {
 	case "trip":
+		// Scope 'trip' hand-authors the global position order and every day
+		// number for the whole trip at once, and both the tool description and
+		// the system prompt route EVERY cross-section edit here — so the most
+		// error-prone work arrives on what used to be the only unvalidated
+		// path. The two guards below are the ones the 2026-08-20 corruption
+		// walked straight through. Like every other rejection in this file they
+		// fire before anything is written: replaceTripSection calls
+		// spliceSection before its delete, so the model retries against an
+		// unchanged trip.
+		if err := errInvalidTripScopePayload(newLocs); err != nil {
+			return nil, err
+		}
 		return newLocs, nil
 	case "day":
 		if sel.Day == nil {
@@ -349,6 +361,55 @@ func errStraySectionItems(sel sectionSelector, newLocs, strays []map[string]any,
 		"To change only this section, resend just the places that are in %s. The trip has %s",
 		len(strays), len(newLocs), describeSelector(sel), describeStrays(strays), hint,
 		describeSelector(sel), describeSections(existing))
+}
+
+// errInvalidTripScopePayload is the self-correcting rejection for a whole-trip
+// rewrite that would fragment a city or run its days backwards. Returns nil when
+// the payload is fine.
+//
+// Both checks come from inspectTripScope — the SAME classifier the offline
+// repair tool runs, so what `repair-sections` predicts and what this rejects can
+// never come apart. Neither check is a "each city appears once" rule: a hub in
+// two runs is a supported itinerary shape (Paris → Rome → Paris) and passes, and
+// so does a revisit that repeats a place, which fragmentation alone would
+// wrongly catch (see tripScopeVerdict.fragmentationRejects).
+//
+// Fragmentation is reported first when both fire. A model told to reassemble a
+// city usually fixes the day sequence in the same edit, whereas fixing the days
+// alone leaves the city split — so leading with the city costs one round trip
+// instead of two.
+func errInvalidTripScopePayload(newLocs []map[string]any) error {
+	v := inspectTripScope(runItemsOfLocations(newLocs))
+	switch {
+	case v.fragmentationRejects():
+		return fmt.Errorf("%d of the %d places sent would split a city into two separate legs with different dates: %s; "+
+			"a city sent as two runs renders TWICE — once with its dates and once collapsed to a near-zero-night stop — so nothing was changed. "+
+			"Resend the COMPLETE itinerary with every place in a city grouped together in ONE unbroken run, in the order the traveler visits them, and one day sequence that only ever moves forward. "+
+			"A city the traveler genuinely returns to later is fine: send that return visit's OWN places on its OWN later days, not a second copy of the first visit's list",
+			fragmentedItemCount(v), len(newLocs), describeFragments(v))
+	case len(v.Breaks) > 0:
+		b := v.Breaks[0]
+		more := ""
+		if n := len(v.Breaks) - 1; n > 0 {
+			more = fmt.Sprintf(" (and %d more place(s) further down)", n)
+		}
+		return fmt.Errorf("the day numbers stop running forwards partway through the list: %q is day %d but comes after day %d%s; "+
+			"day numbers increase across the whole trip in the order the places are sent, and a backwards step is what silently moves a city's dates and night count — so nothing was changed. "+
+			"Resend the COMPLETE itinerary in visit order with one forward-running day sequence. "+
+			"The day the traveler MOVES between cities is shared, not repeated backwards: it carries the SAME number in the city they leave and the city they reach",
+			b.Name, b.Day, b.Prev, more)
+	}
+	return nil
+}
+
+// fragmentedItemCount counts the places caught up in the fragmentation, so the
+// rejection opens the way errStraySectionItems does — "N of the M places sent".
+func fragmentedItemCount(v tripScopeVerdict) int {
+	n := 0
+	for _, f := range v.Fragmented {
+		n += v.Runs[f.A].len() + v.Runs[f.B].len()
+	}
+	return n
 }
 
 // describeSections summarizes the days and hubs present in a trip for the

@@ -142,27 +142,6 @@ func TestPlanTripRepairIgnoresTinyTrips(t *testing.T) {
 	}
 }
 
-func TestHubRunsFoldCase(t *testing.T) {
-	runs := hubRuns([]store.ItineraryItem{
-		ritem(0, "a", 1, "Krakow"),
-		ritem(1, "b", 2, "krakow"),
-		ritem(2, "c", 3, "Prague"),
-	})
-	if len(runs) != 2 {
-		t.Fatalf("mixed case is one hub run, got %d runs", len(runs))
-	}
-	if len(runs[0].Items) != 2 {
-		t.Fatalf("first run should hold both Krakow items, got %d", len(runs[0].Items))
-	}
-}
-
-func TestDayOrderViolationsCountsBackwardSteps(t *testing.T) {
-	fwd := []store.ItineraryItem{ritem(0, "a", 1, "X"), ritem(1, "b", 2, "X"), ritem(2, "c", 3, "X")}
-	if n := dayOrderViolations(fwd); n != 0 {
-		t.Fatalf("ascending days have no violations, got %d", n)
-	}
-	back := []store.ItineraryItem{ritem(0, "a", 3, "X"), ritem(1, "b", 1, "X"), ritem(2, "c", 2, "X")}
-	if n := dayOrderViolations(back); n != 1 {
-		t.Fatalf("one backward step, got %d", n)
-	}
-}
+// hubRuns and dayOrderViolations moved to the shared classifier with the
+// predicate they belong to; their tests moved with them, to
+// itinerary_runs_test.go.
