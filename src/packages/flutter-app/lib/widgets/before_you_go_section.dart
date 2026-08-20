@@ -46,22 +46,7 @@ class BeforeYouGoSection extends ConsumerWidget {
   /// transport and packing stop being plans and start being errands.
   static const int _windowDays = 14;
 
-  static const int _maxRows = 3;
-
-  /// Which finding category each ladder step speaks for, so the band above and
-  /// the rows below cannot both report the same gap. Kinds absent from this
-  /// map (a future phase from a newer server) filter nothing, which shows one
-  /// duplicate row at worst — strictly better than hiding a real finding
-  /// because an unknown kind matched nothing.
-  static const _stepCategory = <String, String>{
-    'set_dates': 'dates',
-    'plan_itinerary': 'unscheduled',
-    'schedule_items': 'unscheduled',
-    'add_lodging': 'lodging',
-    'add_transport': 'transit',
-    'add_packing': 'packing',
-    'book_trip': 'bookings',
-  };
+  static const int _maxRows = 5;
 
   static const _categoryIcons = <String, IconData>{
     'dates': Icons.event_outlined,
@@ -73,14 +58,95 @@ class BeforeYouGoSection extends ConsumerWidget {
     'bookings': Icons.confirmation_number_outlined,
   };
 
-  /// critical first, then warn, then info — the order a traveler with four
-  /// days left needs them in. Stable within a severity: the server's own
-  /// ordering survives, so the list does not reshuffle between builds.
+  /// critical first, then warn, then info. Only breaks ties among the UNDATED
+  /// tail — the dated rows are ordered by the trip itself (see [openItems]).
   static const _severityRank = <String, int>{
     'critical': 0,
     'warn': 1,
     'info': 2,
   };
+
+  /// The date a finding's fix acts on, or null when it is not a leg of the
+  /// journey. The two shapes the server emits carry it under different names
+  /// because they mean different things — a stay's `checkIn` is the night it
+  /// starts, a transport leg's `date` is "the destination hub's first day"
+  /// (trip_review.go) — but both are the point in the trip where that gap
+  /// sits, which is exactly what orders them.
+  static String? _fixDate(TripFinding f) => f.fix?.checkIn ?? f.fix?.date;
+
+  /// Two rows on the same date: you travel, then you sleep there. Anything
+  /// else keeps its relative order.
+  static int _sameDayRank(TripFinding f) => switch (f.category) {
+        'transit' => 0,
+        'lodging' => 1,
+        _ => 2,
+      };
+
+  /// The trip's open items **in the order the trip is actually travelled** —
+  /// the same walk the next-step ladder's phase 3 makes ("Book travel & stays,
+  /// in itinerary order… outbound leg → stay → next leg → … → return leg",
+  /// specs/next-step-cta).
+  ///
+  /// It is reproduced here rather than read off the server because the ladder
+  /// only ever names its FIRST open slot; the walk itself lives behind
+  /// `syncTodos`, which is a POST that upserts the derived checklist, so Home
+  /// must not call it. Findings carry enough to rebuild the sequence: every
+  /// lodging gap knows its `checkIn` and every transport gap its leg date, so
+  /// sorting on that one key yields stay-in-Kraków → fly-to-Copenhagen →
+  /// stay-in-Copenhagen without inventing an ordering of its own.
+  ///
+  /// Undated findings — packing, budget, a whole-trip warning — cannot join a
+  /// chronological walk, so they fall to the tail in severity order rather
+  /// than being dropped or being given a date they do not have.
+  ///
+  /// [promoted] is the step already showing in the band above, and exactly one
+  /// row is removed for it: the one its fix names. Filtering by CATEGORY
+  /// instead — which this did first — deleted every lodging gap on the trip
+  /// the moment the ladder reached lodging, leaving a "Before you go" that
+  /// listed nothing but transport.
+  ///
+  /// Pure and static so the order can be unit-tested without a harness, the
+  /// way [NextStepCard] is.
+  @visibleForTesting
+  static List<TripFinding> openItems(List<TripFinding> findings,
+      {NextStep? promoted}) {
+    final rows = [
+      for (final f in findings)
+        if (!_isPromoted(f, promoted)) f
+    ];
+    rows.sort((a, b) {
+      final da = _fixDate(a), db = _fixDate(b);
+      if (da != null && db != null) {
+        // ISO-8601 date-only strings: lexicographic IS chronological.
+        final byDate = da.compareTo(db);
+        if (byDate != 0) return byDate;
+        return _sameDayRank(a).compareTo(_sameDayRank(b));
+      }
+      // A dated row is a place in the journey; an undated one is a chore.
+      if (da != null) return -1;
+      if (db != null) return 1;
+      return (_severityRank[a.severity] ?? 2)
+          .compareTo(_severityRank[b.severity] ?? 2);
+    });
+    return rows;
+  }
+
+  /// Whether [f] is the very gap [promoted] already names — matched on what
+  /// the two fixes ACT ON, never on category. A lodging step is the same gap
+  /// as a lodging finding when they book the same city on the same night; a
+  /// transport step matches on the leg's endpoints.
+  static bool _isPromoted(TripFinding f, NextStep? promoted) {
+    final step = promoted?.fix;
+    if (step == null) return false;
+    if (step.action != f.fix?.action) return false;
+    return switch (step.action) {
+      'add_lodging' => step.city == f.fix?.city &&
+          step.checkIn == f.fix?.checkIn,
+      'add_transport' => step.origin == f.fix?.origin &&
+          step.destination == f.fix?.destination,
+      _ => false,
+    };
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -91,12 +157,7 @@ class BeforeYouGoSection extends ConsumerWidget {
     final value = review.valueOrNull;
     if (value == null) return const SizedBox.shrink();
 
-    final promoted = _stepCategory[value.nextStep?.kind ?? ''];
-    final rows = <TripFinding>[
-      for (final f in value.findings)
-        if (f.category != promoted) f
-    ]..sort((a, b) => (_severityRank[a.severity] ?? 2)
-        .compareTo(_severityRank[b.severity] ?? 2));
+    final rows = openItems(value.findings, promoted: value.nextStep);
     if (rows.isEmpty) return const SizedBox.shrink();
 
     final shown = rows.take(_maxRows).toList();

@@ -112,7 +112,14 @@ void main() {
     // Same headline + CTA, no photo, no suggestion chips.
     expect(find.text('Plan less. Travel more.'), findsOneWidget);
     expect(find.text("Let's go"), findsOneWidget);
-    expect(find.text('2 days in Paris'), findsNothing);
+    // Scoped to the hero's ActionChip, like the assertion above it and the two
+    // in home_near_me_test: the inspiration rail draws from this same pool and
+    // now renders for a returning user instead of being gated off, so the BARE
+    // text appears on a destination card further down the page. It did so only
+    // SOMETIMES — the rail is a lazy horizontal ListView over a shuffled pool,
+    // so whether the Paris card got built varied run to run, which is what made
+    // this fail intermittently instead of immediately.
+    expect(find.widgetWithText(ActionChip, '2 days in Paris'), findsNothing);
     expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
   });
 
