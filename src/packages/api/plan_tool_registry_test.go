@@ -38,6 +38,11 @@ func TestPlanSessionToolsOrderStable(t *testing.T) {
 		// set_trip_description sits after it, gated, so the anonymous tail is
 		// back to being untouched by a tool append — an anonymous session has no
 		// saved trip whose description could be changed.
+		//
+		// replace_leg is last and gated on a BOUND trip (like
+		// update_itinerary_section), so it lands in the trip-bound shape only:
+		// the anonymous and unbound-authed tools arrays stay byte-identical and
+		// take no cache re-warm at all.
 		{"anonymous", &planSession{}, append(append([]string{}, base...), "create_itinerary", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "search_hotels")},
 		{"authed", &planSession{authed: true},
 			append(append([]string{}, base...), "create_itinerary", "save_preferences", "get_trip",
@@ -45,7 +50,7 @@ func TestPlanSessionToolsOrderStable(t *testing.T) {
 		{"authed trip-bound", &planSession{authed: true, boundTripID: &tid},
 			append(append([]string{}, base...), "update_itinerary_section", "save_preferences", "get_trip",
 				"add_booking_todo", "update_booking_todo", "remove_booking_todo", "add_packing_item", "review_trip",
-				"add_accommodation", "add_transport_segment", "move_itinerary_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates", "set_trip_origin", "set_leg_transport_mode", "search_hotels", "set_trip_description")},
+				"add_accommodation", "add_transport_segment", "move_itinerary_item", "set_travel_mode", "suggest_replies", "search_nearby", "find_parking", "set_trip_dates", "set_leg_dates", "set_trip_origin", "set_leg_transport_mode", "search_hotels", "set_trip_description", "replace_leg")},
 	}
 	for _, tc := range cases {
 		tools := planSessionTools(tc.session)
