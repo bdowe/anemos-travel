@@ -2638,6 +2638,20 @@ class AppLocalizationsEs extends AppLocalizations {
   String get homeLocalGuidesTitle => 'Guías locales';
 
   @override
+  String get homeBeforeYouGoTitle => 'Antes de viajar';
+
+  @override
+  String homeBeforeYouGoMore(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n asuntos pendientes más',
+      one: '1 asunto pendiente más',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get homeInspirationTitle => 'Algún lugar nuevo';
 
   @override
