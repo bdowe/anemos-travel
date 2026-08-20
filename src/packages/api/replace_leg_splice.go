@@ -77,7 +77,11 @@ func parseLegAddress(city string) legAddress {
 // spelled the way this tool accepts them back — the self-correcting error
 // payload, in the style of describeSections/legsSummary. Hubless runs are
 // skipped: a leg with no city is not one this tool can address.
-func describeLegRuns(runs []hubRun) string {
+//
+// Takes the runItem slice the runs index into: since the scope-'trip' guard
+// landed, a hubRun is a half-open index RANGE rather than a carried item list,
+// so a run and the list it was computed from travel together.
+func describeLegRuns(runs []hubRun, rits []runItem) string {
 	seen := map[string]int{}
 	var parts []string
 	for _, r := range runs {
@@ -91,7 +95,7 @@ func describeLegRuns(runs []hubRun) string {
 		if seen[k] > 1 {
 			label = fmt.Sprintf("%s#%d", hub, seen[k])
 		}
-		if lo, hi, ok := dayRange(r.Items); ok {
+		if lo, hi, ok := dayRange(r.slice(rits)); ok {
 			parts = append(parts, fmt.Sprintf("%s (trip days %d-%d)", label, lo, hi))
 		} else {
 			parts = append(parts, fmt.Sprintf("%s (no day numbers)", label))
@@ -110,7 +114,7 @@ func describeLegRuns(runs []hubRun) string {
 // leave them alone. So a bare name that matches two runs is answered with a
 // question, never with a guess: replacing the wrong Paris would delete places
 // nobody asked about.
-func selectLegRun(runs []hubRun, addr legAddress) (int, error) {
+func selectLegRun(runs []hubRun, rits []runItem, addr legAddress) (int, error) {
 	var matches []int
 	for i, r := range runs {
 		if strings.TrimSpace(r.Hub) != "" && sameHub(r.Hub, addr.hub) {
@@ -119,13 +123,13 @@ func selectLegRun(runs []hubRun, addr legAddress) (int, error) {
 	}
 	if len(matches) == 0 {
 		return 0, fmt.Errorf("no leg for %q in this trip, so nothing was changed. Its city legs, in order, are: %s. Use the city name exactly as it appears in the itinerary",
-			addr.hub, describeLegRuns(runs))
+			addr.hub, describeLegRuns(runs, rits))
 	}
 	if addr.visit == 0 {
 		if len(matches) > 1 {
 			var spans []string
 			for n, i := range matches {
-				lo, hi, ok := dayRange(runs[i].Items)
+				lo, hi, ok := dayRange(runs[i].slice(rits))
 				if !ok {
 					spans = append(spans, fmt.Sprintf("%s#%d (no day numbers)", runs[i].Hub, n+1))
 					continue
@@ -139,7 +143,7 @@ func selectLegRun(runs []hubRun, addr legAddress) (int, error) {
 	}
 	if addr.visit > len(matches) {
 		return 0, fmt.Errorf("the itinerary visits %s %d time(s), so there is no visit #%d, and nothing was changed. Its city legs are: %s",
-			addr.hub, len(matches), addr.visit, describeLegRuns(runs))
+			addr.hub, len(matches), addr.visit, describeLegRuns(runs, rits))
 	}
 	return matches[addr.visit-1], nil
 }
@@ -206,19 +210,23 @@ func spliceLeg(existing []store.ItineraryItem, city, newCity string, places []ma
 		return legSplice{}, fmt.Errorf("places came back empty, so this call would DELETE the %s leg rather than replace it, and nothing was changed. Send the new city's places — at least the one they arrive at and one easy place for the day they move on", addr.hub)
 	}
 
-	runs := hubRuns(existing)
-	idx, err := selectLegRun(runs, addr)
+	// runItemsOfStored is the shared reduction the run classifier works over
+	// (itinerary_runs.go). Computed once and carried alongside `runs`, because a
+	// hubRun is an index RANGE into the list it was built from — `existing` and
+	// `rits` are parallel, so a run's range slices either one.
+	rits := runItemsOfStored(existing)
+	runs := hubRuns(rits)
+	idx, err := selectLegRun(runs, rits, addr)
 	if err != nil {
 		return legSplice{}, err
 	}
 	run := runs[idx]
 
-	lo, hi, dated := dayRange(run.Items)
+	first, last, dated := dayRange(run.slice(rits))
 	if !dated {
 		return legSplice{}, fmt.Errorf("the %s leg's places carry no day numbers, so it has no span to preserve and replacing it would leave the new city's dates to be guessed. Nothing was changed — give %s's places day numbers with update_itinerary_section scope 'city' first, or set its dates with set_leg_dates",
 			run.Hub, run.Hub)
 	}
-	first, last := int(lo), int(hi)
 
 	newHub := strings.TrimSpace(newCity)
 	if newHub == "" {
@@ -230,13 +238,13 @@ func spliceLeg(existing []store.ItineraryItem, city, newCity string, places []ma
 		return legSplice{}, err
 	}
 
-	out := make([]map[string]any, 0, len(existing)-len(run.Items)+len(newLocs))
+	out := make([]map[string]any, 0, len(existing)-run.len()+len(newLocs))
 	for i, r := range runs {
 		if i == idx {
 			out = append(out, newLocs...)
 			continue
 		}
-		for _, it := range r.Items {
+		for _, it := range existing[r.Start:r.End] {
 			out = append(out, locationFromItem(it))
 		}
 	}
@@ -252,7 +260,7 @@ func spliceLeg(existing []store.ItineraryItem, city, newCity string, places []ma
 		NewHub:    newHub,
 		FirstDay:  first,
 		LastDay:   last,
-		Replaced:  len(run.Items),
+		Replaced:  run.len(),
 		Days:      days,
 	}, nil
 }
