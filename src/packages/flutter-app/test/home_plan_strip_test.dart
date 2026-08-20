@@ -112,7 +112,13 @@ void main() {
     // Same headline + CTA, no photo, no suggestion chips.
     expect(find.text('Plan less. Travel more.'), findsOneWidget);
     expect(find.text("Let's go"), findsOneWidget);
-    expect(find.text('2 days in Paris'), findsNothing);
+    // Scoped to the chip for the same reason its sibling above is, and the
+    // comment there says why: the inspiration rail draws from the same pool.
+    // The chip PICKER is pinned by the override, but the rail's sibling
+    // provider shuffles the WHOLE pool and the rail is a lazy ListView, so
+    // whether this title is among the built cards is a coin flip. As a bare
+    // find.text this failed ~35% of runs, on main as well as here.
+    expect(find.widgetWithText(ActionChip, '2 days in Paris'), findsNothing);
     expect(find.byIcon(Icons.flight_takeoff), findsOneWidget);
   });
 
