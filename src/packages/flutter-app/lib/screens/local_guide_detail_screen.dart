@@ -10,6 +10,7 @@ import '../models/local_recommendation.dart';
 import '../providers/auth_provider.dart';
 import '../providers/local_provider.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
 import '../theme/spacing.dart';
 import '../widgets/add_to_trip_sheet.dart';
 import '../widgets/page_container.dart';
@@ -442,13 +443,9 @@ class _GuidePin extends StatelessWidget {
         color: AppColors.toolLocal,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        // The trip_map pin family's shared drop — this pin says outright that
+        // it matches that look.
+        boxShadow: AppShadows.pin,
       ),
       alignment: Alignment.center,
       child: Text(

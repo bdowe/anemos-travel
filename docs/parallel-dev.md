@@ -69,8 +69,45 @@ make wt-rm NAME=feature-x         # after merge: stack down -v, worktree+branch 
 
 Harness-created worktrees (Mode A) self-provision with `make wt-init`.
 `make` reads `.wt.env` automatically; for bare `docker`/`go` commands run
-`set -a; . .wt.env; set +a` first — an unsourced bare command falls back to
+`set -a; . ./.wt.env; set +a` first — an unsourced bare command falls back to
 the main stack's ports/project.
+
+**Write `./.wt.env`, with the `./`.** In zsh — this repo's shell — `.` on a
+bare relative name searches `$PATH`, not the working directory, so
+`. .wt.env` fails with *"no such file or directory: .wt.env"* while the file
+is sitting right there. It is one line of stderr in the middle of a compound
+command, and the command then **runs anyway, against the DEFAULT project**.
+That is how a lane's `docker compose … down -v` deleted the main checkout's
+`development_postgres_data` instead of its own. Prefer `make`, which sources
+the file itself; when you must go bare, pass `-p "$GTT_PROJECT"` explicitly
+so the target is named in the command rather than inherited from an
+environment that may not have loaded.
+
+**Booting the stack breaks the host analyzer — `flutter pub get` fixes it.**
+The Flutter dev container runs its own `flutter pub get` against the *mounted*
+source tree, and the file it writes,
+`src/packages/flutter-app/.dart_tool/package_config.json`, holds absolute
+paths to the SDK. It comes back pointing at the container's
+(`file:///flutter/packages/flutter`) instead of the host's
+(`file:///opt/homebrew/share/flutter/...`), so every host tool that reads it
+sees no Flutter at all:
+
+```
+error - Target of URI doesn't exist: 'package:flutter/material.dart'
+error - Undefined class 'State'.  (…~32k more)
+```
+
+Nothing is wrong with the branch. Run `flutter pub get` on the **host**, from
+`src/packages/flutter-app`, and it is over — the file is gitignored and
+per-worktree, so this affects no one else and nothing needs committing.
+
+What makes it cost time is that **it does not look like a tooling problem**:
+the gates stay green, because `flutter analyze` and `flutter test` each run an
+implicit `pub get` and silently repair the file before doing anything. Only
+the tools that don't — your editor's analysis server, and bare `dart analyze`
+— report the wall of errors. So the failure shows up as "my IDE says the
+branch is broken while every check passes", which reads like a bad merge.
+Expect it again after any `docker-dev` restart.
 
 ## 3. Lane partitioning rules (the hub table)
 

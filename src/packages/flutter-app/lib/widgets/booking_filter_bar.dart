@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
+import '../theme/app_colors.dart';
 import '../theme/spacing.dart';
 
 /// One destination the Bookings filter can narrow to, with the count of the
@@ -121,7 +122,25 @@ class _BookingFilterBarState extends State<BookingFilterBar> {
     );
   }
 
+  /// One destination chip: the city, its booked count, and the house
+  /// selected-chip treatment.
+  ///
+  /// **The selected chip stays ENABLED.** Re-tapping it is inert either way,
+  /// but `onSelected: null` marks a [ChoiceChip] *disabled*, and M3 then
+  /// paints the SELECTED chip in the disabled palette — `onSurface` at 12%
+  /// under dimmed ink. It reads as "unavailable", and it leaves every
+  /// unselected chip in the strip looking louder than the active one, which
+  /// inverts the hierarchy on a row that IS this view's navigation.
+  /// `DESIGN.md` is explicit that a selected chip takes the brand tint
+  /// family. The atlas's year chips carry the same fix, for the same reason.
+  ///
+  /// [AppColors.brandTintFill] rather than the raw tint because that constant
+  /// is teal-50: correct on paper, a light block punched into a dark page
+  /// anywhere else. The label style is stated outright on both sides — an M3
+  /// label left to default paints `onSurface`, the wrong ink on a tinted
+  /// fill — and the count beside it takes the same ink, being the same word.
   Widget _destinationChip(ThemeData theme, BookingDestination d) {
+    final scheme = theme.colorScheme;
     final isSelected = widget.selected == d.value;
     final chip = ChoiceChip(
       // Label and count are two Texts, never one interpolated string: the
@@ -135,16 +154,22 @@ class _BookingFilterBarState extends State<BookingFilterBar> {
             ' · ${d.booked}/${d.total}',
             style: theme.textTheme.labelSmall?.copyWith(
               color: isSelected
-                  ? theme.colorScheme.onSecondaryContainer
-                  : theme.colorScheme.onSurfaceVariant,
+                  ? AppColors.onBrandTint(scheme)
+                  : scheme.onSurfaceVariant,
               fontWeight: FontWeight.w500,
             ),
           ),
         ],
       ),
       selected: isSelected,
-      // A re-tap is a dead gesture, not a clear: All is the way back.
-      onSelected: isSelected ? null : (_) => widget.onSelected(d.value),
+      // A re-tap is a dead gesture, not a clear: All is the way back. Inert,
+      // not disabled — see this method's doc.
+      onSelected: isSelected ? (_) {} : (_) => widget.onSelected(d.value),
+      selectedColor: AppColors.brandTintFill(scheme),
+      labelStyle: theme.textTheme.labelLarge?.copyWith(
+        color:
+            isSelected ? AppColors.onBrandTint(scheme) : scheme.onSurfaceVariant,
+      ),
       showCheckmark: false,
       // Full 48px hit box even though the chip paints compact — the padded
       // tap target's extra area is transparent, and compact density would
@@ -158,6 +183,7 @@ class _BookingFilterBarState extends State<BookingFilterBar> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = context.l10n;
     // One destination is not a filter — it would show exactly what All shows.
     final showStrip = widget.destinations.length > 1;
@@ -175,8 +201,18 @@ class _BookingFilterBarState extends State<BookingFilterBar> {
           ChoiceChip(
             label: Text(l10n.tripBookingsAllDestinations),
             selected: widget.selected == null,
-            onSelected:
-                widget.selected == null ? null : (_) => widget.onSelected(null),
+            // Inert, not disabled — see [_destinationChip]. All is this
+            // strip's resting state, so it is the chip most often selected
+            // and the one the dimming showed on most.
+            onSelected: widget.selected == null
+                ? (_) {}
+                : (_) => widget.onSelected(null),
+            selectedColor: AppColors.brandTintFill(scheme),
+            labelStyle: theme.textTheme.labelLarge?.copyWith(
+              color: widget.selected == null
+                  ? AppColors.onBrandTint(scheme)
+                  : scheme.onSurfaceVariant,
+            ),
             showCheckmark: false,
             materialTapTargetSize: MaterialTapTargetSize.padded,
           ),

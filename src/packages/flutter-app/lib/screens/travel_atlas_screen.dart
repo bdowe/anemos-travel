@@ -186,8 +186,14 @@ class _TravelAtlasScreenState extends ConsumerState<TravelAtlasScreen> {
     // as you pick through it. A selection that no longer exists (a refetch
     // dropped its trips) falls back to All time rather than filtering to
     // nothing.
+    //
+    // "There is a chip row" is ONE fact, so it is written once: a filter that
+    // outlived its row is a filter with nothing on screen to clear it — a
+    // refetch collapsing history onto the selected year would otherwise drop
+    // the planned pin and the Planned colophon group with nothing saying why.
     final years = atlasYears(trips, now);
-    final year = years.contains(_year) ? _year : null;
+    final showChips = years.length >= 2;
+    final year = showChips && years.contains(_year) ? _year : null;
     // One filter, three views. The map and the colophon narrow over ALL trips
     // of that year — planned ones included, still hollow — because the map is
     // *everywhere*; only the index is past-only.
@@ -206,7 +212,7 @@ class _TravelAtlasScreenState extends ConsumerState<TravelAtlasScreen> {
           // the empty affordance the artifact's thin-history drawing was
           // written to catch. Under two distinct years the row does not
           // render at all.
-          years: years.length >= 2 ? years : const <int>[],
+          years: showChips ? years : const <int>[],
           selectedYear: year,
           onYearSelected: (y) => setState(() => _year = y),
           wrapChips: wide,
