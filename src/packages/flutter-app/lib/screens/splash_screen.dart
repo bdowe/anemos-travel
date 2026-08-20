@@ -44,14 +44,15 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   /// The mark's box on this screen — the brand's largest appearance.
   ///
-  /// 128, not the 96 it launched at: the rose radiates from a small hub and
-  /// its solid bronze star measures only 76% of this box (the rest is the
-  /// thread's hairline tails), so a 96px box put a 73px rose on a full-screen
-  /// field and read timid. 128 paints a 97px rose — the size the 96 was always
-  /// meant to look like. Stops here rather than going further because the
-  /// lockup is [_markSize] + 56 tall and the loading dots sit 48px off the
-  /// bottom edge: 144 would leave 4px between them on a 320pt-tall landscape
-  /// phone.
+  /// 128, not the 96 it launched at. The Threaded Bezel's ink fills 94% of its
+  /// artboard, so this paints a 121px mark; the 96 box under the old bare-rose
+  /// art painted 73px, because that drawing's ink was only 76% of its own box.
+  /// Both changes pull the same way and the splash is where presence matters
+  /// most — this is the one screen the mark has entirely to itself.
+  ///
+  /// Stops at 128 rather than going further because the lockup is
+  /// [_markSize] + 56 tall and the loading dots sit 48px off the bottom edge:
+  /// 144 would leave 4px between them on a 320pt-tall landscape phone.
   static const double _markSize = 128;
 
   /// Where the mark's and the wordmark's centres sit relative to the viewport

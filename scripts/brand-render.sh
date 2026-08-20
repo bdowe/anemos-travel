@@ -28,16 +28,14 @@ render() {
 # shrink <in> <size> <out>  (square resample, preserves alpha)
 shrink() { sips -z "$2" "$2" "$1" --out "$3" >/dev/null; }
 
-echo "· mark (1080 master)"
+# A plain shrink of the master, no crop harness: the Threaded Bezel's ink is
+# already 94% of its artboard, so a favicon rendered straight from it is
+# effectively full-bleed. (The bare-rose mark needed a 125% crop harness here
+# to reach the same place — it wasted 24% of a 16px icon on its own margin.)
+echo "· mark (1080 master) + favicon"
 render mark.html 1080,1080 "$TMP/mark1080.png"
 shrink "$TMP/mark1080.png" 540 "$APP/assets/images/anemos_mark.png"
-
-# Its own harness rather than a shrink of the master above: a favicon gets no
-# clear space from the browser, so it crops to the rose (~95%) instead of
-# inheriting the artwork's 24% margin. See render/favicon.html.
-echo "· favicon (125% crop)"
-render favicon.html 1024,1024 "$TMP/favicon1024.png"
-shrink "$TMP/favicon1024.png" 64 "$APP/web/favicon.png"
+shrink "$TMP/mark1080.png" 64 "$APP/web/favicon.png"
 
 echo "· mark-light (1080 master)"
 render mark-light.html 1080,1080 "$TMP/marklight1080.png"
@@ -53,7 +51,7 @@ mkdir -p "$APP/assets/splash"
 shrink "$TMP/marklight1080.png" 512 "$APP/assets/splash/mark_light_4x.png"
 render splash-android12.html 1152,1152 "$APP/assets/splash/mark_light_android12.png"
 
-echo "· PWA icons (rose at 84%)"
+echo "· PWA icons (ink at 84%)"
 render icon84.html 1024,1024 "$APP/web/icons/Icon-512.png"
 shrink "$APP/web/icons/Icon-512.png" 384 "$APP/web/icons/Icon-192.png"
 

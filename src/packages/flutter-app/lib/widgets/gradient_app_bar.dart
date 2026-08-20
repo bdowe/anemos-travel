@@ -20,30 +20,34 @@ import 'brand_logo.dart';
 /// provably the same width rather than incidentally similar.
 const double _leadingSlot = kToolbarHeight;
 
-/// The rose's own size wherever this bar paints it.
+/// The mark's own size wherever this bar paints it.
 ///
-/// 58, and measured rather than guessed. `anemos_mark.png` is a 540×540 canvas
-/// holding art that measures 515×410 — 95.4% of its width but only **75.9% of
-/// its height**, with 65px of transparent padding baked in top and bottom. The
-/// mark renders `Image.asset(height: size, fit: BoxFit.contain)` against that
-/// square source, so a `size` of *n* paints a rose **0.759 n** tall and every
-/// size number in the codebase has overstated the visible mark by a third.
-/// 36 painted 27; 44 painted 33, which is why the 8-point rose's rays kept
-/// reading thin next to a 19px wordmark. **58 paints 44.**
+/// 48, and measured rather than guessed. The number that matters is not this
+/// box but what lands on the pixels, and the two differ because the artwork
+/// does not fill its own square: the Threaded Bezel's ink is **94.2%** of its
+/// artboard, so a `size` of *n* paints 0.942 n. 48 paints **45**.
+///
+/// Read the history here carefully, because two different fixes for the same
+/// complaint landed days apart and their numbers are not comparable. The bar
+/// carried 36 of the bare Waypoint Thread rose, whose ink was only **75.9%** of
+/// its artboard — that painted 27, which is why the star's rays read thin
+/// beside a 19px wordmark. PR #509 grew the box to 44 (painted 33); the
+/// follow-up fix pushed it to 58 against that same 0.759 ratio to paint 44.
+/// Swapping the artwork to the bezel changes the ratio, not just the drawing,
+/// so 58 would now paint 55 into a 56px bar. **Never port a box size across
+/// the two marks — divide the painted size you want by 0.942.**
 ///
 /// The ceiling is `DESIGN.md`'s clear-space minimum (≥25% of the mark's
-/// height), not the rail's tap box: at 58 the rose is 55.3 wide in the 80px
-/// rail, leaving 12.3px of clear space against an 11px minimum. **64 would
-/// paint 48.6 and leave 9.5 — it fails that rule, and that rule is what bounds
-/// this.** The rail's 40px tap box does not bound it: [OverflowBox] centres an
-/// oversized child on the unchanged box, so the alignment contract at
-/// `app_shell.dart:150` survives untouched.
+/// height), which this clears with room: 45 in the 80px rail leaves 17.4 of
+/// clear space against an 11.3 minimum. What actually bounds it is the 56px
+/// bar — 48 leaves 5.4 above and below, matching the 6.0 the 58-box rose was
+/// shipped at, and the bezel is a dense circular silhouette rather than a
+/// sparse star, so it carries that margin less forgivingly. 50 would paint 47
+/// and leave 4.5, which reads wedged.
 ///
-/// The real structural fix is to trim the padding out of the asset so `size`
-/// means what it says at all four call sites; that re-tunes auth (72) and the
-/// boot splash too and rewrites `DESIGN.md`'s size ladder, so it is recorded
-/// as its own pass rather than smuggled in here.
-const double _markSize = 58;
+/// 48 is also exactly [kMinTouchTarget], so the mark and the tap box it sits
+/// in are one number here.
+const double _markSize = 48;
 
 /// The rose's tap box, centred inside the [_leadingSlot].
 ///

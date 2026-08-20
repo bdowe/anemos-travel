@@ -3,13 +3,23 @@ import '../constants/app_info.dart';
 import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
 
-/// Anemos brand mark: the Waypoint Thread rose — an 8-point wind rose
-/// (άνεμος = wind) in sun-bronze (#D2A24C/#8B6D3A halves), threaded
-/// west→northeast by an azure route line (#3B9CC4 over #20578B) with a
-/// waypoint dot: chat in, trip out. Source SVGs live in docs/branding/; PNGs
-/// are rendered by scripts/brand-render.sh. (The old horse mark retired with
-/// the Golden Tempo name; the agent persona "Ferdinand" keeps the equine
+/// Anemos brand mark: the Threaded Bezel — an 8-point sun-bronze wind rose
+/// (άνεμος = wind, #D2A24C) inside a mariner's compass bezel with a tick ring,
+/// crossed south-west to north-east by a straight azure route line (#236684):
+/// instrument outside, journey inside. Source SVGs live in docs/branding/;
+/// PNGs are rendered by scripts/brand-render.sh. (The old horse mark retired
+/// with the Golden Tempo name; the agent persona "Ferdinand" keeps the equine
 /// nod.)
+///
+/// It replaced the bare Waypoint Thread rose (kept as
+/// `docs/branding/mark-thread-backup.svg`), and the reason is arithmetic
+/// rather than taste: that drawing's ink filled only 76% of its square
+/// artboard — the rest was the route thread's hairline tails, which antialias
+/// to nothing below ~48px — so every call site here painted a mark a quarter
+/// smaller than the number it passed. The bezel fills 94%. Sizes throughout
+/// the app were re-derived against that when it landed; **a box size is not
+/// comparable across the two drawings**, so do not port a number from git
+/// history without multiplying it through.
 /// Three forms:
 /// - [BrandLogo.lockup] — the full rose + "Anemos" wordmark image. Currently
 ///   unused: the wordmark is live text ([BrandWordmark]) everywhere, and this
@@ -17,25 +27,34 @@ import '../theme/spacing.dart';
 ///   ~7pt of dead space below the mark.
 /// - [BrandLogo.mark] — the rose icon only, for neutral chrome and page
 ///   surfaces (the app bar, nav rail, auth screen).
-/// - [BrandLogo.markLight] — the reversed rose (white/pale-azure #D6ECF5
-///   thread, bronze rose unchanged), for teal fields (the boot splash — the
+/// - [BrandLogo.markLight] — the reversed cut (bezel ring, ticks and thread in
+///   white; bronze rose unchanged), for teal fields (the boot splash — the
 ///   last one standing after the de-gradient pass took the app bar to
 ///   neutral surface).
 ///
 /// The word itself is [BrandWordmark], not part of this class — see there.
 ///
-/// **Plate policy, v3: the rose always floats bare.** No plate is drawn
+/// **Plate policy, v3: the mark always floats bare.** No plate is drawn
 /// anywhere in the app; the only question a surface asks is which cut of the
-/// rose it needs. Neutral chrome and page surfaces (app bar, nav rail, auth
+/// mark it needs. Neutral chrome and page surfaces (app bar, nav rail, auth
 /// screen) take the dark [BrandLogo.mark]; the splash's teal field takes
-/// [BrandLogo.markLight], because the dark artwork's azure thread would
-/// vanish against the teal there.
+/// [BrandLogo.markLight], because the dark artwork's azure bezel would sink
+/// into the teal there rather than stand on it.
 ///
 /// v2 kept a white `BrandBadge` plate on gradient app bars. v3 retired it: the
 /// gradient behind it never changes with theme, so the plate was white in dark
 /// mode too, where it was the brightest object on the screen — and the splash
-/// had already shown (PR #390) that the reversed rose reads on this exact
+/// had already shown (PR #390) that the reversed mark reads on this exact
 /// gradient unaided. Re-litigate the policy here, not at a call site.
+///
+/// **The bezel ring is not a plate, and the distinction is the whole policy.**
+/// A plate is opaque, drawn by the app, sits *behind* the mark, and has to
+/// answer to the theme — which is exactly how v2's white badge ended up being
+/// the brightest thing in dark mode. The ring is transparent-backed line work
+/// inside the artwork itself: it ships in the SVG, recolors with the mark's
+/// two cuts, and lets the surface show through its middle. Nothing here draws
+/// a container. So this policy still forbids what it was written to forbid —
+/// do not read the ring as permission to reintroduce a badge.
 class BrandLogo extends StatelessWidget {
   static const String _lockupAsset = 'assets/images/anemos_logo.png';
   static const String _markAsset = 'assets/images/anemos_mark.png';
