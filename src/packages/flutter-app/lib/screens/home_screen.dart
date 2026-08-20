@@ -188,8 +188,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // one here would starve it (see TripHeroCard.showMap).
                     showMap: false,
                     // On the Trips tab (not pushed over Home): the Trips nav
-                    // item highlights and back lands on the trips list.
-                    onTap: () => openTripOnTripsTab(ref, liveTrip.id),
+                    // item highlights, and `from` sends back here rather than
+                    // to a trips list this traveler never opened.
+                    onTap: () =>
+                        openTripOnTripsTab(ref, liveTrip.id, from: AppTab.home),
                   ),
                   const SizedBox(height: AppSpacing.xl),
                 ],
@@ -205,8 +207,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           title: continueTrip.title,
                           dateRange: continueTrip.dateRange,
                           startDate: continueTrip.startDate,
-                          onTap: () =>
-                              openTripOnTripsTab(ref, continueTrip.tripId),
+                          onTap: () => openTripOnTripsTab(
+                              ref, continueTrip.tripId,
+                              from: AppTab.home),
                         )
                       : null,
                 ),
