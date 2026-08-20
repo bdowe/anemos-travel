@@ -18,13 +18,16 @@ import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/plan_service.dart';
 import 'package:travel_route_planner/widgets/destination_suggestion_card.dart';
 import 'package:travel_route_planner/widgets/home_inspiration_rail.dart';
+import 'package:travel_route_planner/widgets/live_trip_card.dart';
 import 'package:travel_route_planner/widgets/random_suggestions.dart';
 
 import 'support/l10n_test_app.dart';
 
-/// The "Somewhere new" rail's placement contract: inspiration fills the gap
-/// only when there is nothing to continue — no live trip and no continue
-/// card — and a card tap SENDS its prompt into the Plan tab (Home's one-tap
+/// The "Somewhere new" rail's placement contract: inspiration ALWAYS renders,
+/// and always below the traveler's own trips — the ordering replaced an
+/// earlier gate that hid the rail outright whenever there was something to
+/// continue, which left the traveler who had a trip with the emptiest page in
+/// the app. A card tap SENDS its prompt into the Plan tab (Home's one-tap
 /// contract; the landing rail hands off instead).
 class _FakeAuthNotifier extends StateNotifier<AuthState>
     implements AuthNotifier {
@@ -160,21 +163,38 @@ void main() {
     expect(find.byType(HomeInspirationRail), findsOneWidget);
   });
 
-  testWidgets('a live trip hides the rail', (WidgetTester tester) async {
+  // The rail used to be GATED OFF whenever there was a trip to continue, so it
+  // could not push a traveler's own trips down the page. That inverted the
+  // intent in practice: the traveler who HAD a trip got the emptiest home
+  // screen in the app. The rule is now kept by POSITION — the rail always
+  // renders, always below the trip content — so these two pin the ORDER
+  // rather than the absence, which is the property the rule was ever about.
+
+  testWidgets('a live trip keeps the rail, and outranks it',
+      (WidgetTester tester) async {
     await pumpHome(tester, liveTrip: _liveTrip());
 
-    expect(find.byType(HomeInspirationRail), findsNothing);
+    expect(find.byType(HomeInspirationRail), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byType(LiveTripCard)).dy,
+      lessThan(tester.getTopLeft(find.byType(HomeInspirationRail)).dy),
+    );
   });
 
-  testWidgets('a continue trip hides the rail', (WidgetTester tester) async {
+  testWidgets('a continue trip keeps the rail, and outranks it',
+      (WidgetTester tester) async {
     // The recorded-trip snapshot alone reaches rung 2 — a continue card
-    // exists, so inspiration must yield.
+    // exists, and inspiration now sits under it instead of vanishing.
     await pumpHome(tester, prefs: {
       'recent_trip.user-1': '{"id":"t9","title":"Lisbon Trip"}',
     });
 
     expect(find.text('Lisbon Trip'), findsOneWidget);
-    expect(find.byType(HomeInspirationRail), findsNothing);
+    expect(find.byType(HomeInspirationRail), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Lisbon Trip')).dy,
+      lessThan(tester.getTopLeft(find.byType(HomeInspirationRail)).dy),
+    );
   });
 
   testWidgets('card tap sends the prompt and switches to the Plan tab',

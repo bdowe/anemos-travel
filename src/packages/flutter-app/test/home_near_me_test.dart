@@ -133,7 +133,13 @@ void main() {
   testWidgets('returning-user strip keeps a near-me chip beneath it',
       (WidgetTester tester) async {
     await pumpHome(tester, liveTrip: _liveTrip());
-    expect(find.text('2 days in Paris'), findsNothing); // strip branch
+    // Scoped to the hero's ActionChip for the same reason the test above is:
+    // the inspiration rail draws from this same pool, and it now renders for a
+    // returning user instead of being gated off, so the BARE text legitimately
+    // appears on a destination card down the page. What marks the strip branch
+    // is the absence of the HERO's suggestion chips, which is what this says.
+    expect(find.widgetWithText(ActionChip, '2 days in Paris'),
+        findsNothing); // strip branch
     expect(find.byType(NearMeChip), findsOneWidget);
   });
 

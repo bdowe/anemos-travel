@@ -4460,7 +4460,19 @@ abstract class AppLocalizations {
   /// **'Local guides'**
   String get homeLocalGuidesTitle;
 
-  /// Header of Home's destination-inspiration rail, shown only when there is no trip to continue
+  /// Home section header over the open items for a trip departing soon.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you go'**
+  String get homeBeforeYouGoTitle;
+
+  /// Count of open trip items beyond the three Home shows.
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, =1{1 more open item} other{{n} more open items}}'**
+  String homeBeforeYouGoMore(int n);
+
+  /// Header of Home's destination-inspiration rail, which sits below the traveler's own trips
   ///
   /// In en, this message translates to:
   /// **'Somewhere new'**

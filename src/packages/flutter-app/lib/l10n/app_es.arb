@@ -734,6 +734,15 @@
   "suggestionPatagonia": "Senderismo en la Patagonia",
   "suggestionKenya": "Safari en Kenia",
   "homeLocalGuidesTitle": "Guías locales",
+  "homeBeforeYouGoTitle": "Antes de viajar",
+  "@homeBeforeYouGoTitle": {
+    "description": "Home section header over the open items for a trip departing soon."
+  },
+  "homeBeforeYouGoMore": "{n, plural, =1{1 asunto pendiente más} other{{n} asuntos pendientes más}}",
+  "@homeBeforeYouGoMore": {
+    "description": "Count of open trip items beyond the three Home shows.",
+    "placeholders": { "n": { "type": "int" } }
+  },
   "homeInspirationTitle": "Algún lugar nuevo",
   "homeGuideByline": "Por {name}",
   "shellNavHome": "Inicio",
