@@ -157,13 +157,15 @@ const double _kRailMarkBox = kToolbarHeight - _kRailLeadingGap * 2; // 40
 /// [_kRailMarkBox] is an alignment contract and a tap target, not a frame: the
 /// rose is centred in it, so painting it past the edges keeps it on the same
 /// y = 28 line and breaks nothing. That matters because the box cannot grow —
-/// the derivation above pins it at 40 — while the rose needed to: its solid
-/// bronze star measures only 76% of the artwork's square canvas (the rest is
-/// the route thread's hairline tails, which antialias to nothing at chrome
-/// sizes), so 36 painted a 27px rose. 44 paints 33px. Kept identical to
-/// `gradient_app_bar.dart`'s `_markSize` so the brand is one size wherever it
-/// appears — that file carries the argument for why 44 and not 48.
-const double _kRailMarkSize = 44;
+/// the derivation above pins it at 40 — while the rose needed to: the artwork
+/// is a 540×540 canvas holding art that measures 515×410, so it fills 75.9% of
+/// its own height and a `size` of *n* paints a rose 0.759 n tall. 36 painted
+/// 27; 44 painted 33, which is why the strokes still read thin at a number
+/// that claimed 44. **58 paints 44** — the size this constant has always said
+/// it was. Kept identical to `gradient_app_bar.dart`'s `_markSize` so the
+/// brand is one size wherever it appears; that file carries the argument for
+/// why 58 and not 64.
+const double _kRailMarkSize = 58;
 
 /// The Anemos brand mark for the top of the rail — the persistent
 /// Site ID (Krug). Bare mark: the bronze/azure rose reads on the rail surface

@@ -22,20 +22,28 @@ const double _leadingSlot = kToolbarHeight;
 
 /// The rose's own size wherever this bar paints it.
 ///
-/// 44, and measured rather than guessed: the rose radiates from a small hub,
-/// so most of its box is empty and its optical size runs well under its
-/// layout size. The solid bronze star measures exactly 76% of the artwork's
-/// square canvas — the remaining 24% is the route thread's hairline tails,
-/// which antialias to nothing at chrome sizes. So 36 painted a 27px rose and
-/// read as a thin star beside a 19px wordmark; 44 paints a 33px one, which is
-/// what a "36px logo" is supposed to look like.
+/// 58, and measured rather than guessed. `anemos_mark.png` is a 540×540 canvas
+/// holding art that measures 515×410 — 95.4% of its width but only **75.9% of
+/// its height**, with 65px of transparent padding baked in top and bottom. The
+/// mark renders `Image.asset(height: size, fit: BoxFit.contain)` against that
+/// square source, so a `size` of *n* paints a rose **0.759 n** tall and every
+/// size number in the codebase has overstated the visible mark by a third.
+/// 36 painted 27; 44 painted 33, which is why the 8-point rose's rays kept
+/// reading thin next to a 19px wordmark. **58 paints 44.**
 ///
-/// The ceiling is the nav rail, not this bar: the rail's tap box is pinned at
-/// 40 by its centre-line derivation (`app_shell.dart`), so the rose already
-/// overflows it by 2px a side at 44 and 4px at 48. This bar has room to spare
-/// — its tap box is [kMinTouchTarget] — but the brand is one size wherever it
-/// appears, so the rail's constraint governs both.
-const double _markSize = 44;
+/// The ceiling is `DESIGN.md`'s clear-space minimum (≥25% of the mark's
+/// height), not the rail's tap box: at 58 the rose is 55.3 wide in the 80px
+/// rail, leaving 12.3px of clear space against an 11px minimum. **64 would
+/// paint 48.6 and leave 9.5 — it fails that rule, and that rule is what bounds
+/// this.** The rail's 40px tap box does not bound it: [OverflowBox] centres an
+/// oversized child on the unchanged box, so the alignment contract at
+/// `app_shell.dart:150` survives untouched.
+///
+/// The real structural fix is to trim the padding out of the asset so `size`
+/// means what it says at all four call sites; that re-tunes auth (72) and the
+/// boot splash too and rewrites `DESIGN.md`'s size ladder, so it is recorded
+/// as its own pass rather than smuggled in here.
+const double _markSize = 58;
 
 /// The rose's tap box, centred inside the [_leadingSlot].
 ///
