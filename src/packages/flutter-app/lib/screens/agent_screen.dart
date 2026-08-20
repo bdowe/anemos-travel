@@ -144,6 +144,26 @@ const double _kIntroMeasure = 420;
 /// here is height, so height is what is asked.
 const double _kIntroFieldFloor = 440;
 
+/// Where the reading block sits in its field, as an [Alignment] y.
+///
+/// The leftover height splits between the field ABOVE the heading (the crown)
+/// and the one below it, before the rail (the seam); this number is the split.
+/// The crown keeps the larger share on purpose — space over a heading reads as
+/// composure, the move the editorial references make, while the same space
+/// under it reads as a missing element.
+///
+/// It was 0.5 (a 3:1 crown), which is right while the leftover is small and
+/// wrong once it is not: the share is taken from an unbounded field, so the
+/// taller the viewport the more of it pours into one void. Measured in the
+/// running app at 1342x988 — a 934px field — 0.5 put a **374px void above the
+/// heading against a 123px seam** and left the whole composition in the bottom
+/// half, with the first fixation landing on nothing. 0.2 is a 3:2 crown: still
+/// dominant, and it lifts the heading into the upper third.
+///
+/// Both numbers are browser measurements. Nothing here may be asserted from a
+/// widget test — this suite loads no fonts, so its text metrics are fiction.
+const double _kIntroCrownBias = 0.2;
+
 /// The Plan tab before a word is typed.
 ///
 /// Composed as ONE block that ends at the composer instead of a centered card
@@ -247,13 +267,11 @@ class _PlanIntro extends ConsumerWidget {
         return Column(
           children: [
             Expanded(
-              // Whatever height is left over splits 3:1 in favour of the field
-              // ABOVE the heading. Space over a heading reads as composure —
-              // it is the move the editorial references make — while the same
-              // space under it reads as a missing element, which is exactly
-              // how the centred layout this replaces read.
+              // Whatever height is left over splits between the field above
+              // the heading and the seam below it — see [_kIntroCrownBias] for
+              // which way and why it is not the 3:1 it started at.
               child: Align(
-                alignment: const Alignment(0, 0.5),
+                alignment: const Alignment(0, _kIntroCrownBias),
                 // Loose constraints from Align, so this shrink-wraps unless
                 // the largest text scales make the block taller than its
                 // share — then it scrolls instead of overflowing.
