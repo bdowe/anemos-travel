@@ -152,20 +152,18 @@ const double _kRailLeadingGap = 8;
 /// stale the moment GradientAppBar's height moves.
 const double _kRailMarkBox = kToolbarHeight - _kRailLeadingGap * 2; // 40
 
-/// The rose's painted size, which is deliberately LARGER than the box above.
+/// The mark's painted size, deliberately LARGER than the box above.
 ///
 /// [_kRailMarkBox] is an alignment contract and a tap target, not a frame: the
-/// rose is centred in it, so painting it past the edges keeps it on the same
+/// mark is centred in it, so painting it past the edges keeps it on the same
 /// y = 28 line and breaks nothing. That matters because the box cannot grow —
-/// the derivation above pins it at 40 — while the rose needed to: the artwork
-/// is a 540×540 canvas holding art that measures 515×410, so it fills 75.9% of
-/// its own height and a `size` of *n* paints a rose 0.759 n tall. 36 painted
-/// 27; 44 painted 33, which is why the strokes still read thin at a number
-/// that claimed 44. **58 paints 44** — the size this constant has always said
-/// it was. Kept identical to `gradient_app_bar.dart`'s `_markSize` so the
-/// brand is one size wherever it appears; that file carries the argument for
-/// why 58 and not 64.
-const double _kRailMarkSize = 58;
+/// the derivation above pins it at 40 — while the mark needs to, the artwork
+/// filling only its own 94.2% of a square artboard. 48 paints 45.
+///
+/// Kept identical to `gradient_app_bar.dart`'s `_markSize` so the brand is one
+/// size wherever it appears; that file carries the argument for 48, and the
+/// warning that a box size means different things under the two marks.
+const double _kRailMarkSize = 48;
 
 /// The Anemos brand mark for the top of the rail — the persistent
 /// Site ID (Krug). Bare mark: the bronze/azure rose reads on the rail surface
@@ -201,9 +199,9 @@ class _RailBrand extends ConsumerWidget {
               height: _kRailMarkBox,
               // OverflowBox, not a plain Center: Align loosens the incoming
               // constraints but keeps their max, so a Center would silently
-              // shrink the rose back to the 40 the box is pinned at. This
-              // hands the child its own 44 and reports no overflow, because
-              // exceeding the tap box is the intent — see [_kRailMarkSize].
+              // shrink the mark back to the 40 the box is pinned at. This
+              // hands the child its own [_kRailMarkSize] and reports no
+              // overflow, because exceeding the tap box is the intent.
               child: OverflowBox(
                 minWidth: 0,
                 minHeight: 0,

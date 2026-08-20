@@ -1,16 +1,22 @@
 # Anemos brand mark
 
-The **Waypoint Thread rose** — an 8-point **wind rose** (άνεμος is Greek for
-wind, the thing every journey rides on) in sun-bronze, each point split
-light/dark (`#D2A24C` light halves / `#8B6D3A` dark), threaded west→northeast
-by an azure route line (`#3B9CC4` over `#20578B`) with a waypoint dot: **chat
-in, trip out**. Meltemi palette. It is an organic vector drawing, not a
-polygon recipe — edit it in a vector tool, not by hand-computing points.
-Installed 2026-08, replacing the geometric teal/gold rose. The old
+The **Threaded Bezel** — an 8-point **wind rose** (άνεμος is Greek for wind,
+the thing every journey rides on) in sun-bronze (`#D2A24C`), set inside a
+mariner's compass bezel with a tick ring and crossed south-west to north-east
+by a straight azure route line (`#236684`): **instrument outside, journey
+inside**. Meltemi palette. It is an organic vector drawing, not a polygon
+recipe — edit it in a vector tool, not by hand-computing points. The old
 horse-in-horseshoe mark retired with the Golden Tempo name; the chat agent
-persona **Ferdinand** keeps the equine nod. `mark-bezel-backup.svg` is the
-approved alternate take on this rose (bezel ring concept) — unshipped, kept
-as-is.
+persona **Ferdinand** keeps the equine nod.
+
+Both marks come from the same 2026-08 exploration and the bare rose shipped
+first. `mark-thread-backup.svg` is that one — the **Waypoint Thread rose**,
+bare, threaded west→northeast with a waypoint dot. It is the airier and more
+ownable drawing and remains the better answer wherever the mark is large and
+alone, but it lost the app: its ink filled only 76% of its artboard, so every
+surface painted it a quarter smaller than the size it asked for and it read
+timid in chrome. The bezel fills 94%. Kept, unrendered, as the approved
+alternate.
 
 `mark.svg` is the icon and the **single source of truth** — `lockup.svg`
 references it (`<image href="mark.svg">`) and adds the "ANEMOS" wordmark as
@@ -22,21 +28,26 @@ string itself. Because of that external reference + live text, always render
 via the pipeline below, never by loading lockup.svg as a plain `<img>`.
 
 `mark-light.svg` is the **reversed variant for teal fields** (the boot
-splash): the route thread is recolored white / pale azure (`#D6ECF5`) — the
-dark mark's azure thread would vanish on the teal gradient — while the
-bronze rose is shared with mark.svg unchanged. It duplicates mark.svg's
-geometry — a geometry change in one must be mirrored in the other (both
-headers say so).
+splash): the bezel ring, its ticks and the route thread are recolored white —
+the dark mark's azure would sink into the teal gradient rather than stand on
+it — while the bronze rose is shared with mark.svg unchanged. It duplicates
+mark.svg's geometry — a geometry change in one must be mirrored in the other
+(both headers say so).
 
-**Plate policy (v3): the rose always floats bare.** No plate is drawn anywhere
+**Plate policy (v3): the mark always floats bare.** No plate is drawn anywhere
 in the app. The only question a surface asks is which cut it needs: neutral
 page surfaces and scrimmed imagery take the dark `mark`; the teal
 `brandGradient` fields — the splash **and the gradient app bar** — take
-`mark-light`, where the dark artwork's azure thread would vanish against the
-teal. v2 kept a white plate on gradient app bars; it was retired because that
-gradient does not change with theme, so the plate stayed white in dark mode
-and became the brightest object on the screen. The policy is stated in
-`lib/widgets/brand_logo.dart` — re-litigate it there.
+`mark-light`. v2 kept a white plate on gradient app bars; it was retired
+because that gradient does not change with theme, so the plate stayed white in
+dark mode and became the brightest object on the screen.
+
+**The bezel ring is not a plate.** A plate is opaque, drawn by the app, sits
+behind the mark and has to answer to the theme. The ring is transparent-backed
+line work inside the artwork: it ships in the SVG, recolors with the two cuts,
+and lets the surface show through its middle. The policy still forbids exactly
+what it was written to forbid — it is stated in
+`lib/widgets/brand_logo.dart`, so re-litigate it there.
 
 Two artifacts outside the app keep a baked-in plate on purpose: `web/og-card.png`
 (lands on arbitrary social backgrounds) and `web/icons/Icon-maskable-512.png`
@@ -99,13 +110,13 @@ below is generated — edit the SVGs or harnesses, never the PNGs.**
 | Rendered via | File | Size |
 |---|---|---|
 | render/mark.html | `flutter-app/assets/images/anemos_mark.png` | 540 |
-| render/favicon.html (125% crop → rose ~95%) | `flutter-app/web/favicon.png` | 64 |
+| render/mark.html (shrunk; no crop — the bezel is already 94% ink) | `flutter-app/web/favicon.png` | 64 |
 | render/mark-light.html | `flutter-app/assets/images/anemos_mark_light.png` | 540 |
 | render/mark-light.html | `flutter-app/web/splash/anemos_mark_light.png` (copy) | 540 |
 | render/mark-light.html (shrunk, 4× the 128dp splash mark) | `flutter-app/assets/splash/mark_light_4x.png` | 512 |
-| render/splash-android12.html (768 mark in 1152 safe zone) | `flutter-app/assets/splash/mark_light_android12.png` | 1152 |
-| render/icon84.html (110% → rose at 84%, transparent) | `flutter-app/web/icons/Icon-192/512.png` | 384 / 1024 |
-| render/maskable.html (69% → ink inside the 80% safe circle, white) | `flutter-app/web/icons/Icon-maskable-192/512.png` | 384 / 1024 |
+| render/splash-android12.html (741 mark in the 768 circle) | `flutter-app/assets/splash/mark_light_android12.png` | 1152 |
+| render/icon84.html (913 → ink at 84%, transparent) | `flutter-app/web/icons/Icon-192/512.png` | 384 / 1024 |
+| render/maskable.html (790 → ink inside the 80% safe circle, white) | `flutter-app/web/icons/Icon-maskable-192/512.png` | 384 / 1024 |
 | render/lockup.html | `flutter-app/assets/images/anemos_logo.png` | 1024 |
 | render/ogcard.html (teal gradient + tagline) | `flutter-app/web/og-card.png` | 1200×630 |
 | ↳ flutter_native_splash (from the mark_light seeds) | iOS LaunchImage*, Android `splash.png`/`android12splash.png` (+night) | ladders |
@@ -115,20 +126,34 @@ Historical gotcha this table exists to prevent: og-card and badge_4x were
 missing from the old README's table, so they silently kept two-brands-ago art
 (a metronome!) through two renames. If you add a brand asset, add its row.
 
-**Reading the crop percentages.** `mark.svg`'s solid bronze rose is 76% of its
-own square artboard; the remaining 24% belongs to the route thread's hairline
-tails, which antialias to nothing below ~48px. So a percentage here is
-ambiguous unless it says what it measures, and the icon harnesses used to
-measure the artboard — which is why they shipped a rose at 64% (PWA) and 48.6%
-(maskable) while their names claimed 84% and 64%. They now state the number
-they actually control. Two rules fall out of this:
+**Reading the crop percentages.** A percentage here is ambiguous unless it says
+what it measures — the artboard, or the ink on it. Every icon harness used to
+measure the artboard, which was wrong by a quarter under the previous mark and
+is the reason they shipped a 64% PWA icon and a 48.6% maskable while their
+names claimed 84% and 64%. They now state the number they actually control.
 
-- **Unmasked surfaces** (favicon, PWA icon) size to the *rose* and let the
-  thread's tails bleed off the frame. Nothing legible is lost.
+The two constants that drive them, measured on the rendered art:
+
+| | Threaded Bezel (`mark.svg`) | bare rose (`mark-thread-backup.svg`) |
+|---|---|---|
+| ink as a fraction of the artboard | **0.942** | 0.760 |
+| furthest ink radius ÷ drawn width | **0.5185** | 0.5710 |
+
+The bezel wins on both, which is why it ships: it is fuller *and* radially
+tighter. The bare rose looked compact but flung two hairline thread tails
+diagonally toward the artboard corners, so it was simultaneously mostly empty
+and hard to fit inside a circle.
+
+Two rules fall out:
+
+- **Unmasked surfaces** (favicon, PWA icon) size to the ink. The bezel needs no
+  crop at all for the favicon; the bare rose needed a dedicated 125% harness to
+  reach the same place.
 - **Masked surfaces** (maskable, Android 12 splash) size to the ink's furthest
-  *radius* from centre, not its bounding-box width — the tails leave the hub
-  diagonally, so they sit near the corners where a circular mask cuts. Measured
-  on the art, that radius is `0.571 × the mark's drawn width`.
+  *radius* from centre, **not** its bounding-box width. The rose's cardinal
+  blades punch through the bezel and the thread overshoots it, so the ink
+  reaches past the artboard's own inscribed circle — a width reading was tried
+  on the previous mark and put 508 pixels outside the safe zone.
 
 Cache note: `/app/icons/*` is served `no-cache` (nginx), so a changed icon
 propagates on the next load without help. It used to be `immutable` for a year,

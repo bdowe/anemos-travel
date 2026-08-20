@@ -1,13 +1,26 @@
 <!-- Render harness: Android 12+ splash icon seed (flutter_native_splash
-     android_12.image) — light mark at 768px centered on a transparent
-     1152×1152 canvas. Android 12+ masks the icon to a 768px circle inside
-     the 1152px bounds; the rose's tips span ~717px, so it fits the safe
-     zone by construction. -->
+     android_12.image) — light mark centered on a transparent 1152×1152
+     canvas. Android 12+ masks the icon to a 768px circle inside those bounds,
+     i.e. a safe RADIUS of 384px.
+
+     741px, not the 768px this used to draw. 768 was chosen by matching the
+     mark's box to the circle's diameter, which reads the ink's bounding box
+     and is the wrong measure for a circular mask: the ink's furthest point
+     from centre is 0.5185 × the drawn width (the cardinal blades punch
+     through the bezel and the thread overshoots it diagonally), so a 768px
+     mark reached a radius of 398 against a 384 limit and had its tips shaved.
+     741 × 0.5185 = 384 exactly.
+
+     The mark still shows MORE than it did before this correction: the old
+     bare-rose art at 768px painted 584px of visible rose, while the bezel at
+     741px paints 698px of ink. Shrinking the box grew the logo.
+
+     Screenshot at --window-size=1152,1152. -->
 <!doctype html>
 <html><head><style>
   html,body{margin:0;padding:0;background:transparent}
   .frame{width:1152px;height:1152px;
          display:flex;align-items:center;justify-content:center}
-  img{width:768px;height:768px}
+  img{width:741px;height:741px}
 </style></head>
 <body><div class="frame"><img src="../mark-light.svg"></div></body></html>

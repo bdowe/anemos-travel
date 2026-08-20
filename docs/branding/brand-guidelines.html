@@ -517,7 +517,7 @@
           <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
         </g>
       </svg>
-      <p class="cap"><b>Light cut — mark-light.svg</b>Teal fields — the boot splash, where the dark cut would be teal-on-teal. (The app bar left the gradient for neutral surface in v1.4 and takes the dark cut.)</p>
+      <p class="cap"><b>Light cut — mark-light.svg</b>Teal fields — the boot splash, where the dark cut’s azure bezel would sink into the teal. (The app bar left the gradient for neutral surface in v1.4 and takes the dark cut.)</p>
     </div>
   </div>
   </div>
@@ -554,8 +554,9 @@
     </div>
     <div class="small" style="max-width:380px">
       <p><strong>Clear space:</strong> keep at least 25% of the mark's height free on every side (the dashed frame). Nothing enters it — not the wordmark's descenders, not badge counts, not card edges.</p>
-      <p style="margin-top:10px"><strong>Sizes in product:</strong> 58&nbsp;px standard in chrome (app bar, nav rail) · 28&nbsp;px default (<code>BrandLogo.mark</code>) · 72&nbsp;px auth screen · 128&nbsp;px boot splash · legible down to 16&nbsp;px (the favicon is the floor). The signed-out landing page deliberately carries no in-page mark — its app bar is the one brand carrier.</p>
-      <p style="margin-top:10px"><strong>Box size vs. optical size:</strong> every number above is the mark&rsquo;s <em>box</em>, and the box is bigger than the rose. <code>anemos_mark.png</code> is a 540&times;540 canvas holding art that measures <b>515&times;410</b> &mdash; 95.4% of its width but only <b>75.9% of its height</b>, with 65&nbsp;px of transparent padding baked in top and bottom. <code>BrandLogo.mark</code> renders <code>Image.asset(height: size, fit: BoxFit.contain)</code> against that square source, so a box of <em>n</em> paints a rose <b>0.759&nbsp;n</b> tall: 128&nbsp;px on the splash paints 97, and 16&nbsp;px paints a 12&nbsp;px &ldquo;legible floor&rdquo;. Chrome moved 44&rarr;58 in v1.5 for exactly this &mdash; at 44 the rose painted 33 and the 8-point star&rsquo;s rays read thin. Size a new surface against the rose you want to see, then divide by 0.759. <b>64 is over the line:</b> it paints a 48.6 rose, 61&nbsp;px wide, leaving 9.5&nbsp;px of clear space in the 80&nbsp;px nav rail against the &ge;25%-of-mark-height minimum (11&nbsp;px). The real fix is to trim the padding out of the asset so <code>size</code> means what it says at every call site; that re-tunes auth and the splash together and rewrites this ladder, so it is a pass of its own.</p>
+      <p style="margin-top:10px"><strong>Sizes in product:</strong> 48&nbsp;px standard in chrome (app bar, nav rail) · 28&nbsp;px default (<code>BrandLogo.mark</code>) · 72&nbsp;px auth screen · 128&nbsp;px boot splash · legible down to 16&nbsp;px (the favicon is the floor). The signed-out landing page deliberately carries no in-page mark — its app bar is the one brand carrier.</p>
+      <p style="margin-top:10px"><strong>Box size vs. optical size:</strong> every number above is the mark&rsquo;s <em>box</em>, and the box is bigger than the drawing. <code>mark.svg</code>&rsquo;s ink is <b>94.2%</b> of its square artboard, and <code>BrandLogo.mark</code> renders <code>Image.asset(height: size, fit: BoxFit.contain)</code> against that square, so a <code>size</code> of <em>n</em> paints <b>0.942&nbsp;n</b>. 48&nbsp;px in chrome paints 45; 128&nbsp;px on the splash paints 121; 72&nbsp;px on auth paints 68. Size a new surface against the mark you want to see, then divide by 0.942.</p>
+      <p style="margin-top:10px"><strong>Never port a box size across marks.</strong> The bare Waypoint Thread rose that shipped before this one (<code>mark-thread-backup.svg</code>) sat on a 540&times;540 canvas holding art measuring 515&times;410 &mdash; only <b>75.9%</b> of its height, with 65&nbsp;px of transparent padding baked in top and bottom &mdash; so its numbers mean something else entirely: 36 painted 27, 44 painted 33, and it was pushed to 58 to paint 44. Under this mark 58 would paint 55 into a 56&nbsp;px bar. A box size lifted from that era, or from git history, is a third off.</p>
     </div>
   </div>
 
