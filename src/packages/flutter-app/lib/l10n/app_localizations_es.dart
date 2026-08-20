@@ -2004,6 +2004,23 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get tripCalendarTitle => 'Calendario del viaje';
+
+  @override
+  String get tripCalendarAskToChange => 'Pedir un cambio';
+
+  @override
+  String tripCalendarWeekendDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count DÍAS DE FIN DE SEMANA',
+      one: '$count DÍA DE FIN DE SEMANA',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String tripTravelMinutes(int minutes) {
     return '$minutes min';
   }

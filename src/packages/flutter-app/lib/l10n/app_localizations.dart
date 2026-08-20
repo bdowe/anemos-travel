@@ -3512,6 +3512,24 @@ abstract class AppLocalizations {
   /// **'· {count, plural, one{1 night} other{{count} nights}}'**
   String tripLegNights(int count);
 
+  /// Title of the whole-trip calendar sheet (and the tooltip of the icon that opens it): one month grid per month the trip spans, with each city leg as a color band.
+  ///
+  /// In en, this message translates to:
+  /// **'Trip calendar'**
+  String get tripCalendarTitle;
+
+  /// Button in the trip calendar's leg detail row: closes the sheet and opens the trip's refine chat with a seeded request to change that city leg.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask to change'**
+  String get tripCalendarAskToChange;
+
+  /// Pill in the trip calendar's leg detail row: how many of the leg's days fall on a Saturday or Sunday. Caps come from the string (the wordmark rule).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} WEEKEND DAY} other{{count} WEEKEND DAYS}}'**
+  String tripCalendarWeekendDays(int count);
+
   /// No description provided for @tripTravelMinutes.
   ///
   /// In en, this message translates to:

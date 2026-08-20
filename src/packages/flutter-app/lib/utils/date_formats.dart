@@ -16,6 +16,8 @@ DateFormat? _mmmd;
 DateFormat? _mmmed;
 DateFormat? _e;
 DateFormat? _d;
+DateFormat? _ymmmm;
+List<String>? _weekdayHeaders;
 
 void _syncLocale() {
   final tag = Intl.defaultLocale;
@@ -25,6 +27,8 @@ void _syncLocale() {
     _mmmed = null;
     _e = null;
     _d = null;
+    _ymmmm = null;
+    _weekdayHeaders = null;
   }
 }
 
@@ -65,4 +69,38 @@ String formatShortRange(DateTime a, DateTime b) {
   final sameDay = a.year == b.year && a.month == b.month && a.day == b.day;
   final f = mmmd();
   return sameDay ? f.format(a) : '${f.format(a)} – ${f.format(b)}';
+}
+
+/// `DateFormat.yMMMM()` for the current `Intl.defaultLocale` — "August 2026"
+/// in English, "agosto de 2026" in Spanish. Month-grid headings (the trip
+/// calendar sheet).
+DateFormat ymmmm() {
+  _syncLocale();
+  return _ymmmm ??= DateFormat.yMMMM();
+}
+
+/// "Sat, Aug 29 – Thu, Sep 3" via [mmmed], collapsing a same-day pair to the
+/// single date. The weekday-carrying sibling of [formatShortRange]: the trip
+/// calendar's leg detail row, where weekday-vs-weekend is the whole point of
+/// the surface.
+String formatWeekdayRange(DateTime a, DateTime b) {
+  final sameDay = a.year == b.year && a.month == b.month && a.day == b.day;
+  final f = mmmed();
+  return sameDay ? f.format(a) : '${f.format(a)} – ${f.format(b)}';
+}
+
+/// The seven column headings of a Monday-first week grid, MON..SUN in
+/// English: the locale's abbreviated weekday names, uppercased (the caps
+/// come from the string, the wordmark rule) with any trailing period
+/// stripped (some CLDR locales abbreviate with one, e.g. an older "lun.").
+List<String> weekdayHeaders() {
+  _syncLocale();
+  final cached = _weekdayHeaders;
+  if (cached != null) return cached;
+  final e = _e ??= DateFormat.E();
+  // 2024-01-01 was a Monday, so +i walks Mon..Sun.
+  return _weekdayHeaders = [
+    for (var i = 0; i < 7; i++)
+      e.format(DateTime(2024, 1, 1 + i)).replaceAll('.', '').toUpperCase(),
+  ];
 }
