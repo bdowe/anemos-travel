@@ -412,7 +412,7 @@ func TestSpliceLegKeepsDayTripsInsideTheRun(t *testing.T) {
 	// hubRuns groups on day_trip_from ?? city, so all three must land in ONE
 	// run — a day trip that split the run would fragment the leg, which is the
 	// failure this tool makes unreachable.
-	runs := hubRuns(locsAsItems(got.Locations))
+	runs := hubRuns(runItemsOfLocations(got.Locations))
 	var hubs []string
 	for _, r := range runs {
 		hubs = append(hubs, r.Hub)
@@ -565,31 +565,6 @@ func TestSpliceLegRefusesUndatedLeg(t *testing.T) {
 	}
 }
 
-// locsAsItems converts spliced locations back into stored-item shape so run
-// grouping can be asserted with the SAME helper the server uses (hubRuns), not
-// a test-local re-implementation of it.
-func locsAsItems(locs []map[string]any) []store.ItineraryItem {
-	out := make([]store.ItineraryItem, len(locs))
-	for i, loc := range locs {
-		it := store.ItineraryItem{Position: int32(i)}
-		it.Name, _ = loc["name"].(string)
-		if s, ok := loc["city"].(string); ok && s != "" {
-			c := s
-			it.City = &c
-		}
-		if s, ok := loc["day_trip_from"].(string); ok && s != "" {
-			h := s
-			it.DayTripFrom = &h
-		}
-		if d, ok := loc["day"].(float64); ok {
-			v := int32(d)
-			it.Day = &v
-		}
-		out[i] = it
-	}
-	return out
-}
-
 // Replacing a city with one the trip ALREADY visits next door merges the two
 // runs — the traveler now spends both stretches there, which is what they
 // asked for. Pinned so it reads as a decision rather than an accident: the
@@ -602,7 +577,8 @@ func TestSpliceLegMergesIntoAnAdjacentSameCity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("spliceLeg: %v", err)
 	}
-	runs := hubRuns(locsAsItems(got.Locations))
+	rits := runItemsOfLocations(got.Locations)
+	runs := hubRuns(rits)
 	var hubs []string
 	for _, r := range runs {
 		hubs = append(hubs, r.Hub)
@@ -612,11 +588,11 @@ func TestSpliceLegMergesIntoAnAdjacentSameCity(t *testing.T) {
 	}
 	// The merged run runs from the old Copenhagen arrival through Oslo's own
 	// move-on day, and Stockholm's boundary day (10) is untouched.
-	lo, hi, ok := dayRange(runs[1].Items)
+	lo, hi, ok := dayRange(runs[1].slice(rits))
 	if !ok || lo != 4 || hi != 10 {
 		t.Fatalf("merged Oslo run spans days %d-%d (ok=%v), want 4-10", lo, hi, ok)
 	}
-	lo, hi, _ = dayRange(runs[2].Items)
+	lo, hi, _ = dayRange(runs[2].slice(rits))
 	if lo != 10 || hi != 12 {
 		t.Fatalf("Stockholm moved: days %d-%d, want 10-12", lo, hi)
 	}
