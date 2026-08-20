@@ -359,7 +359,7 @@ func auditTripScopeGuard(ctx context.Context, q *store.Queries, only string, ver
 		}
 	}
 
-	var rejected, fragmented, dayBroken int
+	var rejected, fragmented, dayBroken, fragOnly int
 	for _, id := range ids {
 		items, err := q.GetItineraryItemsByTrip(ctx, id)
 		if err != nil {
@@ -367,11 +367,20 @@ func auditTripScopeGuard(ctx context.Context, q *store.Queries, only string, ver
 		}
 		v := inspectTripScope(runItemsOfStored(items))
 		if v.ok() {
+			// Fragmentation with no day break does NOT reject — it is the
+			// measured false-positive class (a revisit that repeats a place).
+			// Reported anyway, marked as a non-rejection, because how often it
+			// occurs in real data is the number that would justify ever
+			// tightening the rule.
+			if len(v.Fragmented) > 0 {
+				fragOnly++
+				log.Printf("trip %s: allowed, but fragmented with no day break: %s", id, describeFragments(v))
+			}
 			continue
 		}
 		rejected++
 		log.Printf("trip %s: WOULD BE REJECTED by the scope 'trip' guard", id)
-		if len(v.Fragmented) > 0 {
+		if v.fragmentationRejects() {
 			fragmented++
 			log.Printf("    fragmented: %s", describeFragments(v))
 		}
@@ -396,8 +405,9 @@ func auditTripScopeGuard(ctx context.Context, q *store.Queries, only string, ver
 	}
 
 	log.Printf("guard audit (report only, nothing written): scanned %d trip(s) with itinerary items — "+
-		"%d would be rejected (%d fragmented, %d day-order), %d would pass",
-		len(ids), rejected, fragmented, dayBroken, len(ids)-rejected)
+		"%d would be rejected (%d fragmented, %d day-order), %d would pass "+
+		"(%d of those fragmented but allowed: no day break)",
+		len(ids), rejected, fragmented, dayBroken, len(ids)-rejected, fragOnly)
 	if len(ids) == 0 {
 		log.Printf("guard audit: NO TRIPS TO CHECK — this database is empty, so this is not evidence " +
 			"that the guard is safe. Point DATABASE_URL at a database with real trips.")

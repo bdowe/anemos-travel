@@ -216,13 +216,17 @@ func TestDayOrderBreaksNamesTheBackwardStep(t *testing.T) {
 // behaviour at all — which is the whole failure the shared classifier exists to
 // prevent. locationFromItem is the round-trip the write path itself performs.
 func TestStoredAndSubmittedReduceIdentically(t *testing.T) {
+	// The real 2026-08-20 shape (so the verdict compared is a REJECTION, not
+	// just two matching "fine"s), plus a day trip so the reducers' day_trip_from
+	// folding is part of what has to agree. Days 1,2,3,4,3,4 — the stale Krakow
+	// run carries its pre-swap days, which is what breaks the order.
 	items := []store.ItineraryItem{
 		item("Wawel Castle", 1, "Krakow", ""),
 		item("Rynek Glowny", 2, "Krakow", ""),
 		item("Charles Bridge", 3, "Prague", ""),
-		item("Versailles", 3, "Versailles", "Prague"),
-		item("Wawel Castle", 3, "Krakow", ""),
-		item("Rynek Glowny", 4, "Krakow", ""),
+		item("Kutna Hora", 4, "Kutna Hora", "Prague"),
+		item("Wawel Castle", 3, "Krakow", ""), // stale
+		item("Rynek Glowny", 4, "Krakow", ""), // stale
 	}
 	locs := make([]map[string]any, len(items))
 	for i, it := range items {
@@ -238,8 +242,17 @@ func TestStoredAndSubmittedReduceIdentically(t *testing.T) {
 	if len(stored.Breaks) != len(submitted.Breaks) {
 		t.Fatalf("day breaks differ: %d stored vs %d submitted", len(stored.Breaks), len(submitted.Breaks))
 	}
-	if stored.ok() || submitted.ok() {
-		t.Fatal("this fixture is the corruption shape; both sides must flag it")
+	if stored.fragmentationRejects() != submitted.fragmentationRejects() || stored.ok() != submitted.ok() {
+		t.Fatalf("verdicts differ: stored ok=%v fragRejects=%v, submitted ok=%v fragRejects=%v",
+			stored.ok(), stored.fragmentationRejects(), submitted.ok(), submitted.fragmentationRejects())
+	}
+	// Compared on a shape that actually REJECTS, so agreement is asserted on a
+	// real verdict rather than on two matching "fine"s.
+	if stored.ok() {
+		t.Fatal("this fixture is the corruption shape; it must be rejected")
+	}
+	if len(stored.Runs) != 3 {
+		t.Fatalf("Kutna Hora folds into the Prague run: expected 3 runs, got %d", len(stored.Runs))
 	}
 }
 
@@ -275,32 +288,82 @@ func TestInspectTripScopeEmptyPayload(t *testing.T) {
 	}
 }
 
-// KNOWN LIMITATION, deliberately pinned rather than fixed here.
+// THE measured false positive, and the reason the guard composes the two checks
+// rather than rejecting on fragmentation alone.
 //
-// A genuine revisit whose return run REPEATS a place from the first run is
-// flagged: run B's identities are a subset of run A's, and the day ranges
-// differ, which is the whole predicate. Nothing about this shape is corrupt —
-// the traveler simply ate at the same bistro on the way home.
+// A genuine revisit whose return run REPEATS a place satisfies the classifier's
+// predicate outright — run B's identities are a SUBSET of run A's, and the day
+// ranges differ. Nothing about it is corrupt: the traveler went back to the
+// Louvre. Rejecting it would be a REGRESSION (it writes fine on main) and,
+// because a scope-'trip' payload is always the complete itinerary, it would
+// block every whole-trip edit on that trip forever.
 //
-// It is left flagged because ticket 1 may not change what repair-sections
-// decides, and because the fix is a predicate change that belongs to whoever
-// owns the audit's result, not to the extraction. Note that such a shape has NO
-// day-order break (its days run 1…7 forwards), whereas the 2026-08-20
-// corruption always has one — so `fragmented && a day break` separates them
-// exactly. If this test ever starts failing, it is because that tightening
-// landed, and the fixture should become an assertNotFlagged.
-func TestClassifyFlagsPartiallyRepeatedRevisit_KnownLimitation(t *testing.T) {
-	v := inspectLocs([]map[string]any{
+// Both halves are asserted on purpose. The classifier must STILL flag it — the
+// repair tool depends on that and its verdicts are pinned byte-identical — while
+// the guard must NOT reject it. That split is the whole design; a test that
+// checked only one half would let the other drift.
+func TestFragmentationAloneDoesNotRejectAGenuineRevisit(t *testing.T) {
+	locs := []map[string]any{
 		rl("Louvre", 1, "Paris", ""),
 		rl("Orsay", 2, "Paris", ""),
 		rl("Colosseum", 3, "Rome", ""),
 		rl("Forum", 4, "Rome", ""),
 		rl("Louvre", 5, "Paris", ""), // same place, genuinely revisited
-	})
+	}
+	v := inspectLocs(locs)
 	if len(v.Fragmented) != 1 {
-		t.Fatalf("documenting today's behaviour: expected Paris flagged, got %v", fragmentedHubs(v))
+		t.Fatalf("the classifier must still flag it (repair depends on that), got %v", fragmentedHubs(v))
 	}
 	if len(v.Breaks) != 0 {
 		t.Fatalf("a genuine revisit's days run forwards; got breaks %+v", v.Breaks)
+	}
+	if v.fragmentationRejects() {
+		t.Fatal("fragmentation with no day break must not reject a write")
+	}
+	if !v.ok() {
+		t.Fatal("a genuine revisit that repeats a place must be writable")
+	}
+}
+
+// The shape that decides whether a "return must be separated in time" rule would
+// be safe — it would not. A genuine revisit can ARRIVE on a shared transition
+// day: Rome that morning, back in Paris that same evening, both day 4. Legal,
+// and it has no gap between the runs at all.
+func TestClassifyAllowsRevisitArrivingOnATransitionDay(t *testing.T) {
+	assertNotFlagged(t, "revisit arriving on a transition day", []map[string]any{
+		rl("Louvre", 1, "Paris", ""),
+		rl("Orsay", 2, "Paris", ""),
+		rl("Colosseum", 3, "Rome", ""),
+		rl("Forum", 4, "Rome", ""),
+		rl("Gare du Nord", 4, "Paris", ""), // same day 4, back in Paris
+		rl("Montmartre", 5, "Paris", ""),
+	})
+}
+
+// The measured gap, pinned so it is a known quantity rather than a surprise.
+//
+// An interleaved transition day — the ARRIVING city's item emitted before the
+// DEPARTING city's morning item — fragments the trip while leaving the days
+// non-decreasing, so neither check fires. It passed before this guard existed
+// too, so it is a gap and not a regression. The leading candidate for closing
+// it is a run-interleaving test (A,B,A,B): a correct itinerary is a SEQUENCE of
+// stays, so each city being interrupted by the other is two lists spliced
+// together. Held pending adversarial shapes and the production audit.
+func TestInterleavedTransitionDayIsAKnownGap(t *testing.T) {
+	v := inspectLocs([]map[string]any{
+		rl("Charles Bridge", 5, "Prague", ""),
+		rl("Wawel", 6, "Krakow", ""),       // arriving city, afternoon
+		rl("Old Town Sq", 6, "Prague", ""), // departing city, morning — emitted AFTER
+		rl("Rynek", 7, "Krakow", ""),
+	})
+	if len(v.Runs) != 4 {
+		t.Fatalf("this shape renders as four legs, got %d runs", len(v.Runs))
+	}
+	if len(v.Breaks) != 0 {
+		t.Fatalf("documenting the gap: days 5,6,6,7 do not run backwards; got %+v", v.Breaks)
+	}
+	if !v.ok() {
+		t.Fatal("documenting the gap: this is NOT caught today. If this now fails, " +
+			"the interleave rule landed — delete this test and assert the rejection instead")
 	}
 }

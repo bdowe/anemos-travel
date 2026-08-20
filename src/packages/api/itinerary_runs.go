@@ -308,7 +308,54 @@ type tripScopeVerdict struct {
 	Skipped    []string
 }
 
-func (v tripScopeVerdict) ok() bool { return len(v.Fragmented) == 0 && len(v.Breaks) == 0 }
+// fragmentationRejects: a fragmentation finding only rejects a WRITE when the
+// payload's days ALSO run backwards.
+//
+// This is the one place the guard is deliberately weaker than classifyHubRuns,
+// and the reason is a measured false positive, not a hunch. A genuine revisit
+// that repeats a place — Paris days 1-2, Rome, then the Louvre again on day 5 —
+// satisfies the classifier's predicate outright: run B's identities are a
+// SUBSET of run A's and the day ranges differ. Nothing about it is corrupt. And
+// because a scope-'trip' payload is always the COMPLETE itinerary, rejecting it
+// would block every whole-trip edit on that trip forever, silently. That is a
+// REGRESSION — the write succeeds on main today — whereas failing to catch a
+// corrupt payload is only a smaller improvement, since main validates nothing
+// here at all. The two failure modes are not symmetric, so the bar is
+// strictly-non-regressive.
+//
+// The repair tool deliberately does NOT compose this way: it proposes a delete
+// in a dry run for a human to confirm (and marks that very shape `[TIED]`), so
+// it can afford the wider net. Same predicate, different consequence — do not
+// "unify" these by making planTripRepair call this.
+//
+// Note what the composition reduces to today: fragmentation cannot reject
+// without a day break, and a day break rejects on its own, so DAY ORDER is what
+// decides and fragmentation decides only WHICH message the model gets. That is
+// the honest state of it. It is still written as two independent rules because
+// they are two independent rules — see the known gap below.
+//
+// KNOWN GAP, measured and deliberately not closed here: an interleaved
+// transition day (Prague d5, Kraków d6, Prague d6, Kraków d7 — the arriving
+// city's item emitted BEFORE the departing city's morning item) is fragmented,
+// has non-decreasing days, and so passes. It passed before this guard existed
+// too, so it is not a regression. The leading candidate for closing it is a
+// run-interleaving test (A,B,A,B), on the principle that a correct itinerary is
+// a SEQUENCE of stays — once you leave A for B you are in B until you leave B,
+// so A,B,A,B means each city was interrupted by the other, which is two lists
+// spliced together. It is unshipped because it was fitted to a self-authored
+// corpus and needs adversarial shapes plus the production audit first.
+func (v tripScopeVerdict) fragmentationRejects() bool {
+	return len(v.Fragmented) > 0 && len(v.Breaks) > 0
+}
+
+// rejects composes the two checks. Written as a disjunction of two
+// independently-changeable rules rather than collapsed to its current truth
+// value, so that tightening or loosening either half stays a local edit.
+func (v tripScopeVerdict) rejects() bool {
+	return v.fragmentationRejects() || len(v.Breaks) > 0
+}
+
+func (v tripScopeVerdict) ok() bool { return !v.rejects() }
 
 // inspectTripScope runs both checks over a whole-trip list. It is the one entry
 // point the write-path guard and the report-only audit share, so what the audit

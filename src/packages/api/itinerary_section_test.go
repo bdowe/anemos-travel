@@ -393,6 +393,43 @@ func TestSpliceSectionTripScopeAcceptsSharedTransitionDay(t *testing.T) {
 	}
 }
 
+// ACCEPTANCE, and the regression this guard was tuned to avoid shipping. A
+// revisit that goes back to the SAME place is a content duplicate of its own
+// first run with a different day range — the classifier flags it, and the guard
+// must still write it, because a scope-'trip' payload is the complete itinerary
+// and rejecting this would block every whole-trip edit on that trip forever.
+func TestSpliceSectionTripScopeAcceptsRevisitRepeatingAPlace(t *testing.T) {
+	repl := []map[string]any{
+		tl("Louvre", 1, "Paris", ""),
+		tl("Orsay", 2, "Paris", ""),
+		tl("Colosseum", 3, "Rome", ""),
+		tl("Forum", 4, "Rome", ""),
+		tl("Louvre", 5, "Paris", ""), // back to the Louvre on the way home
+	}
+	got, err := spliceSection(parisRome(), sectionSelector{Scope: "trip"}, repl)
+	if err != nil {
+		t.Fatalf("returning to a place you liked is not corruption: %v", err)
+	}
+	if len(got) != 5 {
+		t.Fatalf("expected all 5 places written, got %d", len(got))
+	}
+}
+
+// ACCEPTANCE. A revisit may ARRIVE on a shared transition day — Rome that
+// morning, Paris that evening, both day 4.
+func TestSpliceSectionTripScopeAcceptsRevisitOnATransitionDay(t *testing.T) {
+	repl := []map[string]any{
+		tl("Louvre", 1, "Paris", ""),
+		tl("Colosseum", 3, "Rome", ""),
+		tl("Forum", 4, "Rome", ""),
+		tl("Gare du Nord", 4, "Paris", ""),
+		tl("Montmartre", 5, "Paris", ""),
+	}
+	if _, err := spliceSection(parisRome(), sectionSelector{Scope: "trip"}, repl); err != nil {
+		t.Fatalf("a revisit arriving on a transition day is legal: %v", err)
+	}
+}
+
 // ACCEPTANCE. A day trip belongs to its hub's run, so Versailles between two
 // Paris places does not split Paris in two.
 func TestSpliceSectionTripScopeAcceptsDayTrip(t *testing.T) {

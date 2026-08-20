@@ -370,7 +370,9 @@ func errStraySectionItems(sel sectionSelector, newLocs, strays []map[string]any,
 // Both checks come from inspectTripScope — the SAME classifier the offline
 // repair tool runs, so what `repair-sections` predicts and what this rejects can
 // never come apart. Neither check is a "each city appears once" rule: a hub in
-// two runs is a supported itinerary shape (Paris → Rome → Paris) and passes.
+// two runs is a supported itinerary shape (Paris → Rome → Paris) and passes, and
+// so does a revisit that repeats a place, which fragmentation alone would
+// wrongly catch (see tripScopeVerdict.fragmentationRejects).
 //
 // Fragmentation is reported first when both fire. A model told to reassemble a
 // city usually fixes the day sequence in the same edit, whereas fixing the days
@@ -379,7 +381,7 @@ func errStraySectionItems(sel sectionSelector, newLocs, strays []map[string]any,
 func errInvalidTripScopePayload(newLocs []map[string]any) error {
 	v := inspectTripScope(runItemsOfLocations(newLocs))
 	switch {
-	case len(v.Fragmented) > 0:
+	case v.fragmentationRejects():
 		return fmt.Errorf("%d of the %d places sent would split a city into two separate legs with different dates: %s; "+
 			"a city sent as two runs renders TWICE — once with its dates and once collapsed to a near-zero-night stop — so nothing was changed. "+
 			"Resend the COMPLETE itinerary with every place in a city grouped together in ONE unbroken run, in the order the traveler visits them, and one day sequence that only ever moves forward. "+
