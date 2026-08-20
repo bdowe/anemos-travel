@@ -16,11 +16,13 @@ The target: a polished travel product with the calm of a luxury travel
 journal — Airbnb/Hopper/Flighty product craft carrying Aman/Belmond/Cereal
 editorial restraint. Aegean, not tropical. Engraved, not shouted.
 
-- **Editorial type, quiet hierarchy.** Headings are Marcellus at its one
-  weight (w400) — Roman inscriptional letterforms with a true lowercase, so
-  headings read engraved rather than shouted. Below the headline line,
-  hierarchy is weight not size, set in Inter — body, labels, and every
-  number (Cinzel belongs to the wordmark alone). A design earns attention by
+- **Editorial type, quiet hierarchy.** Headings are Cormorant Garamond at
+  w500 — the wordmark's own family one weight down, so headings and the
+  brand read as one register rather than two. High-contrast Garamond
+  letterforms with a true lowercase, so headings read editorial rather than
+  shouted. Below the headline line, hierarchy is weight not size, set in
+  Inter — body, labels, and every number (w600 of the same family belongs to
+  the wordmark alone). A design earns attention by
   making the space around the important thing quieter, not by making the
   thing bigger. A destination surface may open with the Amanzoe move: a
   letterspaced small-caps place eyebrow above the heading, prose held to a
@@ -136,7 +138,7 @@ Entry format:
 - Source: Belmond — homepage hero, https://www.belmond.com, captured 2026-08
 - Tags: photography, typography, navigation
 - Mimic: type ON photography with nothing behind it — trust the image plus letterspacing (their wordmark floats on the pool the way our rose floats bare); top-down aerial angle turns pools into graphic color fields, very Aegean; nav is a quiet plaster bar with hairline separation, one floating pill as the sole overlay control.
-- Ignore: wordmark-as-hero-title (Cinzel stays in chrome); the absence of CTA hierarchy — a product needs one.
+- Ignore: wordmark-as-hero-title (the wordmark stays in chrome); the absence of CTA hierarchy — a product needs one.
 
 ### cereal--home-editorial.jpg
 - Source: Cereal Magazine — archive index grid, https://readcereal.com, captured 2026-08
@@ -148,7 +150,7 @@ Entry format:
 - Source: Flighty — landing hero, https://flighty.com, captured 2026-08
 - Tags: landing, typography, cards, motion
 - Mimic: one huge confident headline, a two-line subhead, a small credibility row, then straight into the product; floating notification cards that fade with distance from the device — depth via opacity, not shadow stacking; a single dark segmented pill grounding the composition; whitespace does the layout work.
-- Ignore: Apple-style near-black display grotesque (we head in Marcellus w400); the yellow accent; device-frame-centric composition on a web-first product.
+- Ignore: Apple-style near-black display grotesque (we head in Cormorant Garamond w500); the yellow accent; device-frame-centric composition on a web-first product.
 
 ### hopper--landing.jpg
 - Source: Hopper — homepage hero, https://hopper.com, captured 2026-08

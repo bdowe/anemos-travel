@@ -52,8 +52,8 @@
       }
     },
     "typographyMeta": {
-      "wordmark": { "displayName": "Wordmark (Cinzel)", "purpose": "The ANEMOS wordmark only, via BrandWordmark; small caps, per-surface measured tracking. Never retyped." },
-      "headline": { "displayName": "Headline (Marcellus)", "purpose": "Page and section headings, app-bar titles. One weight (w400), sentence case, sizes 34/30/26." },
+      "wordmark": { "displayName": "Wordmark (Cormorant Garamond 600)", "purpose": "The ANEMOS wordmark only, via BrandWordmark; full caps from the string, per-surface measured tracking. Never retyped." },
+      "headline": { "displayName": "Headline (Cormorant Garamond 500)", "purpose": "Page and section headings, app-bar titles. Always states w500, sentence case, sizes 44/39/34 (app-bar title 28, pinned section heading 28) — the previous display face's sizes times kDisplayOpticalScale 1.295, an optical correction for the face's 0.386 em x-height, not a resize." },
       "title": { "displayName": "Title (Inter)", "purpose": "Card titles and row headers; w700 large, w600 medium/small — hierarchy by weight." },
       "body": { "displayName": "Body (Inter)", "purpose": "Prose and transcripts; regular weight." },
       "label": { "displayName": "Label (Inter)", "purpose": "Buttons, chips, field labels; w600, sentence case. Every number in the app is Inter." }
@@ -100,7 +100,7 @@
       "refersTo": "card",
       "description": "The promoted-trip hero — a flat photo-led card (de-gradient pass): route imagery on top, Circle-style date square, serif title, one when-line, state pills. Promotion is imagery and typography, never a colored field.",
       "html": "<div class=\"ds-hero-card\"><div class=\"ds-hero-date\"><div class=\"ds-hero-day\">14</div><div class=\"ds-hero-mon\">Sep</div></div><div><div class=\"ds-hero-title\">Island hopping, September</div><div class=\"ds-hero-when\">Sep 14 – 21 · 8 days</div></div></div>",
-      "css": ".ds-hero-card { display: flex; gap: 16px; align-items: flex-start; background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 3px 6px rgba(0,0,0,0.16); max-width: 360px; } .ds-hero-date { border: 1px solid #bec9c6; border-radius: 8px; width: 52px; padding: 8px 4px; text-align: center; flex: none; } .ds-hero-day { font-family: Inter, system-ui, sans-serif; font-size: 22px; font-weight: 700; color: #191c1c; } .ds-hero-mon { font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 600; color: #6f7977; } .ds-hero-title { font-family: Marcellus, Georgia, serif; font-size: 26px; font-weight: 400; line-height: 1.2; color: #191c1c; } .ds-hero-when { font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 500; color: #3f4947; margin-top: 4px; }"
+      "css": ".ds-hero-card { display: flex; gap: 16px; align-items: flex-start; background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 3px 6px rgba(0,0,0,0.16); max-width: 360px; } .ds-hero-date { border: 1px solid #bec9c6; border-radius: 8px; width: 52px; padding: 8px 4px; text-align: center; flex: none; } .ds-hero-day { font-family: Inter, system-ui, sans-serif; font-size: 22px; font-weight: 700; color: #191c1c; } .ds-hero-mon { font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 600; color: #6f7977; } .ds-hero-title { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 34px; font-weight: 500; line-height: 1.2; color: #191c1c; } .ds-hero-when { font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 500; color: #3f4947; margin-top: 4px; }"
     },
     {
       "name": "Input Field",
@@ -122,9 +122,9 @@
       "name": "Wordmark",
       "kind": "custom",
       "refersTo": "wordmark",
-      "description": "The ANEMOS wordmark — Cinzel 600 small caps, measured tracking. A component (BrandWordmark), never retyped in product code.",
+      "description": "The ANEMOS wordmark — Cormorant Garamond 600 full caps from the string, measured tracking. A component (BrandWordmark), never retyped in product code.",
       "html": "<div class=\"ds-wordmark\">ANEMOS</div>",
-      "css": ".ds-wordmark { font-family: Cinzel, Georgia, serif; font-size: 19px; font-weight: 600; letter-spacing: 0.053em; color: #004D40; }"
+      "css": ".ds-wordmark { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 19px; font-weight: 600; letter-spacing: 0.053em; color: #004D40; }"
     },
     {
       "name": "Status Pill",
@@ -149,7 +149,7 @@
       { "name": "The Earned Color Rule", "body": "Every non-teal color means exactly one thing and appears at chip-and-pin scale, never as a field. Color is never decoration.", "section": "colors" },
       { "name": "The Gold-in-the-Mark Rule", "body": "Heritage Gold enters a screen only inside the wind-rose mark. Anywhere else it is a finding.", "section": "colors" },
       { "name": "The One Dark Exception Rule", "body": "Midnight Harbor exists only on the signed-out landing. Everywhere else, surfaces are the neutral scheme and dark mode is the same build with brightness flipped.", "section": "colors" },
-      { "name": "The One Weight Rule", "body": "Marcellus ships in exactly one weight; every style naming it states w400 explicitly, or the web synthesizes faux-bold and smears the serif.", "section": "typography" },
+      { "name": "The One Weight Rule", "body": "Cormorant Garamond ships exactly two real files — 500 (display) and 600 (wordmark) — so each AppFonts constant has one legal weight and every style naming the family states it explicitly, or the web synthesizes faux-bold and smears the serif.", "section": "typography" },
       { "name": "The Weight-Not-Size Rule", "body": "Below the headline line, hierarchy is built with Inter's weight ladder (400/500/600/700), not with size steps.", "section": "typography" },
       { "name": "The One Eyebrow Rule", "body": "Capitals belong to the wordmark and to ONE display device: the letterspaced small-caps place eyebrow on destination surfaces (the Amanzoe move). No other kickers or eyebrows exist.", "section": "typography" },
       { "name": "The Light-From-Above Rule", "body": "Every shadow offsets downward. A zero-offset colored halo is never ours.", "section": "elevation" },
@@ -159,13 +159,13 @@
       "Do build only with tokens — AppColors, AppFonts/textTheme, AppSpacing, AppRadius, AppShadows, BrandLogo/BrandWordmark; a value that isn't a token becomes one in lib/theme/ first.",
       "Do keep photography real — real places in real light, credited in CREDITS.md/LICENSES.md — and put a scrim under any text on it.",
       "Do check both themes; the bar is surface in both — dark mode is the same build with brightness flipped, chrome included.",
-      "Do state w400 on every Marcellus style and set numbers in Inter.",
+      "Do state the weight on every Cormorant Garamond style — w500 for AppFonts.display, w600 for AppFonts.wordmark — and set numbers in Inter.",
       "Do run .claude/skills/brand-guidelines/scripts/check.sh on touched Dart files before shipping."
     ],
     "donts": [
       "Don't put a plate, tile, or container behind the wind rose, or redraw the mark \"close enough\".",
       "Don't use gradient text, colored glows, zero-offset halos, teal-tinted photos, purple-blue AI gradients, or glassmorphism as decoration.",
-      "Don't add a fourth typeface, load google_fonts (prod CSP blocks it), or let emoji stand in for icons.",
+      "Don't add a third typeface (the app is down to two — Cormorant Garamond and Inter), load google_fonts (prod CSP blocks it), or let emoji stand in for icons.",
       "Don't use off-ladder spacing, radii outside 8/12/20/full, ad-hoc BoxShadows, or raw hex in widgets (sanctioned exceptions: app_map.dart canvas, the easter egg).",
       "Don't ship kickers/eyebrows (except the one destination place eyebrow), Title Case Headings, section-number decoration, same-size icon-card grids as page structure, or the hero-metric template."
     ]

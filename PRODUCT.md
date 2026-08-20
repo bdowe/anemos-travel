@@ -94,8 +94,9 @@ ferries, events, budget, packing — in one product.
   all UI work: `.claude/skills/design-inspiration` (taste),
   `src/packages/flutter-app/lib/theme/` (token values),
   `.claude/skills/brand-guidelines` + `docs/branding/brand-guidelines.html`
-  v1.2 (conformance, with `scripts/check.sh` on touched Dart files).
-- Standing identity facts: Cinzel wordmark, Marcellus headings, the teal palette
+  v1.5 (conformance, with `scripts/check.sh` on touched Dart files).
+- Standing identity facts: Cormorant Garamond throughout — 600 for the
+  wordmark, 500 for headings, one family and two weights — the teal palette
   stays, no plate behind the logo anywhere; the landing page's dark canvas is a
   recorded exception to the light app surface. A rule that must break gets
   written into the guideline doc in the same PR.
