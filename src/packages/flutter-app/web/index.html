@@ -49,15 +49,22 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Anemos">
   <!-- The ?v= series dates from when nginx served /app/icons/* immutable for a
-       year; it is now no-cache, so this is belt-and-braces for pre-2026-08-15
-       caches. Bumped to 4 for the switch to the Threaded Bezel mark, which
-       redrew every icon. manifest.json carries the same version — move them
-       together. -->
-  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=4">
+       year; nginx is now no-cache, but Cloudflare still caches these by URL, so
+       this is what actually busts them. manifest.json and the splash <img>
+       below carry the same version — move all three together.
 
-  <!-- Favicon: ?v=4 because Chrome's favicon cache is keyed by URL and
+       **Bump this on any deploy that changes the art, even if the last bump has
+       not been released yet.** 4 was set for the mark-size pass and shipped;
+       the Threaded Bezel swap then rewrote every icon and kept 4, reasoning
+       the bump was still unreleased. It was not — the size pass had merged and
+       deployed in between — so `favicon.png?v=4` served the previous mark from
+       edge cache with `age: 3322` after the bezel went live. The version is
+       cheap; a stale favicon lasts weeks in Chrome. -->
+  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=5">
+
+  <!-- Favicon: ?v=5 because Chrome's favicon cache is keyed by URL and
        refreshes lazily — new bytes at the same URL can stay stale for weeks. -->
-  <link rel="icon" type="image/png" href="favicon.png?v=4"/>
+  <link rel="icon" type="image/png" href="favicon.png?v=5"/>
 
   <title>Anemos</title>
   <link rel="manifest" href="manifest.json">
@@ -213,8 +220,14 @@
   <div id="splash">
     <div class="splash-mark">
       <!-- Empty alt: the wordmark below is the visible, readable name, so a
-           labelled image here would just announce "Anemos" twice. -->
-      <img src="splash/anemos_mark_light.png" alt="">
+           labelled image here would just announce "Anemos" twice.
+
+           ?v= for the same reason the icons above carry one, and it was missing
+           here until the Threaded Bezel swap: brand-render.sh rewrites this
+           file whenever the mark art changes, at a path Cloudflare caches, so
+           the boot splash served the PREVIOUS mark from edge cache for ~15
+           minutes after that deploy. Bump it with the icons. -->
+      <img src="splash/anemos_mark_light.png?v=5" alt="">
     </div>
     <div class="splash-wordmark">Anemos</div>
     <!-- Decorative: the loading state is announced by the app once it boots;
