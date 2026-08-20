@@ -71,6 +71,14 @@ void main() {
 
     container.read(navIndexProvider.notifier).state = AppTab.plan.index;
     await tester.pumpAndSettle();
+    // ensureVisible, not a bare tap: the intro is one scrollable block now, and
+    // in the 800x600 test surface the fallback font wraps the heading and the
+    // paragraph far wider than Inter does, which pushes this chip past the
+    // fold. tap() on an off-screen target only WARNS — the test would go green
+    // while selecting nothing. What this test is about is where the chip goes,
+    // not whether the test font happens to leave it above the fold.
+    await tester.ensureVisible(importLabelIn(AgentScreen));
+    await tester.pumpAndSettle();
     await tester.tap(importLabelIn(AgentScreen));
     await tester.pumpAndSettle();
 

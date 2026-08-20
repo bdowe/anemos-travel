@@ -144,25 +144,31 @@ const double _kIntroMeasure = 420;
 /// here is height, so height is what is asked.
 const double _kIntroFieldFloor = 440;
 
-/// Where the reading block sits in its field, as an [Alignment] y.
+/// Where the intro block sits in its field, as an [Alignment] y.
 ///
-/// The leftover height splits between the field ABOVE the heading (the crown)
-/// and the one below it, before the rail (the seam); this number is the split.
-/// The crown keeps the larger share on purpose — space over a heading reads as
-/// composure, the move the editorial references make, while the same space
-/// under it reads as a missing element.
+/// Slightly above centre: the optical centre of a field is above its geometric
+/// one, so an evenly-split block reads as having sagged.
 ///
-/// It was 0.5 (a 3:1 crown), which is right while the leftover is small and
-/// wrong once it is not: the share is taken from an unbounded field, so the
-/// taller the viewport the more of it pours into one void. Measured in the
-/// running app at 1342x988 — a 934px field — 0.5 put a **374px void above the
-/// heading against a 123px seam** and left the whole composition in the bottom
-/// half, with the first fixation landing on nothing. 0.2 is a 3:2 crown: still
-/// dominant, and it lifts the heading into the upper third.
+/// This number exists because the screen used to hold the reading half and the
+/// acting half apart — the rail was pinned to the composer and the heading
+/// floated in whatever was left over. On a phone that is invisible, because
+/// there is nothing left over. On a 934px desktop field there are ~544px of it,
+/// and pinning the rail meant every one of those pixels had to sit either above
+/// the heading or between the heading and the rail. Both were measured in the
+/// running app at 1342x988 and both are wrong: 374/123 leaves the whole
+/// composition in the bottom half, and 303/196 opens a hole through the middle
+/// of it. There is no third split, because the two are the same 544px.
 ///
-/// Both numbers are browser measurements. Nothing here may be asserted from a
-/// widget test — this suite loads no fonts, so its text metrics are fiction.
-const double _kIntroCrownBias = 0.2;
+/// So the halves travel together now and the leftover goes below them, between
+/// the rail and the composer. That gives up the adjacency the previous pass
+/// prized — starters within reach of the input — and it is a real cost on a
+/// short viewport, which is why the branch below [_kIntroFieldFloor] still
+/// stacks them tight. What it buys is one object instead of three zones.
+///
+/// Every number above is a browser measurement. Nothing here may be asserted
+/// from a widget test — this suite loads no fonts, so its text metrics are
+/// fiction.
+const double _kIntroBlockBias = -0.1;
 
 /// The Plan tab before a word is typed.
 ///
@@ -264,22 +270,26 @@ class _PlanIntro extends ConsumerWidget {
             ),
           );
         }
-        return Column(
-          children: [
-            Expanded(
-              // Whatever height is left over splits between the field above
-              // the heading and the seam below it — see [_kIntroCrownBias] for
-              // which way and why it is not the 3:1 it started at.
-              child: Align(
-                alignment: const Alignment(0, _kIntroCrownBias),
-                // Loose constraints from Align, so this shrink-wraps unless
-                // the largest text scales make the block taller than its
-                // share — then it scrolls instead of overflowing.
-                child: SingleChildScrollView(child: reading),
-              ),
+        // The two halves as ONE object, placed in the field together — see
+        // [_kIntroBlockBias] for why the rail no longer rides the composer.
+        return Align(
+          alignment: const Alignment(0, _kIntroBlockBias),
+          // Loose constraints from Align, so this shrink-wraps unless the
+          // largest text scales make the block taller than the field — then it
+          // scrolls instead of overflowing.
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                reading,
+                // The block's own seam. A ladder value, not a share of the
+                // leftover: it says how close these two halves are, which is a
+                // fixed relationship, not a function of the viewport.
+                const SizedBox(height: AppSpacing.xxl),
+                acting,
+              ],
             ),
-            acting,
-          ],
+          ),
         );
       },
     );
