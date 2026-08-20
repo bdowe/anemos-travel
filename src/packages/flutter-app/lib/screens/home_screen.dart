@@ -16,10 +16,13 @@ import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import '../theme/spacing.dart';
 import '../widgets/account_menu.dart';
+import '../widgets/before_you_go_section.dart';
 import '../widgets/continue_chats_section.dart';
 import '../widgets/continue_trip_hero.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/home_inspiration_rail.dart';
+import '../widgets/home_next_step_band.dart';
+import '../widgets/home_travels_band.dart';
 import '../widgets/language_menu_button.dart';
 import '../widgets/live_trip_card.dart';
 import '../widgets/near_me_chip.dart';
@@ -188,8 +191,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // one here would starve it (see TripHeroCard.showMap).
                     showMap: false,
                     // On the Trips tab (not pushed over Home): the Trips nav
-                    // item highlights and back lands on the trips list.
-                    onTap: () => openTripOnTripsTab(ref, liveTrip.id),
+                    // item highlights, and `from` sends back here rather than
+                    // to a trips list this traveler never opened.
+                    onTap: () =>
+                        openTripOnTripsTab(ref, liveTrip.id, from: AppTab.home),
                   ),
                   const SizedBox(height: AppSpacing.xl),
                 ],
@@ -200,26 +205,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 // only when the account genuinely has nothing to resume.
                 ContinueChatsSection(
                   leading: continueTrip != null
-                      ? ContinueTripHero(
-                          tripId: continueTrip.tripId,
-                          title: continueTrip.title,
-                          dateRange: continueTrip.dateRange,
-                          startDate: continueTrip.startDate,
-                          onTap: () =>
-                              openTripOnTripsTab(ref, continueTrip.tripId),
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ContinueTripHero(
+                              tripId: continueTrip.tripId,
+                              title: continueTrip.title,
+                              dateRange: continueTrip.dateRange,
+                              startDate: continueTrip.startDate,
+                              onTap: () => openTripOnTripsTab(
+                                  ref, continueTrip.tripId,
+                                  from: AppTab.home),
+                            ),
+                            // The hero's quiet sequel: what that trip still
+                            // needs. Collapses to nothing whenever the review
+                            // has no step to report, so the gap below is the
+                            // section's own — see HomeNextStepBand.
+                            const SizedBox(height: AppSpacing.sm),
+                            HomeNextStepBand(
+                              tripId: continueTrip.tripId,
+                              // Same destination AND same origin as the hero
+                              // above it: the pair is one target with two
+                              // rows, so back has to land where the hero's
+                              // back lands (PR #516).
+                              onTap: () => openTripOnTripsTab(
+                                  ref, continueTrip.tripId,
+                                  from: AppTab.home),
+                            ),
+                          ],
                         )
                       : null,
                 ),
 
-                // Inspiration fills the gap only when there is no trip to
-                // continue and nothing live — it must never push a
-                // traveler's actual trips down. New accounts always match,
-                // so the rail doubles as their "get inspired" section under
-                // the photo hero.
-                if (liveTrip == null && continueTrip == null)
-                  HomeInspirationRail(
-                    onPrompt: (text) => startPlanning(initialMessage: text),
+                // Pre-departure readiness for the trip that is close enough to
+                // pack for. Renders nothing outside its window or when it has
+                // no honest row to show (BeforeYouGoSection).
+                if (continueTrip != null)
+                  BeforeYouGoSection(
+                    tripId: continueTrip.tripId,
+                    startDate: continueTrip.startDate,
                   ),
+
+                // Where the traveler has been, and where they are going next.
+                // Carries its own 2+ owned-trips gate, so it cannot appear
+                // half-empty on a first trip.
+                const HomeTravelsBand(),
+
+                // Inspiration no longer disappears the moment there is a trip
+                // to continue. The rule it used to enforce — inspiration must
+                // never push a traveler's actual trips down — is now kept by
+                // POSITION rather than by absence: the rail sits below the
+                // trip content instead of vanishing from the page. Gating it
+                // off inverted the intent in practice, because the traveler
+                // who HAD a trip got the emptiest home screen in the app.
+                HomeInspirationRail(
+                  onPrompt: (text) => startPlanning(initialMessage: text),
+                ),
 
                 // Local guides discover row — published narrative guides
                 // across all cities. Renders nothing while loading, on

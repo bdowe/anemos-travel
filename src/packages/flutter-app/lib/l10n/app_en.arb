@@ -1725,9 +1725,18 @@
   "suggestionPatagonia": "Hiking in Patagonia",
   "suggestionKenya": "Safari in Kenya",
   "homeLocalGuidesTitle": "Local guides",
+  "homeBeforeYouGoTitle": "Before you go",
+  "@homeBeforeYouGoTitle": {
+    "description": "Home section header over the open items for a trip departing soon."
+  },
+  "homeBeforeYouGoMore": "{n, plural, =1{1 more open item} other{{n} more open items}}",
+  "@homeBeforeYouGoMore": {
+    "description": "Count of open trip items beyond the three Home shows.",
+    "placeholders": { "n": { "type": "int" } }
+  },
   "homeInspirationTitle": "Somewhere new",
   "@homeInspirationTitle": {
-    "description": "Header of Home's destination-inspiration rail, shown only when there is no trip to continue"
+    "description": "Header of Home's destination-inspiration rail, which sits below the traveler's own trips"
   },
   "homeGuideByline": "By {name}",
   "@homeGuideByline": {

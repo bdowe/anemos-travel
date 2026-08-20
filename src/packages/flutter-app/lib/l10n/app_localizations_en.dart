@@ -2620,6 +2620,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeLocalGuidesTitle => 'Local guides';
 
   @override
+  String get homeBeforeYouGoTitle => 'Before you go';
+
+  @override
+  String homeBeforeYouGoMore(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n more open items',
+      one: '1 more open item',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get homeInspirationTitle => 'Somewhere new';
 
   @override

@@ -78,6 +78,16 @@ class NextStepCard extends StatelessWidget {
     'add_packing': Icons.luggage_outlined,
   };
 
+  /// The ladder's icon for [kind], falling back to the same generic pin this
+  /// card uses for an unknown kind (a future phase from a newer server).
+  ///
+  /// Public because Home renders the same step as a quiet band under its
+  /// continue hero ([HomeNextStepBand]) and the two must never disagree about
+  /// what a step looks like. The map itself stays private — a second literal
+  /// copy of it is exactly the drift this accessor exists to prevent.
+  static IconData iconFor(String kind) =>
+      _kindIcons[kind] ?? Icons.place_outlined;
+
   /// Localized primary-action label per ladder kind. An unknown kind (a future
   /// ladder phase from a newer server) falls back to the fix's server-localized
   /// button label, else the generic "View all".
