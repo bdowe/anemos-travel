@@ -206,7 +206,7 @@ void pushOnTabWhenReady(List<GlobalKey<NavigatorState>> navKeys, AppTab tab,
 }
 
 /// Open [tripId]'s detail on the Trips tab: the Trips nav item highlights and
-/// back lands on the trips list. Resets the Trips stack inside the (possibly
+/// the trips list sits underneath. Resets the Trips stack inside the (possibly
 /// retried) push action — not eagerly — so a previously-open detail doesn't
 /// sit underneath, and the reset happens next to the push that lands.
 ///
@@ -214,13 +214,21 @@ void pushOnTabWhenReady(List<GlobalKey<NavigatorState>> navKeys, AppTab tab,
 /// run while the Trips tab is still hidden, so an animated reset+push would
 /// freeze and then replay together — the trip you had open sliding out from
 /// under the one you just asked for.
-void openTripOnTripsTab(WidgetRef ref, String tripId) {
+///
+/// [from] is the tab the traveler is standing on, and only Home's trip cards
+/// pass it: the detail still lives on the Trips tab, but back returns them to
+/// Home rather than to a trips list they never opened. It rides the ROUTE (see
+/// [TripDetailScreen.entryOrigin]) rather than a provider, so it cannot outlive
+/// the screen it describes. Passing nothing — or [AppTab.trips] — is the
+/// behavior every caller had before.
+void openTripOnTripsTab(WidgetRef ref, String tripId, {AppTab? from}) {
   ref.read(navIndexProvider.notifier).state = AppTab.trips.index;
   final navKeys = ref.read(tabNavKeysProvider);
   pushOnTabWhenReady(navKeys, AppTab.trips, () {
     resetToRoot(navKeys[AppTab.trips.index].currentState);
     return instantRoute(
-        TripDetailScreen(tripId: tripId), tripDetailLocation(tripId));
+        TripDetailScreen(tripId: tripId, entryOrigin: from),
+        tripDetailLocation(tripId));
   });
 }
 

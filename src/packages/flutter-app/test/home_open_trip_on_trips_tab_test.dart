@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,15 +13,26 @@ import 'package:travel_route_planner/providers/auth_provider.dart';
 import 'package:travel_route_planner/providers/live_trip_provider.dart';
 import 'package:travel_route_planner/providers/resumable_chats_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
+import 'package:travel_route_planner/screens/home_screen.dart';
 import 'package:travel_route_planner/screens/trip_detail_screen.dart';
 import 'package:travel_route_planner/widgets/live_trip_card.dart';
 
 import 'support/url_sync_fakes.dart';
 
+/// Where a trip opens, and where back puts you afterwards.
+///
 /// Home's trip cards (LiveTripCard + the "Continue where you left off"
-/// recent-trip tile) open the detail on the TRIPS tab via openTripOnTripsTab
-/// — the Trips nav item highlights and back lands on the trips list — instead
-/// of stacking the detail over Home where the Home button would re-reveal it.
+/// recent-trip tile) open the detail on the TRIPS tab via openTripOnTripsTab —
+/// the Trips nav item highlights — instead of stacking the detail over Home
+/// where the Home button would re-reveal it. That half is unchanged and still
+/// pinned here.
+///
+/// What changed: back now returns to the tab you came FROM. Opened from Home,
+/// back lands on Home; opened from the trips list, back lands on the list,
+/// exactly as before. The origin rides the route
+/// ([TripDetailScreen.entryOrigin]), so a trip opened from the list can never
+/// inherit a phantom "came from Home" left behind by an earlier one — the last
+/// two cases below are that guarantee.
 void main() {
   late List<String> reports;
 
@@ -49,6 +61,13 @@ void main() {
     });
   }
 
+  /// The real nav button. The default 800x600 test surface is at
+  /// kRailBreakpoint, so the shell renders a NavigationRail and these taps go
+  /// through selectTab — including its re-tap popUntil, which is the one path
+  /// that takes the detail off the stack without consulting any PopScope.
+  Finder railDestination(String label) => find.descendant(
+      of: find.byType(NavigationRail), matching: find.text(label));
+
   Future<ProviderContainer> pumpApp(WidgetTester tester,
       {Trip? live}) async {
     tester.binding.platformDispatcher.defaultRouteNameTestValue = '/';
@@ -73,7 +92,7 @@ void main() {
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('live trip card opens the detail on the Trips tab',
+  testWidgets('live trip card opens on the Trips tab and backs out to Home',
       (tester) async {
     final container = await pumpApp(tester, live: liveTrip('t3'));
 
@@ -84,15 +103,21 @@ void main() {
     expect(find.byType(TripDetailScreen), findsOneWidget);
     expect(reports.last, '/trips/t3');
 
-    // Back lands on the trips LIST, not Home.
+    // Back returns to the tab the trip was opened from.
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.byType(TripDetailScreen), findsNothing);
-    expect(find.text('Lisbon long weekend'), findsOneWidget);
-    expect(reports.last, '/trips');
+    expect(container.read(navIndexProvider), AppTab.home.index);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(reports.last, '/');
+    // skipOffstage: false because the contract is that the trip is CLOSED, not
+    // merely hidden behind the tab switch — the IndexedStack keeps a hidden
+    // tab's subtree mounted, so the default finder would report "gone" either
+    // way. (_IndexedStackElement.debugVisitOnstageChildren visits only the
+    // selected child.)
+    expect(find.byType(TripDetailScreen, skipOffstage: false), findsNothing);
   });
 
-  testWidgets('recent trip card opens the detail on the Trips tab',
+  testWidgets('recent trip card opens on the Trips tab and backs out to Home',
       (tester) async {
     seedRecentTrip('t2', 'Lisbon Trip');
     final container = await pumpApp(tester);
@@ -118,14 +143,16 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.byType(TripDetailScreen), findsNothing);
-    expect(reports.last, '/trips');
+    expect(container.read(navIndexProvider), AppTab.home.index);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byType(TripDetailScreen, skipOffstage: false), findsNothing);
+    expect(reports.last, '/');
   });
 
   testWidgets('a detail already on the Trips stack is replaced, not stacked',
       (tester) async {
-    // Pins openTripOnTripsTab's pre-push popUntil: back must land on the
-    // trips list, never on a previously-open detail left underneath.
+    // Pins openTripOnTripsTab's pre-push reset: nothing may be left underneath
+    // the trip you asked for.
     final container = await pumpApp(tester, live: liveTrip('t3'));
 
     container.read(navIndexProvider.notifier).state = AppTab.trips.index;
@@ -159,7 +186,84 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
+    expect(container.read(navIndexProvider), AppTab.home.index);
+    expect(find.byType(TripDetailScreen, skipOffstage: false), findsNothing);
+    expect(reports.last, '/');
+  });
+
+  testWidgets('backing out to Home leaves the Trips tab on its list',
+      (tester) async {
+    // Trips KEEPS its stack (_stackKeepingTabs), so whatever back leaves
+    // behind is what the next Trips tap shows. Back means the traveler closed
+    // the trip, not that they parked it — otherwise the trip they just backed
+    // out of greets them again, and the trips list becomes unreachable in one
+    // tap.
+    final container = await pumpApp(tester, live: liveTrip('t3'));
+
+    await tester.tap(find.byType(LiveTripCard));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(container.read(navIndexProvider), AppTab.home.index);
+
+    await tester.tap(railDestination('Trips'));
+    await tester.pumpAndSettle();
     expect(find.byType(TripDetailScreen), findsNothing);
+    expect(find.text('Lisbon long weekend'), findsOneWidget);
+    expect(reports.last, '/trips');
+  });
+
+  testWidgets('a trip opened from the trips list still backs out to the list',
+      (tester) async {
+    // The unchanged half: no origin on the route, so back is the ordinary pop
+    // it has always been, and the tab never moves.
+    final container = await pumpApp(tester);
+
+    await tester.tap(railDestination('Trips'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lisbon long weekend'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TripDetailScreen), findsOneWidget);
+    expect(reports.last, '/trips/t1');
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(container.read(navIndexProvider), AppTab.trips.index);
+    expect(find.byType(TripDetailScreen), findsNothing);
+    expect(find.text('Lisbon long weekend'), findsOneWidget);
+    expect(reports.last, '/trips');
+  });
+
+  testWidgets('a Home-opened trip leaves no origin behind for the next one',
+      (tester) async {
+    // The failure this exists to prevent, and the reason the origin is a field
+    // on the route rather than a provider: leave a Home-opened trip by a path
+    // that never consults PopScope — selectTab's re-tap popUntil is exactly
+    // that path — and then open a trip from the LIST. An ambient origin record
+    // would still be sitting there, and this second trip, which the traveler
+    // reached from the list, would throw them onto Home on back.
+    final container = await pumpApp(tester, live: liveTrip('t3'));
+
+    await tester.tap(find.byType(LiveTripCard));
+    await tester.pumpAndSettle();
+    expect(container.read(navIndexProvider), AppTab.trips.index);
+    expect(find.byType(TripDetailScreen), findsOneWidget);
+
+    // Re-tap the tab we are already on: popUntil(isFirst), no PopScope in the
+    // loop, detail gone, still on Trips.
+    await tester.tap(railDestination('Trips'));
+    await tester.pumpAndSettle();
+    expect(container.read(navIndexProvider), AppTab.trips.index);
+    expect(find.byType(TripDetailScreen), findsNothing);
+
+    await tester.tap(find.text('Lisbon long weekend'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TripDetailScreen), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(container.read(navIndexProvider), AppTab.trips.index,
+        reason: 'this trip was opened from the list, so back stays on Trips');
     expect(find.text('Lisbon long weekend'), findsOneWidget);
     expect(reports.last, '/trips');
   });

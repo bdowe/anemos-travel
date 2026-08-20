@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:travel_route_planner/models/itinerary_item.dart';
+import 'package:travel_route_planner/navigation/app_nav.dart';
 import 'package:travel_route_planner/models/trip.dart';
 import 'package:travel_route_planner/providers/plan_provider.dart';
 import 'package:travel_route_planner/providers/trips_provider.dart';
@@ -95,11 +96,14 @@ Trip _trip() => Trip(
 const _homeKey = Key('home-placeholder');
 
 /// Pushes the trip over a placeholder home, so a real pop is observable.
+/// [entryOrigin] is the tab the trip was opened from — set only by Home's trip
+/// cards in the real app (openTripOnTripsTab).
 Widget _app(
   _FakeTripsApiService api, {
   List<PlanEvent> events = const [],
   Completer<void>? gate,
   List<PlanEvent> tailEvents = const [],
+  AppTab? entryOrigin,
 }) =>
     ProviderScope(
       overrides: [
@@ -117,7 +121,8 @@ Widget _app(
             body: Center(
               child: ElevatedButton(
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const TripDetailScreen(tripId: 't1'))),
+                    builder: (_) => TripDetailScreen(
+                        tripId: 't1', entryOrigin: entryOrigin))),
                 child: const Text('open trip'),
               ),
             ),
@@ -330,6 +335,38 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(api.getTripCalls, greaterThan(before));
+  });
+
+  testWidgets('on a Home-opened trip, the panel still goes first',
+      (WidgetTester tester) async {
+    // Both jobs ride ONE PopScope, because ModalRoute hands didPop=false to
+    // EVERY PopScope registered in the route's subtree rather than just the
+    // innermost (routes.dart, onPopInvokedWithResult loops over _popEntries).
+    // Split across two, the first back would close the chat AND switch tabs in
+    // the same breath — the trip vanishing out from under a panel the traveler
+    // only meant to dismiss. So: panel first, origin second, one back each.
+    await tester.pumpWidget(_app(_FakeTripsApiService(_trip()),
+        entryOrigin: AppTab.home));
+    await tester.pumpAndSettle();
+    await _openTripAndChat(tester);
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(TripDetailScreen)));
+    // Where openTripOnTripsTab leaves the app: the detail lives on the Trips
+    // tab whichever tab it was opened from.
+    container.read(navIndexProvider.notifier).state = AppTab.trips.index;
+
+    expect(await _back(tester), isTrue);
+    await tester.pumpAndSettle();
+    expect(find.byType(TripRefinePanel), findsNothing);
+    expect(find.byType(TripDetailScreen), findsOneWidget);
+    expect(container.read(navIndexProvider), AppTab.trips.index,
+        reason: 'closing the chat is not leaving the trip');
+
+    expect(await _back(tester), isTrue);
+    await tester.pumpAndSettle();
+    expect(find.byType(TripDetailScreen), findsNothing);
+    expect(find.byKey(_homeKey), findsOneWidget);
+    expect(container.read(navIndexProvider), AppTab.home.index);
   });
 
   testWidgets('Escape closes the panel', (WidgetTester tester) async {

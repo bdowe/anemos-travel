@@ -138,7 +138,30 @@ String _timeOfDayLabel(AppLocalizations l10n, String value) => switch (value) {
 
 class TripDetailScreen extends ConsumerStatefulWidget {
   final String tripId;
-  const TripDetailScreen({super.key, required this.tripId});
+
+  /// The tab the traveler was on when they opened this trip, when that is
+  /// somewhere other than Trips — set only by [openTripOnTripsTab], which is
+  /// how Home's trip cards open a trip. Back then returns them there instead
+  /// of stranding them on the trips list they never visited.
+  ///
+  /// Carried on the ROUTE rather than in a provider on purpose. An ambient
+  /// record would have to be cleared on every path that takes this screen off
+  /// the stack — a plain `pop`, `selectTab`'s re-tap `popUntil`,
+  /// [resetToRoot]'s `removeRoute`, the next [openTripOnTripsTab] — and none
+  /// of those consult [PopScope], so the first one anybody forgot would leave
+  /// the NEXT trip, opened from the list, jumping to Home on back. As a field
+  /// it is born with the route and dies with it.
+  ///
+  /// Null — every other entry point: the trips list, boot restore from a URL,
+  /// import, log-a-trip, the atlas, a shared-trip join, the agent's "open the
+  /// trip" — and null behaves exactly as this screen always has.
+  final AppTab? entryOrigin;
+
+  const TripDetailScreen({
+    super.key,
+    required this.tripId,
+    this.entryOrigin,
+  });
 
   @override
   ConsumerState<TripDetailScreen> createState() => _TripDetailScreenState();
@@ -3308,6 +3331,35 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     );
   }
 
+  /// Back out of a trip that was opened from another tab
+  /// ([TripDetailScreen.entryOrigin]): clear the Trips stack and hand the
+  /// traveler back to the tab they came from.
+  void _leaveToEntryOrigin(AppTab origin) {
+    // Read the notifier up front. The reset below takes this route out of the
+    // navigator, so reaching for `ref` afterwards is reaching through a widget
+    // already on its way off screen.
+    final navIndex = ref.read(navIndexProvider.notifier);
+    // [resetToRoot], not a pop, and before the tab switch — its own reasoning
+    // with the tab roles reversed. Trips is about to be HIDDEN, and the shell
+    // freezes hidden tabs' tickers (app_shell.dart), so a pop transition here
+    // would park fully painted and then replay in full the next time Trips is
+    // revealed: the trip you just left sliding away in front of you.
+    //
+    // Clearing the stack (rather than removing this one route) is also what
+    // makes the Trips tab honest afterwards. Trips KEEPS its stack
+    // (_stackKeepingTabs), so whatever is left behind is what the next tap on
+    // Trips shows — and back means the traveler closed this trip, not that
+    // they parked it.
+    //
+    // Before the switch, because TabUrlObserver's bookkeeping (url_sync.dart)
+    // then drains while Trips is still the current tab: the removal reports
+    // /trips, and the tab switch that follows reports the origin tab's root,
+    // which is the last word. No new reporting path — the same drain
+    // [selectTab] relies on.
+    resetToRoot(Navigator.of(context));
+    navIndex.state = origin.index;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -3357,6 +3409,12 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
       // chrome), so this always agrees with _mapPinned. Plain assignment:
       // we're in build, like _mapPinned's own write.
       _narrow = constraints.maxWidth < kRailBreakpoint;
+      // Where back goes once the panel is out of the way. Null is both "opened
+      // from the trips list" and every other entry point, and means the
+      // ordinary pop this screen has always done.
+      final backTo = widget.entryOrigin == AppTab.trips
+          ? null
+          : widget.entryOrigin;
       return PopScope(
         // Back closes the chat before it leaves the trip. The panel is drawn
         // inside the screen rather than pushed as a route, and on narrow it
@@ -3365,9 +3423,26 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         // (specs/trip-refine-memory). Composes with AppShell's own
         // PopScope(canPop: false), which forwards to this tab navigator's
         // maybePop(); that consults the top route's PopScope, i.e. this one.
-        canPop: !_panelOpen,
+        // The browser's own back arrow arrives here too: on web it dispatches
+        // popRoute, which WidgetsApp turns into maybePop() on the ROOT
+        // navigator — the same chain, so both back buttons agree by
+        // construction rather than by two implementations kept in step.
+        //
+        // ONE PopScope carrying both jobs, deliberately not two nested ones:
+        // ModalRoute hands `didPop: false` to EVERY PopScope registered in its
+        // subtree, not just the innermost (routes.dart —
+        // `onPopInvokedWithResult` loops over `_popEntries`), so a second one
+        // for [TripDetailScreen.entryOrigin] would fire in the same breath as
+        // this one and a single back would close the chat AND switch tabs.
+        // Stated here in priority order instead.
+        canPop: !_panelOpen && backTo == null,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop && _panelOpen) setState(() => _panelOpen = false);
+          if (didPop) return;
+          if (_panelOpen) {
+            setState(() => _panelOpen = false);
+            return;
+          }
+          if (backTo != null) _leaveToEntryOrigin(backTo);
         },
         child: Scaffold(
       // Always-reachable chat entry, mirroring the _openRefine guards so it's
