@@ -130,8 +130,9 @@ dev_dependencies:
 # gradient isn't expressible natively) + the same bare light mark as the web
 # splash (assets/splash/mark_light_4x.png, 512px = 4x the 128dp mark — no white
 # plate). Android 12+ masks its icon to a circle, so it gets its own safe-zone
-# seed (mark_light_android12.png, 768px mark centered on a 1152px canvas) —
-# pinned by Android's mask, so it does NOT follow the in-app mark size.
+# seed (mark_light_android12.png, a 741px mark centered on a 1152px canvas —
+# sized by the ink's radius against Android's 768px circle, NOT by matching the
+# box to it) — pinned by that mask, so it does not follow the in-app mark size.
 # web: false — index.html has its own hand-crafted splash.
 flutter_native_splash:
   color: "#00695C"

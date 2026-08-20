@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Anemos full lockup: Waypoint Thread rose over the wordmark.
-       The rose artwork lives ONLY in mark.svg (referenced below) so the
+  <!-- Anemos full lockup: the Threaded Bezel mark over the wordmark.
+       The mark artwork lives ONLY in mark.svg (referenced below) so the
        two files cannot drift. NOTE: because of the external reference and
        live text, render this via the HTML harness in render/ (which inlines
        it and loads Cormorant Garamond) — an <img src="lockup.svg"> will not
@@ -14,10 +14,24 @@
       src:url('../../src/packages/flutter-app/assets/fonts/CormorantGaramond-SemiBold.ttf') format('truetype');
     }
   </style>
-  <image href="mark.svg" x="242" y="52" width="540" height="540"/>
+  <!-- Vertical placement is derived from the mark's INK, not its box, and the
+       two differ: mark.svg's ink is 94.2% of its square, so a 540 box carries
+       509 of drawing with ~16 of margin at each edge. Stacking
+       509 ink + 127 clear space (the guideline's 25%) + 106 caps = 741, then
+       centring that on 1024, puts the ink's top at 141 — hence a box at 126 —
+       and the caps' baseline at 883.
+
+       The previous numbers (box y=52, baseline y=760) were solved the same way
+       for the bare-rose mark, whose ink was only 76% of its box. Under this
+       mark they left just 78 units under the drawing where the rule wants 127,
+       and hung the whole lockup ~98 units high on the canvas. Re-run the
+       arithmetic if the mark art changes again. -->
+  <image href="mark.svg" x="242" y="126" width="540" height="540"/>
   <!-- The approved wordmark is full caps; Cormorant Garamond has a true
-       lowercase, so the caps come from the string itself. -->
-  <text x="522" y="760"
+       lowercase, so the caps come from the string itself. x is 522, not the
+       canvas centre: trailing letter-spacing pushes the run's optical centre
+       left of its anchor. -->
+  <text x="522" y="883"
         text-anchor="middle"
         font-family="Cormorant Garamond"
         font-weight="600"

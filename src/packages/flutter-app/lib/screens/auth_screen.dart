@@ -291,15 +291,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Held at 72 while the splash, app bar and nav rail all grew.
-                  // Tempting to match the splash's 128 for continuity across
-                  // the boot→sign-in cut, but this column has no vertical slack
-                  // to spend: at 800x600 the "Create account" button already
-                  // sits 9px above the fold, so even +24 here pushes the
-                  // primary CTA off screen (auth_autofill_submit_test catches
-                  // it). Growing the mark here means first reclaiming the
-                  // height from the spacing below it — a separate call about
-                  // this screen, not a knock-on of a brand-size change.
+                  // Held at 72 while the splash grew. It still gains from the
+                  // Threaded Bezel on its own — 94% ink against the old bare
+                  // rose's 76% takes this from a 55px mark to a 68px one
+                  // without the box moving — and that is all the room there
+                  // is: at 800x600 the "Create account" button sits 9px above
+                  // the fold, so even +24 on the box pushes the primary CTA
+                  // off screen (auth_autofill_submit_test catches it).
+                  // Enlarging the box here means first reclaiming height from
+                  // the spacing below it, which is a call about this screen
+                  // rather than a knock-on of a brand change.
                   const BrandLogo.mark(size: 72),
                   const SizedBox(height: AppSpacing.sm),
                   // Neutral surface, so the wordmark takes the theme's own

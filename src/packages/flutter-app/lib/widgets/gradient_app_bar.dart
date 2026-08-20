@@ -20,22 +20,22 @@ import 'brand_logo.dart';
 /// provably the same width rather than incidentally similar.
 const double _leadingSlot = kToolbarHeight;
 
-/// The rose's own size wherever this bar paints it.
+/// The mark's own size wherever this bar paints it.
 ///
-/// 44, and measured rather than guessed: the rose radiates from a small hub,
-/// so most of its box is empty and its optical size runs well under its
-/// layout size. The solid bronze star measures exactly 76% of the artwork's
-/// square canvas — the remaining 24% is the route thread's hairline tails,
-/// which antialias to nothing at chrome sizes. So 36 painted a 27px rose and
-/// read as a thin star beside a 19px wordmark; 44 paints a 33px one, which is
-/// what a "36px logo" is supposed to look like.
+/// 40, and measured rather than guessed. Box sizes are not comparable across
+/// two different drawings, so the number to reason about is what actually
+/// lands on the pixels: the Threaded Bezel's ink fills 94% of its square
+/// artboard, so 40 paints a 38px mark. The bar carried 36 of the old bare
+/// rose, whose ink was only 76% of its artboard — that painted 27px. The box
+/// shrank and the logo grew by 38%.
 ///
-/// The ceiling is the nav rail, not this bar: the rail's tap box is pinned at
-/// 40 by its centre-line derivation (`app_shell.dart`), so the rose already
-/// overflows it by 2px a side at 44 and 4px at 48. This bar has room to spare
-/// — its tap box is [kMinTouchTarget] — but the brand is one size wherever it
-/// appears, so the rail's constraint governs both.
-const double _markSize = 44;
+/// 40 rather than 44, which the bezel would also survive: at 44 it paints
+/// 41px into a 56px bar and the ring's tick marks come within 7px of the
+/// hairline bottom border, which reads crowded rather than confident. 40 is
+/// also exactly the nav rail's pinned tap box (`app_shell.dart`), so the
+/// brand is one size wherever it appears AND the rail needs no overflow
+/// trickery to paint it.
+const double _markSize = 40;
 
 /// The rose's tap box, centred inside the [_leadingSlot].
 ///

@@ -152,18 +152,16 @@ const double _kRailLeadingGap = 8;
 /// stale the moment GradientAppBar's height moves.
 const double _kRailMarkBox = kToolbarHeight - _kRailLeadingGap * 2; // 40
 
-/// The rose's painted size, which is deliberately LARGER than the box above.
+/// The mark's painted size, which now exactly fills the box above.
 ///
-/// [_kRailMarkBox] is an alignment contract and a tap target, not a frame: the
-/// rose is centred in it, so painting it past the edges keeps it on the same
-/// y = 28 line and breaks nothing. That matters because the box cannot grow —
-/// the derivation above pins it at 40 — while the rose needed to: its solid
-/// bronze star measures only 76% of the artwork's square canvas (the rest is
-/// the route thread's hairline tails, which antialias to nothing at chrome
-/// sizes), so 36 painted a 27px rose. 44 paints 33px. Kept identical to
-/// `gradient_app_bar.dart`'s `_markSize` so the brand is one size wherever it
-/// appears — that file carries the argument for why 44 and not 48.
-const double _kRailMarkSize = 44;
+/// The box cannot move — the derivation above pins it at 40 — and under the
+/// old bare-rose mark that was a real ceiling: its ink was only 76% of its
+/// artboard, so filling the box still painted a 30px rose and anything larger
+/// had to overflow the tap target to be seen. The Threaded Bezel's ink is 94%
+/// of its artboard, so 40 paints 38px and the box is simply the right size.
+/// Kept identical to `gradient_app_bar.dart`'s `_markSize` so the brand is one
+/// size wherever it appears — that file carries the argument for 40 over 44.
+const double _kRailMarkSize = _kRailMarkBox;
 
 /// The Anemos brand mark for the top of the rail — the persistent
 /// Site ID (Krug). Bare mark: the bronze/azure rose reads on the rail surface
@@ -197,18 +195,7 @@ class _RailBrand extends ConsumerWidget {
             child: const SizedBox(
               width: _kRailMarkBox,
               height: _kRailMarkBox,
-              // OverflowBox, not a plain Center: Align loosens the incoming
-              // constraints but keeps their max, so a Center would silently
-              // shrink the rose back to the 40 the box is pinned at. This
-              // hands the child its own 44 and reports no overflow, because
-              // exceeding the tap box is the intent — see [_kRailMarkSize].
-              child: OverflowBox(
-                minWidth: 0,
-                minHeight: 0,
-                maxWidth: _kRailMarkSize,
-                maxHeight: _kRailMarkSize,
-                child: BrandLogo.mark(size: _kRailMarkSize),
-              ),
+              child: Center(child: BrandLogo.mark(size: _kRailMarkSize)),
             ),
           ),
         ),
