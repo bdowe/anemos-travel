@@ -334,16 +334,31 @@ type tripScopeVerdict struct {
 // the honest state of it. It is still written as two independent rules because
 // they are two independent rules — see the known gap below.
 //
-// KNOWN GAP, measured and deliberately not closed here: an interleaved
-// transition day (Prague d5, Kraków d6, Prague d6, Kraków d7 — the arriving
-// city's item emitted BEFORE the departing city's morning item) is fragmented,
-// has non-decreasing days, and so passes. It passed before this guard existed
-// too, so it is not a regression. The leading candidate for closing it is a
-// run-interleaving test (A,B,A,B), on the principle that a correct itinerary is
-// a SEQUENCE of stays — once you leave A for B you are in B until you leave B,
-// so A,B,A,B means each city was interrupted by the other, which is two lists
-// spliced together. It is unshipped because it was fitted to a self-authored
-// corpus and needs adversarial shapes plus the production audit first.
+// KNOWN GAP, measured and deliberately left open: an interleaved transition day
+// (Prague d5, Kraków d6, Prague d6, Kraków d7 — the arriving city's item emitted
+// BEFORE the departing city's morning item) is fragmented, has non-decreasing
+// days, and so passes. It passed before this guard existed too, so it is not a
+// regression.
+//
+// The candidate for closing it was a run-interleaving test (A,B,A,B), on the
+// principle that a correct itinerary is a SEQUENCE of stays. That candidate has
+// now been RUN — against an enumerated corpus rather than one written alongside
+// it (itinerary_shape_corpus_test.go: every run pattern up to five runs crossed
+// with the day assignments, labelled from the definition before any rule saw
+// them) — and it FAILED, with 138 false rejections among 563 shapes it was not
+// fitted to. The principle does not carry the clause: it constrains TIME, and
+// A,B,A,B is Paris → Rome → Paris → Rome, where the first Paris stay was not
+// interrupted by Rome but ENDED before the second began. A,B,A is the supported
+// revisit this file is built around; A,B,A,B is that plus one more ordinary
+// stay. So the clause is not held pending evidence — it is REFUSED on it.
+//
+// What that leaves, and it is the useful part: position order and day numbers
+// are the only carriers of time a payload has, and when they agree there is
+// nothing left in the data to appeal to. The interleaved transition day is
+// legal AS READ; it is only corrupt relative to what the model meant, which is
+// not in the payload. Closing this gap therefore needs a signal that does not
+// exist yet — the emitted `time_of_day`, or the previous itinerary to diff
+// against — not a cleverer predicate over these same fields.
 func (v tripScopeVerdict) fragmentationRejects() bool {
 	return len(v.Fragmented) > 0 && len(v.Breaks) > 0
 }
