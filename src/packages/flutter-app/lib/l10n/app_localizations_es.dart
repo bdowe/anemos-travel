@@ -2021,6 +2021,30 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get tripCalendarTravelDayKey =>
+      'Un día de dos colores es un día de viaje: sales de una ciudad y entras en la siguiente.';
+
+  @override
+  String tripCalendarCheckInOut(String checkIn, String checkOut) {
+    return 'Entrada $checkIn · Salida $checkOut';
+  }
+
+  @override
+  String tripCalendarTravelDaySemantics(String date, String from, String to) {
+    return '$date: salida de $from, entrada en $to';
+  }
+
+  @override
+  String tripCalendarCheckInSemantics(String date, String city) {
+    return '$date: entrada en $city';
+  }
+
+  @override
+  String tripCalendarCheckOutSemantics(String date, String city) {
+    return '$date: salida de $city';
+  }
+
+  @override
   String tripTravelMinutes(int minutes) {
     return '$minutes min';
   }

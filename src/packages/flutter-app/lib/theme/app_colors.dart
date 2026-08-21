@@ -117,9 +117,20 @@ abstract final class AppColors {
   static const Color legToneOlive = Color(0xFFA3A86E);
   static const Color legToneSteel = Color(0xFF7D9AA8);
   static const Color legToneMauve = Color(0xFFB07E8A);
+  static const Color legToneJade = Color(0xFF6BA882);
+  static const Color legToneOrchid = Color(0xFFB47FA8);
+  static const Color legToneIndigo = Color(0xFF7F86BC);
+  static const Color legToneFern = Color(0xFF89A96B);
 
   /// The ladder itself, in assignment order: leg [index] takes
   /// `legTones[index % legTones.length]`.
+  ///
+  /// TWELVE rungs, ordered so consecutive legs land at least ~35° of hue
+  /// apart — the ladder's only real job is that the city you are in and the
+  /// city you move to next never read as the same band. It ran eight until a
+  /// real 9-city trip wrapped it: legs 1 and 9 both drew teal, and the legend
+  /// showed two different cities behind the same dot. Wrapping is still
+  /// possible past twelve, but a wrap is now non-adjacent by a wide margin.
   static const List<Color> legTones = [
     legToneTeal,
     legToneSlate,
@@ -129,6 +140,10 @@ abstract final class AppColors {
     legToneOlive,
     legToneSteel,
     legToneMauve,
+    legToneJade,
+    legToneOrchid,
+    legToneIndigo,
+    legToneFern,
   ];
 
   /// The solid tone for leg [index] — legend dots and the detail-row
@@ -138,8 +153,15 @@ abstract final class AppColors {
   /// The calendar band for leg [index]: its tone let down to a wash so the
   /// sheet surface shows through and the day numbers keep the scheme's ink
   /// in both themes (a solid mid-tone would force a per-theme ink choice).
-  static Color legBand(int index) =>
-      legTones[index % legTones.length].withValues(alpha: 0.45);
+  ///
+  /// [muted] is the not-the-selected-leg state: when the traveler picks a
+  /// city from the legend, every OTHER leg drops to this weaker wash so the
+  /// selected ribbon — and the two half-cells where it checks in and out —
+  /// reads as one run. It stays a tone rather than going gray so the band
+  /// still answers "which city", just quietly.
+  static Color legBand(int index, {bool muted = false}) =>
+      legTones[index % legTones.length]
+          .withValues(alpha: muted ? 0.16 : 0.45);
 
   /// The trip calendar's weekend-column wash: a barely-there ink film, the
   /// recessive read that marks Saturday/Sunday without earning a color.

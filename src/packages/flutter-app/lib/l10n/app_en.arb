@@ -1266,6 +1266,43 @@
       }
     }
   },
+  "tripCalendarTravelDayKey": "A day in two colors is a travel day — you check out of one city and into the next.",
+  "@tripCalendarTravelDayKey": {
+    "description": "Key line under the trip calendar's month grids, beside a miniature two-tone cell. Explains the grid's only non-obvious mark: a leg's band runs from the middle of its check-in day to the middle of its check-out day, so a day the traveler moves carries both cities' tones."
+  },
+  "tripCalendarCheckInOut": "Check in {checkIn} · Check out {checkOut}",
+  "@tripCalendarCheckInOut": {
+    "description": "Date line in the trip calendar's leg detail row. Names both ends of the stay rather than printing the span, so the night count beside it is unambiguous.",
+    "placeholders": {
+      "checkIn": { "type": "String", "example": "Mon, Aug 24" },
+      "checkOut": { "type": "String", "example": "Wed, Aug 26" }
+    }
+  },
+  "tripCalendarTravelDaySemantics": "{date}: check out of {from}, check in to {to}",
+  "@tripCalendarTravelDaySemantics": {
+    "description": "Screen-reader name for a trip calendar day that carries two city tones — the traveler moves that day. Sighted users read this from the two halves of the cell's band.",
+    "placeholders": {
+      "date": { "type": "String", "example": "Wed, Aug 26" },
+      "from": { "type": "String", "example": "Amsterdam" },
+      "to": { "type": "String", "example": "Kraków" }
+    }
+  },
+  "tripCalendarCheckInSemantics": "{date}: check in to {city}",
+  "@tripCalendarCheckInSemantics": {
+    "description": "Screen-reader name for a trip calendar day where a stay begins and none ends — the trip's first day.",
+    "placeholders": {
+      "date": { "type": "String", "example": "Mon, Aug 24" },
+      "city": { "type": "String", "example": "Amsterdam" }
+    }
+  },
+  "tripCalendarCheckOutSemantics": "{date}: check out of {city}",
+  "@tripCalendarCheckOutSemantics": {
+    "description": "Screen-reader name for a trip calendar day where a stay ends and none begins — the trip's last day, the journey home.",
+    "placeholders": {
+      "date": { "type": "String", "example": "Tue, Sep 22" },
+      "city": { "type": "String", "example": "Rome" }
+    }
+  },
   "tripTravelMinutes": "{minutes} min",
   "@tripTravelMinutes": {
     "placeholders": {
