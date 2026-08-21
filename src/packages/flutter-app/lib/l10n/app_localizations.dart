@@ -5420,11 +5420,11 @@ abstract class AppLocalizations {
   /// **'This trip doesn\'t have an itinerary yet.'**
   String get sharedEmptyMessage;
 
-  /// No description provided for @sharedDayN.
+  /// Caps a shared trip's one-line run of place names for a city. Same overflow grammar as citiesMore.
   ///
   /// In en, this message translates to:
-  /// **'Day {day}'**
-  String sharedDayN(int day);
+  /// **'+{count} more'**
+  String sharedCityMorePlaces(int count);
 
   /// No description provided for @sharedStays.
   ///

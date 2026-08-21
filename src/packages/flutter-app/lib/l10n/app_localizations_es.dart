@@ -3241,8 +3241,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String get sharedEmptyMessage => 'Este viaje todavía no tiene itinerario.';
 
   @override
-  String sharedDayN(int day) {
-    return 'Día $day';
+  String sharedCityMorePlaces(int count) {
+    return '+$count más';
   }
 
   @override
