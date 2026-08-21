@@ -501,7 +501,7 @@
           <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
         </g>
       </svg>
-      <p class="cap"><b>Dark cut — mark.svg</b>Neutral page surfaces and scrimmed imagery: auth screen, nav rail, favicon.</p>
+      <p class="cap"><b>Dark cut — mark.svg</b>Aegean page surfaces and scrimmed imagery: auth screen, nav rail, favicon.</p>
     </div>
     <div class="cut on-grad">
       <svg viewBox="0 0 540 540" aria-hidden="true">
@@ -642,7 +642,7 @@
 
   <div class="keep">
   <h3>The landing dark canvas</h3>
-  <p class="small muted" style="margin-bottom:14px">The signed-out landing page is the <strong>one sanctioned exception</strong> to "surfaces stay neutral": it commits to a dark brand look in both theme modes, on a teal-derived field of its own. The exception ends at sign-in — no in-app surface may adopt this family. Tokens in <code>app_colors.dart</code> (the landing family).</p>
+  <p class="small muted" style="margin-bottom:14px">The signed-out landing page is the <strong>one sanctioned exception</strong> to the two Aegean canvases: it commits to a dark brand look in both theme modes, on a teal-derived field of its own. The exception ends at sign-in — no in-app surface may adopt this family. Tokens in <code>app_colors.dart</code> (the landing family).</p>
   <div class="swatchcards">
     <div class="sw">
       <div class="chip" style="background:#00231D"></div>
@@ -695,8 +695,20 @@
     <span class="accent"><i style="background:#455A64"></i>parking <code>#455A64</code></span>
   </div>
 
+  <h3>The two Aegean canvases <span class="small muted">— new in v1.6</span></h3>
+  <p><strong>Surfaces are no longer neutral, and they are no longer seed-derived.</strong> They come from the wind rose's own blue, authored as two ladders — <code>AppColors.aegeanNight</code> (dark) and <code>AppColors.aegeanPaper</code> (light) — selected by <code>AppColors.canvasFor(brightness)</code>, the one place a theme mode becomes a set of surfaces.</p>
+  <p class="small muted">The hue is <b>205°</b>, between the mark's petrol blue (<code>markPetrol</code> #236684, 198°) and the rebrand's recorded Aegean-night canvas (209°). It is the blue the logo is drawn in, not a blue picked to go beside it. The neutrals it replaced were never neutral either: teal-seeded dark surfaces came out at <code>#0E1513</code>, a near-black with a green cast too weak to name. The idea is unchanged — surfaces carry the brand's hue quietly — only the hue is, and the chroma it is allowed.</p>
+
+  <div class="gradband" style="background:linear-gradient(90deg,#091620,#0C1F2C 22%,#0F2738 40%,#123044 58%,#153851 76%,#1A4361 92%,#205479);color:#E3E9ED">aegeanNight · lowest #091620 · <b>surface #0C1F2C</b> · low #0F2738 · container #123044 · <b>high #153851 (cards)</b> · highest #1A4361 · bright #205479</div>
+  <div class="gradband" style="background:linear-gradient(90deg,#FFFFFF,#F6F9FB 22%,#EFF4F8 45%,#E7F0F5 62%,#E0EBF2 80%,#D9E6EF);color:#101B23">aegeanPaper · lowest #FFFFFF · <b>surface #F6F9FB</b> · low #EFF4F8 · container #E7F0F5 · <b>high #E0EBF2 (cards)</b> · highest #D9E6EF</div>
+
+  <p class="small muted" style="margin-top:12px">Inks: dark <code>onSurface #E3E9ED</code> / <code>onSurfaceVariant #C0CBD3</code>; light <code>#101B23</code> / <code>#364754</code>. Hairlines: dark <code>outlineVariant #405564</code>, light <code>#BCC9D2</code>. Light input fields take <b>Paper Fill <code>#F3F7F9</code></b> — cooled onto the canvas, because the old warm <code>#FAFAFA</code> read as a smudge once the fields around it went cool. Every tone is measured against both inks; the tightest pair in either canvas is <b>4.88 : 1</b>, and <code>app_theme_surfaces_test.dart</code> re-measures all sixteen rather than trusting the ladder.</p>
+
+  <p><strong>Two hues, two jobs, no overlap.</strong> Teal still seeds every Material <em>role</em> — primary, secondary, error and their <code>on</code> pairs — so the action colour is untouched. Blue owns every <em>surface</em>. Teal is what you act <em>with</em>; blue is what you act <em>on top of</em>. A filled teal button is easier to find on Aegean night than it was on grey, which is the check that says the split is working.</p>
+
   <h3>Proportion</h3>
-  <p>Surfaces stay neutral — white cards on quiet ground, warm where the direction section leads, <b>chrome included since v1.4</b>: the app bar is flat surface under a hairline in both themes, and the brand rides in the wordmark's ink (brandDark on light, scheme primary on dark), the rose, typography, and imagery. Teal as a fill is the primary action — the one filled button that matters on a screen. Gold belongs to the mark. Tool accents and status colors appear at chip-and-pin scale, never as fields. Both themes are seeded from the same <code>brand</code>; dark mode is the same build with brightness flipped, chrome included.</p>
+  <p>Cards sit a rung above their page on an authored ladder, <b>chrome included since v1.4</b>: the app bar is flat surface under a hairline in both themes, and the brand rides in the wordmark's ink (brandDark on light, scheme primary on dark), the rose, typography, and imagery. Teal as a fill is the primary action — the one filled button that matters on a screen. Gold belongs to the mark. Tool accents and status colors appear at chip-and-pin scale, never as fields. Both themes take their roles from the same <code>brand</code> seed; <b>dark mode is no longer the light build with brightness flipped</b> — the two canvases are composed separately, one design in two keys.</p>
+  <p class="small muted"><b>Superseded in v1.6:</b> "Surfaces stay neutral — white cards on quiet ground, warm where the direction section leads" and "dark mode is the same build with brightness flipped." Both were true of a seed-derived scheme and are not true of an authored one. The <b>warm-plaster</b> direction on the market page above is likewise now cool plaster — the register (quiet ground, photography carries the heat) survives the temperature change; the swatches there do not.</p>
 
   <div class="keep">
   <h3>Contrast, measured</h3>
@@ -898,7 +910,7 @@
       </svg>
       <span class="w">ANEMOS</span>
     </div>
-    <div class="small" style="text-align:right">Brand guidelines · v1.5 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
+    <div class="small" style="text-align:right">Brand guidelines · v1.6 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
   </div>
 </footer>
 
