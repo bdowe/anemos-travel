@@ -345,10 +345,16 @@ func TestClassifyAllowsRevisitArrivingOnATransitionDay(t *testing.T) {
 // An interleaved transition day — the ARRIVING city's item emitted before the
 // DEPARTING city's morning item — fragments the trip while leaving the days
 // non-decreasing, so neither check fires. It passed before this guard existed
-// too, so it is a gap and not a regression. The leading candidate for closing
-// it is a run-interleaving test (A,B,A,B): a correct itinerary is a SEQUENCE of
-// stays, so each city being interrupted by the other is two lists spliced
-// together. Held pending adversarial shapes and the production audit.
+// too, so it is a gap and not a regression.
+//
+// The candidate for closing it was a run-interleaving test (A,B,A,B). It has
+// since been RUN against an enumerated corpus rather than a self-authored one
+// (itinerary_shape_corpus_test.go) and it FAILED: 138 false rejections on 563
+// shapes it was not fitted to, because A,B,A,B is Paris → Rome → Paris → Rome
+// and every one of those is a stay that began after the one before it ended.
+// So this gap is now a gap by DECISION, not by deferral, and closing it needs
+// a signal the payload does not currently carry — see
+// TestTheInterleaveClauseRejectsLegalItineraries.
 func TestInterleavedTransitionDayIsAKnownGap(t *testing.T) {
 	v := inspectLocs([]map[string]any{
 		rl("Charles Bridge", 5, "Prague", ""),
@@ -366,4 +372,31 @@ func TestInterleavedTransitionDayIsAKnownGap(t *testing.T) {
 		t.Fatal("documenting the gap: this is NOT caught today. If this now fails, " +
 			"the interleave rule landed — delete this test and assert the rejection instead")
 	}
+}
+
+// The cheapest available check that the guard is not rejecting real edits: the
+// payload from PR #523's TestWholeTripRewriteMovesOtherLegsDates, run DIRECTLY
+// through the guard rather than assumed to pass. That test drives a legitimate
+// whole-trip rewrite — four cities, every day number re-authored by the model —
+// through this exact path, and it is the only whole-trip payload in the tree
+// that came from somewhere other than this arc.
+//
+// Said plainly because it would otherwise be over-read: the payload is A,B,C,D,
+// so it CANNOT discriminate the interleave clause — the clause accepts it too.
+// It is evidence about the shipped guard, and nothing more.
+func TestPR523WholeTripRewriteIsAccepted(t *testing.T) {
+	locs := []map[string]any{
+		rl("Rijksmuseum", 1, "Amsterdam", ""),
+		rl("Jordaan walk", 2, "Amsterdam", ""),
+		rl("Kalemegdan Fortress", 3, "Belgrade", ""),
+		rl("Skadarlija", 4, "Belgrade", ""),
+		rl("Opera House", 5, "Oslo", ""),
+		rl("Vigeland Park", 6, "Oslo", ""),
+		rl("Vasa Museum", 7, "Stockholm", ""),
+		rl("Gamla Stan", 8, "Stockholm", ""),
+	}
+	if err := errInvalidTripScopePayload(locs); err != nil {
+		t.Fatalf("the guard rejects PR #523's legitimate whole-trip rewrite: %v", err)
+	}
+	assertNotFlagged(t, "PR #523's whole-trip rewrite", locs)
 }

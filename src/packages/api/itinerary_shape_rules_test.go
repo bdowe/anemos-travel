@@ -21,6 +21,9 @@ package main
 //	               or a break.
 //	INTERLEAVE     the clause alone: runs A,B,A,B.
 //	A+INTERLEAVE   the rule this lane exists to test: OPT-A plus the clause.
+//	A+INTERLEAVE   the same clause under its tighter reading, where the four
+//	  (adjacent)   runs must be consecutive. Scored so "you tested the wrong
+//	               reading" is answered rather than left open.
 //
 // The scoring bar is the one the guard lane established and the coordinator
 // upheld, and it is not symmetric:
@@ -77,6 +80,29 @@ func hasInterleave(items []runItem) bool {
 					}
 				}
 			}
+		}
+	}
+	return false
+}
+
+// hasAdjacentInterleave is the TIGHTER reading of the same clause: the four
+// runs must be CONSECUTIVE, so only a literal A,B,A,B stretch counts and
+// A,B,A,C,B does not. Scored because the plan's wording (i < j < k < l) admits
+// both readings, and a reader would otherwise reasonably ask whether the loose
+// one is what failed. It is not — the decisive counterexample, four one-day
+// stays on days 1,2,3,4, is consecutive.
+//
+// Scored, NOT proposed. Adopting a rule invented in the same pass that scores
+// it is the error this lane exists to avoid committing a second time.
+func hasAdjacentInterleave(items []runItem) bool {
+	runs := hubRuns(items)
+	for i := 0; i+3 < len(runs); i++ {
+		a, b := foldIdentity(runs[i].Hub), foldIdentity(runs[i+1].Hub)
+		if a == "" || b == "" || a == b {
+			continue
+		}
+		if foldIdentity(runs[i+2].Hub) == a && foldIdentity(runs[i+3].Hub) == b {
+			return true
 		}
 	}
 	return false
@@ -168,6 +194,9 @@ func candidateRules() []candidateRule {
 		{"A+INTERLEAVE", func(items []runItem) bool {
 			return inspectTripScope(items).rejects() || hasInterleave(items)
 		}},
+		{"A+INTERLEAVE (adjacent)", func(items []runItem) bool {
+			return inspectTripScope(items).rejects() || hasAdjacentInterleave(items)
+		}},
 	}
 }
 
@@ -235,18 +264,18 @@ func TestCandidateRulesOverTheEnumeratedCorpus(t *testing.T) {
 
 	t.Logf("corpus: %d shapes (%d legal, %d illegal); %d new (%d legal, %d illegal)",
 		len(shapes), legal, illegal, len(newShapes), newLegal, newIllegal)
-	t.Logf("%-18s | %-22s | %-22s", "rule", "ALL  false-rej / miss", "NEW  false-rej / miss")
+	t.Logf("%-23s | %-22s | %-22s", "rule", "ALL  false-rej / miss", "NEW  false-rej / miss")
 	t.Logf("%s", strings.Repeat("-", 70))
 	for _, r := range candidateRules() {
 		all := scoreRule(r, shapes)
 		nw := scoreRule(r, newShapes)
-		t.Logf("%-18s | %10d / %-10d | %10d / %-10d", r.Name,
+		t.Logf("%-23s | %10d / %-10d | %10d / %-10d", r.Name,
 			all.FalseRejections, all.Misses, nw.FalseRejections, nw.Misses)
 	}
 	t.Logf("%s", strings.Repeat("-", 70))
 	for _, r := range candidateRules() {
 		all := scoreRule(r, shapes)
-		t.Logf("%-18s  false rejections: %s", r.Name, sample(all.FalseRejectionIDs, 4))
+		t.Logf("%-23s  false rejections: %s", r.Name, sample(all.FalseRejectionIDs, 4))
 	}
 }
 
