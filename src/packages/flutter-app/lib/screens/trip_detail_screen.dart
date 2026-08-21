@@ -45,6 +45,7 @@ import '../services/api_client.dart' show isTransientError;
 import '../services/trip_cache.dart';
 import '../services/trips_api_service.dart' show TripEndpointsException;
 import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../theme/spacing.dart';
 import '../utils/calendar_links.dart';
 import '../utils/clothing_recs.dart';
