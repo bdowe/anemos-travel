@@ -19,6 +19,7 @@ import '../widgets/account_menu.dart';
 import '../widgets/before_you_go_section.dart';
 import '../widgets/continue_chats_section.dart';
 import '../widgets/continue_trip_hero.dart';
+import '../widgets/fading_edge_scroll.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/home_inspiration_rail.dart';
 import '../widgets/home_next_step_band.dart';
@@ -536,14 +537,20 @@ class _LocalGuidesRow extends ConsumerWidget {
         const SizedBox(height: AppSpacing.md),
         SizedBox(
           height: 190,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            // Room below the cards so their drop shadow isn't clipped by
-            // the horizontal viewport.
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            itemCount: guides.length,
-            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
-            itemBuilder: (context, i) => _GuideCard(guide: guides[i]),
+          // Same treatment as the inspiration rail below it — the two sit on
+          // one page at one card rhythm, so a hard cut on this one would
+          // read as a bug beside a faded one.
+          child: FadingEdgeScroll(
+            builder: (context, controller) => ListView.separated(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              // Room below the cards so their drop shadow isn't clipped by
+              // the horizontal viewport.
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              itemCount: guides.length,
+              separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+              itemBuilder: (context, i) => _GuideCard(guide: guides[i]),
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
