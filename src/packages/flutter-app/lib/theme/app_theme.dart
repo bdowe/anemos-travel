@@ -13,9 +13,39 @@ abstract final class AppTheme {
 
   static ThemeData _build(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
+    // Teal still seeds every ROLE — primary, secondary, error, and their
+    // `on` pairs — so the action colour and the brand spine are unchanged.
+    // What the seed no longer decides is the CANVAS: M3 strips almost all
+    // the chroma out of its neutrals, which left dark mode at #0E1513, a
+    // near-black carrying a green cast too weak to read as anything but
+    // grey. The surfaces now come from the wind rose's own blue instead,
+    // stated as a ladder in AppColors (specs/aegean-surfaces).
+    final canvas = AppColors.canvasFor(brightness);
     final colorScheme = ColorScheme.fromSeed(
       seedColor: AppColors.brand, // Teal theme (matches the home banner)
       brightness: brightness,
+    ).copyWith(
+      surface: canvas.surface,
+      surfaceDim: canvas.surfaceDim,
+      surfaceBright: canvas.surfaceBright,
+      surfaceContainerLowest: canvas.containerLowest,
+      surfaceContainerLow: canvas.containerLow,
+      surfaceContainer: canvas.container,
+      surfaceContainerHigh: canvas.containerHigh,
+      surfaceContainerHighest: canvas.containerHighest,
+      onSurface: canvas.onSurface,
+      onSurfaceVariant: canvas.onSurfaceVariant,
+      outline: canvas.outline,
+      outlineVariant: canvas.outlineVariant,
+      // The inverse pair is a SnackBar's field: it has to be the other
+      // canvas, or a toast in dark mode lands on a light green-grey that
+      // belongs to neither.
+      inverseSurface: isDark
+          ? AppColors.aegeanPaper.onSurface
+          : AppColors.aegeanNight.surface,
+      onInverseSurface: isDark
+          ? AppColors.aegeanPaper.surface
+          : AppColors.aegeanNight.onSurface,
     );
 
     // Inter as the app-wide UI font (Cormorant Garamond carries the wordmark
@@ -163,10 +193,13 @@ abstract final class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         border: const OutlineInputBorder(borderRadius: AppRadius.smAll),
         filled: true,
-        // grey[50] reads as paper in light but would glow on a dark surface;
-        // dark takes the M3 filled-field container instead.
-        fillColor:
-            isDark ? colorScheme.surfaceContainerHighest : Colors.grey[50],
+        // Paper reads as a recessed field in light but would glow on a dark
+        // surface; dark takes the filled-field container instead. It was
+        // grey[50] until the canvas went cool, at which point a warm smudge
+        // sat inside every cool field.
+        fillColor: isDark
+            ? colorScheme.surfaceContainerHighest
+            : AppColors.paperFill,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

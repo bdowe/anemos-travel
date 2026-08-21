@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:travel_route_planner/theme/app_colors.dart';
 import 'package:travel_route_planner/theme/app_theme.dart';
 
 /// Pins the light/dark divergences in AppTheme (specs/dark-mode): the dark
@@ -14,7 +15,9 @@ void main() {
   });
 
   test('input fill: paper in light, tonal surface in dark', () {
-    expect(AppTheme.light.inputDecorationTheme.fillColor, Colors.grey[50]);
+    // Paper is a token now, not grey[50]: once the canvas went cool a warm
+    // #FAFAFA sat inside every field as a visible smudge.
+    expect(AppTheme.light.inputDecorationTheme.fillColor, AppColors.paperFill);
     expect(AppTheme.dark.inputDecorationTheme.fillColor,
         AppTheme.dark.colorScheme.surfaceContainerHighest);
   });

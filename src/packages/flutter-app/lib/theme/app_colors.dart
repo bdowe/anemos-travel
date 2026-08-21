@@ -1,5 +1,28 @@
 import 'package:flutter/material.dart';
 
+/// One canvas: the eight Material surface tones, plus the two inks and two
+/// hairlines that sit on them. A theme mode picks a canvas; nothing else
+/// chooses a surface colour.
+///
+/// It exists as a record rather than sixteen loose constants because the
+/// tones are only meaningful as a LADDER — the interval between rungs is
+/// what makes a card read as raised, so a rung can't be re-tuned in
+/// isolation.
+typedef SurfaceCanvas = ({
+  Color surface,
+  Color surfaceDim,
+  Color surfaceBright,
+  Color containerLowest,
+  Color containerLow,
+  Color container,
+  Color containerHigh,
+  Color containerHighest,
+  Color onSurface,
+  Color onSurfaceVariant,
+  Color outline,
+  Color outlineVariant,
+});
+
 /// Brand and category colors in one place. The teal family is the spine of the
 /// app (the Material 3 scheme is seeded from `Colors.teal.shade700`); the
 /// gradients below are the exact pair the app bar, hero, and recent-trip card
@@ -7,6 +30,84 @@ import 'package:flutter/material.dart';
 abstract final class AppColors {
   // Brand teal ramp.
   static final Color brand = Colors.teal.shade700;
+
+  // ---- The wind rose's own two colours ----
+  // Named because they are the source the surface canvases below are derived
+  // from, and because "the blues in the logo" had no token at all until now:
+  // the mark shipped in the rebrand, the app kept a teal-seeded grey world,
+  // and the two identities never met on a screen.
+
+  /// The mark's petrol blue — its bezel ring, the ticks, the needle. 45 of
+  /// the drawing's 51 paths. Hue 198°.
+  static const Color markPetrol = Color(0xFF236684);
+
+  /// The mark's sun-bronze rose. Lives INSIDE the mark and nowhere else (the
+  /// Gold-in-the-Mark rule) — named here so the guideline has something to
+  /// point at, not so widgets can reach for it.
+  static const Color markBronze = Color(0xFFD2A24C);
+
+  // ---- Surface canvases ----
+  // Both ladders are one hue (205°, between the mark's ring at 198° and the
+  // rebrand's recorded Aegean-night canvas at 209°) at rising lightness.
+  //
+  // These REPLACE the seed-derived M3 neutrals. That is a deliberate break
+  // with "surfaces are the seed-derived neutrals, warm, plaster-leaning" —
+  // DESIGN.md carries the rewritten rule. The neutrals were never actually
+  // neutral: teal-seeded dark surfaces came out at #0E1513, a near-black
+  // with a green cast too weak to name. This keeps the idea (surfaces carry
+  // the brand's hue quietly) and changes the hue to the one the logo
+  // actually uses, at a chroma that can be seen.
+  //
+  // Every tone is measured against both inks: the tightest pair in either
+  // canvas is 4.88:1, over the 4.5:1 body-text floor, and
+  // `app_theme_surfaces_test.dart` re-measures all of them.
+
+  /// Dark mode. `surface` is Aegean night — the field the mark already
+  /// stands on in the brand assets, to within two points of the hex the
+  /// rebrand recorded for it.
+  static const SurfaceCanvas aegeanNight = (
+    surface: Color(0xFF0C1F2C),
+    surfaceDim: Color(0xFF0A1924),
+    surfaceBright: Color(0xFF205479),
+    containerLowest: Color(0xFF091620),
+    containerLow: Color(0xFF0F2738),
+    container: Color(0xFF123044),
+    containerHigh: Color(0xFF153851),
+    containerHighest: Color(0xFF1A4361),
+    onSurface: Color(0xFFE3E9ED),
+    onSurfaceVariant: Color(0xFFC0CBD3),
+    outline: Color(0xFF7A8F9F),
+    outlineVariant: Color(0xFF405564),
+  );
+
+  /// Light mode. The same hue at a fraction of the chroma — near white, high
+  /// chroma reads as a colour rather than a cast, so the ladder holds the
+  /// hue and lets it go. This is the "sun-bleached plaster" register moved
+  /// from warm to cool, not a blue page.
+  static const SurfaceCanvas aegeanPaper = (
+    surface: Color(0xFFF6F9FB),
+    surfaceDim: Color(0xFFCEDFEB),
+    surfaceBright: Color(0xFFF6F9FB),
+    containerLowest: Color(0xFFFFFFFF),
+    containerLow: Color(0xFFEFF4F8),
+    container: Color(0xFFE7F0F5),
+    containerHigh: Color(0xFFE0EBF2),
+    containerHighest: Color(0xFFD9E6EF),
+    onSurface: Color(0xFF101B23),
+    onSurfaceVariant: Color(0xFF364754),
+    outline: Color(0xFF697D8C),
+    outlineVariant: Color(0xFFBCC9D2),
+  );
+
+  /// The canvas for [brightness] — the ONE place a theme mode turns into a
+  /// set of surfaces.
+  static SurfaceCanvas canvasFor(Brightness brightness) =>
+      brightness == Brightness.dark ? aegeanNight : aegeanPaper;
+
+  /// Light-mode input fill: paper, cooled onto the canvas's hue. It was
+  /// `Colors.grey[50]` (#FAFAFA), which read as a warm smudge once the
+  /// fields around it went cool.
+  static const Color paperFill = Color(0xFFF3F7F9);
   static final Color brandLight = Colors.teal.shade600;
   static final Color brandDark = Colors.teal.shade900;
   static final Color brandTint = Colors.teal.shade50;

@@ -110,8 +110,13 @@ glassmorphism as decoration, and the hero-metric template.
 
 ## Colors
 
-One deep-teal spine seeded into the whole Material 3 scheme; warm neutral
-surfaces; accents at chip-and-pin scale only.
+One deep-teal spine seeded into every Material 3 **role**; the wind rose's own
+blue carrying every **surface**; accents at chip-and-pin scale only.
+
+Those are two different jobs and they are deliberately given to two different
+hues. Teal is what you act on — the primary button, selection, the brand's
+signature. Blue is what you act *on top of* — the page, the cards, the sheets.
+Nothing is both.
 
 ### Primary
 - **Aegean Teal** (#00796B): the brand seed (`AppColors.brand`, teal-700). The
@@ -150,23 +155,65 @@ surfaces; accents at chip-and-pin scale only.
   600–700 light) for status strips. "No data" deliberately has no token — it
   takes `outlineVariant` so absence can never read as a severity.
 
-### Neutral
-- Surfaces are the seed-derived M3 neutrals — warm, plaster-leaning; light
-  input fields take **Paper Fill** (#FAFAFA), dark takes
-  `surfaceContainerHighest`.
-- **Map Scrim** (black 60%): the one translucent layer for text and controls
-  over satellite imagery.
+### Surfaces — the two Aegean canvases
+
+Surfaces are **not** the seed-derived M3 neutrals. They are two authored
+ladders, one hue at rising lightness, stated as `AppColors.aegeanNight` and
+`AppColors.aegeanPaper` and selected by `AppColors.canvasFor(brightness)` —
+the one place a theme mode becomes a set of surfaces.
+
+The hue is **205°**, sitting between the mark's own petrol blue
+(`markPetrol` #236684, 198°) and the rebrand's recorded Aegean-night canvas
+(209°). It is the blue the logo is drawn in, not a blue chosen to go with it.
+
+| role | dark (`aegeanNight`) | light (`aegeanPaper`) |
+|---|---|---|
+| `surfaceContainerLowest` | `#091620` | `#FFFFFF` |
+| `surfaceDim` | `#0A1924` | `#CEDFEB` |
+| **`surface`** (page, chrome) | **`#0C1F2C`** | **`#F6F9FB`** |
+| `surfaceContainerLow` | `#0F2738` | `#EFF4F8` |
+| `surfaceContainer` | `#123044` | `#E7F0F5` |
+| **`surfaceContainerHigh`** (cards, menus) | **`#153851`** | **`#E0EBF2`** |
+| `surfaceContainerHighest` | `#1A4361` | `#D9E6EF` |
+| `surfaceBright` | `#205479` | `#F6F9FB` |
+| `onSurface` | `#E3E9ED` | `#101B23` |
+| `onSurfaceVariant` | `#C0CBD3` | `#364754` |
+| `outline` / `outlineVariant` | `#7A8F9F` / `#405564` | `#697D8C` / `#BCC9D2` |
+
+Light input fields take **Paper Fill** (`#F3F7F9`, `AppColors.paperFill`),
+dark takes `surfaceContainerHighest`. **Map Scrim** (black 60%) stays the one
+translucent layer for text and controls over satellite imagery.
+
+Every tone is measured against both inks; the tightest pair in either canvas
+is **4.88:1**, over the 4.5:1 body floor, and `app_theme_surfaces_test.dart`
+re-measures all of them rather than trusting the ladder.
 
 ### Named Rules
 **The Earned Color Rule.** Every non-teal color means exactly one thing and
 appears at chip-and-pin scale, never as a field. Color is never decoration.
+The Aegean canvases are the one thing this rule does not reach — a canvas is
+what colour appears *on*, and its meaning is "surface", which is exactly one
+thing.
 
 **The Gold-in-the-Mark Rule.** Heritage Gold enters a screen only inside the
-wind-rose mark. Anywhere else it is a finding.
+wind-rose mark. Anywhere else it is a finding. Unchanged by the blue: the
+mark's `markBronze` (#D2A24C) is named in `AppColors` so this rule has
+something to point at, never so a widget can reach for it.
 
-**The One Dark Exception Rule.** Midnight Harbor exists only on the signed-out
-landing. Everywhere else, surfaces are the neutral scheme and dark mode is the
-same build with brightness flipped.
+**The Two Canvases Rule.** Every surface in the signed-in app comes from
+`AppColors.canvasFor(brightness)` — dark is Aegean night, light is Aegean
+paper, and they are the same design in two keys rather than one inverted
+into the other. A widget that needs a surface takes a `ColorScheme` role; it
+never mixes its own.
+
+*This replaced the One Dark Exception Rule*, which read: "Midnight Harbor
+exists only on the signed-out landing. Everywhere else, surfaces are the
+neutral scheme and dark mode is the same build with brightness flipped." Two
+of its three clauses are now false — surfaces are authored rather than
+seed-derived, and dark is composed rather than flipped. Midnight Harbor is
+still the landing's own canvas and still ends at sign-in, but it is now a
+*green*-black sitting in front of a blue app, which is a real inconsistency
+and an open follow-up, not a rule.
 
 ## Typography
 
