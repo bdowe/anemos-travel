@@ -911,7 +911,7 @@
   "sharedNoPlacesIn": "No hay lugares fijados en {city}",
   "sharedEmptyTitle": "Aún no hay lugares",
   "sharedEmptyMessage": "Este viaje todavía no tiene itinerario.",
-  "sharedDayN": "Día {day}",
+  "sharedCityMorePlaces": "+{count} más",
   "sharedStays": "Alojamientos",
   "sharedJoinCoPlanner": "Unirme como coplanificador",
   "sharedSaveSeparateCopy": "O guardar una copia aparte",

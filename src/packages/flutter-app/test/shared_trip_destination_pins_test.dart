@@ -12,7 +12,6 @@ import 'package:travel_route_planner/screens/shared_trip_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/trips_api_service.dart';
 import 'package:travel_route_planner/widgets/map_leg_chips.dart';
-import 'package:travel_route_planner/widgets/section_header.dart';
 
 import 'support/l10n_test_app.dart';
 
@@ -131,7 +130,7 @@ void main() {
     // like the owner's trip detail.
     expect(
       find.descendant(
-        of: find.byType(SectionHeader),
+        of: find.byType(SharedCityHeader),
         matching: find.text('Lyon'),
       ),
       findsOneWidget,
@@ -151,7 +150,7 @@ void main() {
 
     expect(
       find.descendant(
-        of: find.byType(SectionHeader),
+        of: find.byType(SharedCityHeader),
         matching: find.text('Paris'),
       ),
       findsNWidgets(2),

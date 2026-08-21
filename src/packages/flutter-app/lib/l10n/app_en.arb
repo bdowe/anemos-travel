@@ -2179,10 +2179,11 @@
   },
   "sharedEmptyTitle": "No places yet",
   "sharedEmptyMessage": "This trip doesn't have an itinerary yet.",
-  "sharedDayN": "Day {day}",
-  "@sharedDayN": {
+  "sharedCityMorePlaces": "+{count} more",
+  "@sharedCityMorePlaces": {
+    "description": "Caps a shared trip's one-line run of place names for a city. Same overflow grammar as citiesMore.",
     "placeholders": {
-      "day": {
+      "count": {
         "type": "int"
       }
     }
