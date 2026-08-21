@@ -3530,6 +3530,36 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{{count} WEEKEND DAY} other{{count} WEEKEND DAYS}}'**
   String tripCalendarWeekendDays(int count);
 
+  /// Key line under the trip calendar's month grids, beside a miniature two-tone cell. Explains the grid's only non-obvious mark: a leg's band runs from the middle of its check-in day to the middle of its check-out day, so a day the traveler moves carries both cities' tones.
+  ///
+  /// In en, this message translates to:
+  /// **'A day in two colors is a travel day — you check out of one city and into the next.'**
+  String get tripCalendarTravelDayKey;
+
+  /// Date line in the trip calendar's leg detail row. Names both ends of the stay rather than printing the span, so the night count beside it is unambiguous.
+  ///
+  /// In en, this message translates to:
+  /// **'Check in {checkIn} · Check out {checkOut}'**
+  String tripCalendarCheckInOut(String checkIn, String checkOut);
+
+  /// Screen-reader name for a trip calendar day that carries two city tones — the traveler moves that day. Sighted users read this from the two halves of the cell's band.
+  ///
+  /// In en, this message translates to:
+  /// **'{date}: check out of {from}, check in to {to}'**
+  String tripCalendarTravelDaySemantics(String date, String from, String to);
+
+  /// Screen-reader name for a trip calendar day where a stay begins and none ends — the trip's first day.
+  ///
+  /// In en, this message translates to:
+  /// **'{date}: check in to {city}'**
+  String tripCalendarCheckInSemantics(String date, String city);
+
+  /// Screen-reader name for a trip calendar day where a stay ends and none begins — the trip's last day, the journey home.
+  ///
+  /// In en, this message translates to:
+  /// **'{date}: check out of {city}'**
+  String tripCalendarCheckOutSemantics(String date, String city);
+
   /// No description provided for @tripTravelMinutes.
   ///
   /// In en, this message translates to:

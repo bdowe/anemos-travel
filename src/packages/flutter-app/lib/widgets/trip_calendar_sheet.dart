@@ -8,15 +8,68 @@ import '../utils/leg_ranges.dart';
 import 'section_header.dart';
 import 'status_pill.dart';
 
+/// Height of the leg ribbon inside a [kMinTouchTarget] day cell — the band
+/// sits under the day number with the cell's touch slack left around it.
+const double _kBandHeight = 30;
+
+/// Half the gutter that separates the two halves of a travel day, so the
+/// check-out and check-in ribbons read as two ends meeting rather than one
+/// band changing color. One [AppSpacing.sm] step of gap, split evenly, which
+/// is what keeps the ribbon's length honest: the gutter is centred on the
+/// cell's midpoint, so it costs each side the same.
+///
+/// It is a whole step rather than a hairline because the day number is
+/// centred too, and the seam runs straight through it. At half this width
+/// the two caps closed around the digit and the day read as belonging to
+/// whichever tone happened to be on its right; at this width the number sits
+/// in clean space with one city to its left and the next to its right.
+const double _kSeam = AppSpacing.sm / 2;
+
 /// One city leg as the trip calendar renders it. Built by the caller from the
 /// trip-detail derivation's [TripDerivation.visibleRanges] (index-aligned
 /// with its legs) — the sheet consumes the one derivation, it does not derive
 /// legs itself.
+///
+/// [start] is the day the traveler CHECKS IN and [end] the day they CHECK
+/// OUT, so `end - start` is the leg's night count and consecutive legs share
+/// a boundary date by construction (you check out of one city and into the
+/// next on the same day). The grid renders that literally — see
+/// [_DayRibbon].
 typedef TripCalendarLeg = ({
   String key,
   String label,
   DateTime start,
   DateTime end,
+});
+
+/// How one calendar day carries the legs that touch it.
+///
+/// A leg's ribbon runs from the MIDDLE of its check-in cell to the MIDDLE of
+/// its check-out cell, so the ribbon's length in cell-widths is exactly its
+/// night count and a travel day shows two tones meeting mid-cell. That is the
+/// booking-calendar grammar (Airbnb, Booking, Google Hotels all draw a stay
+/// this way) and it is why the shape is not "one cell, one owner".
+///
+/// It used to be: each date went to the FIRST leg that claimed it, so the
+/// shared boundary day fell to the city being left. That painted the day you
+/// leave as a full day in the old city and dropped the night you arrive in
+/// the new one, which put every leg after the first one day late and gave the
+/// first leg `nights + 1` cells. A 2-night Amsterdam drew three full cells,
+/// and the band and the "2 nights" label underneath it disagreed on screen.
+typedef _DayRibbon = ({
+  /// A leg strictly inside its own span here — the cell is one solid band.
+  int? spanning,
+
+  /// The leg CHECKING OUT here: it owns the cell's left half.
+  int? checkOut,
+
+  /// The leg CHECKING IN here: it owns the cell's right half.
+  int? checkIn,
+
+  /// Legs whose check-in and check-out are both this date — a zero-night
+  /// stop, the interim state a `set_leg_dates` squeeze leaves behind. Drawn
+  /// as a centred pip so a squeezed city is visible rather than absent.
+  List<int> stops,
 });
 
 /// Opens the trip calendar: a compact whole-trip month grid whose day cells
@@ -126,36 +179,84 @@ class _TripCalendarSheetBodyState extends State<TripCalendarSheetBody> {
   DateTime get _end =>
       DateTime(widget.tripEnd.year, widget.tripEnd.month, widget.tripEnd.day);
 
-  /// Day-of-travel ownership: each calendar date inside the trip belongs to
-  /// exactly ONE leg's band. Legs share their boundary day by construction
-  /// (a leg renders from the previous leg's visible end), and that day
-  /// belongs to the city being left — the same rule [CityGroup.emptyDays]
-  /// documents — so the FIRST leg to claim a date keeps it. [ownedStart] /
-  /// [ownedEnd] are each leg's first/last OWNED date (null when it owns
-  /// none — a zero-night squeezed leg), which is where the band's rounded
-  /// caps go.
-  ({
-    Map<DateTime, int> owners,
-    List<DateTime?> ownedStart,
-    List<DateTime?> ownedEnd,
-  }) _ownership() {
-    final owners = <DateTime, int>{};
-    final ownedStart = List<DateTime?>.filled(widget.legs.length, null);
-    final ownedEnd = List<DateTime?>.filled(widget.legs.length, null);
+  /// Every date the trip spans, mapped to the ribbon it carries. One pass
+  /// over the legs; a date absent from the map lies outside every leg.
+  ///
+  /// Nothing arbitrates here — each leg draws its own true span, and legs
+  /// interlock because a shared boundary date is one leg's check-out (left
+  /// half) and the next leg's check-in (right half).
+  Map<DateTime, _DayRibbon> _ribbons() {
+    final out = <DateTime, _DayRibbon>{};
+    _DayRibbon at(DateTime d) =>
+        out[d] ??
+        (spanning: null, checkOut: null, checkIn: null, stops: const <int>[]);
+
     for (var i = 0; i < widget.legs.length; i++) {
       final leg = widget.legs[i];
-      var d = DateTime(leg.start.year, leg.start.month, leg.start.day);
-      final legEnd = DateTime(leg.end.year, leg.end.month, leg.end.day);
-      if (d.isBefore(_start)) d = _start;
-      for (; !d.isAfter(legEnd) && !d.isAfter(_end);
+      final rawStart = _dateOf(leg.start);
+      final rawEnd = _dateOf(leg.end);
+      // A leg wholly outside the trip's own span is dropped rather than
+      // clamped: clamping both ends would collapse it onto the trip's first
+      // or last day and invent a stop that isn't there.
+      if (rawEnd.isBefore(_start) || rawStart.isAfter(_end)) continue;
+      final legStart = _clampToTrip(rawStart);
+      final legEnd = _clampToTrip(rawEnd);
+      if (legEnd.isBefore(legStart)) continue;
+      if (legStart == legEnd) {
+        final r = at(legStart);
+        out[legStart] = (
+          spanning: r.spanning,
+          checkOut: r.checkOut,
+          checkIn: r.checkIn,
+          stops: [...r.stops, i],
+        );
+        continue;
+      }
+      // Check-in day: the right half — FIRST claim wins, so on a shared
+      // boundary the right half is the next city you go to. Check-out takes
+      // the LAST claim for the mirror reason: it is the city you were just
+      // in. Legs arrive in itinerary order, so the pair resolves a boundary
+      // date to "leg i out, leg i+1 in" without any tie-breaking rule.
+      final ci = at(legStart);
+      out[legStart] = (
+        spanning: ci.spanning,
+        checkOut: ci.checkOut,
+        checkIn: ci.checkIn ?? i,
+        stops: ci.stops,
+      );
+      // Check-out day: the left half.
+      final co = at(legEnd);
+      out[legEnd] = (
+        spanning: co.spanning,
+        checkOut: i,
+        checkIn: co.checkIn,
+        stops: co.stops,
+      );
+      // Every night strictly between is a solid cell.
+      for (var d = DateTime(legStart.year, legStart.month, legStart.day + 1);
+          d.isBefore(legEnd);
           d = DateTime(d.year, d.month, d.day + 1)) {
-        if (owners.containsKey(d)) continue;
-        owners[d] = i;
-        ownedStart[i] ??= d;
-        ownedEnd[i] = d;
+        final r = at(d);
+        out[d] = (
+          spanning: r.spanning ?? i,
+          checkOut: r.checkOut,
+          checkIn: r.checkIn,
+          stops: r.stops,
+        );
       }
     }
-    return (owners: owners, ownedStart: ownedStart, ownedEnd: ownedEnd);
+    return out;
+  }
+
+  static DateTime _dateOf(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// [d] held inside the trip's own span — a leg overhanging either end
+  /// renders up to the edge. Callers drop a leg that lies wholly outside
+  /// before clamping, so this never collapses a real span to a point.
+  DateTime _clampToTrip(DateTime d) {
+    if (d.isBefore(_start)) return _start;
+    if (d.isAfter(_end)) return _end;
+    return d;
   }
 
   /// Saturday/Sunday days inside [start]..[end], inclusive — the detail
@@ -180,7 +281,7 @@ class _TripCalendarSheetBodyState extends State<TripCalendarSheetBody> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = context.l10n;
-    final ownership = _ownership();
+    final ribbons = _ribbons();
     final days = _end.difference(_start).inDays + 1;
 
     return Column(
@@ -223,11 +324,71 @@ class _TripCalendarSheetBodyState extends State<TripCalendarSheetBody> {
               ),
           ],
         ),
-        for (final month in _months()) _monthGrid(context, month, ownership),
+        for (final month in _months()) _monthGrid(context, month, ribbons),
+        // A one-city trip has no travel day to explain, so the key would be
+        // describing a mark the grid never draws.
+        if (widget.legs.length > 1) ...[
+          const SizedBox(height: AppSpacing.md),
+          _travelDayKey(context),
+        ],
         if (_selectedLeg != null) ...[
           const SizedBox(height: AppSpacing.lg),
           _detailRow(context, widget.legs[_selectedLeg!], _selectedLeg!),
         ],
+      ],
+    );
+  }
+
+  /// The one line that teaches the grid's only non-obvious mark: a day
+  /// carrying two tones is a day the traveler moves. It sits under the
+  /// months rather than above them — you meet the two-tone cell first and
+  /// the key answers the question it raises, instead of explaining a grammar
+  /// nobody has seen yet.
+  ///
+  /// The glyph is the real thing at cell scale, not an icon standing in for
+  /// it: the same two half-ribbons in the same two tones the grid draws.
+  Widget _travelDayKey(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      key: const ValueKey('trip-calendar-key'),
+      children: [
+        SizedBox(
+          width: AppSpacing.xxl,
+          height: _kBandHeight,
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.only(right: _kSeam),
+                  decoration: BoxDecoration(
+                    color: AppColors.legBand(0),
+                    borderRadius: const BorderRadius.horizontal(
+                        right: Radius.circular(AppRadius.sm)),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.only(left: _kSeam),
+                  decoration: BoxDecoration(
+                    color: AppColors.legBand(1),
+                    borderRadius: const BorderRadius.horizontal(
+                        left: Radius.circular(AppRadius.sm)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            context.l10n.tripCalendarTravelDayKey,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ),
       ],
     );
   }
@@ -247,11 +408,7 @@ class _TripCalendarSheetBodyState extends State<TripCalendarSheetBody> {
   Widget _monthGrid(
     BuildContext context,
     DateTime month,
-    ({
-      Map<DateTime, int> owners,
-      List<DateTime?> ownedStart,
-      List<DateTime?> ownedEnd,
-    }) ownership,
+    Map<DateTime, _DayRibbon> ribbons,
   ) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -307,7 +464,7 @@ class _TripCalendarSheetBodyState extends State<TripCalendarSheetBody> {
                       offset: offset,
                       daysInMonth: daysInMonth,
                       weekendColumn: c >= DateTime.saturday - 1,
-                      ownership: ownership,
+                      ribbons: ribbons,
                     ),
                   ),
               ],
@@ -324,14 +481,11 @@ class _TripCalendarSheetBodyState extends State<TripCalendarSheetBody> {
     required int offset,
     required int daysInMonth,
     required bool weekendColumn,
-    required ({
-      Map<DateTime, int> owners,
-      List<DateTime?> ownedStart,
-      List<DateTime?> ownedEnd,
-    }) ownership,
+    required Map<DateTime, _DayRibbon> ribbons,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final l10n = context.l10n;
     final wash = weekendColumn ? AppColors.weekendWash(scheme) : null;
     final dayNumber = cellIndex - offset + 1;
     if (dayNumber < 1 || dayNumber > daysInMonth) {
@@ -341,86 +495,162 @@ class _TripCalendarSheetBodyState extends State<TripCalendarSheetBody> {
     }
     final date = DateTime(month.year, month.month, dayNumber);
     final inTrip = !date.isBefore(_start) && !date.isAfter(_end);
-    final legIndex = ownership.owners[date];
+    final ribbon = ribbons[date];
     final now = widget.today ?? DateTime.now();
     final isToday = inTrip &&
         date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;
 
-    // The band's rounded caps sit on the leg's first/last OWNED day (a
-    // boundary day belongs to the city being left); square elsewhere, so
-    // same-leg cells — across a row and across a month wrap — read as one
-    // continuous band.
-    BorderRadius? bandRadius;
-    if (legIndex != null) {
-      bandRadius = BorderRadius.horizontal(
-        left: date == ownership.ownedStart[legIndex]
-            ? const Radius.circular(AppRadius.sm)
-            : Radius.zero,
-        right: date == ownership.ownedEnd[legIndex]
-            ? const Radius.circular(AppRadius.sm)
-            : Radius.zero,
-      );
-    }
-
     final numberStyle = theme.textTheme.bodyMedium?.copyWith(
       color: inTrip ? scheme.onSurface : theme.disabledColor,
       fontWeight: inTrip ? FontWeight.w600 : FontWeight.w400,
     );
 
-    return InkWell(
-      key: ValueKey('trip-calendar-day-${_iso(date)}'),
-      onTap: inTrip
-          // inTrip guarantees date >= _start, so this is the 1-based
-          // trip day the jump-scroll resolves.
-          ? () => widget.onJumpToDay(date.difference(_start).inDays + 1)
-          : null,
-      child: Container(
-        key: wash == null
-            ? null
-            // Test/diagnostic marker for the weekend wash: the column's
-            // stripe is otherwise just a color on a Container.
-            : ValueKey('trip-calendar-weekend-${_iso(date)}'),
-        height: kMinTouchTarget,
-        color: wash,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (legIndex != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                height: 30,
-                child: Container(
-                  key: ValueKey('trip-calendar-band-${_iso(date)}'),
+    return Semantics(
+      // Screen readers get the fact the two tones carry visually: a travel
+      // day names both cities and which way round they go. The grid's own
+      // day numbers stay the label for every ordinary day.
+      label: _daySemantics(l10n, date, ribbon),
+      child: InkWell(
+        key: ValueKey('trip-calendar-day-${_iso(date)}'),
+        onTap: inTrip
+            // inTrip guarantees date >= _start, so this is the 1-based
+            // trip day the jump-scroll resolves.
+            ? () => widget.onJumpToDay(date.difference(_start).inDays + 1)
+            : null,
+        child: Container(
+          key: wash == null
+              ? null
+              // Test/diagnostic marker for the weekend wash: the column's
+              // stripe is otherwise just a color on a Container.
+              : ValueKey('trip-calendar-weekend-${_iso(date)}'),
+          height: kMinTouchTarget,
+          color: wash,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (ribbon != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  height: _kBandHeight,
+                  child: _ribbonBand(date, ribbon),
+                ),
+              if (isToday)
+                Container(
+                  key: const ValueKey('trip-calendar-today'),
+                  width: AppSpacing.xxl,
+                  height: AppSpacing.xxl,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.legBand(legIndex),
-                    borderRadius: bandRadius,
+                    color: scheme.primary,
+                    shape: BoxShape.circle,
                   ),
-                ),
-              ),
-            if (isToday)
-              Container(
-                key: const ValueKey('trip-calendar-today'),
-                width: AppSpacing.xxl,
-                height: AppSpacing.xxl,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: scheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  '$dayNumber',
-                  style: numberStyle?.copyWith(color: scheme.onPrimary),
-                ),
-              )
-            else
-              Text('$dayNumber', style: numberStyle),
-          ],
+                  child: Text(
+                    '$dayNumber',
+                    style: numberStyle?.copyWith(color: scheme.onPrimary),
+                  ),
+                )
+              else
+                Text('$dayNumber', style: numberStyle),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  /// One day's ribbon. A solid cell when the traveler simply wakes and sleeps
+  /// in the same city; two halves meeting mid-cell when they move.
+  ///
+  /// Caps round only where a stay actually begins or ends, so cells inside a
+  /// stay — across a row and across a month wrap — still read as one band.
+  Widget _ribbonBand(DateTime date, _DayRibbon ribbon) {
+    final selected = _selectedLeg;
+    bool dim(int i) => selected != null && selected != i;
+
+    if (ribbon.spanning != null && ribbon.stops.isEmpty) {
+      return Container(
+        key: ValueKey('trip-calendar-band-${_iso(date)}'),
+        color: AppColors.legBand(ribbon.spanning!, muted: dim(ribbon.spanning!)),
+      );
+    }
+
+    // A zero-night stop has no half of its own to sit in — it is drawn as a
+    // centred pip over whatever else claims the day, so a city squeezed to
+    // nothing is visibly still on the itinerary instead of silently gone.
+    final pip = ribbon.stops.isEmpty ? null : ribbon.stops.first;
+
+    return Stack(
+      key: ValueKey('trip-calendar-band-${_iso(date)}'),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: ribbon.checkOut == null
+                  ? const SizedBox.shrink()
+                  : Container(
+                      key: ValueKey('trip-calendar-checkout-${_iso(date)}'),
+                      margin: const EdgeInsets.only(right: _kSeam),
+                      decoration: BoxDecoration(
+                        color: AppColors.legBand(ribbon.checkOut!,
+                            muted: dim(ribbon.checkOut!)),
+                        borderRadius: const BorderRadius.horizontal(
+                            right: Radius.circular(AppRadius.sm)),
+                      ),
+                    ),
+            ),
+            Expanded(
+              child: ribbon.checkIn == null
+                  ? const SizedBox.shrink()
+                  : Container(
+                      key: ValueKey('trip-calendar-checkin-${_iso(date)}'),
+                      margin: const EdgeInsets.only(left: _kSeam),
+                      decoration: BoxDecoration(
+                        color: AppColors.legBand(ribbon.checkIn!,
+                            muted: dim(ribbon.checkIn!)),
+                        borderRadius: const BorderRadius.horizontal(
+                            left: Radius.circular(AppRadius.sm)),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+        if (pip != null)
+          Center(
+            child: Container(
+              key: ValueKey('trip-calendar-stop-${_iso(date)}'),
+              width: AppSpacing.md,
+              height: AppSpacing.md,
+              decoration: BoxDecoration(
+                color: AppColors.legTone(pip),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// The accessible name for a day cell: the two-tone travel day spelled out,
+  /// and nothing added anywhere else — an ordinary day inside a stay is
+  /// already announced by its number and its row.
+  String? _daySemantics(
+      AppLocalizations l10n, DateTime date, _DayRibbon? ribbon) {
+    if (ribbon == null) return null;
+    final out = ribbon.checkOut;
+    final into = ribbon.checkIn;
+    if (out == null && into == null) return null;
+    final day = mmmed().format(date);
+    if (out != null && into != null) {
+      return l10n.tripCalendarTravelDaySemantics(
+          day, widget.legs[out].label, widget.legs[into].label);
+    }
+    if (into != null) {
+      return l10n.tripCalendarCheckInSemantics(day, widget.legs[into].label);
+    }
+    return l10n.tripCalendarCheckOutSemantics(day, widget.legs[out!].label);
   }
 
   /// The selected leg's detail row: label, range with weekdays, nights, the
@@ -471,8 +701,15 @@ class _TripCalendarSheetBodyState extends State<TripCalendarSheetBody> {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '${formatWeekdayRange(leg.start, leg.end)}'
-            '${nights > 0 ? ' ${l10n.tripLegNights(nights)}' : ''}',
+            // Naming the two ends beats printing the span: "Aug 24 – Aug 26"
+            // reads as three days in the city to anyone who hasn't decided
+            // whether the second date is a night or a departure, and then
+            // argues with the nights beside it. A zero-night stop has no
+            // ends to name, so it keeps the plain date.
+            nights > 0
+                ? '${l10n.tripCalendarCheckInOut(mmmed().format(leg.start), mmmed().format(leg.end))}'
+                    ' ${l10n.tripLegNights(nights)}'
+                : formatWeekdayRange(leg.start, leg.end),
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: scheme.onSurfaceVariant),
           ),

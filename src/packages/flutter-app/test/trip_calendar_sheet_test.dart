@@ -7,12 +7,13 @@ import 'package:travel_route_planner/widgets/trip_calendar_sheet.dart';
 import 'support/l10n_test_app.dart';
 
 // Pure widget tests for the trip calendar sheet body: the whole-trip month
-// grid with one color band per city leg. No providers, no network — the body
-// renders the legs it is handed (the screen builds them from the trip-detail
-// derivation's visibleRanges).
+// grid with one check-in → check-out ribbon per city leg. No providers, no
+// network — the body renders the legs it is handed (the screen builds them
+// from the trip-detail derivation's visibleRanges).
 
 /// Mon Aug 24 – Tue Sep 22, 2026 (30 days), three legs sharing their
-/// boundary days exactly the way the derivation's visible ranges do.
+/// boundary days exactly the way the derivation's visible ranges do:
+/// Athens 5 nights, Kraków 5, Prague 19 — 29 nights over 30 days.
 final _legs = <TripCalendarLeg>[
   (key: 'Athens', label: 'Athens', start: DateTime(2026, 8, 24), end: DateTime(2026, 8, 29)),
   (key: 'Kraków', label: 'Kraków', start: DateTime(2026, 8, 29), end: DateTime(2026, 9, 3)),
@@ -20,6 +21,7 @@ final _legs = <TripCalendarLeg>[
 ];
 
 Widget _app({
+  List<TripCalendarLeg>? legs,
   ValueChanged<int>? onJumpToDay,
   ValueChanged<TripCalendarLeg>? onAskToChange,
   DateTime? today,
@@ -30,7 +32,7 @@ Widget _app({
           child: TripCalendarSheetBody(
             tripStart: DateTime(2026, 8, 24),
             tripEnd: DateTime(2026, 9, 22),
-            legs: _legs,
+            legs: legs ?? _legs,
             today: today,
             onJumpToDay: onJumpToDay ?? (_) {},
             onAskToChange: onAskToChange,
@@ -41,6 +43,7 @@ Widget _app({
 
 Future<void> _pump(
   WidgetTester tester, {
+  List<TripCalendarLeg>? legs,
   ValueChanged<int>? onJumpToDay,
   ValueChanged<TripCalendarLeg>? onAskToChange,
   DateTime? today,
@@ -48,6 +51,7 @@ Future<void> _pump(
   await tester.binding.setSurfaceSize(const Size(800, 1600));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(_app(
+    legs: legs,
     onJumpToDay: onJumpToDay,
     onAskToChange: onAskToChange,
     today: today,
@@ -55,8 +59,27 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-Container _band(WidgetTester tester, String isoDate) => tester.widget<Container>(
-    find.byKey(ValueKey('trip-calendar-band-$isoDate')));
+/// The whole-cell band a day inside a stay carries.
+Container _solid(WidgetTester tester, String isoDate) =>
+    tester.widget<Container>(
+        find.byKey(ValueKey('trip-calendar-band-$isoDate')));
+
+/// The left half of a day: the leg CHECKING OUT.
+Container _checkOut(WidgetTester tester, String isoDate) =>
+    tester.widget<Container>(
+        find.byKey(ValueKey('trip-calendar-checkout-$isoDate')));
+
+/// The right half of a day: the leg CHECKING IN.
+Container _checkIn(WidgetTester tester, String isoDate) =>
+    tester.widget<Container>(
+        find.byKey(ValueKey('trip-calendar-checkin-$isoDate')));
+
+Color? _fill(Container c) =>
+    c.color ?? (c.decoration as BoxDecoration?)?.color;
+
+String _iso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
+    '${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';
 
 void main() {
   testWidgets('header, summary, month and weekday headers', (tester) async {
@@ -82,43 +105,153 @@ void main() {
     expect(find.text('Prague'), findsOneWidget);
   });
 
-  testWidgets('leg bands: shared boundary day belongs to the city being left',
+  testWidgets('a shared boundary day carries BOTH cities — out left, in right',
       (tester) async {
     await _pump(tester);
 
-    // Aug 29 is both Athens' end and Kraków's start; the band stays Athens'.
-    expect(_band(tester, '2026-08-29').decoration,
-        isA<BoxDecoration>().having((d) => d.color, 'color', AppColors.legBand(0)));
-    // Kraków's band starts the next day.
-    expect(_band(tester, '2026-08-30').decoration,
-        isA<BoxDecoration>().having((d) => d.color, 'color', AppColors.legBand(1)));
-    // ...and runs through the shared Sep 3; Prague starts Sep 4.
-    expect(_band(tester, '2026-09-03').decoration,
-        isA<BoxDecoration>().having((d) => d.color, 'color', AppColors.legBand(1)));
-    expect(_band(tester, '2026-09-04').decoration,
-        isA<BoxDecoration>().having((d) => d.color, 'color', AppColors.legBand(2)));
-    // Days outside the trip carry no band.
+    // Aug 29 is Athens' check-out and Kraków's check-in. The day is split,
+    // not awarded to one of them: the left half is the city being left.
+    expect(_fill(_checkOut(tester, '2026-08-29')), AppColors.legBand(0));
+    expect(_fill(_checkIn(tester, '2026-08-29')), AppColors.legBand(1));
+    // Sep 3 does the same for Kraków → Prague.
+    expect(_fill(_checkOut(tester, '2026-09-03')), AppColors.legBand(1));
+    expect(_fill(_checkIn(tester, '2026-09-03')), AppColors.legBand(2));
+
+    // Nights strictly inside a stay are solid.
+    expect(_fill(_solid(tester, '2026-08-26')), AppColors.legBand(0));
+    expect(_fill(_solid(tester, '2026-08-30')), AppColors.legBand(1));
+
+    // The trip's first day is a check-in with nothing to check out of; its
+    // last day is the mirror — the journey home.
+    expect(_fill(_checkIn(tester, '2026-08-24')), AppColors.legBand(0));
+    expect(find.byKey(const ValueKey('trip-calendar-checkout-2026-08-24')),
+        findsNothing);
+    expect(_fill(_checkOut(tester, '2026-09-22')), AppColors.legBand(2));
+    expect(find.byKey(const ValueKey('trip-calendar-checkin-2026-09-22')),
+        findsNothing);
+
+    // Days outside the trip carry no ribbon.
     expect(find.byKey(const ValueKey('trip-calendar-band-2026-08-23')),
         findsNothing);
   });
 
-  testWidgets('band caps round at the leg\'s owned start and end only',
+  testWidgets('a ribbon is exactly as long as the leg has nights',
       (tester) async {
     await _pump(tester);
 
-    BorderRadius radiusOf(String iso) =>
-        (_band(tester, iso).decoration! as BoxDecoration).borderRadius!
-            as BorderRadius;
+    // The regression this whole shape exists for: the band and the nights
+    // label used to disagree on screen. Half-cells at each end mean a stay's
+    // ink measures its night count in cell-widths, for every leg — not
+    // nights+1 for the first and nights-shifted-a-day for the rest.
+    for (var i = 0; i < _legs.length; i++) {
+      var width = 0.0;
+      for (var d = DateTime(2026, 8, 24);
+          !d.isAfter(DateTime(2026, 9, 22));
+          d = DateTime(d.year, d.month, d.day + 1)) {
+        final iso = _iso(d);
+        final tone = AppColors.legBand(i);
+        if (find.byKey(ValueKey('trip-calendar-band-$iso')).evaluate().isEmpty) {
+          continue;
+        }
+        if (find
+                .byKey(ValueKey('trip-calendar-checkout-$iso'))
+                .evaluate()
+                .isNotEmpty &&
+            _fill(_checkOut(tester, iso)) == tone) {
+          width += 0.5;
+        }
+        if (find
+                .byKey(ValueKey('trip-calendar-checkin-$iso'))
+                .evaluate()
+                .isNotEmpty &&
+            _fill(_checkIn(tester, iso)) == tone) {
+          width += 0.5;
+        }
+        if (find.byKey(ValueKey('trip-calendar-checkout-$iso')).evaluate().isEmpty &&
+            find.byKey(ValueKey('trip-calendar-checkin-$iso')).evaluate().isEmpty &&
+            _fill(_solid(tester, iso)) == tone) {
+          width += 1;
+        }
+      }
+      expect(width, _legs[i].end.difference(_legs[i].start).inDays.toDouble(),
+          reason: '${_legs[i].label} ribbon must measure its nights');
+    }
+  });
 
-    // Athens owns Aug 24–29: rounded caps at both ends...
-    expect(radiusOf('2026-08-24').topLeft, const Radius.circular(8));
-    expect(radiusOf('2026-08-29').topRight, const Radius.circular(8));
-    // ...square in the middle so adjacent cells read as one band...
-    expect(radiusOf('2026-08-26').topLeft, Radius.zero);
-    expect(radiusOf('2026-08-26').topRight, Radius.zero);
-    // ...and Kraków's cap lands on its first OWNED day (Aug 30), not the
-    // shared boundary.
-    expect(radiusOf('2026-08-30').topLeft, const Radius.circular(8));
+  testWidgets('caps round only where a stay begins or ends', (tester) async {
+    await _pump(tester);
+
+    BorderRadius radiusOf(Container c) =>
+        (c.decoration! as BoxDecoration).borderRadius! as BorderRadius;
+
+    // The check-out half rounds where it stops, mid-cell, and stays square
+    // against the night before it...
+    final out = radiusOf(_checkOut(tester, '2026-08-29'));
+    expect(out.topRight, const Radius.circular(8));
+    expect(out.topLeft, Radius.zero);
+    // ...and the check-in half is its mirror.
+    final into = radiusOf(_checkIn(tester, '2026-08-29'));
+    expect(into.topLeft, const Radius.circular(8));
+    expect(into.topRight, Radius.zero);
+
+    // A night inside a stay has no radius at all, so cells merge across a
+    // row and across a month wrap.
+    expect((_solid(tester, '2026-08-26').decoration as BoxDecoration?)?.borderRadius,
+        isNull);
+  });
+
+  testWidgets('the key names the two-tone day, and only when one can occur',
+      (tester) async {
+    await _pump(tester);
+    expect(find.byKey(const ValueKey('trip-calendar-key')), findsOneWidget);
+    expect(
+      find.text('A day in two colors is a travel day — you check out of one '
+          'city and into the next.'),
+      findsOneWidget,
+    );
+
+    // A one-city trip never draws a split cell, so it never explains one.
+    await _pump(tester, legs: [_legs.first]);
+    expect(find.byKey(const ValueKey('trip-calendar-key')), findsNothing);
+  });
+
+  testWidgets('a zero-night stop stays visible as a pip', (tester) async {
+    // The interim state a set_leg_dates squeeze leaves behind: Kraków ends
+    // the day it starts. It owned no whole cell under the old rule and
+    // vanished from the grid entirely.
+    await _pump(tester, legs: [
+      (key: 'Athens', label: 'Athens', start: DateTime(2026, 8, 24), end: DateTime(2026, 8, 29)),
+      (key: 'Kraków', label: 'Kraków', start: DateTime(2026, 8, 29), end: DateTime(2026, 8, 29)),
+      (key: 'Prague', label: 'Prague', start: DateTime(2026, 8, 29), end: DateTime(2026, 9, 22)),
+    ]);
+
+    final pip = find.byKey(const ValueKey('trip-calendar-stop-2026-08-29'));
+    expect(pip, findsOneWidget);
+    expect(
+      (tester.widget<Container>(pip).decoration! as BoxDecoration).color,
+      AppColors.legTone(1),
+    );
+    // Athens still checks out that day and Prague still checks in.
+    expect(_fill(_checkOut(tester, '2026-08-29')), AppColors.legBand(0));
+    expect(_fill(_checkIn(tester, '2026-08-29')), AppColors.legBand(2));
+  });
+
+  testWidgets('selecting a leg mutes the others so its run reads as one',
+      (tester) async {
+    await _pump(tester);
+    expect(_fill(_solid(tester, '2026-08-30')), AppColors.legBand(1));
+
+    await tester.tap(find.byKey(const ValueKey('trip-calendar-legend-1')));
+    await tester.pumpAndSettle();
+
+    // Kraków keeps its full wash; Athens drops back.
+    expect(_fill(_solid(tester, '2026-08-30')), AppColors.legBand(1));
+    expect(_fill(_solid(tester, '2026-08-26')),
+        AppColors.legBand(0, muted: true));
+    // Its two boundary halves are exactly where the ribbon starts and stops.
+    expect(_fill(_checkIn(tester, '2026-08-29')), AppColors.legBand(1));
+    expect(_fill(_checkOut(tester, '2026-08-29')),
+        AppColors.legBand(0, muted: true));
   });
 
   testWidgets('weekend columns get the wash, weekdays do not', (tester) async {
@@ -155,9 +288,14 @@ void main() {
     expect(
         find.descendant(of: detail, matching: find.text('Kraków')),
         findsOneWidget);
+    // The row names both ends rather than printing the span, so the night
+    // count beside it can't be read against a range the traveler is still
+    // deciding how to count.
     expect(
       find.descendant(
-          of: detail, matching: find.text('Sat, Aug 29 – Thu, Sep 3 · 5 nights')),
+          of: detail,
+          matching: find.text(
+              'Check in Sat, Aug 29 · Check out Thu, Sep 3 · 5 nights')),
       findsOneWidget,
     );
     // Aug 29 (Sat) and Aug 30 (Sun) are the leg's two weekend days.

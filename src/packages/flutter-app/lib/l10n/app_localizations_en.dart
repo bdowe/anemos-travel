@@ -2007,6 +2007,30 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get tripCalendarTravelDayKey =>
+      'A day in two colors is a travel day — you check out of one city and into the next.';
+
+  @override
+  String tripCalendarCheckInOut(String checkIn, String checkOut) {
+    return 'Check in $checkIn · Check out $checkOut';
+  }
+
+  @override
+  String tripCalendarTravelDaySemantics(String date, String from, String to) {
+    return '$date: check out of $from, check in to $to';
+  }
+
+  @override
+  String tripCalendarCheckInSemantics(String date, String city) {
+    return '$date: check in to $city';
+  }
+
+  @override
+  String tripCalendarCheckOutSemantics(String date, String city) {
+    return '$date: check out of $city';
+  }
+
+  @override
   String tripTravelMinutes(int minutes) {
     return '$minutes min';
   }
