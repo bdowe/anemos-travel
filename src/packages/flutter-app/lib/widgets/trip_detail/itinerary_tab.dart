@@ -376,22 +376,6 @@ extension on _TripDetailScreenState {
   }
 
 
-  /// A city section's heading style: the display face, at a size a PINNED row
-  /// can afford.
-  ///
-  /// Composed from two existing slots rather than written as literals —
-  /// `headlineSmall` contributes the face and its explicit `w500` (the
-  /// display weight; anything the family doesn't ship is faux-bold on web),
-  /// `titleLarge` contributes the size. So a face swap or a scale change in
-  /// `app_theme.dart` still reaches this heading, and no number lives here.
-  ///
-  /// A headline slot outright (30/35/39) is a PAGE title: it owns the top of
-  /// a screen and sets its own rhythm. A city header pins while its days
-  /// scroll under it, so it can't spend that height — this is the step that
-  /// reads editorial while staying chrome.
-  TextStyle? _citySectionStyle(ThemeData theme) => theme.textTheme.headlineSmall
-      ?.copyWith(fontSize: theme.textTheme.titleLarge?.fontSize, height: 1.2);
-
 
   /// City group header: name, date range, refine + collapse controls. Pinned
   /// at the top of the scroll area while its group scrolls past; the opaque
@@ -1057,15 +1041,21 @@ extension on _TripDetailScreenState {
       AppLocalizations l10n, CityGroup group, ThemeData theme,
       {Widget? metaLine}) {
     // The one editorial move on this screen: a city is a SECTION HEADING, so
-    // it takes the display face ([_citySectionStyle]). Bold Inter at
-    // titleSmall made a city name the same object as a booking row's title —
-    // the tab's loudest text was a teal date, and nothing said "a new place
-    // starts here". Sentence case is already the data's own.
+    // it takes the display face. Bold Inter at titleSmall made a city name the
+    // same object as a booking row's title — the tab's loudest text was a teal
+    // date, and nothing said "a new place starts here". Sentence case is
+    // already the data's own.
+    //
+    // [AppTextStyles.sectionHeading] rather than a local composition: this
+    // header used to compose the register inline and had silently drifted off
+    // it, dropping [kDisplayOpticalScale] and rendering a city name at the body
+    // face's number in a face with a much smaller x-height — the exact recess
+    // that constant's dartdoc was written about. The token is the register.
     final label = Text(
       groupLabelText(l10n, group.label),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: _citySectionStyle(theme),
+      style: AppTextStyles.sectionHeading(theme.textTheme),
     );
     final qualifier = group.qualifier;
     if (qualifier == null && metaLine == null) return label;
