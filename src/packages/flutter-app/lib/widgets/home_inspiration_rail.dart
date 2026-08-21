@@ -6,6 +6,7 @@ import '../l10n/l10n.dart';
 import '../providers/suggestions_provider.dart';
 import '../theme/spacing.dart';
 import 'destination_suggestion_card.dart';
+import 'fading_edge_scroll.dart';
 import 'random_suggestions.dart';
 import 'section_header.dart';
 
@@ -51,24 +52,30 @@ class HomeInspirationRail extends StatelessWidget {
               behavior: ScrollConfiguration.of(context).copyWith(
                 dragDevices: PointerDeviceKind.values.toSet(),
               ),
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                // Room below the cards so their drop shadow isn't clipped by
-                // the horizontal viewport (the guides-row rule).
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                itemCount: prompts.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(width: AppSpacing.md),
-                itemBuilder: (context, i) {
-                  final s = prompts[i];
-                  return DestinationSuggestionCard(
-                    prompt: s.text,
-                    asset: s.asset,
-                    credit: s.credit,
-                    width: _cardWidth,
-                    onTap: () => onPrompt(s.text),
-                  );
-                },
+              // The pool is longer than any window, so the rail always runs
+              // off the edge. Without the fade it ended on a hard cut that
+              // read like the last card rather than a cropped one.
+              child: FadingEdgeScroll(
+                builder: (context, controller) => ListView.separated(
+                  controller: controller,
+                  scrollDirection: Axis.horizontal,
+                  // Room below the cards so their drop shadow isn't clipped
+                  // by the horizontal viewport (the guides-row rule).
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  itemCount: prompts.length,
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(width: AppSpacing.md),
+                  itemBuilder: (context, i) {
+                    final s = prompts[i];
+                    return DestinationSuggestionCard(
+                      prompt: s.text,
+                      asset: s.asset,
+                      credit: s.credit,
+                      width: _cardWidth,
+                      onTap: () => onPrompt(s.text),
+                    );
+                  },
+                ),
               ),
             ),
           ),
