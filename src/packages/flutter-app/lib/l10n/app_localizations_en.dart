@@ -2518,6 +2518,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importFromAi => 'Import from AI chat';
 
   @override
+  String get importFromAiShort => 'Import chat';
+
+  @override
   String get importExplainer =>
       'Planned a trip in ChatGPT or Claude? Paste the conversation — or its final summary — and we\'ll turn it into a trip you can edit.';
 
@@ -4120,6 +4123,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nearMeChipLabel => 'What\'s near me?';
+
+  @override
+  String get nearMeChipLabelShort => 'Near me';
 
   @override
   String get nearMeSeedLabel => 'Near my current location';
