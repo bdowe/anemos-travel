@@ -206,6 +206,15 @@ var planToolRegistry = []planTool{
 	// Tail-appended per the prompt-cache rule above.
 	{def: replaceLegTool, enabled: func(s *planSession) bool { return s.boundTripID != nil },
 		run: runReplaceLegTool},
+
+	// Move a booked booking-checklist row onto the leg that replaced it after
+	// the route changed (stale-transport-orphans ticket 2). The safe
+	// alternative to remove_booking_todo for exactly the row a delete would
+	// strip of its shortlist and expense link — the model reached for that
+	// delete on 2026-08-20 because it had no other move. Signed-in only, like
+	// the rest of the booking-todo family; which trip is resolved by trip_id
+	// at call time. Tail-appended per the prompt-cache rule above.
+	{def: migrateBookingTodoTool, enabled: authedOnly, run: runMigrateBookingTodoTool},
 }
 
 // planToolByName dispatches tool_use blocks; derived from the registry so the
