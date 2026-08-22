@@ -15,7 +15,8 @@ LIMIT $2;
 
 -- name: MarkNotificationsRead :execrows
 -- Mark-all is the read model: opening the notification center clears the badge
--- wholesale. No per-notification variant yet.
+-- wholesale. Still no per-notification variant — unlike DELETE, which has one:
+-- a row you are done with is dismissed outright rather than marked read.
 UPDATE notifications
 SET read_at = now()
 WHERE user_id = $1 AND read_at IS NULL;
@@ -69,11 +70,22 @@ SELECT user_id, 'collab_edit',
 FROM targets;
 
 -- name: DeleteNotificationsByUser :execrows
--- Clear-all is the delete model, mirroring MarkNotificationsRead's mark-all:
--- one user-scoped wholesale action, no per-notification variant. Hard delete —
--- a notification is an ephemeral signal, not a record of account activity.
+-- Clear-all: one user-scoped wholesale action, mirroring MarkNotificationsRead.
+-- Hard delete — a notification is an ephemeral signal, not a record of account
+-- activity. DeleteNotification below is the single-row sibling.
 DELETE FROM notifications
 WHERE user_id = $1;
+
+-- name: DeleteNotification :execrows
+-- Dismiss one row. Ownership is structural in the WHERE clause rather than a
+-- separate fetch-then-check: a row owned by somebody else deletes nothing and
+-- is therefore indistinguishable from one that does not exist, so the handler's
+-- 404 cannot be used to probe which notification ids are real.
+--
+-- :execrows, not :exec — the affected count is what separates "deleted" from
+-- "was never yours", and the handler needs that to choose 204 over 404.
+DELETE FROM notifications
+WHERE id = $1 AND user_id = $2;
 
 -- name: DeleteOldReadNotifications :exec
 -- Retention (janitor): read rows expire 45 days after they were SEEN (read_at,

@@ -4520,7 +4520,7 @@ abstract class AppLocalizations {
   /// **'Before you go'**
   String get homeBeforeYouGoTitle;
 
-  /// Count of open trip items beyond the three Home shows.
+  /// Count of open trip items beyond the five Home shows. Sits inside the tappable card, which opens that trip's Trip Health sheet with the complete list.
   ///
   /// In en, this message translates to:
   /// **'{n, plural, =1{1 more open item} other{{n} more open items}}'**
@@ -5287,6 +5287,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not clear notifications: {error}'**
   String notifClearAllFailed(String error);
+
+  /// Tooltip and screen-reader label on the ✕ that removes one notification from the feed. Not a confirm-gated action, unlike Clear all.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get notifDismiss;
+
+  /// Snackbar when removing one notification fails. The row stays in the feed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not dismiss: {error}'**
+  String notifDismissFailed(String error);
 
   /// No description provided for @notifLoadErrorTitle.
   ///

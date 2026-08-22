@@ -57,11 +57,23 @@ class _FakeNotificationsApiService extends NotificationsApiService {
   bool clearAllCalled = false;
   Exception? clearAllError; // set to make clearAll throw
 
+  /// Ids handed to [delete], in order — the per-row dismiss.
+  final List<String> deletedIds = [];
+  Exception? deleteError; // set to make delete throw
+
   _FakeNotificationsApiService(this.notifications)
       : super(ApiClient(baseUrl: 'http://test'));
 
-  // Post-clear refetches observe the cleared feed, matching the real
-  // contract (the client re-lists to see post-state).
+  /// The feed the server would return now: empty once cleared, otherwise
+  /// minus anything dismissed. Refetches observe post-state on both paths,
+  /// matching the real contract (the client re-lists to see it).
+  List<AppNotification> get _live => clearAllCalled
+      ? const []
+      : [
+          for (final n in notifications)
+            if (!deletedIds.contains(n.id)) n
+        ];
+
   @override
   Future<List<AppNotification>> list({int limit = 50}) async {
     if (failLists) throw Exception('list down');
@@ -70,7 +82,7 @@ class _FakeNotificationsApiService extends NotificationsApiService {
       failNextList = null;
       throw err;
     }
-    return clearAllCalled ? const [] : notifications;
+    return _live;
   }
 
   @override
@@ -80,16 +92,24 @@ class _FakeNotificationsApiService extends NotificationsApiService {
     clearAllCalled = true;
   }
 
+  /// Throws before recording when [deleteError] is set — a failed dismiss
+  /// must leave the row in the feed, so the fake must not "half" delete it.
+  @override
+  Future<void> delete(String id) async {
+    final err = deleteError;
+    if (err != null) throw err;
+    deletedIds.add(id);
+  }
+
   @override
   Future<void> markRead() async {
     markReadCalled = true;
   }
 
-  // Mirrors list(): a cleared feed has nothing unread, so the badge a
-  // post-clear refetch observes is 0.
+  // Mirrors list(): the badge a refetch observes counts only what is still
+  // in the feed, so dismissing an unread row moves it.
   @override
-  Future<int> unreadCount() async =>
-      clearAllCalled ? 0 : notifications.where((n) => n.isUnread).length;
+  Future<int> unreadCount() async => _live.where((n) => n.isUnread).length;
 }
 
 UserModel _user() => UserModel(
@@ -437,6 +457,101 @@ void main() {
     expect(find.text('Paris trip starts soon'), findsOneWidget);
   });
 
+  // Per-row dismissal — the half of the lifecycle the feed shipped without.
+  // Clear-all was the only exit, so removing one stale row meant destroying
+  // the whole feed. Deliberately unlike clear-all: no confirmation gate, and
+  // the row leaves only once the server says it is gone.
+  group('dismiss one', () {
+    testWidgets('every row carries its own dismiss control', (tester) async {
+      await _pump(tester, [_priceDrop(id: 'a'), _ops(id: 'b')]);
+
+      expect(find.byTooltip('Dismiss'), findsNWidgets(2));
+    });
+
+    testWidgets('dismissing deletes that id and drops only that row',
+        (tester) async {
+      final service = await _pump(
+          tester, [_priceDrop(id: 'a'), _ops(id: 'b')]);
+
+      // The ops row is second; dismiss it and the price drop must survive.
+      await tester.tap(find.byTooltip('Dismiss').last);
+      await tester.pumpAndSettle();
+
+      expect(service.deletedIds, ['b']);
+      expect(find.text('System degraded'), findsNothing);
+      expect(find.text('BOS → CDG'), findsOneWidget);
+      expect(find.byTooltip('Dismiss'), findsNWidgets(1));
+    });
+
+    testWidgets('it asks nothing first — a dialog per row would cost more '
+        'than the clutter it removes', (tester) async {
+      final service = await _pump(tester, [_priceDrop(id: 'a')]);
+
+      await tester.tap(find.byTooltip('Dismiss'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(service.deletedIds, ['a']);
+    });
+
+    testWidgets('dismissing the last row lands on the empty state',
+        (tester) async {
+      await _pump(tester, [_priceDrop(id: 'a')]);
+
+      await tester.tap(find.byTooltip('Dismiss'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No notifications yet'), findsOneWidget);
+      // Nothing left to clear, so the destructive footer goes with it.
+      expect(find.text('Clear all'), findsNothing);
+    });
+
+    testWidgets('dismissing an unread row moves the badge', (tester) async {
+      final service = await _pump(tester,
+          [_priceDrop(id: 'a'), _ops(id: 'b', readAt: '2026-07-16T00:00:00Z')]);
+      expect(await service.unreadCount(), 1);
+
+      await tester.tap(find.byTooltip('Dismiss').first);
+      await tester.pumpAndSettle();
+
+      // The unread row left the feed, so the count a refetch observes drops.
+      expect(service.deletedIds, ['a']);
+      expect(await service.unreadCount(), 0);
+    });
+
+    testWidgets('a failed dismiss keeps the row and says why', (tester) async {
+      final service = await _pump(tester, [_priceDrop(id: 'a'), _ops(id: 'b')]);
+      service.deleteError = Exception('nope');
+
+      await tester.tap(find.byTooltip('Dismiss').first);
+      await tester.pumpAndSettle();
+
+      // A dismiss that silently failed would look exactly like one that
+      // worked, and the row would be believed gone when the server still
+      // has it.
+      expect(service.deletedIds, isEmpty);
+      expect(find.text('BOS → CDG'), findsOneWidget);
+      expect(find.byTooltip('Dismiss'), findsNWidgets(2));
+      expect(find.textContaining('Could not dismiss'), findsOneWidget);
+    });
+
+    testWidgets('the button re-arms after a failure', (tester) async {
+      final service = await _pump(tester, [_priceDrop(id: 'a')]);
+      service.deleteError = Exception('nope');
+      await tester.tap(find.byTooltip('Dismiss'));
+      await tester.pumpAndSettle();
+
+      // The busy flag must clear on the failure path, or the row would be
+      // left with a permanently dead ✕.
+      service.deleteError = null;
+      await tester.tap(find.byTooltip('Dismiss'));
+      await tester.pumpAndSettle();
+
+      expect(service.deletedIds, ['a']);
+    });
+
+  });
+
   group('clear all', () {
     testWidgets('clear-all footer hidden on an empty feed, shown with rows',
         (tester) async {
@@ -575,6 +690,54 @@ void main() {
       await tester.pumpAndSettle();
       return service;
     }
+
+    testWidgets('rows carry the dismiss control here too, not just the page',
+        (tester) async {
+      final service = await pumpPanel(tester, [_priceDrop(id: 'a')]);
+
+      // One _NotificationRow serves both presentations. A hover-revealed ✕
+      // would have been no affordance at all on the narrow page, which is
+      // the touch one.
+      expect(find.byTooltip('Dismiss'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Dismiss'));
+      await tester.pumpAndSettle();
+
+      expect(service.deletedIds, ['a']);
+      expect(find.text('No notifications yet'), findsOneWidget);
+    });
+
+    testWidgets('dismissing a TAPPABLE row does not also follow the row',
+        (tester) async {
+      // ops rows navigate to admin metrics, and the ✕ sits inside that same
+      // InkWell. If the button let the tap through, dismissing one would
+      // silently yank the traveler onto another screen. onClose is the
+      // observable: the panel always closes itself before navigating.
+      var closes = 0;
+      final service = _FakeNotificationsApiService([_ops(id: 'o')]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authProvider.overrideWith((ref) => _FakeAuthNotifier(_user())),
+            notificationsApiServiceProvider.overrideWithValue(service),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: testLocalizationsDelegates,
+            home: Scaffold(
+              body: Center(
+                  child: NotificationsPanel(onClose: () => closes++)),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Dismiss'));
+      await tester.pumpAndSettle();
+
+      expect(service.deletedIds, ['o']);
+      expect(closes, 0, reason: 'the ✕ must not trigger the row navigation');
+    });
 
     testWidgets('panel renders header, rows and the clear-all footer',
         (tester) async {

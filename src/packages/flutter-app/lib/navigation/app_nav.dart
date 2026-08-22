@@ -232,6 +232,32 @@ void openTripOnTripsTab(WidgetRef ref, String tripId, {AppTab? from}) {
   });
 }
 
+/// [openTripOnTripsTab], landing with the Trip Health sheet already open.
+///
+/// The destination for Home's "Before you go" card, which lists a handful of
+/// that trip's open items and has no way to fix any of them — the apply-fix
+/// plumbing lives on the trip screen with the mutation providers. The sheet is
+/// the same list, complete, with a working button on every row, so this is the
+/// one entry point where dropping the traveler on the trip page and leaving
+/// them to find the health badge would be a worse answer than opening the
+/// thing they tapped.
+///
+/// The URL is deliberately [tripDetailLocation] — unchanged from the plain
+/// open. An auto-opened sheet is a transient intent belonging to this one
+/// navigation, not a state a refresh should restore; the same reasoning that
+/// puts [TripDetailScreen.entryOrigin] on the route instead of in a provider.
+void openTripHealthOnTripsTab(WidgetRef ref, String tripId, {AppTab? from}) {
+  ref.read(navIndexProvider.notifier).state = AppTab.trips.index;
+  final navKeys = ref.read(tabNavKeysProvider);
+  pushOnTabWhenReady(navKeys, AppTab.trips, () {
+    resetToRoot(navKeys[AppTab.trips.index].currentState);
+    return instantRoute(
+        TripDetailScreen(
+            tripId: tripId, entryOrigin: from, openHealthSheet: true),
+        tripDetailLocation(tripId));
+  });
+}
+
 /// Open the import-from-AI-chat screen on the Trips tab — every entry point
 /// funnels here so the Trips nav item highlights, back lands on the trips
 /// list, and the URL reports /import (whose refresh restores onto Trips).

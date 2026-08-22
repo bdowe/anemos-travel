@@ -210,6 +210,89 @@ func TestNotificationsClearAll(t *testing.T) {
 	}
 }
 
+// Per-item dismissal: the single-resource counterpart to clear-all, and the
+// conventions diverge on purpose. This one NAMES a resource, so zero affected
+// rows is a 404 rather than an idempotent 204 — and that 404 is the same
+// answer for "no such id", "already dismissed" and "somebody else's row",
+// because ownership lives in the DELETE's WHERE clause. A caller cannot use it
+// to learn which notification ids exist.
+func TestNotificationDismissOne(t *testing.T) {
+	resetDB(t)
+	owner, ownerToken := createTestUser(t, "notif-dismiss-owner@example.com")
+	other, otherToken := createTestUser(t, "notif-dismiss-other@example.com")
+
+	keep := insertTestNotification(t, owner.ID, "price_drop", map[string]any{"price": 450.0}, nil)
+	drop := insertTestNotification(t, owner.ID, "trip_reminder", map[string]any{"title": "soon"}, nil)
+	theirs := insertTestNotification(t, other.ID, "weekly_nudge", map[string]any{"reason": "resume_planning"}, nil)
+
+	if n := notifUnreadCount(t, ownerToken); n != 2 {
+		t.Fatalf("unread before dismiss = %v, want 2", n)
+	}
+
+	// Dismissing one leaves the rest of the feed alone.
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications/"+drop.ID.String(), ownerToken, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("dismiss own = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+	got := decodeNotifList(t, doJSON(t, "GET", "/api/v1/notifications", ownerToken, nil).Body.Bytes())
+	if len(got) != 1 {
+		t.Fatalf("owner feed after dismiss = %d rows, want 1", len(got))
+	}
+	if got[0]["id"] != keep.ID.String() {
+		t.Fatalf("dismiss removed the wrong row: left %v, want %v", got[0]["id"], keep.ID)
+	}
+	// An unread row leaving the feed has to move the badge with it.
+	if n := notifUnreadCount(t, ownerToken); n != 1 {
+		t.Fatalf("unread after dismissing an unread row = %v, want 1", n)
+	}
+
+	// Dismissing the same row again finds nothing to delete.
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications/"+drop.ID.String(), ownerToken, nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("second dismiss = %d, want 404", rec.Code)
+	}
+
+	// Another user's row is not the caller's to dismiss — and answers exactly
+	// as an unknown id does, so the response leaks no existence.
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications/"+theirs.ID.String(), ownerToken, nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("cross-user dismiss = %d, want 404", rec.Code)
+	}
+	if got := decodeNotifList(t, doJSON(t, "GET", "/api/v1/notifications", otherToken, nil).Body.Bytes()); len(got) != 1 {
+		t.Fatalf("other feed after a stranger's dismiss = %d rows, want 1 (row was deleted)", len(got))
+	}
+
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications/"+uuid.NewString(), ownerToken, nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown id = %d, want 404", rec.Code)
+	}
+	// A non-uuid names no notification, which is the same outcome as naming
+	// one that isn't yours — 404, not 400.
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications/not-a-uuid", ownerToken, nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("malformed id = %d, want 404", rec.Code)
+	}
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications/"+keep.ID.String(), "", nil); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous dismiss = %d, want 401", rec.Code)
+	}
+}
+
+// The literal sub-routes must never be captured as notification ids by the
+// `{id}` route registered after them.
+func TestNotificationSubroutesNotCapturedAsIDs(t *testing.T) {
+	resetDB(t)
+	_, token := createTestUser(t, "notif-routes@example.com")
+
+	// POST /notifications/read still marks read (it is not a DELETE, so the
+	// id route cannot claim it) and GET unread-count still counts.
+	if rec := doJSON(t, "POST", "/api/v1/notifications/read", token, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("mark read = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+	if n := notifUnreadCount(t, token); n != 0 {
+		t.Fatalf("unread-count = %v, want 0", n)
+	}
+	// And DELETE on those literals is a 404 (no such notification), never a
+	// 405 or a silent match against a real row.
+	if rec := doJSON(t, "DELETE", "/api/v1/notifications/read", token, nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("DELETE /notifications/read = %d, want 404", rec.Code)
+	}
+}
+
 // The retention prune expires READ rows 45 days after read_at and never
 // touches unread rows, however old. Runs through janitorTick itself so the
 // wiring (not just the query) is pinned — this is the first janitor test.

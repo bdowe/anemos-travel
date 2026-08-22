@@ -908,13 +908,18 @@ func buildRouter() *mux.Router {
 	// Generalized notifications feed (Wave 16): the Flutter notification
 	// center + badge read these. Writers: the re-engagement checkers (trip
 	// reminders, weekly nudge), collab/share activity (notifications_writer.go),
-	// and the ops self-check monitor (admin-only rows). DELETE is clear-all
+	// and the ops self-check monitor (admin-only rows). Two deletes, and the
+	// difference is deliberate: collection DELETE is clear-all
 	// (specs/clear-notifications) — user-scoped, idempotent, dialog-confirmed
-	// client-side, so the general limiter suffices like its siblings.
+	// client-side; item DELETE dismisses one row, 404s when it isn't yours, and
+	// needs no dialog. The general limiter suffices for both, like their
+	// siblings. `/read` and `/unread-count` are registered BEFORE the `{id}`
+	// route so those literals can never be captured as notification ids.
 	api.Handle("/notifications", authMiddleware(http.HandlerFunc(listNotificationsHandler))).Methods("GET")
 	api.Handle("/notifications", authMiddleware(http.HandlerFunc(clearNotificationsHandler))).Methods("DELETE")
 	api.Handle("/notifications/read", authMiddleware(http.HandlerFunc(markNotificationsReadHandler))).Methods("POST")
 	api.Handle("/notifications/unread-count", authMiddleware(http.HandlerFunc(unreadNotificationsCountHandler))).Methods("GET")
+	api.Handle("/notifications/{id}", authMiddleware(http.HandlerFunc(deleteNotificationHandler))).Methods("DELETE")
 	api.Handle("/preferences", authMiddleware(http.HandlerFunc(getPreferencesHandler))).Methods("GET")
 	api.Handle("/preferences", authMiddleware(http.HandlerFunc(putPreferencesHandler))).Methods("PUT")
 	api.HandleFunc("/accommodation-links", accommodationLinksHandler).Methods("GET")

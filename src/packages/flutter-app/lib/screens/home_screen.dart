@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../models/local_guide.dart';
 import '../providers/auth_provider.dart';
+import '../providers/departing_trip_provider.dart';
 import '../providers/live_trip_provider.dart';
 import '../providers/local_provider.dart';
 import '../providers/plan_provider.dart';
@@ -105,6 +106,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // storage, domain move) — precedence in continueTripOf. It already
     // excludes the live trip, so nothing here has to.
     final continueTrip = ref.watch(continueTripProvider);
+    // A SEPARATE question from the one above: the trip departing soonest
+    // inside the readiness window, which is what "before you go" means. Also
+    // live-trip-excluding, so nothing here has to. See departingTripOf.
+    final departingTrip = ref.watch(departingTripProvider);
     // Populated app-wide: AppShell's IndexedStack keeps TripsListScreen
     // mounted, and its loadTrips() feeds tripsProvider — no fetch from here.
     //
@@ -240,12 +245,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
 
                 // Pre-departure readiness for the trip that is close enough to
-                // pack for. Renders nothing outside its window or when it has
+                // pack for — which is departingTripProvider's trip, NOT the
+                // continue-trip above. The two answer different questions
+                // ("what am I about to take" vs "what did I last open"), and
+                // reading readiness off the second one silently reported the
+                // wrong trip whenever they disagreed. The card prints the name
+                // it is talking about either way. Renders nothing when it has
                 // no honest row to show (BeforeYouGoSection).
-                if (continueTrip != null)
+                if (departingTrip != null)
                   BeforeYouGoSection(
-                    tripId: continueTrip.tripId,
-                    startDate: continueTrip.startDate,
+                    tripId: departingTrip.tripId,
+                    tripTitle: departingTrip.title,
+                    startDate: departingTrip.startDate,
+                    // The health sheet, not the trip page: this card's rows
+                    // ARE that sheet's rows, and it is the only surface with
+                    // buttons that can act on them.
+                    onTap: () => openTripHealthOnTripsTab(
+                        ref, departingTrip.tripId,
+                        from: AppTab.home),
                   ),
 
                 // Where the traveler has been, and where they are going next.

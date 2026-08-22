@@ -3139,6 +3139,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get notifDismiss => 'Dismiss';
+
+  @override
+  String notifDismissFailed(String error) {
+    return 'Could not dismiss: $error';
+  }
+
+  @override
   String get notifLoadErrorTitle => 'Could not load notifications';
 
   @override

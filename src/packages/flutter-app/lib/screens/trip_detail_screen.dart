@@ -160,10 +160,23 @@ class TripDetailScreen extends ConsumerStatefulWidget {
   /// trip" — and null behaves exactly as this screen always has.
   final AppTab? entryOrigin;
 
+  /// Open the Trip Health sheet as soon as the trip has loaded — set only by
+  /// [openTripHealthOnTripsTab], which is how Home's "Before you go" card opens
+  /// a trip. That card lists open items it cannot fix; this lands the traveler
+  /// on the complete list with the buttons that can.
+  ///
+  /// On the ROUTE for the same reason as [entryOrigin], and fired exactly once
+  /// (see [_TripDetailScreenState._healthSheetShown]): it describes the
+  /// navigation that created this screen, so no later reload — a pull to
+  /// refresh, a `trip_updated` bump, an offline fallback — can reopen the sheet
+  /// over a traveler who already closed it.
+  final bool openHealthSheet;
+
   const TripDetailScreen({
     super.key,
     required this.tripId,
     this.entryOrigin,
+    this.openHealthSheet = false,
   });
 
   @override
@@ -198,6 +211,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   RefineChatPhase _chatPhase = RefineChatPhase.ready;
   Object? _chatError;
   bool _chatResumeTried = false;
+
+  /// Whether [TripDetailScreen.openHealthSheet] has already been honored.
+  /// Once-per-screen like `_chatResumeTried`, and load-driven, so the sheet
+  /// cannot reappear over a traveler who closed it.
+  bool _healthSheetShown = false;
 
   // The active view state. 'all' renders the grouped itinerary; 'bookings'
   // and 'unbooked' are the Bookings view (entered from the header tab) and
@@ -364,7 +382,26 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scroll.addListener(_syncCollapsedTitle);
-    _load();
+    // `_load` renders its own error state and never rethrows, so this always
+    // runs; `_openHealthOnArrival` decides from what actually landed.
+    _load().then((_) => _openHealthOnArrival());
+  }
+
+  /// Honors [TripDetailScreen.openHealthSheet], once, after the first load.
+  ///
+  /// After the load rather than in [initState] because the sheet is wired to a
+  /// [Trip] — it needs one to apply a fix against — and `_load` is also what
+  /// fetches the review it lists. A load that failed into the error screen
+  /// leaves `_trip` null and opens nothing: the traveler gets the error, not a
+  /// sheet floating over it. An offline fallback DOES open it — that path sets
+  /// a real cached trip, and the sheet's own `isOffline` wiring makes it
+  /// read-only.
+  void _openHealthOnArrival() {
+    if (!mounted || !widget.openHealthSheet || _healthSheetShown) return;
+    final trip = _trip;
+    if (trip == null) return;
+    _healthSheetShown = true;
+    _openHealthSheet(trip);
   }
 
   @override
