@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-18T00:00:00Z",
+  "generatedAt": "2026-08-22T00:00:00Z",
   "title": "Design System: Anemos",
   "extensions": {
     "colorMeta": {
@@ -40,6 +40,16 @@
         "displayName": "Midnight Harbor",
         "canonical": "#091620"
       },
+      "aegean-night": {
+        "role": "neutral",
+        "displayName": "Aegean Night",
+        "canonical": "#0C1F2C"
+      },
+      "aegean-paper": {
+        "role": "neutral",
+        "displayName": "Aegean Paper",
+        "canonical": "#F6F9FB"
+      },
       "map-scrim": {
         "role": "neutral",
         "displayName": "Map Scrim",
@@ -48,7 +58,7 @@
       "paper-fill": {
         "role": "neutral",
         "displayName": "Paper Fill",
-        "canonical": "#FAFAFA"
+        "canonical": "#F3F7F9"
       }
     },
     "typographyMeta": {
@@ -92,7 +102,7 @@
       "refersTo": "card",
       "description": "The standard raised surface — 12px radius, real downward shadow, no Material tonal tint.",
       "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">4 nights in Naxos</div><div class=\"ds-card-body\">Old Town stay, ferry to Santorini on Friday morning.</div></div>",
-      "css": ".ds-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 3px 6px rgba(0,0,0,0.16); max-width: 320px; } .ds-card-title { font-family: Inter, system-ui, sans-serif; font-size: 16px; font-weight: 700; color: #191c1c; margin-bottom: 8px; } .ds-card-body { font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 400; line-height: 1.43; color: #3f4947; }"
+      "css": ".ds-card { background: #E0EBF2; border-radius: 12px; padding: 16px; box-shadow: 0 3px 6px rgba(0,0,0,0.16); max-width: 320px; } .ds-card-title { font-family: Inter, system-ui, sans-serif; font-size: 16px; font-weight: 700; color: #101B23; margin-bottom: 8px; } .ds-card-body { font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 400; line-height: 1.43; color: #364754; }"
     },
     {
       "name": "Trip Hero Card",
@@ -100,7 +110,7 @@
       "refersTo": "card",
       "description": "The promoted-trip hero — a flat photo-led card (de-gradient pass): route imagery on top, Circle-style date square, serif title, one when-line, state pills. Promotion is imagery and typography, never a colored field.",
       "html": "<div class=\"ds-hero-card\"><div class=\"ds-hero-date\"><div class=\"ds-hero-day\">14</div><div class=\"ds-hero-mon\">Sep</div></div><div><div class=\"ds-hero-title\">Island hopping, September</div><div class=\"ds-hero-when\">Sep 14 – 21 · 8 days</div></div></div>",
-      "css": ".ds-hero-card { display: flex; gap: 16px; align-items: flex-start; background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 3px 6px rgba(0,0,0,0.16); max-width: 360px; } .ds-hero-date { border: 1px solid #bec9c6; border-radius: 8px; width: 52px; padding: 8px 4px; text-align: center; flex: none; } .ds-hero-day { font-family: Inter, system-ui, sans-serif; font-size: 22px; font-weight: 700; color: #191c1c; } .ds-hero-mon { font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 600; color: #6f7977; } .ds-hero-title { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 34px; font-weight: 500; line-height: 1.2; color: #191c1c; } .ds-hero-when { font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 500; color: #3f4947; margin-top: 4px; }"
+      "css": ".ds-hero-card { display: flex; gap: 16px; align-items: flex-start; background: #E0EBF2; border-radius: 12px; padding: 16px; box-shadow: 0 3px 6px rgba(0,0,0,0.16); max-width: 360px; } .ds-hero-date { border: 1px solid #BCC9D2; border-radius: 8px; width: 52px; padding: 8px 4px; text-align: center; flex: none; } .ds-hero-day { font-family: Inter, system-ui, sans-serif; font-size: 22px; font-weight: 700; color: #101B23; } .ds-hero-mon { font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 600; color: #697D8C; } .ds-hero-title { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 34px; font-weight: 500; line-height: 1.2; color: #101B23; } .ds-hero-when { font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 500; color: #364754; margin-top: 4px; }"
     },
     {
       "name": "Input Field",
@@ -108,7 +118,7 @@
       "refersTo": "input",
       "description": "Outlined, filled field — paper fill, 8px radius, primary outline on focus, no glow.",
       "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Where to?\" />",
-      "css": ".ds-input { background: #FAFAFA; border: 1px solid #6f7977; border-radius: 8px; padding: 12px 16px; font-family: Inter, system-ui, sans-serif; font-size: 14px; color: #191c1c; width: 260px; transition: border-color 0.2s; } .ds-input::placeholder { color: #6f7977; } .ds-input:focus { outline: none; border: 2px solid #00796B; padding: 11px 15px; }"
+      "css": ".ds-input { background: #F3F7F9; border: 1px solid #697D8C; border-radius: 8px; padding: 12px 16px; font-family: Inter, system-ui, sans-serif; font-size: 14px; color: #101B23; width: 260px; transition: border-color 0.2s; } .ds-input::placeholder { color: #697D8C; } .ds-input:focus { outline: none; border: 2px solid #00796B; padding: 11px 15px; }"
     },
     {
       "name": "Filter Chip",
@@ -116,7 +126,7 @@
       "refersTo": "chip",
       "description": "Fully-rounded chip; chip rows are the entire secondary navigation on list screens. Selected takes the brand tint family.",
       "html": "<span class=\"ds-chip\">Flights</span> <span class=\"ds-chip ds-chip-selected\">Stays</span>",
-      "css": ".ds-chip { display: inline-block; font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 500; color: #3f4947; background: transparent; border: 1px solid #bec9c6; border-radius: 999px; padding: 8px 16px; cursor: pointer; transition: background 0.2s; } .ds-chip:hover { background: rgba(0,121,107,0.06); } .ds-chip-selected { background: #E0F2F1; border-color: #E0F2F1; color: #004D40; font-weight: 600; }"
+      "css": ".ds-chip { display: inline-block; font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 500; color: #364754; background: transparent; border: 1px solid #BCC9D2; border-radius: 999px; padding: 8px 16px; cursor: pointer; transition: background 0.2s; } .ds-chip:hover { background: rgba(0,121,107,0.06); } .ds-chip-selected { background: #E0F2F1; border-color: #E0F2F1; color: #004D40; font-weight: 600; }"
     },
     {
       "name": "Wordmark",
@@ -146,9 +156,9 @@
       "Card-and-sheet vocabulary, comfortable density, 48px touch floor"
     ],
     "rules": [
-      { "name": "The Earned Color Rule", "body": "Every non-teal color means exactly one thing and appears at chip-and-pin scale, never as a field. Color is never decoration.", "section": "colors" },
+      { "name": "The Earned Color Rule", "body": "Every non-teal color means exactly one thing and appears at chip-and-pin scale, never as a field. Color is never decoration. The Aegean canvases are the one thing this rule does not reach — a canvas is what colour appears on, and its meaning is \"surface\", which is exactly one thing.", "section": "colors" },
       { "name": "The Gold-in-the-Mark Rule", "body": "Heritage Gold enters a screen only inside the wind-rose mark. Anywhere else it is a finding.", "section": "colors" },
-      { "name": "The One Dark Exception Rule", "body": "Midnight Harbor exists only on the signed-out landing. Everywhere else, surfaces are the neutral scheme and dark mode is the same build with brightness flipped.", "section": "colors" },
+      { "name": "The Two Canvases Rule", "body": "Every surface in the signed-in app comes from AppColors.canvasFor(brightness) — dark is Aegean night, light is Aegean paper, the same design in two keys rather than one inverted into the other. Midnight Harbor remains the signed-out landing's own canvas (now the Aegean ladder's deepest rung, #091620); the exception ends at sign-in.", "section": "colors" },
       { "name": "The One Weight Rule", "body": "Cormorant Garamond ships exactly two real files — 500 (display) and 600 (wordmark) — so each AppFonts constant has one legal weight and every style naming the family states it explicitly, or the web synthesizes faux-bold and smears the serif.", "section": "typography" },
       { "name": "The Weight-Not-Size Rule", "body": "Below the headline line, hierarchy is built with Inter's weight ladder (400/500/600/700), not with size steps.", "section": "typography" },
       { "name": "The One Eyebrow Rule", "body": "Capitals belong to the wordmark and to ONE display device: the letterspaced small-caps place eyebrow on destination surfaces (the Amanzoe move). No other kickers or eyebrows exist.", "section": "typography" },
@@ -158,7 +168,7 @@
     "dos": [
       "Do build only with tokens — AppColors, AppFonts/textTheme, AppSpacing, AppRadius, AppShadows, BrandLogo/BrandWordmark; a value that isn't a token becomes one in lib/theme/ first.",
       "Do keep photography real — real places in real light, credited in CREDITS.md/LICENSES.md — and put a scrim under any text on it.",
-      "Do check both themes; the bar is surface in both — dark mode is the same build with brightness flipped, chrome included.",
+      "Do check both themes; the bar is surface in both — dark is Aegean night, composed, not a brightness flip of light.",
       "Do state the weight on every Cormorant Garamond style — w500 for AppFonts.display, w600 for AppFonts.wordmark — and set numbers in Inter.",
       "Do run .claude/skills/brand-guidelines/scripts/check.sh on touched Dart files before shipping."
     ],

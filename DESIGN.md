@@ -9,8 +9,10 @@ colors:
   heritage-gold: "#E8C452"
   heritage-gold-deep: "#B98B1E"
   midnight-harbor: "#091620"
+  aegean-night: "#0C1F2C"
+  aegean-paper: "#F6F9FB"
   map-scrim: "rgba(0, 0, 0, 0.6)"
-  paper-fill: "#FAFAFA"
+  paper-fill: "#F3F7F9"
 typography:
   wordmark:
     fontFamily: "Cormorant Garamond, Georgia, serif"
@@ -128,7 +130,7 @@ Nothing is both.
   `heroScrim` (0.88 alpha lower-left → 0.35 upper-right — the layer under any
   text on a photo), and the flat fallback field under the continue-trip
   hero's imagery. **`brandGradient` is no longer a sanctioned brand surface**
-  (the de-gradient pass, 2026-08): chrome and hero cards are neutral
+  (the de-gradient pass, 2026-08): chrome and hero cards are scheme
   surfaces whose brand is the wordmark's ink, the rose, typography, and
   imagery; the gradient survives only on the signed-out photo/guide
   panels until phase 2 flattens or retires each — the boot splash left it
@@ -362,7 +364,7 @@ mark on the boot splash's night field.
   200×160 chat cards so images never reflow the transcript.
 
 ### Inputs / Fields
-- **Style:** outlined at 8px radius, filled — Paper Fill (#FAFAFA) light,
+- **Style:** outlined at 8px radius, filled — Paper Fill (#F3F7F9) light,
   `surfaceContainerHighest` dark; on the landing canvas, the glass-ladder
   field rung (white 10%).
 - **Focus:** scheme primary outline; no glow.
@@ -411,8 +413,8 @@ gradient never carries text.
   value that isn't a token becomes one in `lib/theme/` first.
 - **Do** keep photography real — real places in real light, credited in
   `CREDITS.md`/`LICENSES.md` — and put a scrim under any text on it.
-- **Do** check both themes; the bar is `surface` in both — dark mode is the
-  same build with brightness flipped, chrome included.
+- **Do** check both themes; the bar is `surface` in both — dark is Aegean
+  night, composed, not a brightness flip of light.
 - **Do** state the weight on every style naming Cormorant Garamond — `w500`
   for `AppFonts.display`, `w600` for `AppFonts.wordmark` — and set numbers in
   Inter.
