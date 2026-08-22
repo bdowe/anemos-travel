@@ -648,13 +648,15 @@ extension on _TripDetailScreenState {
                   left: AppSpacing.md, top: AppSpacing.sm, bottom: AppSpacing.xs),
               child: Row(
                 children: [
-                  Icon(Icons.verified, size: 16, color: AppColors.toolLocal),
+                  Icon(Icons.verified,
+                      size: 16,
+                      color: AppColors.toolLocal(theme.brightness)),
                   const SizedBox(width: 6),
                   Text(
                     context.l10n.tripLocalIntel,
                     style: theme.textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: AppColors.toolLocal,
+                      color: AppColors.toolLocal(theme.brightness),
                     ),
                   ),
                 ],
@@ -677,7 +679,7 @@ extension on _TripDetailScreenState {
   /// A tappable "Local guide" row inside the Local intel section that opens the
   /// full narrative guide (story + ordered pins + map).
   Widget _guideChip(LocalGuide guide, ThemeData theme) {
-    final accent = AppColors.toolLocal;
+    final accent = AppColors.toolLocal(theme.brightness);
     return Card(
       margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       clipBehavior: Clip.antiAlias,
@@ -805,7 +807,7 @@ extension on _TripDetailScreenState {
               padding: const EdgeInsets.only(left: AppSpacing.md),
               child: PlacePhotoStrip(
                 icon: Icons.local_activity,
-                accent: AppColors.toolEvents,
+                accent: AppColors.toolEvents(theme.brightness),
                 // Counts everything found, not the cards shown — otherwise 8
                 // reads as "that's all there is". At the server's per-city cap
                 // the true total is unknown, so the count says "30+".
@@ -826,7 +828,8 @@ extension on _TripDetailScreenState {
                 cards: [
                   for (final e in picks)
                     PlacePhotoCard(
-                      data: PlaceCardData.event(e),
+                      data: PlaceCardData.event(e,
+                          brightness: theme.brightness),
                       onTap: e.url.isEmpty
                           ? null
                           : () => trackedLaunchUrl(context, e.url,
@@ -855,7 +858,7 @@ extension on _TripDetailScreenState {
       if (links == null || links.isEmpty) return const SizedBox.shrink();
       return SourceLinksCard(
         icon: Icons.local_activity,
-        accent: AppColors.toolEvents,
+        accent: AppColors.toolEvents(theme.brightness),
         title: context.l10n.tripFindEventsIn(query.city),
         links: links,
       );
@@ -1702,14 +1705,15 @@ extension on _TripDetailScreenState {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.verified,
-                              size: 13, color: AppColors.toolLocal),
+                              size: 13,
+                              color: AppColors.toolLocal(theme.brightness)),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               context.l10n
                                   .tripRecommendedBy(item.localSourceName!),
                               style: theme.textTheme.labelSmall?.copyWith(
-                                color: AppColors.toolLocal,
+                                color: AppColors.toolLocal(theme.brightness),
                                 fontWeight: FontWeight.w600,
                               ),
                               maxLines: 1,

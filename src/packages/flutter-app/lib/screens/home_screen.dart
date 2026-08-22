@@ -569,7 +569,7 @@ class _GuideCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = AppColors.toolLocal;
+    final accent = AppColors.toolLocal(theme.brightness);
 
     return SizedBox(
       width: 230,

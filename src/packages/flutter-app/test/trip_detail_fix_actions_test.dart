@@ -360,6 +360,50 @@ void main() {
     expect(inSheet('2026-08-03'), findsOneWidget);
   });
 
+  testWidgets('fix_segment opens the row\'s edit sheet and PATCHes it',
+      (tester) async {
+    // checkStaleTransport's finding: a confirmed booking the route left
+    // behind. "Review booking" opens the segment's own edit sheet (not the
+    // add sheet) prefilled with its stored values, and Save PATCHes the row.
+    final review = _FakeReviewApiService([
+      _finding(
+          'transit',
+          'Your booking Gothenburg → Sorrento no longer matches the route',
+          const FindingFix(
+              action: 'fix_segment',
+              label: 'Review booking',
+              itemId: 'seg-9',
+              entityType: 'segment',
+              origin: 'Gothenburg',
+              destination: 'Sorrento',
+              mode: 'flight',
+              date: '2026-09-11')),
+    ]);
+    final transport = _FakeTransportApiService();
+    await _pumpScreen(tester,
+        trip: _trip(), review: review, transport: transport);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Review booking'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AddSegmentSheet), findsOneWidget);
+    Finder inSheet(String text) => find.descendant(
+        of: find.byType(AddSegmentSheet), matching: find.text(text));
+    expect(inSheet('Gothenburg'), findsOneWidget);
+    expect(inSheet('Sorrento'), findsOneWidget);
+    expect(inSheet('2026-09-11'), findsOneWidget);
+
+    // Saving PATCHes the existing row — no second segment is created.
+    review.resolved = true;
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(transport.patches, hasLength(1));
+    expect(transport.patches.single['id'], 'seg-9');
+    expect(transport.patches.single['origin'], 'Gothenburg');
+    expect(transport.added, isEmpty);
+  });
+
   testWidgets(
       'health and packing live in the app bar; Budget is a header tab',
       (tester) async {

@@ -267,6 +267,7 @@ var messages = map[string]map[string]string{
 	"review.fix.markBooked":       {"en": "Mark booked", "es": "Marcar como reservado"},
 	"review.fix.moveToDay":        {"en": "Move to Day %d", "es": "Mover al día %d"},
 	"review.fix.reschedule":       {"en": "Reschedule", "es": "Reprogramar"},
+	"review.fix.reviewSegment":    {"en": "Review booking", "es": "Revisar reserva"},
 	"review.fix.setDates":         {"en": "Set dates", "es": "Añadir fechas"},
 	"review.itemBeyondSpan":       {"en": "%q is on day %d, past the trip's %d-day span.", "es": "%q está en el día %d, más allá de la duración de %d días del viaje."},
 	// review.ladder.* — rung labels for the plan-progress sheet, needed only by
@@ -320,6 +321,8 @@ var messages = map[string]map[string]string{
 	"review.planOverBudget":             {"en": "Your plan runs %.2f %s over target — nothing overspent yet.", "es": "Tu plan supera el objetivo en %.2f %s — aún no te has pasado."},
 	"review.packedDay":                  {"en": "Day %d has %d items planned — that may be too packed.", "es": "El día %d tiene %d actividades planificadas — puede que sea demasiado."},
 	"review.rainLikely":                 {"en": "Rain likely on Day %d (%s) — pack an umbrella.", "es": "Es probable que llueva el día %d (%s) — lleva paraguas."},
+	"review.staleTransport":             {"en": "Your booking %s no longer matches the route — those two places are not consecutive stops anymore.", "es": "Tu reserva %s ya no coincide con la ruta — esos dos lugares ya no son paradas consecutivas."},
+	"review.staleTransportDates":        {"en": " It also departs %s, outside the current dates of the legs it names.", "es": " Además sale el %s, fuera de las fechas actuales de las etapas que menciona."},
 	"review.timeOfDayCollision":         {"en": "Day %d has %d things scheduled for the %s.", "es": "El día %d tiene %d cosas programadas para %s."},
 	"review.tod.afternoon":              {"en": "afternoon", "es": "la tarde"},
 	"review.tod.evening":                {"en": "evening", "es": "la noche"},

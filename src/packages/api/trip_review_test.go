@@ -1085,3 +1085,188 @@ func TestCheckLegShape(t *testing.T) {
 		t.Fatalf("a well-formed spine raised findings: %+v", fs)
 	}
 }
+
+// --- checkStaleTransport: the booking the route left behind ------------------
+//
+// The trigger shape: Naples inserted between Gothenburg and Sorrento. The legs
+// below are exactly that sequence — the confirmed Gothenburg → Sorrento flight
+// is the orphan.
+
+// staleTransportFixture builds the post-edit leg sequence: Gothenburg (day 1,
+// Sep 10) → Naples (day 4, Sep 13) → Sorrento (day 6, Sep 15) → Rome (day 8,
+// Sep 17).
+func staleTransportFixture(t *testing.T) exportData {
+	return exportData{
+		Trip: store.Trip{ID: uuid.New(),
+			StartDate: dateVal(t, "2026-09-10"), EndDate: dateVal(t, "2026-09-18")},
+		Items: []store.ItineraryItem{
+			rlItem(1, "Gothenburg pin", rlCity("Gothenburg"), 1),
+			rlItem(2, "Naples pin", rlCity("Naples"), 4),
+			rlItem(3, "Sorrento pin", rlCity("Sorrento"), 6),
+			rlItem(4, "Rome pin", rlCity("Rome"), 8),
+		},
+	}
+}
+
+func TestCheckStaleTransport_OrphanedConfirmedSegment(t *testing.T) {
+	d := staleTransportFixture(t)
+	seg := store.TripSegment{
+		ID: uuid.New(), Mode: "flight", Booked: true,
+		Origin: strp("Gothenburg"), Destination: strp("Sorrento"),
+		DepartDate: dateVal(t, "2026-09-11"),
+	}
+	d.Segments = []store.TripSegment{seg}
+
+	fs := checkStaleTransport("en", d)
+	if len(fs) != 1 {
+		t.Fatalf("findings = %+v, want the one orphan", fs)
+	}
+	f := fs[0]
+	if f.Severity != "warn" || f.Category != "transit" {
+		t.Fatalf("severity/category = %q/%q", f.Severity, f.Category)
+	}
+	if f.ItemID == nil || *f.ItemID != seg.ID.String() {
+		t.Fatalf("finding must carry the row's id, got %+v", f.ItemID)
+	}
+	if !strings.Contains(f.Message, "Gothenburg → Sorrento") {
+		t.Fatalf("finding must name the row, got %q", f.Message)
+	}
+	// The optional date signal: Sep 11 is outside both named legs' rendered
+	// spans, so it rides along as evidence.
+	if !strings.Contains(f.Message, "outside the current dates") {
+		t.Fatalf("expected the date evidence in the message, got %q", f.Message)
+	}
+	if f.Fix == nil || f.Fix.Action != "fix_segment" {
+		t.Fatalf("fix = %+v, want action fix_segment", f.Fix)
+	}
+	fix := f.Fix
+	if fix.ItemID == nil || *fix.ItemID != seg.ID.String() ||
+		fix.EntityType == nil || *fix.EntityType != "segment" {
+		t.Fatalf("fix must identify the segment row, got %+v", fix)
+	}
+	if fix.Origin == nil || *fix.Origin != "Gothenburg" ||
+		fix.Destination == nil || *fix.Destination != "Sorrento" ||
+		fix.Date == nil || *fix.Date != "2026-09-11" ||
+		fix.Mode == nil || *fix.Mode != "flight" {
+		t.Fatalf("fix must carry the row's endpoints/date/mode, got %+v", fix)
+	}
+}
+
+func TestCheckStaleTransport_ConnectedPairsSilent(t *testing.T) {
+	d := staleTransportFixture(t)
+	d.Segments = []store.TripSegment{
+		{ID: uuid.New(), Mode: "flight", Origin: strp("Gothenburg"), Destination: strp("Naples")},
+		{ID: uuid.New(), Mode: "train", Origin: strp("Naples"), Destination: strp("Sorrento")},
+		// Either direction counts — a hand-entered segment may read backwards.
+		{ID: uuid.New(), Mode: "train", Origin: strp("Rome"), Destination: strp("Sorrento")},
+	}
+	if fs := checkStaleTransport("en", d); len(fs) != 0 {
+		t.Fatalf("connected segments flagged: %+v", fs)
+	}
+}
+
+func TestCheckStaleTransport_DraftOrphanNotFlagged(t *testing.T) {
+	d := staleTransportFixture(t)
+	d.Segments = []store.TripSegment{{
+		ID: uuid.New(), Mode: "flight", Auto: true,
+		Origin: strp("Gothenburg"), Destination: strp("Sorrento"),
+	}}
+	if fs := checkStaleTransport("en", d); len(fs) != 0 {
+		t.Fatalf("drafts are the resync's to prune — flagging double-reports: %+v", fs)
+	}
+}
+
+func TestCheckStaleTransport_DismissedNotFlagged(t *testing.T) {
+	d := staleTransportFixture(t)
+	d.Segments = []store.TripSegment{{
+		ID: uuid.New(), Mode: "flight", Dismissed: true,
+		Origin: strp("Gothenburg"), Destination: strp("Sorrento"),
+	}}
+	if fs := checkStaleTransport("en", d); len(fs) != 0 {
+		t.Fatalf("a dismissed row is already dealt with: %+v", fs)
+	}
+}
+
+func TestCheckStaleTransport_NonLegPlaceNotFlagged(t *testing.T) {
+	d := staleTransportFixture(t)
+	d.Segments = []store.TripSegment{
+		// The flight out from the home airport: ALB is no leg of this trip, so
+		// this segment is none of the route's business.
+		{ID: uuid.New(), Mode: "flight", Origin: strp("ALB"), Destination: strp("Gothenburg")},
+		// Same for the flight home.
+		{ID: uuid.New(), Mode: "flight", Origin: strp("Rome"), Destination: strp("EWR")},
+		// A connection city.
+		{ID: uuid.New(), Mode: "flight", Origin: strp("Frankfurt"), Destination: strp("Naples")},
+	}
+	if fs := checkStaleTransport("en", d); len(fs) != 0 {
+		t.Fatalf("segments naming non-leg places must stay silent: %+v", fs)
+	}
+}
+
+func TestCheckStaleTransport_OneOrNoLegs(t *testing.T) {
+	seg := store.TripSegment{ID: uuid.New(), Mode: "flight",
+		Origin: strp("Gothenburg"), Destination: strp("Sorrento")}
+
+	noLegs := exportData{Trip: store.Trip{ID: uuid.New(),
+		StartDate: dateVal(t, "2026-09-10"), EndDate: dateVal(t, "2026-09-18")},
+		Segments: []store.TripSegment{seg}}
+	if fs := checkStaleTransport("en", noLegs); len(fs) != 0 {
+		t.Fatalf("no legs, no flags: %+v", fs)
+	}
+
+	oneLeg := exportData{Trip: store.Trip{ID: uuid.New(),
+		StartDate: dateVal(t, "2026-09-10"), EndDate: dateVal(t, "2026-09-18")},
+		Items:    []store.ItineraryItem{rlItem(1, "Rome pin", rlCity("Rome"), 1)},
+		Segments: []store.TripSegment{seg}}
+	if fs := checkStaleTransport("en", oneLeg); len(fs) != 0 {
+		t.Fatalf("one leg, no flags (and no panic): %+v", fs)
+	}
+}
+
+// The date signal is evidence, never a trigger: a confirmed segment can
+// legitimately depart a day early, so a still-adjacent pair with an out-of-leg
+// date stays silent.
+func TestCheckStaleTransport_DateAloneNeverFires(t *testing.T) {
+	d := staleTransportFixture(t)
+	d.Segments = []store.TripSegment{{
+		ID: uuid.New(), Mode: "flight",
+		Origin: strp("Gothenburg"), Destination: strp("Naples"),
+		// Sep 12 is outside both legs' one-day spans (Sep 10, Sep 13) — but the
+		// pair is still adjacent, so there is nothing to flag.
+		DepartDate: dateVal(t, "2026-09-12"),
+	}}
+	if fs := checkStaleTransport("en", d); len(fs) != 0 {
+		t.Fatalf("an early departure on a connected pair must not flag: %+v", fs)
+	}
+}
+
+func TestCheckStaleTransport_Spanish(t *testing.T) {
+	d := staleTransportFixture(t)
+	d.Segments = []store.TripSegment{{
+		ID: uuid.New(), Mode: "flight",
+		Origin: strp("Gothenburg"), Destination: strp("Sorrento"),
+	}}
+	fs := checkStaleTransport("es", d)
+	if len(fs) != 1 || !strings.Contains(fs[0].Message, "ya no coincide con la ruta") {
+		t.Fatalf("es finding = %+v", fs)
+	}
+}
+
+// The check rides reviewTrip like every other — one call, both surfaces.
+func TestReviewTrip_IncludesStaleTransport(t *testing.T) {
+	d := staleTransportFixture(t)
+	d.Segments = []store.TripSegment{{
+		ID: uuid.New(), Mode: "flight",
+		Origin: strp("Gothenburg"), Destination: strp("Sorrento"),
+	}}
+	fs := reviewTrip(context.Background(), "en", d, reviewOptions{}, reviewDeps{})
+	found := false
+	for _, f := range fs {
+		if f.Fix != nil && f.Fix.Action == "fix_segment" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("reviewTrip lost the orphan finding: %+v", fs)
+	}
+}

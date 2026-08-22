@@ -2639,6 +2639,40 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           rethrow;
         }
         break;
+      case 'fix_segment':
+        // A confirmed booking the route left behind (checkStaleTransport):
+        // "Review booking" opens the row's own edit sheet so the traveler
+        // re-dates, corrects or detaches it themselves — the fix never
+        // rewrites a reservation's endpoints on its own say-so. The sheet is
+        // prefilled from the fix, which carries the segment's stored values;
+        // fields it doesn't carry (provider, url, notes, arrival) are simply
+        // omitted from the save body and UpdateSegment's COALESCE keeps them.
+        final segmentId = fix.itemId;
+        if (segmentId == null) return;
+        final body = await showModalBottomSheet<Map<String, dynamic>>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => AddSegmentSheet(
+            initial: TripSegment(
+              id: segmentId,
+              mode: fix.mode ?? 'flight',
+              origin: fix.origin,
+              destination: fix.destination,
+              departDate: fix.date,
+            ),
+          ),
+        );
+        if (body == null) return;
+        try {
+          await ref
+              .read(transportApiServiceProvider)
+              .updateSegment(tripId, segmentId, body);
+          await _afterFix();
+        } catch (e) {
+          _showSnack(l10n.tripUpdateTransportFailed(friendlyError(l10n, e)));
+          rethrow;
+        }
+        break;
       case 'move_item':
         final itemId = fix.itemId;
         final targetDay = fix.targetDay;

@@ -20,7 +20,7 @@ class LocalRecCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = AppColors.toolLocal;
+    final accent = AppColors.toolLocal(theme.brightness);
     final subtitle = [
       if (rec.neighborhood.isNotEmpty) rec.neighborhood,
       if (rec.category.isNotEmpty) rec.category,
