@@ -501,9 +501,9 @@ func TestRemoveBookingTodoToolConfirmDeletesStateRow(t *testing.T) {
 	}
 	for _, want := range []string{
 		`"Book flights Gothenburg to Sorrento"`, // names the row
-		"shortlist",  // what went with it
-		"expense",    // what went with it
-		"not cancel", // the provider-side reservation warning
+		"shortlist",                             // what went with it
+		"expense",                               // what went with it
+		"not cancel",                            // the provider-side reservation warning
 	} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("confirmed result missing %q:\n%s", want, msg)
