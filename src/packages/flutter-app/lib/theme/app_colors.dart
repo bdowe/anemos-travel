@@ -133,10 +133,13 @@ abstract final class AppColors {
 
   // Landing dark-canvas family (specs/landing-redesign). The signed-out
   // landing page commits to the dark brand look regardless of theme mode, so
-  // its surfaces are named here rather than borrowed from the dark scheme —
-  // the dark cardTheme's neutral grey fights the teal canvas.
-  /// Deep teal page field behind every landing section.
-  static final Color landingCanvas = Color.lerp(brandDark, Colors.black, 0.55)!;
+  // its surfaces are named here rather than borrowed from a scheme that
+  // flips with the theme.
+  /// Deep blue page field behind every landing section: the Aegean-night
+  /// ladder's deepest rung, one step below the signed-in dark page, so the
+  /// signed-out canvas and the app read as one hue family. (Was brandDark
+  /// lerped 55% toward black — a green-black in front of a blue app.)
+  static final Color landingCanvas = aegeanNight.containerLowest;
 
   /// Glass card fill on [landingCanvas] (the feature grid's cards).
   static final Color landingCard = Colors.white.withValues(alpha: 0.06);

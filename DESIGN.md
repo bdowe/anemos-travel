@@ -8,7 +8,7 @@ colors:
   shallows-tint: "#E0F2F1"
   heritage-gold: "#E8C452"
   heritage-gold-deep: "#B98B1E"
-  midnight-harbor: "#00231D"
+  midnight-harbor: "#091620"
   map-scrim: "rgba(0, 0, 0, 0.6)"
   paper-fill: "#FAFAFA"
 typography:
@@ -138,12 +138,14 @@ Nothing is both.
 ### Secondary
 - **Heritage Gold** (#E8C452 / deep #B98B1E): lives in the wind-rose mark and
   nowhere else. Never text, never a button, never a UI accent.
-- **Midnight Harbor** (≈#00231D, `landingCanvas`): the signed-out landing
-  page's dark canvas — the ONE recorded exception (doc v1.2) to neutral
-  surfaces. On it, every raised fill is a rung of the glass ladder (white at
-  6/8/10/12%, hairline 14%) and every text tone a rung of the ink ladder
-  (white at 35/60/70/85%). New landing surfaces pick a rung, never mint a
-  fresh alpha. The exception ends at sign-in.
+- **Midnight Harbor** (#091620, `landingCanvas`): the signed-out landing
+  page's dark canvas — the one exception to the signed-in canvases, and now
+  inside their family: it is the Aegean-night ladder's deepest rung
+  (`containerLowest`), one step below the dark page. On it, every raised
+  fill is a rung of the glass ladder (white at 6/8/10/12%, hairline 14%) and
+  every text tone a rung of the ink ladder (white at 35/60/70/85%). New
+  landing surfaces pick a rung, never mint a fresh alpha. The exception ends
+  at sign-in.
 
 ### Tertiary
 - **Tool accents** (chip-and-pin scale only, one meaning each), brightness-
@@ -215,9 +217,9 @@ exists only on the signed-out landing. Everywhere else, surfaces are the
 neutral scheme and dark mode is the same build with brightness flipped." Two
 of its three clauses are now false — surfaces are authored rather than
 seed-derived, and dark is composed rather than flipped. Midnight Harbor is
-still the landing's own canvas and still ends at sign-in, but it is now a
-*green*-black sitting in front of a blue app, which is a real inconsistency
-and an open follow-up, not a rule.
+still the landing's own canvas and still ends at sign-in — and it now takes
+the Aegean ladder's deepest rung, so the exception no longer stands in
+front of the app in a different hue.
 
 ## Typography
 
