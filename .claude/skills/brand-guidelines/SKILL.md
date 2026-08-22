@@ -57,16 +57,19 @@ Paths below are relative to `src/packages/flutter-app/` unless rooted.
   (ramp: tint `#E0F2F1` · teal-100 `#B2DFDB` · light `#00897B` · brand
   `#00796B` · platform `#00695C` · dark `#004D40`; teal-100 and platform
   live in the SVGs/web shell, not `AppColors`). Both themes share the
-  seed. **Chrome is neutral since v1.4** (the de-gradient pass): the app
+  seed. **Chrome is flat since v1.4** (the de-gradient pass): the app
   bar is flat `surface` under a hairline in both themes, the brand riding
   in the wordmark's ink (`wordmarkInk` — brandDark light / primary dark)
   and the dark-cut rose; `brandGradient` is no longer a sanctioned brand
   surface and survives only on the signed-out photo/guide panels pending
   phase 2 — the boot splash is flat Aegean night.
-- **Proportion**: surfaces neutral (warm, plaster-leaning); teal is
-  identity + the primary action; tool accents and status colors appear at
-  chip-and-pin scale, **never as fields**. ONE recorded exception (doc
-  v1.2): the signed-out landing page commits to the dark
+- **Proportion**: surfaces are the two authored Aegean canvases —
+  `canvasFor(brightness)`, dark Aegean night `#0C1F2C` / light Aegean
+  paper `#F6F9FB`, the one field-scale colour the Earned Color Rule
+  permits; teal is identity + the primary action; tool accents and
+  status colors appear at chip-and-pin scale, **never as fields**. ONE
+  recorded exception (doc v1.2): the signed-out landing page commits to
+  the dark
   `landingCanvas` family (`app_colors.dart` — canvas #091620, glass
   ladder 6/8/10/12/14%, ink ladder 35/60/70/85%). The exception ends at
   sign-in; new landing surfaces pick a ladder rung, never a fresh alpha.
@@ -180,11 +183,12 @@ Each is an instant finding in review:
 - Off-scale magic values: spacing not on the 4/8/12/16/24/32 ladder,
   radii other than 8/12/20/full, ad-hoc `BoxShadow`s.
 - Teal-tinted photos, purple-blue "AI gradients", or any hue used as a
-  large field at all — since v1.4 the only recorded teal-field survivors
-  are the signed-out photo/guide gradient panels (pending phase 2) and
-  `landingCanvas` on the signed-out landing (doc v1.2), plus the
+  large field at all — the only recorded teal-field survivors are the
+  signed-out photo/guide gradient panels (pending phase 2) and the
   continue-trip hero's flat `brandDark` imagery fallback; the boot splash
-  is flat Aegean night.
+  is flat Aegean night. The Aegean canvases — the signed-in
+  surfaces and the landing's Midnight Harbor — are the one sanctioned
+  field-scale colour family (the Two Canvases Rule).
 - M3 defaults where the theme already decided: surface tint, default
   card shadows, `ColorScheme` roles bypassed by raw `Colors.*`.
 
