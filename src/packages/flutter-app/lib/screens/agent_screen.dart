@@ -137,49 +137,16 @@ const double _kRailCardWidth = 260;
 /// and the whole point of this block is that it reads in one glance.
 const double _kIntroMeasure = 420;
 
-/// Below this the reading block stops floating in a field of its own and joins
-/// the scroll with everything else. Measured against the shortest viewport the
-/// screen has to hold (a 568pt phone, less the app bar and the composer, is
-/// ~430) rather than guessed from a width breakpoint — the thing that runs out
-/// here is height, so height is what is asked.
-const double _kIntroFieldFloor = 440;
-
-/// Where the intro block sits in its field, as an [Alignment] y.
-///
-/// Slightly above centre: the optical centre of a field is above its geometric
-/// one, so an evenly-split block reads as having sagged.
-///
-/// This number exists because the screen used to hold the reading half and the
-/// acting half apart — the rail was pinned to the composer and the heading
-/// floated in whatever was left over. On a phone that is invisible, because
-/// there is nothing left over. On a 934px desktop field there are ~544px of it,
-/// and pinning the rail meant every one of those pixels had to sit either above
-/// the heading or between the heading and the rail. Both were measured in the
-/// running app at 1342x988 and both are wrong: 374/123 leaves the whole
-/// composition in the bottom half, and 303/196 opens a hole through the middle
-/// of it. There is no third split, because the two are the same 544px.
-///
-/// So the halves travel together now and the leftover goes below them, between
-/// the rail and the composer. That gives up the adjacency the previous pass
-/// prized — starters within reach of the input — and it is a real cost on a
-/// short viewport, which is why the branch below [_kIntroFieldFloor] still
-/// stacks them tight. What it buys is one object instead of three zones.
-///
-/// Every number above is a browser measurement. Nothing here may be asserted
-/// from a widget test — this suite loads no fonts, so its text metrics are
-/// fiction.
-const double _kIntroBlockBias = -0.1;
-
 /// The Plan tab before a word is typed.
 ///
-/// Composed as ONE block that ends at the composer instead of a centered card
-/// marooned in the middle of the panel: the reading half (heading + what the
-/// agent will do) takes an open field over its head, and the acting half
-/// (destination rail, then the two non-typing ways in) sits directly above the
-/// input, so the eye finishes the sentence on the thing it is supposed to use. That adjacency is the redesign — every AI start screen
-/// worth copying (and Mindtrip, the closest competitor) hangs its starters off
-/// the composer, and the old layout hung them off the vertical centre with
-/// ~200px of nothing underneath.
+/// ONE block — the reading half (heading + what the agent will do) over the
+/// acting half (destination rail, then the two non-typing ways in) — that
+/// [ChatPanel] joins with the composer into a single group on any field tall
+/// enough to hold it, so the eye finishes the sentence on the thing it is
+/// supposed to use. That adjacency is the redesign: every AI start screen
+/// worth copying (and Mindtrip, the closest competitor) hangs its starters
+/// off the composer, and the old layouts hung the block off the vertical
+/// centre with hundreds of pixels of nothing underneath.
 ///
 /// Deliberately NOT the shared [EmptyState] widget: that one is the app's
 /// "nothing here yet" voice — icon, title, message, a Wrap of buttons, all
@@ -256,42 +223,22 @@ class _PlanIntro extends ConsumerWidget {
       ],
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxHeight < _kIntroFieldFloor) {
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: AppSpacing.xl),
-                reading,
-                const SizedBox(height: AppSpacing.xl),
-                acting,
-              ],
-            ),
-          );
-        }
-        // The two halves as ONE object, placed in the field together — see
-        // [_kIntroBlockBias] for why the rail no longer rides the composer.
-        return Align(
-          alignment: const Alignment(0, _kIntroBlockBias),
-          // Loose constraints from Align, so this shrink-wraps unless the
-          // largest text scales make the block taller than the field — then it
-          // scrolls instead of overflowing.
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                reading,
-                // The block's own seam. A ladder value, not a share of the
-                // leftover: it says how close these two halves are, which is a
-                // fixed relationship, not a function of the viewport.
-                const SizedBox(height: AppSpacing.xxl),
-                acting,
-              ],
-            ),
-          ),
-        );
-      },
+    // ONE shrink-wrapped block; where it sits is not this widget's question
+    // anymore. ChatPanel owns the vertical distribution: on a tall field the
+    // composer joins the block and the air splits below it; on a short one
+    // the block scrolls and the composer keeps the floor. (What must never
+    // return here is a bias constant whose dartdoc explains machinery that
+    // no longer runs.)
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        reading,
+        // The block's own seam. A ladder value, not a share of the leftover:
+        // it says how close these two halves are, which is a fixed
+        // relationship, not a function of the viewport.
+        const SizedBox(height: AppSpacing.xxl),
+        acting,
+      ],
     );
   }
 }
