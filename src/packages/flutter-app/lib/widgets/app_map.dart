@@ -100,11 +100,11 @@ MapOptions appMapOptions({
   return MapOptions(
     crs: const AppMapCrs(),
     backgroundColor: appMapBackground,
-    // Keeps the world edges outside the viewport horizontally (no background
-    // bars from a pan or an off-meridian fit) and the camera center on the
-    // planet vertically. Deliberately not CameraConstraint.contain: that one
+    // Keeps the world edges outside the viewport on both axes, so no pan can
+    // end on background. Deliberately not CameraConstraint.contain: that one
     // rejects any camera it cannot fit inside the bounds (returning null),
-    // which would freeze a map taller than the world is wide.
+    // which would freeze a map taller than the world is wide — the case this
+    // one handles by centering instead.
     cameraConstraint: const AppMapCameraConstraint(),
     // Without a floor, zooming out shrinks the single world to a postage
     // stamp and then past the smallest tile level into empty background.
@@ -121,22 +121,39 @@ MapOptions appMapOptions({
 }
 
 /// Camera constraint for the single-world [AppMapCrs]: contains the world
-/// *edges* horizontally (a pan or off-center fit can never drag ±180° inside
-/// the viewport and expose [appMapBackground] as side bars) while only
-/// containing the camera *center* vertically at ±85° (edge-containing
-/// latitude would freeze any map taller than the world, per the note on
-/// [appMapOptions]).
+/// *edges* on both axes, so no pan can drag ±180° or the ±85.05° Mercator
+/// limit inside the viewport and expose [appMapBackground] as bars.
 ///
-/// Horizontal containment is only possible when the world is at least as
-/// wide as the viewport — [appMapMinZoomFor] guarantees that; below the
-/// floor (transient states only) the camera is returned unchanged rather
-/// than `null`, which would freeze the map.
+/// Edge containment needs the world to cover the viewport on the axis being
+/// contained, and the two axes reach that differently — which is why their
+/// fallbacks differ:
+///
+///  * **Horizontally** [appMapMinZoomFor] guarantees it. Falling short is a
+///    transient state (a resize or a fresh fit, corrected post-frame), so the
+///    camera is handed back unchanged rather than snapped — and never `null`,
+///    which freezes the map and is why stock [CameraConstraint.contain] is
+///    unusable here.
+///  * **Vertically** nothing guarantees it: the drawn world is square, so a
+///    map box taller than it is wide has *no* zoom at which the world both
+///    fills the width and covers the height. That state is permanent, not
+///    transient, so the world is centered in the box instead — the leftover
+///    background splits evenly top and bottom rather than pooling on
+///    whichever side the last drag left it.
 @immutable
 class AppMapCameraConstraint extends CameraConstraint {
   /// Create the app's single-world camera constraint.
   const AppMapCameraConstraint();
 
+  /// Latitude the camera center is held to before the edge math runs.
+  ///
+  /// The edge clamp is strictly tighter wherever it applies, so this now only
+  /// governs degenerate viewports — it keeps "the center is on the planet"
+  /// true even there.
   static const double _maxLatitude = 85;
+
+  /// The world's north and south edges. [SphericalMercator] clamps latitude
+  /// symmetrically to this, so it *is* the top and bottom of the drawn square.
+  static const double _worldEdgeLatitude = SphericalMercator.maxLatitude;
 
   @override
   MapCamera constrain(MapCamera camera) {
@@ -146,7 +163,9 @@ class AppMapCameraConstraint extends CameraConstraint {
     final size = camera.nonRotatedSize;
     if (size == MapCamera.kImpossibleSize ||
         !size.width.isFinite ||
-        size.width <= 0) {
+        !size.height.isFinite ||
+        size.width <= 0 ||
+        size.height <= 0) {
       return camera;
     }
 
@@ -156,28 +175,37 @@ class AppMapCameraConstraint extends CameraConstraint {
       camera.center.longitude,
     );
 
-    // Mirror ContainCamera's x-axis math against the whole world.
-    final westPix = camera.projectAtZoom(const LatLng(0, -180), zoom);
-    final eastPix = camera.projectAtZoom(const LatLng(0, 180), zoom);
-    final halfWidth = camera.size.width / 2;
-    final leftOkCenter = math.min(westPix.dx, eastPix.dx) + halfWidth;
-    final rightOkCenter = math.max(westPix.dx, eastPix.dx) - halfWidth;
-
-    // World narrower than the viewport: no horizontal containment exists
-    // (transiently possible below the [appMapMinZoomFor] floor).
-    if (leftOkCenter > rightOkCenter) {
-      if (center == camera.center) return camera;
-      return camera.withPosition(center: center);
-    }
+    // Mirror ContainCamera's math against the whole world, both axes at once:
+    // the north-west and south-east corners of the drawn square. Longitude
+    // projects independently of latitude, so the x limits are unchanged by
+    // taking them off the corners rather than off the equator.
+    final nwPix =
+        camera.projectAtZoom(const LatLng(_worldEdgeLatitude, -180), zoom);
+    final sePix =
+        camera.projectAtZoom(const LatLng(-_worldEdgeLatitude, 180), zoom);
+    final half = camera.size / 2;
+    final leftOkCenter = math.min(nwPix.dx, sePix.dx) + half.width;
+    final rightOkCenter = math.max(nwPix.dx, sePix.dx) - half.width;
+    final topOkCenter = math.min(nwPix.dy, sePix.dy) + half.height;
+    final botOkCenter = math.max(nwPix.dy, sePix.dy) - half.height;
 
     final centerPix = camera.projectAtZoom(center, zoom);
-    final newX = centerPix.dx.clamp(leftOkCenter, rightOkCenter);
-    if (newX == centerPix.dx) {
+    // An inverted range means the world doesn't cover the viewport on that
+    // axis: x keeps its center (transient), y takes the range's midpoint,
+    // which is exactly the world's vertical middle.
+    final newX = leftOkCenter <= rightOkCenter
+        ? centerPix.dx.clamp(leftOkCenter, rightOkCenter)
+        : centerPix.dx;
+    final newY = topOkCenter <= botOkCenter
+        ? centerPix.dy.clamp(topOkCenter, botOkCenter)
+        : (topOkCenter + botOkCenter) / 2;
+
+    if (newX == centerPix.dx && newY == centerPix.dy) {
       if (center == camera.center) return camera;
       return camera.withPosition(center: center);
     }
     return camera.withPosition(
-      center: camera.unprojectAtZoom(Offset(newX, centerPix.dy), zoom),
+      center: camera.unprojectAtZoom(Offset(newX, newY), zoom),
     );
   }
 
