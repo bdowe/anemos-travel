@@ -29,6 +29,28 @@ import 'place_photo_card.dart';
 import 'source_links_card.dart';
 import 'result_summary_chip.dart';
 
+/// The panel height below which the Plan tab's empty state keeps the
+/// composer on the floor and scrolls the intro, instead of joining them
+/// into one [intro, gap, composer] group.
+///
+/// Height is what is asked because height is what runs out (the rule
+/// _PlanIntro's old field floor stated): a 568pt phone offers the panel
+/// ~510px once the app bar is gone, and an open keyboard takes most of any
+/// field — both must keep the composer at the floor, which is the layout
+/// the app has always had. The joined group measures ~471px at default
+/// text scale (browser-measured at 1440x900: intro 263→634, the 33px seam,
+/// composer 667→734), so 650 admits it with at least ~100px of air above
+/// and ~75 below — less, and the split reads as crowding rather than
+/// composition.
+const double _kComposerJoinFloor = 650;
+
+/// Where the Plan tab's joined [intro, gap, composer] group sits in its
+/// field, as an [Alignment] y. 1/7 splits the leftover air 4:3 above/below:
+/// at the 938px field this composition was measured against that is ~215
+/// over ~156 — the heading holds the position #517 set for it while the
+/// 268px void #520 left between the block and the input closes.
+const double _kComposerGroupBias = 1 / 7;
+
 /// The plan-agent chat surface (messages, tool chips, result chips, input bar)
 /// decoupled from any screen, so the full-screen Agent tab and the trip-detail
 /// refine panel share one implementation. The provider pair is passed in:
@@ -384,54 +406,14 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
     // window, or dock bubbles run the full dock width on desktop.
     return LayoutBuilder(builder: (context, constraints) {
       final bubbleMaxWidth = _bubbleMaxWidthFor(constraints.maxWidth);
-      final panel = Column(
+      // The composer and its pending-attachments row as ONE unit. On the
+      // Plan tab's empty state it leaves the floor and joins the intro
+      // block — see _kComposerJoinFloor — so it is built once, here, and
+      // placed by the branch below rather than hard-coded to the column's
+      // tail.
+      final composer = Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: isEmpty
-                ? (widget.emptyState ?? const SizedBox.shrink())
-                // SelectionArea wraps only the message list: the composer's
-                // TextField below has native selection and must keep its own
-                // gesture handling.
-                : SelectionArea(
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: _onScrollNotification,
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-                        itemCount: messages.length + 1,
-                        itemBuilder: (context, i) {
-                          if (i < messages.length) {
-                            final msg = messages[i];
-                            // Labeled messages (e.g. the machine-built refine
-                            // seed) collapse to a context chip; the full content
-                            // still went to the server history.
-                            if (msg.displayLabel != null) {
-                              return _SeedContextChip(
-                                key: ValueKey('msg-$i'),
-                                label: msg.displayLabel!,
-                              );
-                            }
-                            // Append-only list, so index keys are stable.
-                            return ChatMessageBubble(
-                              key: ValueKey('msg-$i'),
-                              message: msg,
-                              maxWidth: bubbleMaxWidth,
-                            );
-                          }
-                          return _ChatTail(
-                            key: const ValueKey('chat-tail'),
-                            state: widget.state,
-                            notifier: widget.notifier,
-                            footerBuilder: widget.footerBuilder,
-                            onViewTrip: widget.onViewTrip,
-                            bubbleMaxWidth: bubbleMaxWidth,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-          ),
           if (_pending.isNotEmpty || _processingCount > 0)
             _PendingAttachmentsRow(
               pending: _pending,
@@ -456,6 +438,99 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
           ),
         ],
       );
+
+      final Widget panel;
+      if (isEmpty && widget.emptyState != null) {
+        // The Plan tab before a word is typed. The gate is HEIGHT — the
+        // thing that runs out — never width. Below the floor (a phone, an
+        // open keyboard) the composer keeps the floor and the intro
+        // scrolls, exactly as _PlanIntro's old field rule arranged. At or
+        // above it the composer joins the block as [intro, gap,
+        // composer], placed by _kComposerGroupBias. The scroll wrapper only
+        // ever runs when text scaling makes the group taller than the
+        // field.
+        panel = constraints.maxHeight < _kComposerJoinFloor
+            ? Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.only(top: AppSpacing.xl),
+                      child: widget.emptyState!,
+                    ),
+                  ),
+                  composer,
+                ],
+              )
+            : Align(
+                alignment: const Alignment(0, _kComposerGroupBias),
+                // Loose constraints from Align, so the group shrink-wraps
+                // unless the largest text scales make it taller than the
+                // field — then it scrolls instead of overflowing.
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      widget.emptyState!,
+                      const SizedBox(height: AppSpacing.lg),
+                      composer,
+                    ],
+                  ),
+                ),
+              );
+      } else {
+        panel = Column(
+          children: [
+            Expanded(
+              child: isEmpty
+                  ? const SizedBox.shrink()
+                  // SelectionArea wraps only the message list: the composer's
+                  // TextField below has native selection and must keep its own
+                  // gesture handling.
+                  : SelectionArea(
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: _onScrollNotification,
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.lg,
+                              vertical: AppSpacing.md),
+                          itemCount: messages.length + 1,
+                          itemBuilder: (context, i) {
+                            if (i < messages.length) {
+                              final msg = messages[i];
+                              // Labeled messages (e.g. the machine-built refine
+                              // seed) collapse to a context chip; the full content
+                              // still went to the server history.
+                              if (msg.displayLabel != null) {
+                                return _SeedContextChip(
+                                  key: ValueKey('msg-$i'),
+                                  label: msg.displayLabel!,
+                                );
+                              }
+                              // Append-only list, so index keys are stable.
+                              return ChatMessageBubble(
+                                key: ValueKey('msg-$i'),
+                                message: msg,
+                                maxWidth: bubbleMaxWidth,
+                              );
+                            }
+                            return _ChatTail(
+                              key: const ValueKey('chat-tail'),
+                              state: widget.state,
+                              notifier: widget.notifier,
+                              footerBuilder: widget.footerBuilder,
+                              onViewTrip: widget.onViewTrip,
+                              bubbleMaxWidth: bubbleMaxWidth,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+            ),
+            composer,
+          ],
+        );
+      }
 
       // DropTarget is a no-op on platforms without drag-drop (mobile), so the
       // wrap is unconditional. The overlay invites the drop while a drag
@@ -1113,8 +1188,7 @@ class _ResultStrips extends ConsumerWidget {
                 onTap: event.url.isEmpty
                     ? null
                     : () => trackedLaunchUrl(context, event.url,
-                        provider: 'ticketmaster',
-                        surface: 'chat_event_card'),
+                        provider: 'ticketmaster', surface: 'chat_event_card'),
                 onAddToTrip: signedIn
                     ? () => addToTrip(AddToTripPayload.fromEvent(event))
                     : null,
@@ -1124,9 +1198,9 @@ class _ResultStrips extends ConsumerWidget {
       if (r.parkingSpots != null && r.parkingSpots!.isNotEmpty)
         PlacePhotoStrip(
           icon: Icons.local_parking,
-          accent: AppColors.toolParking(scheme.brightness),
-          label: label(l10n.chatStripParking(r.parkingSpots!.length),
-              r.parkingBeach),
+          accent: AppColors.toolParking,
+          label: label(
+              l10n.chatStripParking(r.parkingSpots!.length), r.parkingBeach),
           onViewTrip: onHeaderTap,
           cards: [
             for (final spot in r.parkingSpots!.take(_maxCards))
