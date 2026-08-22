@@ -44,7 +44,7 @@ type Finding struct {
 // Populated deterministically inside the same checkX helper that emits the
 // finding — never a live/external lookup.
 type FindingFix struct {
-	Action          string  `json:"action"` // add_lodging|add_transport|move_item|mark_booked|add_packing|set_dates|raise_budget
+	Action          string  `json:"action"` // add_lodging|add_transport|move_item|mark_booked|add_packing|set_dates|raise_budget|fix_segment
 	Label           string  `json:"label"`  // human button label, e.g. "Add a stay", "Add ferry", "Move to Day 3"
 	ItemID          *string `json:"item_id,omitempty"`
 	EntityType      *string `json:"entity_type,omitempty"` // "accommodation"|"segment" — disambiguates a bookings ItemID
@@ -98,6 +98,7 @@ func reviewTrip(ctx context.Context, locale string, data exportData, opts review
 	findings = append(findings, checkDensity(locale, data)...)
 	findings = append(findings, checkLodging(locale, data)...)
 	findings = append(findings, checkTransit(locale, data)...)
+	findings = append(findings, checkStaleTransport(locale, data)...)
 	findings = append(findings, checkBudget(locale, data, opts.Budget)...)
 	findings = append(findings, checkBookings(locale, data)...)
 	findings = append(findings, checkWeather(ctx, locale, data, deps.Weather)...)
@@ -946,6 +947,160 @@ func hasWord(s, w string) bool {
 		}
 	}
 	return false
+}
+
+// checkStaleTransport is checkTransit's inverse. checkTransit walks adjacent
+// leg pairs asking whether any segment CONNECTS them, and flags the gap; this
+// walks the trip's own segments asking whether each still connects an
+// adjacent pair, and flags the ones the route left behind. The trigger shape:
+// a city inserted mid-route (Naples between Gothenburg and Sorrento) leaves
+// the confirmed Gothenburg → Sorrento flight naming a pair that is no longer
+// adjacent — exempt from the draft resync, which by design never touches
+// confirmed rows, so nothing else ever notices.
+//
+// It reports and nothing more. An orphaned booking's endpoints are facts
+// about a reservation the traveler holds, so they are never rewritten,
+// re-dated or removed here — degrade, never invent.
+//
+// The rule errs toward silence, because a wrong "your booking is stale" sends
+// the traveler to re-check a reservation that is fine:
+//   - drafts (auto = true) are the resync's to prune; flagging double-reports
+//   - dismissed rows are already dealt with
+//   - a segment whose endpoints are not both legs of the trip — the flight
+//     out of the home airport, a connection city — is none of the route's
+//     business
+//   - "connects" is the shared segmentConnects predicate, fuzzyMatch and all;
+//     a second, stricter copy would be exactly the divergence the Go/Dart
+//     twin rule exists to prevent
+func checkStaleTransport(locale string, d exportData) []Finding {
+	groups := groupExportItems(d.Trip, d.Items)
+	var hubs []string
+	for _, g := range groups {
+		if g.Hub == "" || g.Hub == "Itinerary" {
+			continue
+		}
+		hubs = append(hubs, g.Hub)
+	}
+	if len(hubs) < 2 {
+		return nil
+	}
+	tripID := d.Trip.ID.String()
+	var out []Finding
+	for _, seg := range d.Segments {
+		if seg.Auto || seg.Dismissed {
+			continue
+		}
+		origin := strings.TrimSpace(strPtrVal(seg.Origin))
+		dest := strings.TrimSpace(strPtrVal(seg.Destination))
+		if origin == "" || dest == "" {
+			continue
+		}
+		if !namesLeg(hubs, origin) || !namesLeg(hubs, dest) {
+			continue
+		}
+		one := []store.TripSegment{seg}
+		connected := false
+		for i := 1; i < len(hubs); i++ {
+			if strings.EqualFold(hubs[i-1], hubs[i]) {
+				continue
+			}
+			if segmentConnects(one, hubs[i-1], hubs[i]) {
+				connected = true
+				break
+			}
+		}
+		if connected {
+			continue
+		}
+		name := origin + " → " + dest
+		msg := tr(locale, "review.staleTransport", name)
+		if depart, ok := staleDateEvidence(d.Trip, d.Items, hubs, seg); ok {
+			msg += tr(locale, "review.staleTransportDates",
+				localizedDate(locale, depart, dateStyleWeekdayMonthDay))
+		}
+		id := seg.ID.String()
+		fix := &FindingFix{
+			Action: "fix_segment", Label: tr(locale, "review.fix.reviewSegment"),
+			ItemID: &id, EntityType: ptrTo("segment"),
+			Origin: &origin, Destination: &dest, Mode: ptrTo(seg.Mode),
+		}
+		if seg.DepartDate.Valid {
+			fix.Date = ptrTo(seg.DepartDate.Time.Format(dateLayout))
+		}
+		out = append(out, Finding{
+			Severity: "warn", Category: "transit", TripID: tripID,
+			Message: msg, ItemID: &id, Fix: fix,
+		})
+	}
+	return out
+}
+
+// namesLeg reports whether a segment endpoint names one of the trip's legs,
+// under the same fuzzyMatch the connects predicate uses.
+func namesLeg(hubs []string, endpoint string) bool {
+	e := strings.ToLower(endpoint)
+	for _, hub := range hubs {
+		if fuzzyMatch(e, strings.ToLower(hub)) {
+			return true
+		}
+	}
+	return false
+}
+
+// staleDateEvidence reports whether the segment's departure falls outside the
+// date span of EVERY leg it names — supporting evidence that rides along on
+// the orphan finding's message, never its trigger: a confirmed segment can
+// legitimately depart a day early, so a date mismatch alone flags nothing.
+func staleDateEvidence(trip store.Trip, items []store.ItineraryItem, hubs []string, seg store.TripSegment) (time.Time, bool) {
+	if !seg.DepartDate.Valid {
+		return time.Time{}, false
+	}
+	depart := seg.DepartDate.Time
+	o := strings.ToLower(strings.TrimSpace(strPtrVal(seg.Origin)))
+	dst := strings.ToLower(strings.TrimSpace(strPtrVal(seg.Destination)))
+	anySpan := false
+	for _, hub := range hubs {
+		h := strings.ToLower(hub)
+		if !fuzzyMatch(o, h) && !fuzzyMatch(dst, h) {
+			continue
+		}
+		lo, hi, ok := hubDateSpan(trip, items, hub)
+		if !ok {
+			continue
+		}
+		anySpan = true
+		if !depart.Before(lo) && !depart.After(hi) {
+			return time.Time{}, false
+		}
+	}
+	if !anySpan {
+		return time.Time{}, false
+	}
+	return depart, true
+}
+
+// hubDateSpan is the min→max of a hub's dated items — the span of the leg as
+// the page renders it.
+func hubDateSpan(trip store.Trip, items []store.ItineraryItem, hub string) (time.Time, time.Time, bool) {
+	var lo, hi time.Time
+	found := false
+	for _, it := range items {
+		if !strings.EqualFold(itemHub(it), hub) {
+			continue
+		}
+		dt, ok := itemStartDate(trip, it)
+		if !ok {
+			continue
+		}
+		if !found || dt.Before(lo) {
+			lo = dt
+		}
+		if !found || dt.After(hi) {
+			hi = dt
+		}
+		found = true
+	}
+	return lo, hi, found
 }
 
 // checkBudget flags a trip whose spending exceeds its target — or, failing
