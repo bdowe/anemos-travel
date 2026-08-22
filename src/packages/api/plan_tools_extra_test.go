@@ -354,6 +354,190 @@ func TestBookingTodoToolsRefuseAutoRows(t *testing.T) {
 	}
 }
 
+// seedTodoOption saves a booking-shortlist candidate off the given todo (00065:
+// booking_options CASCADEs off booking_todos, so a delete destroys it).
+func seedTodoOption(t *testing.T, tripID, todoID uuid.UUID, title string) {
+	t.Helper()
+	if _, err := dbPool.Exec(context.Background(),
+		`INSERT INTO booking_options (trip_id, booking_todo_id, title) VALUES ($1, $2, $3)`,
+		tripID, todoID, title); err != nil {
+		t.Fatalf("seed option: %v", err)
+	}
+}
+
+// seedTodoExpense links a paid budget expense to the given todo via 00061's
+// untyped (source_kind, source_id) pair — no FK, so a delete leaves it dangling.
+func seedTodoExpense(t *testing.T, tripID, todoID uuid.UUID) {
+	t.Helper()
+	if _, err := dbPool.Exec(context.Background(),
+		`INSERT INTO trip_expenses (trip_id, label, amount, actual_amount, source_kind, source_id)
+		 VALUES ($1, 'Flight deposit', 120, 120, 'booking_todo', $2)`,
+		tripID, todoID); err != nil {
+		t.Fatalf("seed expense: %v", err)
+	}
+}
+
+func countTodoRows(t *testing.T, id uuid.UUID) int {
+	t.Helper()
+	var n int
+	if err := dbPool.QueryRow(context.Background(),
+		`SELECT count(*) FROM booking_todos WHERE id = $1`, id).Scan(&n); err != nil {
+		t.Fatalf("count todo: %v", err)
+	}
+	return n
+}
+
+// A booked manual row is the production case (agent_booking_todo_removed,
+// 2026-08-20 20:49:43 UTC, trip 4a72c44c): the agent hard-deleted the app's
+// last record of a reservation the traveler actually holds. The tool must
+// refuse, naming the reservation risk and the confirm path.
+func TestRemoveBookingTodoToolRefusesBookedRow(t *testing.T) {
+	resetDB(t)
+	owner, _ := createTestUser(t, "agent@example.com")
+	trip := createTestTrip(t, owner.ID, 1)
+	seed, _ := testPlanSession(true, owner.ID)
+	todoID := seedAgentTodo(t, seed, trip.ID, "Book flights Gothenburg to Sorrento")
+	if _, err := dbPool.Exec(context.Background(),
+		`UPDATE booking_todos SET booked = true WHERE id = $1`, todoID); err != nil {
+		t.Fatalf("mark booked: %v", err)
+	}
+
+	s, rec := testPlanSession(true, owner.ID)
+	msg, isErr := runRemoveBookingTodoTool(s,
+		json.RawMessage(`{"trip_id":"`+trip.ID.String()+`","todo_id":"`+todoID.String()+`"}`))
+	if !isErr {
+		t.Fatalf("booked row removed without confirm: %q", msg)
+	}
+	for _, want := range []string{
+		`"Book flights Gothenburg to Sorrento"`, // names the row
+		"booked",
+		"reservation",
+		"only the traveler can cancel",
+		"confirm: true", // names the call that works
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("refusal missing %q:\n%s", want, msg)
+		}
+	}
+	if strings.Contains(rec.Body.String(), "trip_updated") {
+		t.Fatal("refusal emitted trip_updated")
+	}
+	if n := countTodoRows(t, todoID); n != 1 {
+		t.Fatalf("refusal deleted the row (n=%d)", n)
+	}
+}
+
+// The rest of the demote predicate (minus mode): a saved shortlist and a
+// linked expense are also state a hard delete silently destroys.
+func TestRemoveBookingTodoToolRefusesOptionAndExpenseRows(t *testing.T) {
+	resetDB(t)
+	owner, _ := createTestUser(t, "agent@example.com")
+	trip := createTestTrip(t, owner.ID, 1)
+	seed, _ := testPlanSession(true, owner.ID)
+	s, rec := testPlanSession(true, owner.ID)
+
+	optTodo := seedAgentTodo(t, seed, trip.ID, "Book Naples stay")
+	seedTodoOption(t, trip.ID, optTodo, "Loft near Old Town")
+	seedTodoOption(t, trip.ID, optTodo, "B&B by the port")
+
+	expTodo := seedAgentTodo(t, seed, trip.ID, "Book Sorrento ferry")
+	seedTodoExpense(t, trip.ID, expTodo)
+
+	rec.Body.Reset()
+	msg, isErr := runRemoveBookingTodoTool(s,
+		json.RawMessage(`{"trip_id":"`+trip.ID.String()+`","todo_id":"`+optTodo.String()+`"}`))
+	if !isErr {
+		t.Fatalf("shortlist row removed without confirm: %q", msg)
+	}
+	for _, want := range []string{`"Book Naples stay"`, "shortlist", "2 options", "confirm: true"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("shortlist refusal missing %q:\n%s", want, msg)
+		}
+	}
+
+	rec.Body.Reset()
+	msg, isErr = runRemoveBookingTodoTool(s,
+		json.RawMessage(`{"trip_id":"`+trip.ID.String()+`","todo_id":"`+expTodo.String()+`"}`))
+	if !isErr {
+		t.Fatalf("expense-linked row removed without confirm: %q", msg)
+	}
+	for _, want := range []string{`"Book Sorrento ferry"`, "expense", "confirm: true"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("expense refusal missing %q:\n%s", want, msg)
+		}
+	}
+
+	if strings.Contains(rec.Body.String(), "trip_updated") {
+		t.Fatal("refusal emitted trip_updated")
+	}
+	if countTodoRows(t, optTodo) != 1 || countTodoRows(t, expTodo) != 1 {
+		t.Fatal("refusal deleted a row")
+	}
+}
+
+// confirm: true is the escape hatch: the delete proceeds and the result names
+// the row and what went with it (replace_leg's name-it-back idiom).
+func TestRemoveBookingTodoToolConfirmDeletesStateRow(t *testing.T) {
+	resetDB(t)
+	owner, _ := createTestUser(t, "agent@example.com")
+	trip := createTestTrip(t, owner.ID, 1)
+	seed, _ := testPlanSession(true, owner.ID)
+	s, rec := testPlanSession(true, owner.ID)
+
+	todoID := seedAgentTodo(t, seed, trip.ID, "Book flights Gothenburg to Sorrento")
+	if _, err := dbPool.Exec(context.Background(),
+		`UPDATE booking_todos SET booked = true WHERE id = $1`, todoID); err != nil {
+		t.Fatalf("mark booked: %v", err)
+	}
+	seedTodoOption(t, trip.ID, todoID, "Ryanair FR123")
+	seedTodoOption(t, trip.ID, todoID, "Norwegian DY456")
+	seedTodoExpense(t, trip.ID, todoID)
+
+	rec.Body.Reset()
+	msg, isErr := runRemoveBookingTodoTool(s,
+		json.RawMessage(`{"trip_id":"`+trip.ID.String()+`","todo_id":"`+todoID.String()+`","confirm":true}`))
+	if isErr {
+		t.Fatalf("confirmed remove refused: %q", msg)
+	}
+	for _, want := range []string{
+		`"Book flights Gothenburg to Sorrento"`, // names the row
+		"shortlist",  // what went with it
+		"expense",    // what went with it
+		"not cancel", // the provider-side reservation warning
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("confirmed result missing %q:\n%s", want, msg)
+		}
+	}
+	if !strings.Contains(rec.Body.String(), "trip_updated") {
+		t.Fatal("confirmed remove did not emit trip_updated")
+	}
+	if n := countTodoRows(t, todoID); n != 0 {
+		t.Fatalf("confirmed remove left the row (n=%d)", n)
+	}
+	var optCount int
+	if err := dbPool.QueryRow(context.Background(),
+		`SELECT count(*) FROM booking_options WHERE booking_todo_id = $1`, todoID).Scan(&optCount); err != nil || optCount != 0 {
+		t.Fatalf("shortlist survived the cascade (n=%d, err=%v)", optCount, err)
+	}
+	// The expense survives, dangling by design (00061 has no FK).
+	var expCount int
+	if err := dbPool.QueryRow(context.Background(),
+		`SELECT count(*) FROM trip_expenses WHERE source_kind = 'booking_todo' AND source_id = $1`, todoID).Scan(&expCount); err != nil || expCount != 1 {
+		t.Fatalf("linked expense gone (n=%d, err=%v)", expCount, err)
+	}
+
+	// confirm on a plain row is still the ordinary happy path.
+	plainID := seedAgentTodo(t, seed, trip.ID, "Book travel insurance")
+	if msg, isErr := runRemoveBookingTodoTool(s,
+		json.RawMessage(`{"trip_id":"`+trip.ID.String()+`","todo_id":"`+plainID.String()+`","confirm":true}`)); isErr {
+		t.Fatalf("confirmed plain remove refused: %q", msg)
+	}
+	if n := countTodoRows(t, plainID); n != 0 {
+		t.Fatalf("confirmed plain remove left the row (n=%d)", n)
+	}
+}
+
 // boundPlanSession is testPlanSession bound to a trip the caller owns — the
 // setup the three trip-acting tools require.
 func boundPlanSession(uid, tripID uuid.UUID) (*planSession, *httptest.ResponseRecorder) {
