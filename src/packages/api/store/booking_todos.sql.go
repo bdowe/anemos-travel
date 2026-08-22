@@ -141,6 +141,36 @@ func (q *Queries) DeleteBookingTodoNonAuto(ctx context.Context, arg DeleteBookin
 	return result.RowsAffected(), nil
 }
 
+const deleteCleanAutoBookingTodoByKey = `-- name: DeleteCleanAutoBookingTodoByKey :execrows
+DELETE FROM booking_todos b
+WHERE b.trip_id = $1 AND b.todo_key = $2
+  AND b.auto = true AND b.booked = false AND b.mode IS NULL
+  AND NOT EXISTS (SELECT 1 FROM booking_options o WHERE o.booking_todo_id = b.id)
+  AND NOT EXISTS (
+        SELECT 1 FROM trip_expenses e
+        WHERE e.trip_id = b.trip_id
+          AND e.source_kind = 'booking_todo' AND e.source_id = b.id)
+`
+
+type DeleteCleanAutoBookingTodoByKeyParams struct {
+	TripID  uuid.UUID `json:"trip_id"`
+	TodoKey string    `json:"todo_key"`
+}
+
+// Clears the way for MigrateBookingTodoLeg: removes the auto row holding the
+// target key, but only while it is provably disposable — unbooked, no mode
+// choice, no shortlist, no expense link (the same four kinds of traveler
+// state DemoteStaleAutoBookingTodos protects). A state-carrying holder
+// survives, and MigrateBookingTodoLeg's own NOT EXISTS guard then refuses
+// the move: merging two traveler-claimed rows is the traveler's call.
+func (q *Queries) DeleteCleanAutoBookingTodoByKey(ctx context.Context, arg DeleteCleanAutoBookingTodoByKeyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCleanAutoBookingTodoByKey, arg.TripID, arg.TodoKey)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteStaleAutoBookingTodos = `-- name: DeleteStaleAutoBookingTodos :execrows
 DELETE FROM booking_todos
 WHERE trip_id = $1 AND auto = true AND todo_key <> ALL($2::text[])
@@ -382,6 +412,93 @@ func (q *Queries) ListHomeBookingTodos(ctx context.Context, tripID uuid.UUID) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const migrateBookingTodoLeg = `-- name: MigrateBookingTodoLeg :one
+UPDATE booking_todos b
+SET todo_key = $1,
+    origin_label = $2,
+    destination_label = $3,
+    title = $4,
+    depart_date = $5,
+    search_url = $6,
+    provider = $7,
+    derived_mode = $8
+WHERE b.id = $9 AND b.trip_id = $10
+  AND b.auto = false AND b.kind = 'transport'
+  AND NOT EXISTS (
+        SELECT 1 FROM booking_todos x
+        WHERE x.trip_id = b.trip_id AND x.todo_key = $1 AND x.id <> b.id)
+RETURNING id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label, derived_mode
+`
+
+type MigrateBookingTodoLegParams struct {
+	TodoKey          string      `json:"todo_key"`
+	OriginLabel      *string     `json:"origin_label"`
+	DestinationLabel *string     `json:"destination_label"`
+	Title            string      `json:"title"`
+	DepartDate       pgtype.Date `json:"depart_date"`
+	SearchUrl        *string     `json:"search_url"`
+	Provider         *string     `json:"provider"`
+	DerivedMode      *string     `json:"derived_mode"`
+	ID               uuid.UUID   `json:"id"`
+	TripID           uuid.UUID   `json:"trip_id"`
+}
+
+// Re-keys a MANUAL (auto = false) transport todo onto the leg that replaced
+// it after the route changed — todo_key, labels, title, depart_date, provider,
+// search_url and derived_mode recomputed for the new leg — preserving the row
+// id, so booked, mode, position, the booking_options shortlist (CASCADE off
+// this id) and any trip_expenses.source_id link all ride along. Create-new +
+// delete-old would silently destroy the shortlist and dangle the money — the
+// exact losses DemoteStaleAutoBookingTodos's docstring enumerates — and
+// UpdateBookingTodo cannot do this (auto = false only, no key/label columns);
+// a migration is a different act with its own guard.
+//
+// The statement's own guards: the row must be a manual transport row of this
+// trip, and the target key must be FREE. The handler deletes a clean auto
+// holder first (DeleteCleanAutoBookingTodoByKey), so a holder that survives
+// to this statement is by definition state-carrying and the update refuses.
+// The "refuse when the todo's pair is still adjacent" guard lives in Go
+// (booking_todo_migrate.go): adjacency is a fact about the itinerary, which
+// SQL cannot see.
+func (q *Queries) MigrateBookingTodoLeg(ctx context.Context, arg MigrateBookingTodoLegParams) (BookingTodo, error) {
+	row := q.db.QueryRow(ctx, migrateBookingTodoLeg,
+		arg.TodoKey,
+		arg.OriginLabel,
+		arg.DestinationLabel,
+		arg.Title,
+		arg.DepartDate,
+		arg.SearchUrl,
+		arg.Provider,
+		arg.DerivedMode,
+		arg.ID,
+		arg.TripID,
+	)
+	var i BookingTodo
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Kind,
+		&i.TodoKey,
+		&i.Title,
+		&i.Subtitle,
+		&i.Provider,
+		&i.SearchUrl,
+		&i.DepartDate,
+		&i.ReturnDate,
+		&i.Booked,
+		&i.Auto,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Mode,
+		&i.Role,
+		&i.OriginLabel,
+		&i.DestinationLabel,
+		&i.DerivedMode,
+	)
+	return i, err
 }
 
 const relabelHomeBookingTodo = `-- name: RelabelHomeBookingTodo :one

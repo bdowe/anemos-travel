@@ -44,20 +44,22 @@ type Finding struct {
 // Populated deterministically inside the same checkX helper that emits the
 // finding — never a live/external lookup.
 type FindingFix struct {
-	Action          string  `json:"action"` // add_lodging|add_transport|move_item|mark_booked|add_packing|set_dates|raise_budget|fix_segment
-	Label           string  `json:"label"`  // human button label, e.g. "Add a stay", "Add ferry", "Move to Day 3"
-	ItemID          *string `json:"item_id,omitempty"`
-	EntityType      *string `json:"entity_type,omitempty"` // "accommodation"|"segment" — disambiguates a bookings ItemID
-	TargetDay       *int    `json:"target_day,omitempty"`
-	City            *string `json:"city,omitempty"`
-	Origin          *string `json:"origin,omitempty"`
-	Destination     *string `json:"destination,omitempty"`
-	CheckIn         *string `json:"check_in,omitempty"`  // YYYY-MM-DD
-	CheckOut        *string `json:"check_out,omitempty"` // YYYY-MM-DD
-	Date            *string `json:"date,omitempty"`      // YYYY-MM-DD
-	Mode            *string `json:"mode,omitempty"`      // ferry|flight|train|bus|car
-	PackingItem     *string `json:"packing_item,omitempty"`
-	PackingCategory *string `json:"packing_category,omitempty"`
+	Action            string  `json:"action"` // add_lodging|add_transport|move_item|mark_booked|add_packing|set_dates|raise_budget|fix_segment|migrate_booking
+	Label             string  `json:"label"`  // human button label, e.g. "Add a stay", "Add ferry", "Move to Day 3"
+	ItemID            *string `json:"item_id,omitempty"`
+	EntityType        *string `json:"entity_type,omitempty"` // "accommodation"|"segment"|"booking_todo" — disambiguates a bookings ItemID
+	TargetDay         *int    `json:"target_day,omitempty"`
+	City              *string `json:"city,omitempty"`
+	Origin            *string `json:"origin,omitempty"`
+	Destination       *string `json:"destination,omitempty"`
+	TargetOrigin      *string `json:"target_origin,omitempty"`      // migrate_booking: the replacement leg's endpoints
+	TargetDestination *string `json:"target_destination,omitempty"` // (Origin/Destination stay the flagged row's own)
+	CheckIn           *string `json:"check_in,omitempty"`           // YYYY-MM-DD
+	CheckOut          *string `json:"check_out,omitempty"`          // YYYY-MM-DD
+	Date              *string `json:"date,omitempty"`               // YYYY-MM-DD
+	Mode              *string `json:"mode,omitempty"`               // ferry|flight|train|bus|car
+	PackingItem       *string `json:"packing_item,omitempty"`
+	PackingCategory   *string `json:"packing_category,omitempty"`
 }
 
 // ptrTo returns a pointer to v — a tiny helper for populating FindingFix's
@@ -99,6 +101,7 @@ func reviewTrip(ctx context.Context, locale string, data exportData, opts review
 	findings = append(findings, checkLodging(locale, data)...)
 	findings = append(findings, checkTransit(locale, data)...)
 	findings = append(findings, checkStaleTransport(locale, data)...)
+	findings = append(findings, checkStaleBookedTodos(locale, data)...)
 	findings = append(findings, checkBudget(locale, data, opts.Budget)...)
 	findings = append(findings, checkBookings(locale, data)...)
 	findings = append(findings, checkWeather(ctx, locale, data, deps.Weather)...)
@@ -1101,6 +1104,131 @@ func hubDateSpan(trip store.Trip, items []store.ItineraryItem, hub string) (time
 		found = true
 	}
 	return lo, hi, found
+}
+
+// todoLegPlacement answers, in one scan, the two questions the booked-todo
+// orphan rule asks of one endpoint pair: does it connect any adjacent hub
+// pair (either direction — a hand-entered row may read backwards), and when
+// it does not, which adjacent pair should replace it (the first hop out of
+// the same city — pair whose ORIGIN matches the todo's origin hub — else the
+// pair whose destination matches). checkStaleBookedTodos reads the answers to
+// flag; migrateBookingTodo reads them to guard. ONE scan, so the finding and
+// the write can never disagree about what is still adjacent — and it reuses
+// fuzzyMatch, the shared connects predicate, rather than growing a second one.
+func todoLegPlacement(hubs []string, origin, dest string) (connected bool, replFrom, replTo string) {
+	o, dst := strings.ToLower(origin), strings.ToLower(dest)
+	for i := 1; i < len(hubs); i++ {
+		from, to := hubs[i-1], hubs[i]
+		if strings.EqualFold(from, to) {
+			continue
+		}
+		f, t := strings.ToLower(from), strings.ToLower(to)
+		if fuzzyMatch(o, f) && fuzzyMatch(dst, t) || fuzzyMatch(o, t) && fuzzyMatch(dst, f) {
+			connected = true
+		}
+		if replFrom == "" && fuzzyMatch(o, f) {
+			replFrom, replTo = from, to
+		}
+	}
+	if connected || replFrom != "" {
+		return connected, replFrom, replTo
+	}
+	for i := 1; i < len(hubs); i++ {
+		from, to := hubs[i-1], hubs[i]
+		if strings.EqualFold(from, to) {
+			continue
+		}
+		if fuzzyMatch(dst, strings.ToLower(to)) {
+			return false, from, to
+		}
+	}
+	return false, "", ""
+}
+
+// checkStaleBookedTodos is checkStaleTransport's todo-layer twin — the shape
+// the production audit (2026-08-22) found actually survives in the wild: the
+// route changed, the booked todo encoding the reservation's endpoints was
+// pruned with it, and the traveler re-ticked "booked" on the replacement row
+// whose endpoints they do not hold. The trip reads "all clean" — checkTransit
+// sees every pair connected, checkStaleTransport reads segments (there are
+// none) — and is wrong.
+//
+// The orphan that survives: a BOOKED, non-auto transport todo whose endpoints
+// connect no adjacent leg pair. The conservatism is the segment check's own,
+// for the same reason — a wrong "your booking is stale" sends the traveler to
+// re-check a reservation that is fine:
+//   - auto rows are the sync's to prune; flagging double-reports
+//   - an UNBOOKED manual orphan risks nothing but tidiness — silent
+//   - @home roles name the trip's endpoints, not a city pair the route owes
+//   - a row whose endpoints are not both legs of the trip — the flight out of
+//     the home airport — is none of the route's business
+//   - "connects" is the shared legEndpoints/fuzzyMatch ladder, either
+//     direction (a hand-entered row may read backwards); a second predicate
+//     would be exactly the divergence the Go/Dart twin rule exists to prevent
+//
+// The finding reports and offers, never moves: when a replacement leg exists —
+// the adjacent pair whose ORIGIN matches the todo's origin hub (the first hop
+// out of the same city), else the pair whose destination matches — the fix
+// names both pairs and carries the replacement's date, and the traveler (or
+// the agent, via migrate_booking_todo) makes the move. With no replacement the
+// finding offers nothing: keep/remove already live on the residual row.
+func checkStaleBookedTodos(locale string, d exportData) []Finding {
+	groups := groupExportItems(d.Trip, d.Items)
+	var hubs []string
+	for _, g := range groups {
+		if g.Hub == "" || g.Hub == "Itinerary" {
+			continue
+		}
+		hubs = append(hubs, g.Hub)
+	}
+	if len(hubs) < 2 {
+		return nil
+	}
+	tripID := d.Trip.ID.String()
+	var out []Finding
+	for _, todo := range d.BookingTodos {
+		if !todo.Booked || todo.Auto || todo.Kind != "transport" {
+			continue
+		}
+		if isHomeRole(strPtrVal(todo.Role)) {
+			continue
+		}
+		origin, dest, ok := legEndpoints(todo)
+		if !ok || strings.EqualFold(origin, dest) {
+			continue
+		}
+		if !namesLeg(hubs, origin) || !namesLeg(hubs, dest) {
+			continue
+		}
+		connected, replFrom, replTo := todoLegPlacement(hubs, origin, dest)
+		if connected {
+			continue
+		}
+		id := todo.ID.String()
+		f := Finding{
+			Severity: "warn", Category: "transit", TripID: tripID, ItemID: &id,
+			Message: tr(locale, "review.staleBookedTodo", origin+" → "+dest),
+		}
+		if replFrom != "" {
+			fix := &FindingFix{
+				Action: "migrate_booking",
+				ItemID: &id, EntityType: ptrTo("booking_todo"),
+				Origin: &origin, Destination: &dest,
+				TargetOrigin: &replFrom, TargetDestination: &replTo,
+			}
+			newName := replFrom + " → " + replTo
+			if dt, ok := hubFirstDate(d.Trip, d.Items, replTo); ok {
+				fix.Date = ptrTo(dt.Format(dateLayout))
+				fix.Label = tr(locale, "review.fix.moveBooking", newName,
+					localizedDate(locale, dt, dateStyleWeekdayMonthDay))
+			} else {
+				fix.Label = tr(locale, "review.fix.moveBookingNoDate", newName)
+			}
+			f.Fix = fix
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // checkBudget flags a trip whose spending exceeds its target — or, failing

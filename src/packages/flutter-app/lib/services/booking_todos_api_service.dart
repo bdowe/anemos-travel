@@ -121,4 +121,22 @@ class BookingTodosApiService {
       throw Exception('Failed to delete booking todo (${res.statusCode})');
     }
   }
+
+  /// Moves a booked manual transport todo onto the leg that replaced its
+  /// endpoints (the Trip Health migrate_booking fix). The server re-keys the
+  /// SAME row — the booked tick, any saved shortlist and any expense link
+  /// all carry over — and answers 409 when its guard refuses (the row's
+  /// places are still consecutive stops, no replacement leg exists, or the
+  /// target leg is already claimed by a row with traveler state).
+  Future<BookingTodo> migrate(String tripId, String todoId) async {
+    final res = await apiClient.httpClient.post(
+      Uri.parse(
+          '${apiClient.baseUrl}/trips/$tripId/booking-todos/$todoId/migrate'),
+      headers: apiClient.jsonHeaders(),
+    );
+    if (res.statusCode == 200) {
+      return BookingTodo.fromJson(jsonDecode(res.body));
+    }
+    throw Exception('Failed to move booking todo (${res.statusCode})');
+  }
 }

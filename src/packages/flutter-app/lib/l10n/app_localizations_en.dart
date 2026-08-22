@@ -2101,6 +2101,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripMarkedAsBooked => 'Marked as booked';
 
   @override
+  String tripBookingMoved(String leg) {
+    return 'Booking moved to $leg';
+  }
+
+  @override
   String tripAddedToPacking(String item) {
     return 'Added \"$item\" to packing';
   }
@@ -2960,6 +2965,12 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get reviewHoursCheckFailed =>
       'Couldn\'t check opening hours — try again.';
+
+  @override
+  String get reviewMigrationTitle => 'Move this booking?';
+
+  @override
+  String get reviewMigrationKeep => 'Keep as other booking';
 
   @override
   String get liveTripStatusLive => 'Live';

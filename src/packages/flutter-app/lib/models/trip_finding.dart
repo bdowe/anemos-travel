@@ -40,9 +40,9 @@ class TripFinding {
 
 /// A structured "fix" for a [TripFinding]: what one-tap action resolves it plus
 /// any prefill hints. [action] is one of add_lodging | add_transport |
-/// move_item | mark_booked | add_packing | set_dates | raise_budget; [label] is
-/// the human button text. Every other field is optional and only present for
-/// the action(s) that use it.
+/// move_item | mark_booked | add_packing | set_dates | raise_budget |
+/// fix_segment | migrate_booking; [label] is the human button text. Every
+/// other field is optional and only present for the action(s) that use it.
 @JsonSerializable()
 class FindingFix {
   final String action;
@@ -51,7 +51,8 @@ class FindingFix {
   @JsonKey(name: 'item_id')
   final String? itemId;
 
-  /// For mark_booked: accommodation | segment.
+  /// For mark_booked: accommodation | segment. For migrate_booking:
+  /// booking_todo.
   @JsonKey(name: 'entity_type')
   final String? entityType;
 
@@ -62,9 +63,17 @@ class FindingFix {
   /// For add_lodging: the city the stay is for.
   final String? city;
 
-  /// For add_transport: leg endpoints.
+  /// For add_transport: leg endpoints. For migrate_booking: the flagged row's
+  /// own (stale) endpoints.
   final String? origin;
   final String? destination;
+
+  /// For migrate_booking: the replacement leg's endpoints (origin/destination
+  /// stay the flagged row's own).
+  @JsonKey(name: 'target_origin')
+  final String? targetOrigin;
+  @JsonKey(name: 'target_destination')
+  final String? targetDestination;
 
   /// For add_lodging: YYYY-MM-DD check-in / check-out.
   @JsonKey(name: 'check_in')
@@ -93,6 +102,8 @@ class FindingFix {
     this.city,
     this.origin,
     this.destination,
+    this.targetOrigin,
+    this.targetDestination,
     this.checkIn,
     this.checkOut,
     this.date,

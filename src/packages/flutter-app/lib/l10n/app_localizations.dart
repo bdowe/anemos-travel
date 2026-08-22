@@ -3668,6 +3668,12 @@ abstract class AppLocalizations {
   /// **'Marked as booked'**
   String get tripMarkedAsBooked;
 
+  /// No description provided for @tripBookingMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking moved to {leg}'**
+  String tripBookingMoved(String leg);
+
   /// No description provided for @tripAddedToPacking.
   ///
   /// In en, this message translates to:
@@ -4975,6 +4981,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t check opening hours — try again.'**
   String get reviewHoursCheckFailed;
+
+  /// No description provided for @reviewMigrationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Move this booking?'**
+  String get reviewMigrationTitle;
+
+  /// No description provided for @reviewMigrationKeep.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep as other booking'**
+  String get reviewMigrationKeep;
 
   /// No description provided for @liveTripStatusLive.
   ///

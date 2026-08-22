@@ -1383,6 +1383,14 @@
     }
   },
   "tripMarkedAsBooked": "Marked as booked",
+  "tripBookingMoved": "Booking moved to {leg}",
+  "@tripBookingMoved": {
+    "placeholders": {
+      "leg": {
+        "type": "String"
+      }
+    }
+  },
   "tripAddedToPacking": "Added \"{item}\" to packing",
   "@tripAddedToPacking": {
     "placeholders": {
@@ -1978,6 +1986,8 @@
   "reviewHoursChecked": "Opening hours checked",
   "reviewCheckHours": "Also check opening hours",
   "reviewHoursCheckFailed": "Couldn't check opening hours — try again.",
+  "reviewMigrationTitle": "Move this booking?",
+  "reviewMigrationKeep": "Keep as other booking",
   "liveTripStatusLive": "Live",
   "liveTripDay": "Day {day}",
   "@liveTripDay": {

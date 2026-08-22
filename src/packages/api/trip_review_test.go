@@ -1270,3 +1270,191 @@ func TestReviewTrip_IncludesStaleTransport(t *testing.T) {
 		t.Fatalf("reviewTrip lost the orphan finding: %+v", fs)
 	}
 }
+
+// --- checkStaleBookedTodos: the booked checklist row the route left behind ----
+//
+// The production shape (stale-transport-orphans/production-audit): the route
+// moved, the booked todo was pruned with it, and the traveler re-ticked
+// "booked" on the replacement row whose endpoints they do not hold. Detection
+// lives on the TODO layer: a booked, non-auto transport todo whose endpoints
+// connect no adjacent leg pair.
+
+// bookedTodoFixtureRow is the orphaned row: booked, manual, Gothenburg →
+// Sorrento over the staleTransportFixture legs (G d1 → N d4 → S d6 → R d8).
+func bookedTodoFixtureRow() store.BookingTodo {
+	return store.BookingTodo{
+		ID: uuid.New(), Kind: "transport", Booked: true, Auto: false,
+		TodoKey:          "transport:gothenburg>>sorrento",
+		Title:            "Gothenburg → Sorrento",
+		OriginLabel:      strp("Gothenburg"),
+		DestinationLabel: strp("Sorrento"),
+		Role:             strp("inter_city"),
+	}
+}
+
+func TestCheckStaleBookedTodos_OrphanWithReplacementOffered(t *testing.T) {
+	d := staleTransportFixture(t)
+	todo := bookedTodoFixtureRow()
+	d.BookingTodos = []store.BookingTodo{todo}
+
+	fs := checkStaleBookedTodos("en", d)
+	if len(fs) != 1 {
+		t.Fatalf("findings = %+v, want the one orphan", fs)
+	}
+	f := fs[0]
+	if f.Severity != "warn" || f.Category != "transit" {
+		t.Fatalf("severity/category = %q/%q", f.Severity, f.Category)
+	}
+	if f.ItemID == nil || *f.ItemID != todo.ID.String() {
+		t.Fatalf("finding must carry the row's id, got %+v", f.ItemID)
+	}
+	if !strings.Contains(f.Message, "Gothenburg → Sorrento") {
+		t.Fatalf("finding must name the row, got %q", f.Message)
+	}
+	if f.Fix == nil || f.Fix.Action != "migrate_booking" {
+		t.Fatalf("fix = %+v, want action migrate_booking", f.Fix)
+	}
+	fix := f.Fix
+	if fix.ItemID == nil || *fix.ItemID != todo.ID.String() ||
+		fix.EntityType == nil || *fix.EntityType != "booking_todo" {
+		t.Fatalf("fix must identify the todo row, got %+v", fix)
+	}
+	if fix.Origin == nil || *fix.Origin != "Gothenburg" ||
+		fix.Destination == nil || *fix.Destination != "Sorrento" {
+		t.Fatalf("fix must carry the row's own endpoints, got %+v", fix)
+	}
+	// The replacement is the first hop out of the same city: Gothenburg →
+	// Naples, departing on Naples' first day.
+	if fix.TargetOrigin == nil || *fix.TargetOrigin != "Gothenburg" ||
+		fix.TargetDestination == nil || *fix.TargetDestination != "Naples" {
+		t.Fatalf("fix must name the replacement leg, got %+v", fix)
+	}
+	if fix.Date == nil || *fix.Date != "2026-09-13" {
+		t.Fatalf("fix must carry the replacement leg's date, got %+v", fix.Date)
+	}
+	if !strings.Contains(fix.Label, "Gothenburg → Naples") {
+		t.Fatalf("label must name the replacement leg, got %q", fix.Label)
+	}
+}
+
+func TestCheckStaleBookedTodos_NoReplacementKeepRemoveOnly(t *testing.T) {
+	d := staleTransportFixture(t)
+	// Rome → Gothenburg names two legs but matches no adjacent pair's origin
+	// or destination, so there is no leg to offer.
+	todo := store.BookingTodo{
+		ID: uuid.New(), Kind: "transport", Booked: true, Auto: false,
+		TodoKey:          "transport:rome>>gothenburg",
+		Title:            "Rome → Gothenburg",
+		OriginLabel:      strp("Rome"),
+		DestinationLabel: strp("Gothenburg"),
+		Role:             strp("inter_city"),
+	}
+	d.BookingTodos = []store.BookingTodo{todo}
+
+	fs := checkStaleBookedTodos("en", d)
+	if len(fs) != 1 {
+		t.Fatalf("findings = %+v, want the one orphan", fs)
+	}
+	if fs[0].Fix != nil {
+		t.Fatalf("no replacement leg means keep/remove only, got fix %+v", fs[0].Fix)
+	}
+}
+
+func TestCheckStaleBookedTodos_AutoRowsSilent(t *testing.T) {
+	d := staleTransportFixture(t)
+	todo := bookedTodoFixtureRow()
+	todo.Auto = true
+	d.BookingTodos = []store.BookingTodo{todo}
+	if fs := checkStaleBookedTodos("en", d); len(fs) != 0 {
+		t.Fatalf("auto rows are the sync's to prune — flagging double-reports: %+v", fs)
+	}
+}
+
+func TestCheckStaleBookedTodos_ConnectedSilent(t *testing.T) {
+	d := staleTransportFixture(t)
+	d.BookingTodos = []store.BookingTodo{
+		{ID: uuid.New(), Kind: "transport", Booked: true,
+			TodoKey: "transport:gothenburg>>naples", Title: "Gothenburg → Naples",
+			OriginLabel: strp("Gothenburg"), DestinationLabel: strp("Naples")},
+		// Either direction counts — a hand-entered row may read backwards.
+		{ID: uuid.New(), Kind: "transport", Booked: true,
+			TodoKey: "transport:rome>>sorrento", Title: "Rome → Sorrento",
+			OriginLabel: strp("Rome"), DestinationLabel: strp("Sorrento")},
+	}
+	if fs := checkStaleBookedTodos("en", d); len(fs) != 0 {
+		t.Fatalf("booked rows connecting adjacent pairs must stay silent: %+v", fs)
+	}
+}
+
+func TestCheckStaleBookedTodos_HomeRolesSilent(t *testing.T) {
+	d := staleTransportFixture(t)
+	// A demoted home leg keeps its role; its labels are the trip's endpoints,
+	// not a city pair the route owes — never flagged, even when they happen to
+	// name two legs that are no longer adjacent.
+	todo := bookedTodoFixtureRow()
+	todo.Role = strp("home_outbound")
+	todo.TodoKey = "transport:@home>>sorrento"
+	d.BookingTodos = []store.BookingTodo{todo}
+	if fs := checkStaleBookedTodos("en", d); len(fs) != 0 {
+		t.Fatalf("@home roles are excluded: %+v", fs)
+	}
+}
+
+func TestCheckStaleBookedTodos_UnbookedSilent(t *testing.T) {
+	d := staleTransportFixture(t)
+	todo := bookedTodoFixtureRow()
+	todo.Booked = false
+	d.BookingTodos = []store.BookingTodo{todo}
+	if fs := checkStaleBookedTodos("en", d); len(fs) != 0 {
+		t.Fatalf("an unbooked orphan is tidiness, not a stale booking: %+v", fs)
+	}
+}
+
+func TestCheckStaleBookedTodos_NonLegPlaceSilent(t *testing.T) {
+	d := staleTransportFixture(t)
+	// The flight out of the home airport: ALB is no leg of this trip, so this
+	// row is none of the route's business.
+	d.BookingTodos = []store.BookingTodo{
+		{ID: uuid.New(), Kind: "transport", Booked: true,
+			TodoKey: "transport:alb>>gothenburg", Title: "ALB → Gothenburg",
+			OriginLabel: strp("ALB"), DestinationLabel: strp("Gothenburg")},
+	}
+	if fs := checkStaleBookedTodos("en", d); len(fs) != 0 {
+		t.Fatalf("rows naming non-leg places must stay silent: %+v", fs)
+	}
+}
+
+func TestCheckStaleBookedTodos_OneOrNoLegs(t *testing.T) {
+	todo := bookedTodoFixtureRow()
+	noLegs := exportData{Trip: store.Trip{ID: uuid.New(),
+		StartDate: dateVal(t, "2026-09-10"), EndDate: dateVal(t, "2026-09-18")},
+		BookingTodos: []store.BookingTodo{todo}}
+	if fs := checkStaleBookedTodos("en", noLegs); len(fs) != 0 {
+		t.Fatalf("no legs, no flags: %+v", fs)
+	}
+}
+
+func TestCheckStaleBookedTodos_Spanish(t *testing.T) {
+	d := staleTransportFixture(t)
+	d.BookingTodos = []store.BookingTodo{bookedTodoFixtureRow()}
+	fs := checkStaleBookedTodos("es", d)
+	if len(fs) != 1 || !strings.Contains(fs[0].Message, "ya no coincide con la ruta") {
+		t.Fatalf("es finding = %+v", fs)
+	}
+}
+
+// The check rides reviewTrip like every other — one call, both surfaces.
+func TestReviewTrip_IncludesStaleBookedTodos(t *testing.T) {
+	d := staleTransportFixture(t)
+	d.BookingTodos = []store.BookingTodo{bookedTodoFixtureRow()}
+	fs := reviewTrip(context.Background(), "en", d, reviewOptions{}, reviewDeps{})
+	found := false
+	for _, f := range fs {
+		if f.Fix != nil && f.Fix.Action == "migrate_booking" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("reviewTrip lost the booked-todo orphan finding: %+v", fs)
+	}
+}

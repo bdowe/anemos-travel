@@ -255,3 +255,53 @@ SELECT b.title, b.booked,
                  AND e.source_kind = 'booking_todo' AND e.source_id = b.id) AS has_expense
 FROM booking_todos b
 WHERE b.id = $1 AND b.trip_id = $2 AND b.auto = false;
+
+-- name: DeleteCleanAutoBookingTodoByKey :execrows
+-- Clears the way for MigrateBookingTodoLeg: removes the auto row holding the
+-- target key, but only while it is provably disposable — unbooked, no mode
+-- choice, no shortlist, no expense link (the same four kinds of traveler
+-- state DemoteStaleAutoBookingTodos protects). A state-carrying holder
+-- survives, and MigrateBookingTodoLeg's own NOT EXISTS guard then refuses
+-- the move: merging two traveler-claimed rows is the traveler's call.
+DELETE FROM booking_todos b
+WHERE b.trip_id = sqlc.arg('trip_id') AND b.todo_key = sqlc.arg('todo_key')
+  AND b.auto = true AND b.booked = false AND b.mode IS NULL
+  AND NOT EXISTS (SELECT 1 FROM booking_options o WHERE o.booking_todo_id = b.id)
+  AND NOT EXISTS (
+        SELECT 1 FROM trip_expenses e
+        WHERE e.trip_id = b.trip_id
+          AND e.source_kind = 'booking_todo' AND e.source_id = b.id);
+
+-- name: MigrateBookingTodoLeg :one
+-- Re-keys a MANUAL (auto = false) transport todo onto the leg that replaced
+-- it after the route changed — todo_key, labels, title, depart_date, provider,
+-- search_url and derived_mode recomputed for the new leg — preserving the row
+-- id, so booked, mode, position, the booking_options shortlist (CASCADE off
+-- this id) and any trip_expenses.source_id link all ride along. Create-new +
+-- delete-old would silently destroy the shortlist and dangle the money — the
+-- exact losses DemoteStaleAutoBookingTodos's docstring enumerates — and
+-- UpdateBookingTodo cannot do this (auto = false only, no key/label columns);
+-- a migration is a different act with its own guard.
+--
+-- The statement's own guards: the row must be a manual transport row of this
+-- trip, and the target key must be FREE. The handler deletes a clean auto
+-- holder first (DeleteCleanAutoBookingTodoByKey), so a holder that survives
+-- to this statement is by definition state-carrying and the update refuses.
+-- The "refuse when the todo's pair is still adjacent" guard lives in Go
+-- (booking_todo_migrate.go): adjacency is a fact about the itinerary, which
+-- SQL cannot see.
+UPDATE booking_todos b
+SET todo_key = sqlc.arg('todo_key'),
+    origin_label = sqlc.narg('origin_label'),
+    destination_label = sqlc.narg('destination_label'),
+    title = sqlc.arg('title'),
+    depart_date = sqlc.narg('depart_date'),
+    search_url = sqlc.narg('search_url'),
+    provider = sqlc.narg('provider'),
+    derived_mode = sqlc.narg('derived_mode')
+WHERE b.id = sqlc.arg('id') AND b.trip_id = sqlc.arg('trip_id')
+  AND b.auto = false AND b.kind = 'transport'
+  AND NOT EXISTS (
+        SELECT 1 FROM booking_todos x
+        WHERE x.trip_id = b.trip_id AND x.todo_key = sqlc.arg('todo_key') AND x.id <> b.id)
+RETURNING *;

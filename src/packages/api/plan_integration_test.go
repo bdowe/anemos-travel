@@ -317,12 +317,12 @@ func TestPlanSetTravelModePersistsWithItinerary(t *testing.T) {
 	if err := json.Unmarshal(reqs[0], &body); err != nil {
 		t.Fatalf("unmarshal request body: %v", err)
 	}
-	// set_trip_description is the newest tail append (specs/trip-description).
-	// It is authed-gated and this is an authed session, so it is last here;
-	// the anonymous shape's tail stays search_hotels (see the pin in
-	// plan_quick_replies_integration_test.go).
-	if n := len(body.Tools); n == 0 || body.Tools[n-1].Name != "set_trip_description" {
-		t.Fatalf("tools tail = %+v, want set_trip_description last", body.Tools)
+	// migrate_booking_todo is the newest tail append (stale-transport-orphans
+	// ticket 2). It is authed-gated and this is an authed session, so it is
+	// last here; the anonymous shape's tail stays search_hotels (see the pin
+	// in plan_quick_replies_integration_test.go).
+	if n := len(body.Tools); n == 0 || body.Tools[n-1].Name != "migrate_booking_todo" {
+		t.Fatalf("tools tail = %+v, want migrate_booking_todo last", body.Tools)
 	}
 
 	waitForEventCount(t, user.ID, "trip_created", 1)
