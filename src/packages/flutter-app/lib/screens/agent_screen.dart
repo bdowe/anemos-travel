@@ -11,6 +11,7 @@ import '../widgets/account_menu.dart';
 import '../widgets/gradient_app_bar.dart';
 import '../widgets/chat_panel.dart';
 import '../widgets/destination_suggestion_card.dart';
+import '../widgets/fading_edge_scroll.dart';
 import '../widgets/near_me_chip.dart';
 import '../widgets/random_suggestions.dart';
 import '../providers/auth_provider.dart';
@@ -274,22 +275,29 @@ class _DestinationRail extends ConsumerWidget {
           behavior: ScrollConfiguration.of(context).copyWith(
             dragDevices: PointerDeviceKind.values.toSet(),
           ),
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            itemCount: prompts.length,
-            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
-            itemBuilder: (context, i) {
-              final p = prompts[i];
-              return DestinationSuggestionCard(
-                prompt: p.text,
-                asset: p.asset,
-                credit: p.credit,
-                width: _kRailCardWidth,
-                onTap: () =>
-                    ref.read(planProvider.notifier).sendMessage(p.text),
-              );
-            },
+          // The pool is longer than any window, so this rail always runs off
+          // the edge. Without the fade it ended on a hard cut that read like
+          // the last card rather than a cropped one — the same complaint the
+          // home rails answered, so the same widget answers it here.
+          child: FadingEdgeScroll(
+            builder: (context, controller) => ListView.separated(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              itemCount: prompts.length,
+              separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+              itemBuilder: (context, i) {
+                final p = prompts[i];
+                return DestinationSuggestionCard(
+                  prompt: p.text,
+                  asset: p.asset,
+                  credit: p.credit,
+                  width: _kRailCardWidth,
+                  onTap: () =>
+                      ref.read(planProvider.notifier).sendMessage(p.text),
+                );
+              },
+            ),
           ),
         ),
       ),
