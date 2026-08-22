@@ -237,6 +237,25 @@ WHERE trip_id = sqlc.arg(trip_id)
 -- a candidate is being hung off actually belongs to this trip.
 SELECT * FROM booking_todos WHERE id = $1 AND trip_id = $2;
 
+-- name: GetBookingTodoDeleteState :one
+-- Pre-delete read for the agent's remove_booking_todo guard — the second delete
+-- path, the one DemoteStaleAutoBookingTodos' policy does not cover (the demote
+-- preserves a state-carrying row as auto = false; this statement is what stops
+-- the agent then hard-deleting that survivor). Same state-carrying predicate as
+-- the demote MINUS mode: booked, a saved shortlist (booking_options CASCADEs
+-- off this row), or a linked trip_expenses row (00061's untyped pair — the
+-- expense survives a delete, dangling and still summed into `spent`). A mode
+-- override alone is cheap to re-make, so it is deliberately not guarded.
+-- Scoped auto = false so an auto row reads as "no such row" and the caller
+-- answers with the same refusal DeleteBookingTodoNonAuto gives today.
+SELECT b.title, b.booked,
+       (SELECT count(*)::int FROM booking_options o WHERE o.booking_todo_id = b.id) AS option_count,
+       EXISTS (SELECT 1 FROM trip_expenses e
+               WHERE e.trip_id = b.trip_id
+                 AND e.source_kind = 'booking_todo' AND e.source_id = b.id) AS has_expense
+FROM booking_todos b
+WHERE b.id = $1 AND b.trip_id = $2 AND b.auto = false;
+
 -- name: DeleteCleanAutoBookingTodoByKey :execrows
 -- Clears the way for MigrateBookingTodoLeg: removes the auto row holding the
 -- target key, but only while it is provably disposable — unbooked, no mode

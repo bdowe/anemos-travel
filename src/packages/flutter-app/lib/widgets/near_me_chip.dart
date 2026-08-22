@@ -27,12 +27,20 @@ class NearMeChip extends StatefulWidget {
   final Color? foregroundColor;
   final TextStyle? labelStyle;
 
+  /// Takes the chip's short spelling — the same idiom [ChatPanel] uses for its
+  /// composer hint. Set by hosts whose panel is too narrow for the full label
+  /// to share a row: "¿Qué hay cerca de mí?" is 210px, so the Plan tab's
+  /// opening wrapped to a second row of chips in Spanish and pushed its own
+  /// composer under the nav bar.
+  final bool compact;
+
   const NearMeChip({
     super.key,
     required this.onSend,
     this.backgroundColor,
     this.foregroundColor,
     this.labelStyle,
+    this.compact = false,
   });
 
   @override
@@ -82,7 +90,14 @@ class _NearMeChipState extends State<NearMeChip> {
               child: CircularProgressIndicator(strokeWidth: 2, color: color),
             )
           : Icon(Icons.my_location, size: 16, color: color),
-      label: Text(context.l10n.nearMeChipLabel, style: widget.labelStyle),
+      label: Text(
+        widget.compact
+            ? context.l10n.nearMeChipLabelShort
+            : context.l10n.nearMeChipLabel,
+        style: widget.labelStyle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       backgroundColor: widget.backgroundColor,
       side: widget.backgroundColor != null ? BorderSide.none : null,
       onPressed: _locating ? null : _locate,

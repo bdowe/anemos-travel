@@ -706,6 +706,7 @@
   "connectExpiredTitle": "Esta solicitud caducó",
   "connectExpiredMessage": "Vuelve a iniciar la conexión desde tu asistente de IA.",
   "importFromAi": "Importar de un chat de IA",
+  "importFromAiShort": "Importar chat",
   "importExplainer": "¿Planeaste un viaje en ChatGPT o Claude? Pega la conversación — o su resumen final — y la convertiremos en un viaje que puedes editar.",
   "importCopyPrompt": "Copiar prompt de planificación",
   "importPromptCopied": "Prompt copiado — pégalo en ChatGPT o Claude para empezar a planear.",
@@ -1158,6 +1159,7 @@
   "errorServer": "Algo salió mal de nuestro lado. Inténtalo de nuevo en un momento.",
   "errorGeneric": "Algo salió mal. Inténtalo de nuevo.",
   "nearMeChipLabel": "¿Qué hay cerca de mí?",
+  "nearMeChipLabelShort": "Cerca de mí",
   "nearMeSeedLabel": "Cerca de mi ubicación actual",
   "nearMeSeedMessage": "Mi ubicación actual es latitud {lat}, longitud {lng} (precisión de unos {accuracy} m). ¿Qué hay bueno para ver, hacer o comer cerca de mí ahora mismo?",
   "@nearMeSeedMessage": {

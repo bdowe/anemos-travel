@@ -124,7 +124,7 @@ var updateBookingTodoTool = anthropic.ToolParam{
 
 var removeBookingTodoTool = anthropic.ToolParam{
 	Name:        "remove_booking_todo",
-	Description: anthropic.String("Remove an item from a saved trip's booking checklist when it no longer applies (e.g. the destination or plan changed and the booking is moot). Items marked 'auto' in get_trip cannot be removed — they track the itinerary automatically. Call get_trip first to get the item's todo_id."),
+	Description: anthropic.String("Remove an item from a saved trip's booking checklist when it no longer applies. A changed destination or plan does NOT by itself make the booking moot — the traveler may hold a real reservation for the old leg, and removing the checklist row cancels nothing with the provider. An item marked booked, carrying saved booking options, or linked to a budget expense is REFUSED without the traveler's explicit confirmation: relay the refusal's stakes, and only if the traveler confirms call again with confirm: true. Items marked 'auto' in get_trip cannot be removed — they track the itinerary automatically. Call get_trip first to get the item's todo_id."),
 	InputSchema: anthropic.ToolInputSchemaParam{
 		Properties: map[string]any{
 			"trip_id": map[string]any{
@@ -134,6 +134,10 @@ var removeBookingTodoTool = anthropic.ToolParam{
 			"todo_id": map[string]any{
 				"type":        "string",
 				"description": "The checklist item's todo_id from get_trip",
+			},
+			"confirm": map[string]any{
+				"type":        "boolean",
+				"description": "Set true only after the traveler has explicitly confirmed removing an item the tool refused as state-carrying (marked booked, saved booking options, or a linked budget expense) — the refusal names what is at stake; relay it first.",
 			},
 		},
 		Required: []string{"trip_id", "todo_id"},
@@ -1014,8 +1018,9 @@ func runUpdateBookingTodoTool(s *planSession, input json.RawMessage) (string, bo
 
 func runRemoveBookingTodoTool(s *planSession, input json.RawMessage) (string, bool) {
 	var in struct {
-		TripID string `json:"trip_id"`
-		TodoID string `json:"todo_id"`
+		TripID  string `json:"trip_id"`
+		TodoID  string `json:"todo_id"`
+		Confirm bool   `json:"confirm"`
 	}
 	json.Unmarshal(input, &in)
 
@@ -1028,6 +1033,21 @@ func runRemoveBookingTodoTool(s *planSession, input json.RawMessage) (string, bo
 		return "That todo_id is not valid; call get_trip to see the checklist with ids.", true
 	}
 
+	// The demote policy guards the sync's delete; this guard is the second
+	// delete path — the one that fired in production (agent_booking_todo_removed,
+	// 2026-08-20 20:49:43 UTC) and hard-deleted the app's last record of a
+	// reservation the traveler holds. The state read is scoped auto = false, so
+	// a wrong id and an auto row stay indistinguishable, exactly as today.
+	st, err := store.New(dbPool).GetBookingTodoDeleteState(s.ctx, store.GetBookingTodoDeleteStateParams{ID: todoID, TripID: tid})
+	if err != nil {
+		return bookingTodoMissingMsg, true
+	}
+	if !in.Confirm {
+		if refusal := bookingTodoStateRefusal(st); refusal != "" {
+			return refusal, true
+		}
+	}
+
 	rows, err := store.New(dbPool).DeleteBookingTodoNonAuto(s.ctx, store.DeleteBookingTodoNonAutoParams{ID: todoID, TripID: tid})
 	if err != nil || rows == 0 {
 		return bookingTodoMissingMsg, true
@@ -1035,5 +1055,57 @@ func runRemoveBookingTodoTool(s *planSession, input json.RawMessage) (string, bo
 	touchTripAs(s.ctx, tid, s.uid)
 	sendSSE(s.w, "trip_updated", map[string]string{"trip_id": tid.String()})
 	safeGo("recordEvent", func() { recordEvent(s.uid, "agent_booking_todo_removed", &tid, nil) })
-	return "Removed the item from the trip's booking checklist — the traveler's trip page has refreshed.", false
+	return bookingTodoRemovedMsg(st), false
+}
+
+func pluralS(n int32) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// bookingTodoStateRefusal is the self-correcting rejection for removing a
+// state-carrying checklist row (the errStraySectionItems idiom: name what's
+// wrong, name the stakes, name the call that works). "" when the row carries
+// nothing worth guarding. Nothing has been deleted when this fires, so the
+// model can relay the stakes and retry with confirm: true against an unchanged
+// checklist.
+func bookingTodoStateRefusal(st store.GetBookingTodoDeleteStateRow) string {
+	var stakes []string
+	if st.Booked {
+		stakes = append(stakes, "it is marked booked — a real reservation may still exist with the provider, and only the traveler can cancel it; removing the checklist row does not cancel anything")
+	}
+	if st.OptionCount > 0 {
+		stakes = append(stakes, fmt.Sprintf("it has a saved booking shortlist (%d option%s) that is deleted with the row", st.OptionCount, pluralS(st.OptionCount)))
+	}
+	if st.HasExpense {
+		stakes = append(stakes, "it is linked to a budget expense that stays summed into the trip's spend with nothing pointing back at a booking")
+	}
+	if len(stakes) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("Not removing %q: %s. Nothing was removed. If the traveler has confirmed the booking is cancelled (or was never made), call remove_booking_todo again with confirm: true.",
+		st.Title, strings.Join(stakes, "; "))
+}
+
+// bookingTodoRemovedMsg names the deleted row and — for a confirmed
+// state-carrying delete — what went with it (replace_leg's name-it-back idiom),
+// so the tool_result states the post-state its consumer observes.
+func bookingTodoRemovedMsg(st store.GetBookingTodoDeleteStateRow) string {
+	msg := fmt.Sprintf("Removed %q from the trip's booking checklist", st.Title)
+	var gone []string
+	if st.OptionCount > 0 {
+		gone = append(gone, fmt.Sprintf("its saved booking shortlist (%d option%s) went with it", st.OptionCount, pluralS(st.OptionCount)))
+	}
+	if st.HasExpense {
+		gone = append(gone, "its linked budget expense remains but no longer points at a booking")
+	}
+	if len(gone) > 0 {
+		msg += "; " + strings.Join(gone, "; ")
+	}
+	if st.Booked {
+		msg += ". Removing the checklist row does not cancel any reservation with the provider — only the traveler can do that"
+	}
+	return msg + " — the traveler's trip page has refreshed."
 }

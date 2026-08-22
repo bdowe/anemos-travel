@@ -274,6 +274,50 @@ func (q *Queries) GetBookingTodo(ctx context.Context, arg GetBookingTodoParams) 
 	return i, err
 }
 
+const getBookingTodoDeleteState = `-- name: GetBookingTodoDeleteState :one
+SELECT b.title, b.booked,
+       (SELECT count(*)::int FROM booking_options o WHERE o.booking_todo_id = b.id) AS option_count,
+       EXISTS (SELECT 1 FROM trip_expenses e
+               WHERE e.trip_id = b.trip_id
+                 AND e.source_kind = 'booking_todo' AND e.source_id = b.id) AS has_expense
+FROM booking_todos b
+WHERE b.id = $1 AND b.trip_id = $2 AND b.auto = false
+`
+
+type GetBookingTodoDeleteStateParams struct {
+	ID     uuid.UUID `json:"id"`
+	TripID uuid.UUID `json:"trip_id"`
+}
+
+type GetBookingTodoDeleteStateRow struct {
+	Title       string `json:"title"`
+	Booked      bool   `json:"booked"`
+	OptionCount int32  `json:"option_count"`
+	HasExpense  bool   `json:"has_expense"`
+}
+
+// Pre-delete read for the agent's remove_booking_todo guard — the second delete
+// path, the one DemoteStaleAutoBookingTodos' policy does not cover (the demote
+// preserves a state-carrying row as auto = false; this statement is what stops
+// the agent then hard-deleting that survivor). Same state-carrying predicate as
+// the demote MINUS mode: booked, a saved shortlist (booking_options CASCADEs
+// off this row), or a linked trip_expenses row (00061's untyped pair — the
+// expense survives a delete, dangling and still summed into `spent`). A mode
+// override alone is cheap to re-make, so it is deliberately not guarded.
+// Scoped auto = false so an auto row reads as "no such row" and the caller
+// answers with the same refusal DeleteBookingTodoNonAuto gives today.
+func (q *Queries) GetBookingTodoDeleteState(ctx context.Context, arg GetBookingTodoDeleteStateParams) (GetBookingTodoDeleteStateRow, error) {
+	row := q.db.QueryRow(ctx, getBookingTodoDeleteState, arg.ID, arg.TripID)
+	var i GetBookingTodoDeleteStateRow
+	err := row.Scan(
+		&i.Title,
+		&i.Booked,
+		&i.OptionCount,
+		&i.HasExpense,
+	)
+	return i, err
+}
+
 const listBookingTodosByTrip = `-- name: ListBookingTodosByTrip :many
 SELECT id, trip_id, kind, todo_key, title, subtitle, provider, search_url, depart_date, return_date, booked, auto, position, created_at, updated_at, mode, role, origin_label, destination_label, derived_mode FROM booking_todos WHERE trip_id = $1 ORDER BY position ASC, created_at ASC
 `

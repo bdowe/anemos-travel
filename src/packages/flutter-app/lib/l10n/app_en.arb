@@ -1726,6 +1726,10 @@
   "connectExpiredTitle": "This request expired",
   "connectExpiredMessage": "Start the connection again from your AI assistant.",
   "importFromAi": "Import from AI chat",
+  "importFromAiShort": "Import chat",
+  "@importFromAiShort": {
+    "description": "Short spelling of importFromAi for the Plan tab's opening on phone-width panels, where the two chips otherwise wrap to a second row. Must still name the action, not just the source."
+  },
   "importExplainer": "Planned a trip in ChatGPT or Claude? Paste the conversation — or its final summary — and we'll turn it into a trip you can edit.",
   "importCopyPrompt": "Copy planning prompt",
   "importPromptCopied": "Prompt copied — paste it into ChatGPT or Claude to start planning.",
@@ -2771,6 +2775,10 @@
   "errorServer": "Something went wrong on our end. Please try again in a moment.",
   "errorGeneric": "Something went wrong. Please try again.",
   "nearMeChipLabel": "What's near me?",
+  "nearMeChipLabelShort": "Near me",
+  "@nearMeChipLabelShort": {
+    "description": "Short spelling of nearMeChipLabel for panels too narrow to fit the full label beside another chip. Keep it well under the full label in every locale — the Plan tab's opening sizes its whole composition assuming these two chips share one row."
+  },
   "nearMeSeedLabel": "Near my current location",
   "nearMeSeedMessage": "My current location is latitude {lat}, longitude {lng} (accuracy about {accuracy} m). What's good to see, do, or eat near me right now?",
   "@nearMeSeedMessage": {
