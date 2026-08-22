@@ -10,7 +10,7 @@ void main() {
   // "No plate" is no longer asserted here: the plate widget is gone from the
   // app entirely (v3 of the policy in brand_logo.dart), so the compiler pins
   // what an expectation used to. What still needs pinning is the *cut* — the
-  // reversed mark is what reads on the teal gradient.
+  // reversed mark is what reads on the Aegean-night field.
   Widget harness({MediaQueryData? mediaQuery, Widget child = const SplashScreen()}) {
     return MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

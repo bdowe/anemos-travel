@@ -517,7 +517,7 @@
           <circle r="34" fill="#FFFFFF" stroke="#004D40" stroke-width="13"/>
         </g>
       </svg>
-      <p class="cap"><b>Light cut — mark-light.svg</b>Teal fields — the boot splash, where the dark cut’s azure bezel would sink into the teal. (The app bar left the gradient for neutral surface in v1.4 and takes the dark cut.)</p>
+      <p class="cap"><b>Light cut — mark-light.svg</b>Dark brand fields — the boot splash (flat Aegean night since v1.7), where the dark cut’s azure bezel would sink. (The app bar left the gradient for neutral surface in v1.4 and takes the dark cut.)</p>
     </div>
   </div>
   </div>
@@ -612,15 +612,15 @@
   <div class="ramp">
     <div class="step" style="background:#E0F2F1;color:#004D40"><b>brandTint</b>#E0F2F1<br>teal 50 · selected fills</div>
     <div class="step" style="background:#B2DFDB;color:#004D40"><b>teal 100</b>#B2DFDB<br>mark-light cardinals</div>
-    <div class="step" style="background:#00897B;color:#FFFFFF"><b>brandLight</b>#00897B<br>splash gradient start</div>
+    <div class="step" style="background:#00897B;color:#FFFFFF"><b>brandLight</b>#00897B<br>gradient start</div>
     <div class="step" style="background:#00796B;color:#FFFFFF"><b>brand</b>#00796B<br>the seed · primary</div>
-    <div class="step" style="background:#00695C;color:#FFFFFF"><b>platform</b>#00695C<br>splash · theme-color</div>
+    <div class="step" style="background:#00695C;color:#FFFFFF"><b>platform</b>#00695C<br>button hover</div>
     <div class="step" style="background:#004D40;color:#FFFFFF"><b>brandDark</b>#004D40<br>wordmark ink · scrims</div>
   </div>
-  <figcaption>Tokens resolve to Material teal shades 50 / 100 / 600 / 700 / 800 / 900. <code>#00695C</code> lives in <code>web/index.html</code>, <code>manifest.json</code>, and the native splash config rather than Dart.</figcaption>
+  <figcaption>Tokens resolve to Material teal shades 50 / 100 / 600 / 700 / 800 / 900. The shell’s splash field is Aegean night <code>#0C1F2C</code> — it lives in <code>web/index.html</code>, <code>manifest.json</code>, and the native splash config rather than Dart (v1.7: the splash left the teal gradient for the app’s dark page field).</figcaption>
 
   <h3>The gradient &amp; its scrims</h3>
-  <div class="gradband" style="background:linear-gradient(135deg,#00897B,#004D40)">brandGradient · top-left → bottom-right · #00897B → #004D40 · boot splash only — <b>unsanctioned as a brand surface in v1.4</b> (the de-gradient pass): chrome and hero cards are neutral; phase 2 flattens the remaining signed-out fields</div>
+  <div class="gradband" style="background:linear-gradient(135deg,#00897B,#004D40)">brandGradient · top-left → bottom-right · #00897B → #004D40 · signed-out photo/guide panels only — <b>unsanctioned as a brand surface in v1.4</b> (the de-gradient pass): chrome and hero cards are neutral; the boot splash left it for flat Aegean night in v1.7; phase 2 flattens the remaining signed-out fields</div>
   <div class="swatchcards">
     <div class="sw">
       <div class="chip" style="background:linear-gradient(to top right,rgba(0,77,64,0.88),rgba(0,77,64,0.35)),url() ,#8FA6A0"></div>
@@ -723,7 +723,8 @@
       <tr><td>success #2E7D32 on white</td><td>5.13 : 1</td><td><span class="badge aa">AA</span></td></tr>
       <tr><td>brand #00796B on brandTint #E0F2F1</td><td>4.60 : 1</td><td><span class="badge aa">AA</span></td></tr>
       <tr><td>black on warningSolid #FFB300</td><td>11.70 : 1</td><td><span class="badge aa">AA</span></td></tr>
-      <tr><td>white on brandLight #00897B (splash gradient start)</td><td>4.32 : 1</td><td><span class="badge aal">AA large</span></td></tr>
+      <tr><td>white on brandLight #00897B (gradient start)</td><td>4.32 : 1</td><td><span class="badge aal">AA large</span></td></tr>
+      <tr><td>white on Aegean night #0C1F2C (the splash field, v1.7)</td><td>16.83 : 1</td><td><span class="badge aa">AAA</span></td></tr>
       <tr><td>gold #E8C452 on brand #00796B</td><td>3.15 : 1</td><td><span class="badge aal">AA large / graphics</span></td></tr>
       <tr><td>dark gold #B98B1E on white</td><td>3.10 : 1</td><td><span class="badge aal">graphics only</span></td></tr>
       <tr><td>success #2E7D32 on its container</td><td>4.46 : 1</td><td><span class="badge aal">AA large — 0.04 short of AA</span></td></tr>
@@ -910,7 +911,7 @@
       </svg>
       <span class="w">ANEMOS</span>
     </div>
-    <div class="small" style="text-align:right">Brand guidelines · v1.6 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
+    <div class="small" style="text-align:right">Brand guidelines · v1.7 · August 2026<br>Maintained in <code style="background:rgba(255,255,255,0.12);color:#B2DFDB">docs/branding</code></div>
   </div>
 </footer>
 

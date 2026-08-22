@@ -126,8 +126,9 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.1
 
 # Native launch screens (iOS/Android) shown while the engine boots, before the
-# in-app SplashScreen takes over. Solid #00695C (the brand teal mid-tone; the
-# gradient isn't expressible natively) + the same bare light mark as the web
+# in-app SplashScreen takes over. Solid Aegean night #0C1F2C — the same field
+# the web and in-app splash paint (a solid is all native can express, and a
+# solid is now all there is) + the same bare light mark as the web
 # splash (assets/splash/mark_light_4x.png, 512px = 4x the 128dp mark — no white
 # plate). Android 12+ masks its icon to a circle, so it gets its own safe-zone
 # seed (mark_light_android12.png, a 741px mark centered on a 1152px canvas —
@@ -135,11 +136,11 @@ dev_dependencies:
 # box to it) — pinned by that mask, so it does not follow the in-app mark size.
 # web: false — index.html has its own hand-crafted splash.
 flutter_native_splash:
-  color: "#00695C"
+  color: "#0C1F2C"
   image: assets/splash/mark_light_4x.png
   web: false
   android_12:
-    color: "#00695C"
+    color: "#0C1F2C"
     image: assets/splash/mark_light_android12.png
 
 # For information on the generic Dart part of this file, see the

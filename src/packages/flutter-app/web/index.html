@@ -68,18 +68,17 @@
 
   <title>Anemos</title>
   <link rel="manifest" href="manifest.json">
-  <!-- Browser chrome tint (specs/dark-mode). Follows the OS preference only —
-       deliberately not synced to the in-app choice. Both metas carry a media
-       query: an unqualified meta matches every environment and, being first in
-       tree order, would shadow the dark one. -->
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#00695C">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#004D40">
+  <!-- Browser chrome tint: the splash's flat Aegean-night field, in both OS
+       modes — the splash commits to the one dark field regardless of theme,
+       so the chrome matches the boot's first frame. A single unqualified
+       meta; it used to take a media pair when the field followed the OS. -->
+  <meta name="theme-color" content="#0C1F2C">
 
   <!--
     Boot splash shown while flutter_bootstrap.js + main.dart.js download and
     the engine starts. Pixel-matched to the in-app SplashScreen (lib/screens/
-    splash_screen.dart) — same gradient, mark geometry (128px bare light mark,
-    no plate, centre 28px above viewport centre), pulse, wordmark (centre
+    splash_screen.dart) — same Aegean-night field, mark geometry (128px bare
+    light mark, no plate, centre 28px above viewport centre), pulse, wordmark (centre
     80px below viewport centre) and bottom loading dots — so the
     flutter-first-frame handoff reads as one continuous screen. If you change
     dimensions here, change splash_screen.dart too.
@@ -111,20 +110,20 @@
       font-display: swap;
     }
     html {
-      /* Paints before/if the gradient parses — no white flash. */
-      background-color: #00695C;
+      /* Paints before anything else — no white flash. */
+      background-color: #0C1F2C;
       height: 100%;
     }
     body {
       margin: 0;
       height: 100%;
-      background: linear-gradient(to bottom right, #00897B, #004D40) fixed;
+      background-color: #0C1F2C;
     }
     #splash {
       position: fixed;
       inset: 0;
       z-index: 9999;
-      background: linear-gradient(to bottom right, #00897B, #004D40);
+      background: #0C1F2C;
       opacity: 1;
       transition: opacity 300ms ease-out;
       pointer-events: none;
