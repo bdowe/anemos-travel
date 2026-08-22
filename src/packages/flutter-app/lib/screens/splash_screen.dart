@@ -5,8 +5,9 @@ import '../widgets/brand_logo.dart';
 
 /// Branded boot splash shown while the stored session is being restored.
 ///
-/// Pixel-matched to the static HTML splash in web/index.html — same gradient,
-/// mark geometry (128px bare light mark, no plate, centre 28px above viewport
+/// Pixel-matched to the static HTML splash in web/index.html — same
+/// Aegean-night field, mark geometry (128px bare light mark, no plate, centre
+/// 28px above viewport
 /// centre), pulse (1.0→1.04 over 1.8s), wordmark (centre 80px below viewport
 /// centre) and loading dots (three 6px dots at 12px gaps, 48px + safe inset
 /// off the bottom edge, opacity 0.25→0.85 staggered on the pulse's 1.8s
@@ -87,14 +88,17 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(gradient: AppColors.brandGradient),
+      // Flat Aegean night — the app's dark page field, so the boot read is
+      // the app's first frame rather than a separate brand field. (The teal
+      // gradient held this screen until the Aegean-canvas pass.)
+      decoration: BoxDecoration(color: AppColors.aegeanNight.surface),
       // The splash is the one route with no Scaffold, so nothing above it
       // provides a Material — and MaterialApp's no-Material fallback text
       // style carries the debug-signal yellow double underline, which the
       // wordmark inherited (visible in prod for the cross-fade beat on every
       // boot; nobody ever saw this screen at rest until specs/splash-screen).
       // A transparent Material installs the real DefaultTextStyle and paints
-      // nothing over the gradient.
+      // nothing over the canvas.
       child: Material(
         type: MaterialType.transparency,
         // Independent Centers (not a Column) so each layer sits at an exact

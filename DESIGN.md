@@ -130,8 +130,10 @@ Nothing is both.
   hero's imagery. **`brandGradient` is no longer a sanctioned brand surface**
   (the de-gradient pass, 2026-08): chrome and hero cards are neutral
   surfaces whose brand is the wordmark's ink, the rose, typography, and
-  imagery; the gradient survives only on the boot splash and the signed-out
-  photo/guide panels until phase 2 flattens or retires each.
+  imagery; the gradient survives only on the signed-out photo/guide
+  panels until phase 2 flattens or retires each — the boot splash left it
+  for flat Aegean night (#0C1F2C), so the boot read is the app's first
+  frame.
 - **Shallows Tint** (#E0F2F1): the faint teal wash (`brandTint`) for selected
   and brand-touched surfaces at rest.
 
@@ -327,7 +329,7 @@ are fully rounded. Nothing else. Borders are hairlines when they exist at all
 mark always floats bare — no plate, tile, chip, or container behind it,
 anywhere (plate policy v3); the only per-surface question is which cut: dark
 mark on neutral or scrimmed fields (the app bar and nav rail included), light
-mark on the boot splash's teal field.
+mark on the boot splash's night field.
 
 ## Components
 
@@ -380,7 +382,7 @@ mark on the boot splash's teal field.
 ### The Wind Rose & Wordmark (signature)
 `BrandLogo` (mark) and `BrandWordmark` (Cormorant Garamond 600 full-caps
 ANEMOS) are components, not assets to recreate. Sizes shipped: **58 in chrome**
-(nav rail and app bar), 28 default, 72 auth, 96 boot splash, 16 legible floor.
+(nav rail and app bar), 28 default, 72 auth, 128 boot splash, 16 legible floor.
 Clear space ≥25% of mark height. Rasters come only from
 `scripts/brand-render.sh`.
 
