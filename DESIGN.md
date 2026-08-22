@@ -146,9 +146,13 @@ Nothing is both.
   fresh alpha. The exception ends at sign-in.
 
 ### Tertiary
-- **Tool accents** (chip-and-pin scale only, one meaning each): route
-  deep-orange 600 · flights blue 700 · stays pink 600 · events purple 600 ·
-  ferries cyan 700 · local amber 800 · parking blue-grey 700.
+- **Tool accents** (chip-and-pin scale only, one meaning each), brightness-
+  aware like the status marks — light shade / dark shade: route deep-orange
+  600/400 · flights blue 700/400 · stays pink 600/300 · events purple 600/300
+  · ferries cyan 700/400 · local amber 800/400 · parking blue-grey 700/300.
+  Dark takes the lightest rung that keeps the hue and clears 3:1 on the
+  Aegean-night card (#153851); as fixed shades, flights, stays, events and
+  parking sat at 1.7–2.7:1 there.
 - **Semantic pairs, two registers**: translucent containers (green 15% /
   amber 20% alpha with shade-800/900 foregrounds) for pills on cards; solid
   brightness-aware marks (`upMark`/`degradedMark`/`downMark`, shade 400 dark /

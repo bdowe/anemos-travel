@@ -343,20 +343,35 @@ abstract final class AppColors {
     }
   }
 
-  // Planning-toolkit tool accents (Home screen).
-  static Color get toolRoute => Colors.deepOrange.shade600;
-  static Color get toolFlights => Colors.blue.shade700;
+  // Planning-toolkit tool accents (Home screen). Brightness-aware, like the
+  // status marks above: light keeps the shades these replaced byte-for-byte;
+  // dark takes a lighter rung of the same family so every accent clears 3:1
+  // on the Aegean-night card (#153851) — as fixed shades, flights, stays,
+  // events and parking sank to 1.7–2.7:1 there. Dark is shade 400 where that
+  // clears with margin, 300 where 400 lands thin on the card (stays 3.25,
+  // events 2.54, parking 3.65).
+  static Color toolRoute(Brightness b) => b == Brightness.dark
+      ? Colors.deepOrange.shade400
+      : Colors.deepOrange.shade600;
+  static Color toolFlights(Brightness b) =>
+      b == Brightness.dark ? Colors.blue.shade400 : Colors.blue.shade700;
   /// Lodging accent — stay pins on the map and the chat's hotel rail. Named
   /// toolAirbnb until search_hotels arrived; the app links to Booking.com and
   /// surfaces hotels and vacation rentals from several sources, so a colour
   /// named after one provider was a stale name, not a meaning.
-  static Color get toolStays => Colors.pink.shade600;
-  static Color get toolEvents => Colors.purple.shade600;
-  static Color get toolFerries => Colors.cyan.shade700;
-  static Color get toolLocal => Colors.amber.shade800;
+  static Color toolStays(Brightness b) =>
+      b == Brightness.dark ? Colors.pink.shade300 : Colors.pink.shade600;
+  static Color toolEvents(Brightness b) =>
+      b == Brightness.dark ? Colors.purple.shade300 : Colors.purple.shade600;
+  static Color toolFerries(Brightness b) =>
+      b == Brightness.dark ? Colors.cyan.shade400 : Colors.cyan.shade700;
+  static Color toolLocal(Brightness b) =>
+      b == Brightness.dark ? Colors.amber.shade400 : Colors.amber.shade800;
   // Blue-grey reads as the universal "P" signage family; distinct from
   // toolFlights blue and toolFerries cyan.
-  static Color get toolParking => Colors.blueGrey.shade700;
+  static Color toolParking(Brightness b) => b == Brightness.dark
+      ? Colors.blueGrey.shade300
+      : Colors.blueGrey.shade700;
 
   /// The wordmark's ink on the neutral app bar (the de-gradient pass): Harbor
   /// Dark on light surfaces — the exact ink DESIGN.md records for the

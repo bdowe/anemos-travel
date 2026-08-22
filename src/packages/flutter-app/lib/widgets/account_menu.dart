@@ -190,7 +190,8 @@ List<PopupMenuEntry<String>> _items(
       PopupMenuItem<String>(
         value: 'local_admin',
         child: _menuRow(
-          Icon(Icons.verified, size: 20, color: AppColors.toolLocal),
+          Icon(Icons.verified,
+              size: 20, color: AppColors.toolLocal(theme.brightness)),
           l10n.accountMenuLocalIntelAdmin,
         ),
       ),
