@@ -602,6 +602,14 @@
   "tripRemovedItem": "{name} eliminado",
   "tripMovedToDay": "Movido al día {day}",
   "tripMarkedAsBooked": "Marcado como reservado",
+  "tripBookingMoved": "Reserva movida a {leg}",
+  "@tripBookingMoved": {
+    "placeholders": {
+      "leg": {
+        "type": "String"
+      }
+    }
+  },
   "tripAddedToPacking": "\"{item}\" añadido al equipaje",
   "tripAddDates": "Añadir fechas",
   "tripCoPlanningWith": "Planificando con {name} — tus cambios se guardan para todos.",
@@ -826,6 +834,8 @@
   "reviewHoursChecked": "Horarios comprobados",
   "reviewCheckHours": "Comprobar también los horarios",
   "reviewHoursCheckFailed": "No se pudieron comprobar los horarios — inténtalo de nuevo.",
+  "reviewMigrationTitle": "¿Mover esta reserva?",
+  "reviewMigrationKeep": "Conservar como otra reserva",
   "liveTripStatusLive": "En curso",
   "liveTripDay": "Día {day}",
   "liveTripDayOfTotal": "Día {day} de {total}",

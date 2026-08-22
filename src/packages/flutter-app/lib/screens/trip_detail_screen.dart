@@ -65,6 +65,7 @@ import '../services/api_client.dart' show ApiException;
 import '../widgets/booked_expense_prompt.dart';
 import '../widgets/booking_detail_row.dart';
 import '../widgets/booking_filter_bar.dart';
+import '../widgets/booking_migration_dialog.dart';
 import '../widgets/booking_sheets.dart';
 import '../widgets/booking_todo_card.dart';
 import '../widgets/budget_section.dart';
@@ -2670,6 +2671,45 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           await _afterFix();
         } catch (e) {
           _showSnack(l10n.tripUpdateTransportFailed(friendlyError(l10n, e)));
+          rethrow;
+        }
+        break;
+      case 'migrate_booking':
+        // A booked checklist row the route left behind
+        // (checkStaleBookedTodos): the traveler decides — move the booking
+        // onto the replacement leg, keep it as an other-booking (it still
+        // names the reservation they actually hold), or remove it. Never
+        // automatic: the booked flag is the traveler's to move, with both
+        // endpoint pairs named in the same breath.
+        final todoId = fix.itemId;
+        if (todoId == null) return;
+        final choice = await showBookingMigrationDialog(
+          context,
+          message: finding.message,
+          moveLabel: fix.label,
+        );
+        if (choice == null || choice == BookingMigrationChoice.keep) return;
+        try {
+          if (choice == BookingMigrationChoice.move) {
+            await ref
+                .read(bookingTodosApiServiceProvider)
+                .migrate(tripId, todoId);
+            await _afterFix();
+            if (!mounted) return;
+            final leg = (fix.targetOrigin != null &&
+                    fix.targetDestination != null)
+                ? '${fix.targetOrigin} → ${fix.targetDestination}'
+                : '';
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(l10n.tripBookingMoved(leg))));
+          } else {
+            await ref
+                .read(bookingTodosApiServiceProvider)
+                .delete(tripId, todoId);
+            await _afterFix();
+          }
+        } catch (e) {
+          _showSnack(l10n.tripUpdateBookingFailed(friendlyError(l10n, e)));
           rethrow;
         }
         break;
