@@ -1198,7 +1198,7 @@ class _ResultStrips extends ConsumerWidget {
       if (r.parkingSpots != null && r.parkingSpots!.isNotEmpty)
         PlacePhotoStrip(
           icon: Icons.local_parking,
-          accent: AppColors.toolParking,
+          accent: AppColors.toolParking(scheme.brightness),
           label: label(
               l10n.chatStripParking(r.parkingSpots!.length), r.parkingBeach),
           onViewTrip: onHeaderTap,
