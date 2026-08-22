@@ -5270,6 +5270,18 @@ abstract class AppLocalizations {
   /// **'Could not clear notifications: {error}'**
   String notifClearAllFailed(String error);
 
+  /// Tooltip and screen-reader label on the ✕ that removes one notification from the feed. Not a confirm-gated action, unlike Clear all.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get notifDismiss;
+
+  /// Snackbar when removing one notification fails. The row stays in the feed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not dismiss: {error}'**
+  String notifDismissFailed(String error);
+
   /// No description provided for @notifLoadErrorTitle.
   ///
   /// In en, this message translates to:

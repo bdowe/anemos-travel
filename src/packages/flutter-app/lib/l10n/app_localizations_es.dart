@@ -3147,6 +3147,14 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get notifDismiss => 'Descartar';
+
+  @override
+  String notifDismissFailed(String error) {
+    return 'No se pudo descartar: $error';
+  }
+
+  @override
   String get notifLoadErrorTitle => 'No se pudieron cargar las notificaciones';
 
   @override

@@ -14,6 +14,13 @@ missing removal half of the notification lifecycle: an explicit, user-initiated
 "Clear all", plus a server-side retention policy so read history eventually
 expires on its own.
 
+**Amended 2026-08-22 — per-notification dismissal is now in scope.** The
+original decision was clear-all only. In use that made the feed all-or-nothing:
+the only way to remove one stale row was to destroy every other row with it,
+including unread ones the traveler had not acted on yet. Wholesale deletion is
+the wrong price for tidying, so each row now carries its own ✕. Clear-all keeps
+its confirmation dialog and stays the way to empty the feed.
+
 ## User Stories
 
 - As a **signed-in user**, I want to **clear all my notifications at once** so
@@ -23,6 +30,8 @@ expires on its own.
   rather than a permanent log.
 - As a **user**, I want **unread notifications to never disappear on their
   own** so that I can trust nothing was removed before I saw it.
+- As a **signed-in user**, I want to **remove one notification I'm done with**
+  so that tidying the feed doesn't cost me every other notification in it.
 
 ## Acceptance Criteria
 
@@ -45,6 +54,23 @@ expires on its own.
       automatically, no matter how old.
 - [ ] The action and dialog are fully localized (English and Spanish).
 
+Per-notification dismissal (amended):
+
+- [ ] Every row in the feed offers a dismiss control, in both the popover and
+      the full-page presentation, visible without hovering.
+- [ ] Dismissing asks for no confirmation, and removes only that row —
+      server-side, so a reload still shows it gone.
+- [ ] Dismissing an unread row lowers the unread badge by one.
+- [ ] A notification that is not the caller's cannot be dismissed, and the
+      refusal is indistinguishable from one for an id that does not exist, so
+      the response cannot be used to discover other users' notification ids.
+- [ ] Dismissing the same row twice reports that there was nothing to dismiss
+      the second time — unlike clear-all, this names a resource.
+- [ ] If a dismiss fails (offline, server error), the row stays in the feed
+      and the user sees why — never a row that looks dismissed but was not.
+- [ ] Dismissing the last row leaves the feed in its empty state, with the
+      clear-all action gone.
+
 ## API Surface
 
 ### `DELETE /api/v1/notifications`
@@ -58,6 +84,18 @@ expires on its own.
 - **Errors:** `401` when unauthenticated; `503` when the database is
   unavailable (degraded mode); `500` with a generic message on database
   failure.
+
+### `DELETE /api/v1/notifications/{id}`
+- **Purpose:** dismiss one notification (amended 2026-08-22).
+- **Request:** the notification's id in the path; no body. Ownership is not a
+  parameter — the row must belong to the session's user.
+- **Response:** `204 No Content`.
+- **Errors:** `404` when the id names nothing the caller owns — which covers a
+  bad id, an already-dismissed row, and another user's row **with the same
+  response**, so existence cannot be probed. `401` when unauthenticated;
+  `503`/`500` as the sibling endpoints.
+- **Deliberately not idempotent**, unlike clear-all: this call names a
+  resource, so a repeat finds nothing to delete and says so.
 
 **Retention policy (server-side, no endpoint):** an hourly background prune
 deletes notifications that were read more than 45 days ago. The clock starts
@@ -81,6 +119,11 @@ six more weeks; anything you haven't seen stays until you see it or clear it."
   ⋮ menu disappears with it.
 - **States:** loading/error/empty — no ⋮ menu (nothing clearable). Non-empty —
   ⋮ menu present. Clear failure — snackbar with the reason; rows remain.
+- **Dismissing one (amended):** every row carries a trailing ✕ — always
+  visible, not hover-revealed, because the same row renders in the popover and
+  on the narrow page where hover does not exist. Tapping it removes that row
+  with no dialog; the control shows progress while the server is asked, and on
+  failure the row stays put under a snackbar saying why.
 
 ## Edge Cases & Error States
 
@@ -101,13 +144,15 @@ six more weeks; anything you haven't seen stays until you see it or clear it."
 
 ## Out of Scope
 
-- Per-notification dismissal (swipe or ✕) — clear-all only, by decision.
-- Undo after clearing.
+- Swipe-to-dismiss. The ✕ serves both presentations; swipe would be a second
+  idiom for the same act and only on one of them.
+- Undo, after clearing or after dismissing one.
 - Soft delete / archive / trash.
 - Muting, deduplicating, or rate-limiting the ops-alert stream itself.
 - Any change to when notifications are *written*.
 
 ## Open Questions
 
-None — scope (clear-all only + 45-day read-row retention, hard delete) was
-decided with the product owner on 2026-08-13.
+None. Original scope (clear-all only + 45-day read-row retention, hard delete)
+was decided with the product owner on 2026-08-13; per-notification dismissal
+was added at their request on 2026-08-22, superseding that one exclusion.

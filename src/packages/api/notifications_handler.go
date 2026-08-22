@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 
 	"travel-route-planner/store"
 )
@@ -16,8 +17,8 @@ import (
 // bag the client switches on. Writers: the re-engagement checkers (trip
 // reminders, weekly nudge), collab/share activity (notifications_writer.go),
 // and the ops self-check monitor (admin-only rows). This file reads, marks,
-// and clears (clear-all is the one delete: user-initiated, whole-feed). All
-// routes require auth.
+// and deletes — wholesale (clear-all) or one row at a time. All routes require
+// auth.
 
 const (
 	defaultNotificationsLimit = 50
@@ -110,6 +111,50 @@ func clearNotificationsHandler(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFromContext(r.Context())
 	if _, err := store.New(dbPool).DeleteNotificationsByUser(r.Context(), user.ID); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "could not clear notifications")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// deleteNotificationHandler dismisses ONE notification. The single-resource
+// counterpart to clear-all, and it takes the opposite convention deliberately:
+// this one names a resource, so zero affected rows means the named thing was
+// not the caller's to delete and the answer is 404, matching the other
+// single-resource deletes in this API.
+//
+// The 404 is the same for "no such id", "someone else's row", and "already
+// gone", because ownership lives in the query's WHERE clause — there is no
+// fetch-then-check that could tell those apart, and no response that leaks
+// which notification ids exist.
+//
+// No confirmation gate, unlike clear-all: dismissing one row of an ephemeral
+// signal is not the same act as emptying the feed, and a dialog per row would
+// make the affordance unusable. The client refetches the feed on 204 and leaves
+// the row in place on any failure, so a failed dismiss never reads as a
+// successful one.
+func deleteNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	if dbPool == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "database unavailable")
+		return
+	}
+	user, _ := userFromContext(r.Context())
+	// An unparseable id is a 404 rather than a 400: it names no notification,
+	// which is the same outcome as naming one that isn't yours (the
+	// deleteAccommodationHandler convention).
+	id, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		writeJSONError(w, http.StatusNotFound, "notification not found")
+		return
+	}
+	n, err := store.New(dbPool).DeleteNotification(r.Context(), store.DeleteNotificationParams{
+		ID: id, UserID: user.ID,
+	})
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "could not delete notification")
+		return
+	}
+	if n == 0 {
+		writeJSONError(w, http.StatusNotFound, "notification not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

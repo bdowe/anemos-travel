@@ -3,8 +3,8 @@ import '../models/notification.dart';
 import 'api_client.dart';
 
 /// Client for the generalized notifications feed (Wave 16): `/notifications`
-/// (GET list / DELETE clear-all), `/notifications/read`,
-/// `/notifications/unread-count`.
+/// (GET list / DELETE clear-all), `/notifications/{id}` (DELETE one),
+/// `/notifications/read`, `/notifications/unread-count`.
 class NotificationsApiService {
   final ApiClient apiClient;
 
@@ -53,6 +53,21 @@ class NotificationsApiService {
   Future<void> clearAll() async {
     final res = await apiClient.httpClient.delete(
       Uri.parse('${apiClient.baseUrl}/notifications'),
+      headers: apiClient.jsonHeaders(),
+    );
+    if (res.statusCode != 204) {
+      throw Exception(_errorMessage(res.body, res.statusCode));
+    }
+  }
+
+  /// Dismisses ONE notification. Returns 204; **404 when the row is not the
+  /// caller's** — which covers "already gone" and "someone else's" alike,
+  /// because the server resolves ownership inside the delete rather than in a
+  /// separate lookup. Not idempotent, unlike [clearAll]: this one names a
+  /// resource, so a second call finds nothing to delete and says so.
+  Future<void> delete(String id) async {
+    final res = await apiClient.httpClient.delete(
+      Uri.parse('${apiClient.baseUrl}/notifications/$id'),
       headers: apiClient.jsonHeaders(),
     );
     if (res.statusCode != 204) {

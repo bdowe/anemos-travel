@@ -886,6 +886,8 @@
   "notifClearAllTitle": "¿Borrar todas las notificaciones?",
   "notifClearAllBody": "Se eliminarán todas las notificaciones, incluidas las no leídas. Esta acción no se puede deshacer.",
   "notifClearAllFailed": "No se pudieron borrar las notificaciones: {error}",
+  "notifDismiss": "Descartar",
+  "notifDismissFailed": "No se pudo descartar: {error}",
   "notifLoadErrorTitle": "No se pudieron cargar las notificaciones",
   "notifEmptyTitle": "Aún no tienes notificaciones",
   "notifEmptyMessage": "Aquí aparecerán los recordatorios de viaje y las novedades de planificación compartida.",
