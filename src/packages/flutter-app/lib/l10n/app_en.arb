@@ -1785,7 +1785,7 @@
   },
   "homeBeforeYouGoMore": "{n, plural, =1{1 more open item} other{{n} more open items}}",
   "@homeBeforeYouGoMore": {
-    "description": "Count of open trip items beyond the three Home shows.",
+    "description": "Count of open trip items beyond the five Home shows. Sits inside the tappable card, which opens that trip's Trip Health sheet with the complete list.",
     "placeholders": { "n": { "type": "int" } }
   },
   "homeInspirationTitle": "Somewhere new",

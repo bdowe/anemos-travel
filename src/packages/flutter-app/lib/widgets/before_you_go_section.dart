@@ -17,34 +17,58 @@ import 'section_header.dart';
 /// request**: same provider, same family key, one cached call.
 ///
 /// **Windowed, not permanent furniture.** It appears only inside
-/// [_windowDays] of departure. A trip eleven months out always has open items
-/// — that is what planning is — and listing them every time Home loads would
-/// turn a real pre-departure signal into wallpaper that gets scrolled past.
-/// Past and undated trips never qualify.
+/// [kBeforeYouGoWindowDays] of departure. A trip eleven months out always has
+/// open items — that is what planning is — and listing them every time Home
+/// loads would turn a real pre-departure signal into wallpaper that gets
+/// scrolled past. Past and undated trips never qualify. That gate now lives
+/// entirely in [departingTripOf], which also decides WHICH trip this is about;
+/// re-checking it here would be the same rule in two places.
 ///
-/// The step already promoted into the band above is filtered out by category,
-/// so the two never say the same thing twice. Everything left is capped at
-/// [_maxRows]: this is a nudge toward the trip page, not a second health
-/// sheet, and the sheet is one tap away with the complete list.
+/// **It names its trip, and it goes somewhere.** Both were missing, and each
+/// made the other worse. The header said only "Before you go" over a list that
+/// belonged to whichever trip [continueTripOf] had picked — so on an account
+/// with two trips there was no way to tell which, and no way to find out. And
+/// nothing here was tappable, on the reasoning that a row promising a fix it
+/// cannot perform is the promise [HomeNextStepBand] refuses to make. True of a
+/// BUTTON; the band itself is tapped end to end. So the card now carries the
+/// trip's name and countdown on its first line and takes one tap into that
+/// trip's health sheet — the complete list, with the buttons this surface
+/// cannot host, exactly where "10 more open items" was pointing all along.
 ///
-/// Renders nothing when the window is closed, the review has not arrived, or
-/// nothing is open — an empty "Before you go" is worse than no section.
+/// One target for the whole card, not one per row: every row would go to the
+/// same sheet, so per-row taps would be five ways to say the same thing while
+/// implying each row had its own destination.
+///
+/// The step already promoted into the band above is filtered out, so the two
+/// never say the same thing twice. Everything left is capped at [_maxRows] —
+/// this is a nudge toward the trip page, not a second health sheet.
+///
+/// Renders nothing when the review has not arrived or nothing is open — an
+/// empty "Before you go" is worse than no section.
 class BeforeYouGoSection extends ConsumerWidget {
   final String tripId;
 
-  /// ISO date-only trip start. Null means the snapshot could not say, which
-  /// closes the window rather than guessing it open.
+  /// The trip's name, printed on the card. Required rather than optional: a
+  /// readiness list that cannot say whose readiness it is describing is the
+  /// defect this section was reworked to fix.
+  final String tripTitle;
+
+  /// ISO date-only trip start, for the countdown beside the name. Null only
+  /// where the trip genuinely has no start date on hand, which drops the
+  /// countdown and keeps the name.
   final String? startDate;
+
+  /// Where the card goes: that trip's Trip Health sheet
+  /// ([openTripHealthOnTripsTab]).
+  final VoidCallback onTap;
 
   const BeforeYouGoSection({
     super.key,
     required this.tripId,
+    required this.tripTitle,
     required this.startDate,
+    required this.onTap,
   });
-
-  /// How close departure has to be. Two weeks is the span where lodging,
-  /// transport and packing stop being plans and start being errands.
-  static const int _windowDays = 14;
 
   static const int _maxRows = 5;
 
@@ -150,9 +174,6 @@ class BeforeYouGoSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final days = daysUntilTrip(startDate, DateTime.now());
-    if (days == null || days > _windowDays) return const SizedBox.shrink();
-
     final review = ref.watch(tripReviewProvider(TripReviewKey(tripId)));
     final value = review.valueOrNull;
     if (value == null) return const SizedBox.shrink();
@@ -162,49 +183,148 @@ class BeforeYouGoSection extends ConsumerWidget {
 
     final shown = rows.take(_maxRows).toList();
     final theme = Theme.of(context);
+    final l10n = context.l10n;
+    // Sampled at build like ContinueTripHero's: a countdown that ages out
+    // updates on the next rebuild, not spontaneously.
+    final days = daysUntilTrip(startDate, DateTime.now());
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SectionHeader(title: context.l10n.homeBeforeYouGoTitle),
+        SectionHeader(title: l10n.homeBeforeYouGoTitle),
         const SizedBox(height: AppSpacing.md),
-        Card(
-          // Rows, not tiles: DESIGN.md rules out same-size icon cards as page
-          // structure and the hero-metric template, and a readiness list is
-          // exactly where both are tempting.
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: Column(
-              children: [
-                for (var i = 0; i < shown.length; i++)
-                  _FindingRow(
-                    finding: shown[i],
-                    icon: _categoryIcons[shown[i].category] ??
-                        Icons.info_outline,
-                    showDivider: i < shown.length - 1,
-                  ),
-              ],
+        Semantics(
+          button: true,
+          container: true,
+          child: Card(
+            // Rows, not tiles: DESIGN.md rules out same-size icon cards as
+            // page structure and the hero-metric template, and a readiness
+            // list is exactly where both are tempting.
+            //
+            // The ink goes INSIDE the Card rather than wrapping it, so the
+            // splash is clipped to the card's own radius instead of painting
+            // a rectangle over its rounded corners.
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: AppRadius.mdAll,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: Column(
+                  children: [
+                    _TripLine(
+                      title: tripTitle,
+                      countdown: days == null ? null : l10n.upNextStartsIn(days),
+                    ),
+                    Divider(height: 1, color: theme.colorScheme.outlineVariant),
+                    for (var i = 0; i < shown.length; i++)
+                      _FindingRow(
+                        finding: shown[i],
+                        icon: _categoryIcons[shown[i].category] ??
+                            Icons.info_outline,
+                        showDivider: i < shown.length - 1,
+                      ),
+                    // Inside the card, not stranded under it. As grey text
+                    // below a dead card this was the one line that named the
+                    // complete list and the one place a traveler was most
+                    // likely to reach for — with nothing behind it. It is now
+                    // part of the target that goes there.
+                    if (rows.length > shown.length) ...[
+                      Divider(
+                          height: 1, color: theme.colorScheme.outlineVariant),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.md),
+                        child: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Text(
+                            l10n.homeBeforeYouGoMore(
+                                rows.length - shown.length),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),
-        if (rows.length > shown.length)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sm),
-            child: Text(
-              context.l10n.homeBeforeYouGoMore(rows.length - shown.length),
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ),
         const SizedBox(height: AppSpacing.xl),
       ],
     );
   }
 }
 
-/// One open item. Not tappable: applying a fix needs the trip screen's
-/// mutation providers, and a row that looks actionable but only navigates is
-/// the same broken promise [HomeNextStepBand] refuses to make.
+/// The card's first line: whose readiness this is, how long there is left, and
+/// the chevron that says the whole card goes somewhere.
+///
+/// It carries the trip's name because the section header cannot be relied on to
+/// — [ContinueChatsSection] renders any in-progress conversations between the
+/// continue-trip block and this section, so the nearest thing naming a trip can
+/// be scrolled well off screen even on an account with exactly one trip.
+class _TripLine extends StatelessWidget {
+  final String title;
+  final String? countdown;
+
+  const _TripLine({required this.title, required this.countdown});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: kMinTouchTarget),
+      child: Row(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  if (countdown != null)
+                    Text(
+                      countdown!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          // The only affordance the card gets. A button here would have to
+          // name an action, and every honest name for it ("Fix these") belongs
+          // to the sheet this opens — the HomeNextStepBand rule.
+          Icon(Icons.chevron_right, size: 20, color: scheme.onSurfaceVariant),
+        ],
+      ),
+    );
+  }
+}
+
+/// One open item. Carries no tap of its own — the card around it does, and it
+/// goes to the health sheet where this row's fix has a working button. A tap
+/// per row would be five routes to one destination.
+///
+/// It carries no BUTTON for the [HomeNextStepBand] reason, which is the part of
+/// the original rule that still holds: applying a fix needs the trip screen's
+/// mutation providers, so a "Find a stay" here could only ever navigate, and a
+/// button that names an action it does not perform is a broken promise. Stating
+/// the gap and inheriting the card's tap is not.
 class _FindingRow extends StatelessWidget {
   final TripFinding finding;
   final IconData icon;

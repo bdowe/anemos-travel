@@ -4514,7 +4514,7 @@ abstract class AppLocalizations {
   /// **'Before you go'**
   String get homeBeforeYouGoTitle;
 
-  /// Count of open trip items beyond the three Home shows.
+  /// Count of open trip items beyond the five Home shows. Sits inside the tappable card, which opens that trip's Trip Health sheet with the complete list.
   ///
   /// In en, this message translates to:
   /// **'{n, plural, =1{1 more open item} other{{n} more open items}}'**
