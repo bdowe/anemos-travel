@@ -13,6 +13,7 @@ import 'package:travel_route_planner/screens/agent_screen.dart';
 import 'package:travel_route_planner/services/api_client.dart';
 import 'package:travel_route_planner/services/plan_service.dart';
 import 'package:travel_route_planner/widgets/destination_suggestion_card.dart';
+import 'package:travel_route_planner/widgets/fading_edge_scroll.dart';
 import 'package:travel_route_planner/widgets/near_me_chip.dart';
 
 import 'support/l10n_test_app.dart';
@@ -155,6 +156,25 @@ void main() {
     // keeps the field above it that makes the block read as composed.
     expect(heading.top, greaterThan(tester.getRect(find.byType(AppBar)).bottom),
         reason: 'the heading sits below the app bar, in its own field');
+  });
+
+  testWidgets('the rail dissolves at its edges, like the home rails',
+      (WidgetTester tester) async {
+    await pumpAgent(tester, overrides());
+
+    expect(find.byType(FadingEdgeScroll), findsOneWidget);
+
+    // The fade is derived from the controller FadingEdgeScroll hands out, so
+    // a ListView that builds its own (or none) leaves the mask frozen at
+    // "no edges" and the rail silently reverts to a hard cut. Pinning the
+    // wiring, not the pixels: the gradient itself is covered by
+    // fading_edge_scroll_test.
+    final rail = tester.widget<ListView>(find.descendant(
+      of: find.byType(FadingEdgeScroll),
+      matching: find.byType(ListView),
+    ));
+    expect(rail.controller, isNotNull,
+        reason: 'the rail must take the controller it is handed');
   });
 
   testWidgets('near-me and import are the two starter chips',
