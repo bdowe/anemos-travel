@@ -66,7 +66,7 @@ Paths below are relative to `src/packages/flutter-app/` unless rooted.
   identity + the primary action; tool accents and status colors appear at
   chip-and-pin scale, **never as fields**. ONE recorded exception (doc
   v1.2): the signed-out landing page commits to the dark
-  `landingCanvas` family (`app_colors.dart` — canvas ≈#00231D, glass
+  `landingCanvas` family (`app_colors.dart` — canvas #091620, glass
   ladder 6/8/10/12/14%, ink ladder 35/60/70/85%). The exception ends at
   sign-in; new landing surfaces pick a ladder rung, never a fresh alpha.
 - **Heritage gold `#E8C452`/`#B98B1E` lives in the mark and nowhere
