@@ -1083,7 +1083,7 @@ class _ResultStrips extends ConsumerWidget {
       if (r.localRecs != null && r.localRecs!.isNotEmpty)
         PlacePhotoStrip(
           icon: Icons.verified,
-          accent: AppColors.toolLocal,
+          accent: AppColors.toolLocal(scheme.brightness),
           label: label(
               l10n.chatChipLocalPicks(r.localRecs!.length), r.localRecsCity),
           onViewTrip: onHeaderTap,
@@ -1091,7 +1091,8 @@ class _ResultStrips extends ConsumerWidget {
             for (final rec in r.localRecs!.take(_maxCards))
               PlacePhotoCard(
                 data: PlaceCardData.localRec(rec,
-                    photoUrl: photoUrl(rec.photoRef)),
+                    photoUrl: photoUrl(rec.photoRef),
+                    brightness: scheme.brightness),
                 onTap: () => openMaps(rec.name, rec.placeId),
                 onAddToTrip: signedIn
                     ? () => addToTrip(AddToTripPayload.fromLocalRec(rec))
@@ -1102,13 +1103,13 @@ class _ResultStrips extends ConsumerWidget {
       if (r.events != null && r.events!.isNotEmpty)
         PlacePhotoStrip(
           icon: Icons.local_activity,
-          accent: AppColors.toolEvents,
+          accent: AppColors.toolEvents(scheme.brightness),
           label: label(l10n.chatChipEvents(r.events!.length), r.eventsCity),
           onViewTrip: onHeaderTap,
           cards: [
             for (final event in r.events!.take(_maxCards))
               PlacePhotoCard(
-                data: PlaceCardData.event(event),
+                data: PlaceCardData.event(event, brightness: scheme.brightness),
                 onTap: event.url.isEmpty
                     ? null
                     : () => trackedLaunchUrl(context, event.url,
@@ -1123,7 +1124,7 @@ class _ResultStrips extends ConsumerWidget {
       if (r.parkingSpots != null && r.parkingSpots!.isNotEmpty)
         PlacePhotoStrip(
           icon: Icons.local_parking,
-          accent: AppColors.toolParking,
+          accent: AppColors.toolParking(scheme.brightness),
           label: label(l10n.chatStripParking(r.parkingSpots!.length),
               r.parkingBeach),
           onViewTrip: onHeaderTap,
@@ -1132,7 +1133,8 @@ class _ResultStrips extends ConsumerWidget {
               PlacePhotoCard(
                 data: PlaceCardData.parking(spot,
                     photoUrl: photoUrl(spot.photoRef),
-                    freeLabel: l10n.chatCardFreeListed),
+                    freeLabel: l10n.chatCardFreeListed,
+                    brightness: scheme.brightness),
                 onTap: () => openMaps(spot.name, spot.placeId),
                 onAddToTrip: signedIn
                     ? () => addToTrip(AddToTripPayload.fromPlace(spot))
@@ -1143,7 +1145,7 @@ class _ResultStrips extends ConsumerWidget {
       if (r.hotels != null && r.hotels!.stays.isNotEmpty)
         PlacePhotoStrip(
           icon: Icons.hotel,
-          accent: AppColors.toolStays,
+          accent: AppColors.toolStays(scheme.brightness),
           // The "no live rates" caveat rides the HEADER, not the cards: the
           // tier is a property of the whole result set, and a 200x160 card
           // showing a rating has no room for a disclaimer anyway.
@@ -1160,6 +1162,7 @@ class _ResultStrips extends ConsumerWidget {
               PlacePhotoCard(
                 data: PlaceCardData.hotel(
                   stay,
+                  brightness: scheme.brightness,
                   photoUrl: stay.resolvedPhotoUrl(apiBase),
                   priceLabel: stay.ratePerNight == null || stay.currency == null
                       ? null
@@ -1232,7 +1235,7 @@ class _ResultChips extends ConsumerWidget {
       if (r.flights != null && r.flights!.isNotEmpty)
         ResultSummaryChip(
           icon: Icons.flight,
-          accent: AppColors.toolFlights,
+          accent: AppColors.toolFlights(Theme.of(context).brightness),
           label: label(
               l10n.chatChipFlightOptions(r.flights!.length), r.flightRoute),
           onTap: onTap,
@@ -1240,7 +1243,7 @@ class _ResultChips extends ConsumerWidget {
       if (r.ferries != null && r.ferries!.isNotEmpty)
         ResultSummaryChip(
           icon: Icons.directions_boat,
-          accent: AppColors.toolFerries,
+          accent: AppColors.toolFerries(Theme.of(context).brightness),
           label:
               label(l10n.chatChipFerryOptions(r.ferries!.length), r.ferryRoute),
           onTap: onTap,
@@ -1248,7 +1251,7 @@ class _ResultChips extends ConsumerWidget {
       if (r.eventLinks != null && r.eventLinks!.isNotEmpty)
         ResultSummaryChip(
           icon: Icons.link,
-          accent: AppColors.toolEvents,
+          accent: AppColors.toolEvents(Theme.of(context).brightness),
           label: label(l10n.chatChipEventSources(r.eventLinks!.length),
               r.eventLinksCity),
           onTap: onTap,
@@ -1296,14 +1299,14 @@ class _ResultLinks extends ConsumerWidget {
       if (r.stayLinks != null && r.stayLinks!.isNotEmpty)
         SourceLinksCard(
           icon: Icons.hotel,
-          accent: AppColors.toolStays,
+          accent: AppColors.toolStays(Theme.of(context).brightness),
           title: title(l10n.chatLinksStays, r.stayWhere),
           links: r.stayLinks!,
         ),
       if (r.transportLinks != null && r.transportLinks!.isNotEmpty)
         SourceLinksCard(
           icon: Icons.directions,
-          accent: AppColors.toolFlights,
+          accent: AppColors.toolFlights(Theme.of(context).brightness),
           title: title(l10n.chatLinksTransport, r.transportRoute),
           links: r.transportLinks!,
         ),

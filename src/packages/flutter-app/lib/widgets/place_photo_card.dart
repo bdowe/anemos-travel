@@ -87,6 +87,7 @@ class PlaceCardData {
   factory PlaceCardData.localRec(
     LocalRecommendation rec, {
     required String? photoUrl,
+    required Brightness brightness,
   }) {
     return PlaceCardData(
       title: rec.name,
@@ -97,7 +98,7 @@ class PlaceCardData {
         if (rec.category.isNotEmpty) rec.category,
       ].join(' · '),
       fallbackIcon: Icons.verified,
-      accent: AppColors.toolLocal,
+      accent: AppColors.toolLocal(brightness),
       localBadge: true,
       localCredit: rec.creditLine,
     );
@@ -112,6 +113,7 @@ class PlaceCardData {
     AgentPlace place, {
     required String? photoUrl,
     required String freeLabel,
+    required Brightness brightness,
   }) {
     return PlaceCardData(
       title: place.name,
@@ -125,18 +127,21 @@ class PlaceCardData {
       rating: place.freeListed ? null : place.rating,
       priceLevel: place.freeListed ? null : place.priceLevel,
       fallbackIcon: Icons.local_parking,
-      accent: AppColors.toolParking,
+      accent: AppColors.toolParking(brightness),
       metaIsAccent: place.freeListed,
     );
   }
 
-  factory PlaceCardData.event(Event event) {
+  factory PlaceCardData.event(
+    Event event, {
+    required Brightness brightness,
+  }) {
     return PlaceCardData(
       title: event.name,
       photoUrl: event.imageUrl.isEmpty ? null : event.imageUrl,
       metaLine: eventWhenLabel(event),
       fallbackIcon: Icons.local_activity,
-      accent: AppColors.toolEvents,
+      accent: AppColors.toolEvents(brightness),
       externalLink: event.url.isNotEmpty,
       metaIsAccent: true,
     );
@@ -151,6 +156,7 @@ class PlaceCardData {
     HotelStay stay, {
     required String? photoUrl,
     required String? priceLabel,
+    required Brightness brightness,
   }) {
     return PlaceCardData(
       title: stay.name,
@@ -162,7 +168,7 @@ class PlaceCardData {
       priceLabel: priceLabel,
       fallbackIcon:
           stay.kind == 'vacation_rental' ? Icons.house_outlined : Icons.hotel,
-      accent: AppColors.toolStays,
+      accent: AppColors.toolStays(brightness),
       externalLink: stay.bookingUrl.isNotEmpty,
     );
   }
@@ -283,8 +289,12 @@ class PlacePhotoCard extends StatelessWidget {
                                 color: Colors.white,
                                 shape: BoxShape.circle,
                               ),
+                              // The badge disc is white in both themes, so
+                              // the glyph always takes the light shade.
                               child: Icon(Icons.verified,
-                                  size: 14, color: AppColors.toolLocal),
+                                  size: 14,
+                                  color: AppColors.toolLocal(
+                                      Brightness.light)),
                             ),
                           ),
                         ),

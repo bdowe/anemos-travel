@@ -108,7 +108,8 @@ class _GuideListTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: AppColors.toolLocal.withValues(alpha: 0.15),
+          backgroundColor: AppColors.toolLocal(theme.brightness)
+              .withValues(alpha: 0.15),
           // Bound the decode to the 40px avatar slot (default CircleAvatar
           // radius 20, DPR-scaled) — the source photo is full-size.
           foregroundImage: guide.sourcePhotoUrl.isNotEmpty
@@ -119,7 +120,7 @@ class _GuideListTile extends StatelessWidget {
                 )
               : null,
           child: Icon(Icons.menu_book_outlined,
-              size: 18, color: AppColors.toolLocal),
+              size: 18, color: AppColors.toolLocal(theme.brightness)),
         ),
         title: Text(guide.title, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: guide.sourceName.isEmpty

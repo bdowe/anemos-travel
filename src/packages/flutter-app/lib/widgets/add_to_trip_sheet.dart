@@ -522,7 +522,8 @@ class AddToTripButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       icon: Icon(Icons.add_location_alt_outlined,
-          size: 20, color: color ?? AppColors.toolLocal),
+          size: 20,
+          color: color ?? AppColors.toolLocal(Theme.of(context).brightness)),
       tooltip: context.l10n.addToTripTitle,
       visualDensity: VisualDensity.compact,
       onPressed: onPressed,

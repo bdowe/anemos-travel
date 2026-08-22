@@ -55,7 +55,7 @@ class EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = AppColors.toolEvents;
+    final accent = AppColors.toolEvents(theme.brightness);
     final subtitle = [
       if (event.venue.isNotEmpty) event.venue,
       if (event.category.isNotEmpty) event.category,

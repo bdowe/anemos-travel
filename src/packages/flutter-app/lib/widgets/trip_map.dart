@@ -1193,7 +1193,7 @@ class _HomePin extends StatelessWidget {
           width: 26,
           height: 26,
           decoration: BoxDecoration(
-            color: AppColors.toolFlights,
+            color: AppColors.toolFlights(Theme.of(context).brightness),
             borderRadius: BorderRadius.circular(AppRadius.sm),
             border: Border.all(color: Colors.white, width: 2),
             boxShadow: AppShadows.pin,
@@ -1236,7 +1236,7 @@ class _StayPin extends StatelessWidget {
           // Same white ring + shadow treatment as _Pin so it reads as part
           // of the family, but square where itinerary pins are round.
           decoration: BoxDecoration(
-            color: AppColors.toolStays,
+            color: AppColors.toolStays(Theme.of(context).brightness),
             borderRadius: BorderRadius.circular(AppRadius.sm),
             border: Border.all(color: Colors.white, width: 2),
             boxShadow: AppShadows.pin,

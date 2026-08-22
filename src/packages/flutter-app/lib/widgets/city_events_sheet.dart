@@ -87,7 +87,9 @@ class CityEventsSheetBody extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: Row(
             children: [
-              Icon(Icons.local_activity, size: 20, color: AppColors.toolEvents),
+              Icon(Icons.local_activity,
+                  size: 20,
+                  color: AppColors.toolEvents(theme.brightness)),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(

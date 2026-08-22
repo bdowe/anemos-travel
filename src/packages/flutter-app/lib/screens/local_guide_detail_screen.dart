@@ -104,7 +104,7 @@ class _GuideBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final accent = AppColors.toolLocal;
+    final accent = AppColors.toolLocal(Theme.of(context).brightness);
     final title = _pick(guide.title, fallback.title);
     final body = _pick(guide.body, fallback.body);
     final heroUrl = _pick(guide.heroImageUrl, fallback.heroImageUrl);
@@ -440,7 +440,7 @@ class _GuidePin extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.toolLocal,
+        color: AppColors.toolLocal(Theme.of(context).brightness),
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 2),
         // The trip_map pin family's shared drop — this pin says outright that
