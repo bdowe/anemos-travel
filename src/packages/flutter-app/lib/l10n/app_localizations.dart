@@ -4244,6 +4244,12 @@ abstract class AppLocalizations {
   /// **'Import from AI chat'**
   String get importFromAi;
 
+  /// Short spelling of importFromAi for the Plan tab's opening on phone-width panels, where the two chips otherwise wrap to a second row. Must still name the action, not just the source.
+  ///
+  /// In en, this message translates to:
+  /// **'Import chat'**
+  String get importFromAiShort;
+
   /// No description provided for @importExplainer.
   ///
   /// In en, this message translates to:
@@ -6781,6 +6787,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'What\'s near me?'**
   String get nearMeChipLabel;
+
+  /// Short spelling of nearMeChipLabel for panels too narrow to fit the full label beside another chip. Keep it well under the full label in every locale — the Plan tab's opening sizes its whole composition assuming these two chips share one row.
+  ///
+  /// In en, this message translates to:
+  /// **'Near me'**
+  String get nearMeChipLabelShort;
 
   /// No description provided for @nearMeSeedLabel.
   ///

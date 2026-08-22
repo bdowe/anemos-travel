@@ -34,6 +34,11 @@ Future<void> _pump(
   Size size, {
   PlanState? seeded,
   Widget? emptyState,
+
+  /// The field height the block claims to need. Passed explicitly so these
+  /// stay structure tests: the real screen derives this from measured text,
+  /// and text measured in this suite is fiction.
+  double? joinFloor,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -49,7 +54,10 @@ Future<void> _pump(
           body: ChatPanel(
             state: provider,
             notifier: provider.notifier,
-            emptyState: emptyState,
+            emptyStateBuilder:
+                emptyState == null ? null : (context, panel) => emptyState,
+            emptyStateJoinFloor:
+                emptyState == null ? null : (context, panel) => joinFloor ?? 650,
           ),
         ),
       ),
@@ -80,6 +88,29 @@ void main() {
 
     expect(find.text('INTRO-BLOCK'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
+    expect(_joinAlign(), findsNothing);
+  });
+
+  testWidgets('a block that composes smaller is joined on that same field',
+      (tester) async {
+    // The mobile-web fix in one assertion: the field is the 500px that the
+    // test above sends to the floor, and the only thing that changed is the
+    // block reporting it needs 420. A single constant here could not tell
+    // those two cases apart, so every phone got the floor.
+    await _pump(tester, const Size(800, 500),
+        emptyState: const Text('INTRO-BLOCK'), joinFloor: 420);
+
+    expect(find.text('INTRO-BLOCK'), findsOneWidget);
+    expect(_joinAlign(), findsOneWidget);
+  });
+
+  testWidgets('a field below even the smallest composition keeps the floor',
+      (tester) async {
+    // An open keyboard, or the largest accessibility text scales.
+    await _pump(tester, const Size(800, 300),
+        emptyState: const Text('INTRO-BLOCK'), joinFloor: 420);
+
+    expect(find.text('INTRO-BLOCK'), findsOneWidget);
     expect(_joinAlign(), findsNothing);
   });
 

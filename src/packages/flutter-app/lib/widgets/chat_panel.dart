@@ -29,21 +29,6 @@ import 'place_photo_card.dart';
 import 'source_links_card.dart';
 import 'result_summary_chip.dart';
 
-/// The panel height below which the Plan tab's empty state keeps the
-/// composer on the floor and scrolls the intro, instead of joining them
-/// into one [intro, gap, composer] group.
-///
-/// Height is what is asked because height is what runs out (the rule
-/// _PlanIntro's old field floor stated): a 568pt phone offers the panel
-/// ~510px once the app bar is gone, and an open keyboard takes most of any
-/// field — both must keep the composer at the floor, which is the layout
-/// the app has always had. The joined group measures ~471px at default
-/// text scale (browser-measured at 1440x900: intro 263→634, the 33px seam,
-/// composer 667→734), so 650 admits it with at least ~100px of air above
-/// and ~75 below — less, and the split reads as crowding rather than
-/// composition.
-const double _kComposerJoinFloor = 650;
-
 /// Where the Plan tab's joined [intro, gap, composer] group sits in its
 /// field, as an [Alignment] y. 1/7 splits the leftover air 4:3 above/below:
 /// at the 938px field this composition was measured against that is ~215
@@ -73,8 +58,28 @@ class ChatPanel extends ConsumerStatefulWidget {
   /// narrow for the full one. Null falls back to the generic short hint.
   final String? shortInputHint;
 
-  /// Shown instead of the message list while the conversation is empty.
-  final Widget? emptyState;
+  /// Builds what replaces the message list while the conversation is empty.
+  ///
+  /// A builder over the panel's own constraints, not a finished widget,
+  /// because the Plan tab's opening composes itself to the field it gets —
+  /// the destination rail narrows and the explanatory sentence drops on short
+  /// fields. The block cannot work that out for itself: in the joined branch
+  /// it sits inside a scroll view, where its own `maxHeight` is unbounded.
+  final Widget Function(BuildContext context, BoxConstraints panel)?
+      emptyStateBuilder;
+
+  /// The panel height at or above which the empty block and the composer are
+  /// placed as one [intro, gap, composer] group; below it the composer keeps
+  /// the floor and the block scrolls. Null — the refine dock, which has no
+  /// empty block — never joins.
+  ///
+  /// Supplied by whoever supplies [emptyStateBuilder], because only that
+  /// widget knows how tall it composes for a given field. This used to be a
+  /// constant here, measured once at 1440x900; every phone in mobile web then
+  /// fell under it and got the scrolling layout, which is what put three of
+  /// the Plan tab's four ways in below the fold.
+  final double Function(BuildContext context, BoxConstraints panel)?
+      emptyStateJoinFloor;
 
   /// Optional extra content rendered after the messages (e.g. the Agent tab's
   /// completed-itinerary banner).
@@ -103,7 +108,8 @@ class ChatPanel extends ConsumerStatefulWidget {
     required this.notifier,
     this.inputHint,
     this.shortInputHint,
-    this.emptyState,
+    this.emptyStateBuilder,
+    this.emptyStateJoinFloor,
     this.footerBuilder,
     this.onViewTrip,
     this.attachmentPipeline = const ImageAttachmentPipeline(),
@@ -440,22 +446,28 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
       );
 
       final Widget panel;
-      if (isEmpty && widget.emptyState != null) {
+      final emptyBlock = isEmpty
+          ? widget.emptyStateBuilder?.call(context, constraints)
+          : null;
+      if (emptyBlock != null) {
         // The Plan tab before a word is typed. The gate is HEIGHT — the
-        // thing that runs out — never width. Below the floor (a phone, an
-        // open keyboard) the composer keeps the floor and the intro
-        // scrolls, exactly as _PlanIntro's old field rule arranged. At or
-        // above it the composer joins the block as [intro, gap,
-        // composer], placed by _kComposerGroupBias. The scroll wrapper only
-        // ever runs when text scaling makes the group taller than the
-        // field.
-        panel = constraints.maxHeight < _kComposerJoinFloor
+        // thing that runs out — never width, and the height asked for is the
+        // one the block itself reports for this field, so a block that
+        // composes smaller is admitted rather than sent to the floor for
+        // failing a number measured on a desktop. Below it nothing fits (an
+        // open keyboard, the largest text scales): the composer keeps the
+        // floor and the block scrolls. At or above, the composer joins it as
+        // [intro, gap, composer], placed by _kComposerGroupBias.
+        final joinFloor =
+            widget.emptyStateJoinFloor?.call(context, constraints) ??
+                double.infinity;
+        panel = constraints.maxHeight < joinFloor
             ? Column(
                 children: [
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.only(top: AppSpacing.xl),
-                      child: widget.emptyState!,
+                      child: emptyBlock,
                     ),
                   ),
                   composer,
@@ -470,7 +482,7 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      widget.emptyState!,
+                      emptyBlock,
                       const SizedBox(height: AppSpacing.lg),
                       composer,
                     ],
