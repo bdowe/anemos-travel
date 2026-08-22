@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
+import 'app_shadows.dart';
 import 'app_typography.dart';
 import 'spacing.dart';
 
@@ -224,6 +225,36 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
+      ),
+      // Tooltips were the one surface left on framework defaults — stock
+      // Flutter paints a grey[700]/white pill at 90% opacity with a 4px
+      // radius, none of it scheme-derived, and its `verticalOffset` of 24 is
+      // measured from the trigger's CENTRE: on a 48px IconButton that leaves
+      // ~0 clearance against whatever sits directly below, which is how the
+      // composer's "Attach images" ended up hard against the input field.
+      // Stated once here instead of per call site: the same raised-surface
+      // recipe as cards and menus (paper surface in light, the explicit tonal
+      // step in dark, the shared downward shadow, no tint) at the small-badge
+      // radius, menu-row text, and an offset that puts real space between the
+      // pill and its trigger. `verticalOffset` is measured on screen from the
+      // trigger's centre — 24 covers the IconButton's lower half, the rest is
+      // the visible gap, chosen against the composer (the tightest neighbour
+      // in the app) rather than derived.
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color:
+              isDark ? colorScheme.surfaceContainerHigh : colorScheme.surface,
+          borderRadius: AppRadius.smAll,
+          boxShadow: AppShadows.soft,
+        ),
+        textStyle: _menuRowStyle(textTheme, colorScheme),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        // Keeps a pill near the app bar or nav rail off the viewport edge.
+        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        verticalOffset: 32,
       ),
     );
   }
