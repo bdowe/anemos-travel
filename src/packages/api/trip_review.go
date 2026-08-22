@@ -1106,6 +1106,45 @@ func hubDateSpan(trip store.Trip, items []store.ItineraryItem, hub string) (time
 	return lo, hi, found
 }
 
+// todoLegPlacement answers, in one scan, the two questions the booked-todo
+// orphan rule asks of one endpoint pair: does it connect any adjacent hub
+// pair (either direction — a hand-entered row may read backwards), and when
+// it does not, which adjacent pair should replace it (the first hop out of
+// the same city — pair whose ORIGIN matches the todo's origin hub — else the
+// pair whose destination matches). checkStaleBookedTodos reads the answers to
+// flag; migrateBookingTodo reads them to guard. ONE scan, so the finding and
+// the write can never disagree about what is still adjacent — and it reuses
+// fuzzyMatch, the shared connects predicate, rather than growing a second one.
+func todoLegPlacement(hubs []string, origin, dest string) (connected bool, replFrom, replTo string) {
+	o, dst := strings.ToLower(origin), strings.ToLower(dest)
+	for i := 1; i < len(hubs); i++ {
+		from, to := hubs[i-1], hubs[i]
+		if strings.EqualFold(from, to) {
+			continue
+		}
+		f, t := strings.ToLower(from), strings.ToLower(to)
+		if fuzzyMatch(o, f) && fuzzyMatch(dst, t) || fuzzyMatch(o, t) && fuzzyMatch(dst, f) {
+			connected = true
+		}
+		if replFrom == "" && fuzzyMatch(o, f) {
+			replFrom, replTo = from, to
+		}
+	}
+	if connected || replFrom != "" {
+		return connected, replFrom, replTo
+	}
+	for i := 1; i < len(hubs); i++ {
+		from, to := hubs[i-1], hubs[i]
+		if strings.EqualFold(from, to) {
+			continue
+		}
+		if fuzzyMatch(dst, strings.ToLower(to)) {
+			return false, from, to
+		}
+	}
+	return false, "", ""
+}
+
 // checkStaleBookedTodos is checkStaleTransport's todo-layer twin — the shape
 // the production audit (2026-08-22) found actually survives in the wild: the
 // route changed, the booked todo encoding the reservation's endpoints was
@@ -1161,37 +1200,9 @@ func checkStaleBookedTodos(locale string, d exportData) []Finding {
 		if !namesLeg(hubs, origin) || !namesLeg(hubs, dest) {
 			continue
 		}
-		o, dst := strings.ToLower(origin), strings.ToLower(dest)
-		connected := false
-		var replFrom, replTo string
-		for i := 1; i < len(hubs); i++ {
-			from, to := hubs[i-1], hubs[i]
-			if strings.EqualFold(from, to) {
-				continue
-			}
-			f, tt := strings.ToLower(from), strings.ToLower(to)
-			if fuzzyMatch(o, f) && fuzzyMatch(dst, tt) || fuzzyMatch(o, tt) && fuzzyMatch(dst, f) {
-				connected = true
-				break
-			}
-			if replFrom == "" && fuzzyMatch(o, f) {
-				replFrom, replTo = from, to
-			}
-		}
+		connected, replFrom, replTo := todoLegPlacement(hubs, origin, dest)
 		if connected {
 			continue
-		}
-		if replFrom == "" {
-			for i := 1; i < len(hubs); i++ {
-				from, to := hubs[i-1], hubs[i]
-				if strings.EqualFold(from, to) {
-					continue
-				}
-				if fuzzyMatch(dst, strings.ToLower(to)) {
-					replFrom, replTo = from, to
-					break
-				}
-			}
 		}
 		id := todo.ID.String()
 		f := Finding{

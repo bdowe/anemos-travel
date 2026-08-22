@@ -933,6 +933,7 @@ func buildRouter() *mux.Router {
 	api.Handle("/trips/{id}/booking-todos/order", authMiddleware(http.HandlerFunc(reorderBookingTodosHandler))).Methods("PUT")
 	api.Handle("/trips/{id}/booking-todos/{todoId}", authMiddleware(http.HandlerFunc(patchBookingTodoHandler))).Methods("PATCH")
 	api.Handle("/trips/{id}/booking-todos/{todoId}", authMiddleware(http.HandlerFunc(deleteBookingTodoHandler))).Methods("DELETE")
+	api.Handle("/trips/{id}/booking-todos/{todoId}/migrate", authMiddleware(http.HandlerFunc(migrateBookingTodoHandler))).Methods("POST")
 	// Saved booking options — the per-leg shortlist (specs/booking-shortlist).
 	// No list route: options ride the GET /trips/{id} payload, since a
 	// shortlist is only ever read alongside the legs it hangs off.
