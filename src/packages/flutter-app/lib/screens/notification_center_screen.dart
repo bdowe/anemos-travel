@@ -22,10 +22,13 @@ import 'admin_metrics_screen.dart';
 /// opens (account_menu.dart), and [NotificationCenterScreen] stays the full
 /// page for narrow widths and URL deep links. Rows are flat and
 /// hairline-divided — a leading type-icon chip, weight-not-size unread
-/// emphasis, a trailing unread dot — grouped into New/Earlier while unread
-/// rows exist. Clear-all lives as a quiet footer action (the confirm dialog
-/// remains the gate); the server has no per-item or archive endpoints, so
-/// those are the whole inbox vocabulary.
+/// emphasis, a trailing unread dot then a dismiss ✕ — grouped into New/Earlier
+/// while unread rows exist.
+///
+/// Two ways out, and the difference is the point: the row ✕ removes one
+/// notification with no dialog, and the quiet clear-all footer empties the feed
+/// behind a confirm. There is still no archive endpoint, so removal is
+/// permanent either way.
 ///
 /// Type-agnostic as before: each row renders from `type` + `payload`, so trip
 /// signals, ops alerts and future types share one feed.
@@ -101,6 +104,42 @@ Future<void> _confirmAndClearAll(BuildContext context, WidgetRef ref) async {
   } catch (e) {
     if (context.mounted) {
       showSnack(context, l10n.notifClearAllFailed(friendlyError(l10n, e)));
+    }
+    return;
+  }
+  if (!context.mounted) return;
+  ref.invalidate(notificationsProvider);
+  ref.invalidate(notificationsUnreadCountProvider);
+}
+
+/// Dismiss one row. The single-row sibling of [_confirmAndClearAll], and
+/// deliberately unlike it in two ways.
+///
+/// **No confirmation.** Clear-all is gated because it empties the feed
+/// wholesale and cannot be undone; removing one row of an ephemeral signal is
+/// a different act, and a dialog on every ✕ would make the affordance cost
+/// more than the clutter it removes.
+///
+/// **It refetches rather than removing the row locally.** The feed is a
+/// [FutureProvider], so the row leaves when the server confirms it is gone —
+/// which is why the button shows a spinner in the meantime instead of nothing.
+/// On failure the row stays exactly where it was and the snackbar says why: a
+/// dismiss that silently failed would look identical to one that worked, and
+/// the traveler would believe a notification was gone when it was not.
+///
+/// The unread count is invalidated too — dismissing an unread row has to move
+/// the badge, and nothing else would.
+Future<void> _dismissNotification(
+  BuildContext context,
+  WidgetRef ref,
+  String id,
+) async {
+  final l10n = context.l10n;
+  try {
+    await ref.read(notificationsApiServiceProvider).delete(id);
+  } catch (e) {
+    if (context.mounted) {
+      showSnack(context, l10n.notifDismissFailed(friendlyError(l10n, e)));
     }
     return;
   }
@@ -523,9 +562,65 @@ class _NotificationRow extends ConsumerWidget {
                   ),
                 ),
               ),
+            // Always present, never hover-revealed. The popover is the
+            // pointer presentation but NotificationCenterScreen is the same
+            // rows at narrow widths, where a hover affordance is no
+            // affordance — and an inbox whose only exit was "clear all" is
+            // what this row is here to fix.
+            _DismissButton(id: notification.id),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The per-row ✕. Stateful only to hold `_busy`, which does two jobs: it
+/// disarms the button so a double tap cannot fire a second DELETE (the second
+/// would 404 on an already-deleted row and raise an error for something that
+/// in fact succeeded), and it replaces the glyph with a spinner so the wait
+/// for the refetch reads as progress rather than a dead click.
+class _DismissButton extends ConsumerStatefulWidget {
+  final String id;
+  const _DismissButton({required this.id});
+
+  @override
+  ConsumerState<_DismissButton> createState() => _DismissButtonState();
+}
+
+class _DismissButtonState extends ConsumerState<_DismissButton> {
+  bool _busy = false;
+
+  Future<void> _dismiss() async {
+    setState(() => _busy = true);
+    await _dismissNotification(context, ref, widget.id);
+    // On success this row is on its way out with the refetch, so the setState
+    // may land after unmount — on failure the row stays and the button has to
+    // be usable again. `mounted` covers both.
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return IconButton(
+      // Full 48 target (kMinTouchTarget) rather than a dense 32: rows with a
+      // two-line body are already taller than this, so it costs height only on
+      // the shortest ones.
+      iconSize: 18,
+      visualDensity: VisualDensity.standard,
+      tooltip: context.l10n.notifDismiss,
+      onPressed: _busy ? null : _dismiss,
+      icon: _busy
+          ? SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: scheme.onSurfaceVariant,
+              ),
+            )
+          : Icon(Icons.close, color: scheme.onSurfaceVariant),
     );
   }
 }

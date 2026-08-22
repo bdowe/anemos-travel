@@ -2086,6 +2086,19 @@
       }
     }
   },
+  "notifDismiss": "Dismiss",
+  "@notifDismiss": {
+    "description": "Tooltip and screen-reader label on the ✕ that removes one notification from the feed. Not a confirm-gated action, unlike Clear all."
+  },
+  "notifDismissFailed": "Could not dismiss: {error}",
+  "@notifDismissFailed": {
+    "description": "Snackbar when removing one notification fails. The row stays in the feed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "notifLoadErrorTitle": "Could not load notifications",
   "notifEmptyTitle": "No notifications yet",
   "notifEmptyMessage": "Trip reminders and co-planning updates will show up here.",

@@ -24,14 +24,39 @@ func (q *Queries) CountUnreadNotifications(ctx context.Context, userID uuid.UUID
 	return count, err
 }
 
+const deleteNotification = `-- name: DeleteNotification :execrows
+DELETE FROM notifications
+WHERE id = $1 AND user_id = $2
+`
+
+type DeleteNotificationParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+// Dismiss one row. Ownership is structural in the WHERE clause rather than a
+// separate fetch-then-check: a row owned by somebody else deletes nothing and
+// is therefore indistinguishable from one that does not exist, so the handler's
+// 404 cannot be used to probe which notification ids are real.
+//
+// :execrows, not :exec — the affected count is what separates "deleted" from
+// "was never yours", and the handler needs that to choose 204 over 404.
+func (q *Queries) DeleteNotification(ctx context.Context, arg DeleteNotificationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteNotification, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteNotificationsByUser = `-- name: DeleteNotificationsByUser :execrows
 DELETE FROM notifications
 WHERE user_id = $1
 `
 
-// Clear-all is the delete model, mirroring MarkNotificationsRead's mark-all:
-// one user-scoped wholesale action, no per-notification variant. Hard delete —
-// a notification is an ephemeral signal, not a record of account activity.
+// Clear-all: one user-scoped wholesale action, mirroring MarkNotificationsRead.
+// Hard delete — a notification is an ephemeral signal, not a record of account
+// activity. DeleteNotification below is the single-row sibling.
 func (q *Queries) DeleteNotificationsByUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteNotificationsByUser, userID)
 	if err != nil {
@@ -201,7 +226,8 @@ WHERE user_id = $1 AND read_at IS NULL
 `
 
 // Mark-all is the read model: opening the notification center clears the badge
-// wholesale. No per-notification variant yet.
+// wholesale. Still no per-notification variant — unlike DELETE, which has one:
+// a row you are done with is dismissed outright rather than marked read.
 func (q *Queries) MarkNotificationsRead(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, markNotificationsRead, userID)
 	if err != nil {
